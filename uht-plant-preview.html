@@ -1,0 +1,1237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- UHT milk plant flow preview. Open this file in Chrome or Edge with an internet connection (three.js loads from cdn.jsdelivr.net). -->
+<title>UHT Milk Plant Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: control-room HMI. Top bar for time, stage rail | live 3D plant | machine panel, KPI strip along the bottom. */
+:root{
+  --bg:#e8edf0; --surface:#f4f7f8; --raised:#ffffff; --ink:#13212b; --muted:#53687a; --line:#cbd5dc;
+  --accent:#1767b0; --accent-ink:#ffffff; --accent-soft:rgba(23,103,176,.11);
+  --ok:#1f8f57; --warn:#c88a00; --bad:#c63a2b;
+  --scene-bg:#dde5ea; --floor:#ccd6dc; --steel:#b4c0c8; --steel-dark:#76858f;
+  --zone-proc:#c1d3e2; --zone-pack:#d5d2c8; --zone-quar:#e5d4a8; --zone-ware:#c8d0d6; --apron:#b9c3ca;
+  --t4:#2b7bd0; --t20:#2aa0c0; --t60:#e3a21c; --t80:#ea8027; --t140:#d63b26;
+  --font-ui:'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-label:'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  --font-data:'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1419; --surface:#131d24; --raised:#18242d; --ink:#e2eaef; --muted:#93a5b3; --line:#28363f;
+    --accent:#5aa6ec; --accent-ink:#071420; --accent-soft:rgba(90,166,236,.16);
+    --ok:#3cc47f; --warn:#e8ad2c; --bad:#f0604d;
+    --scene-bg:#111a20; --floor:#1a252d; --steel:#8b99a4; --steel-dark:#56636d;
+    --zone-proc:#1d3141; --zone-pack:#2a2924; --zone-quar:#3a311d; --zone-ware:#222c33; --apron:#141d23;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1419; --surface:#131d24; --raised:#18242d; --ink:#e2eaef; --muted:#93a5b3; --line:#28363f;
+  --accent:#5aa6ec; --accent-ink:#071420; --accent-soft:rgba(90,166,236,.16);
+  --ok:#3cc47f; --warn:#e8ad2c; --bad:#f0604d;
+  --scene-bg:#111a20; --floor:#1a252d; --steel:#8b99a4; --steel-dark:#56636d;
+  --zone-proc:#1d3141; --zone-pack:#2a2924; --zone-quar:#3a311d; --zone-ware:#222c33; --apron:#141d23;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 var(--font-ui);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{box-sizing:border-box;height:100%;padding-block:12px;padding-inline:16px;display:grid;gap:12px;
+  grid-template-columns:236px minmax(0,1fr) 300px;grid-template-rows:auto minmax(0,1fr) auto;
+  grid-template-areas:"bar bar bar" "rail view panel" "kpis kpis kpis"}
+
+/* top bar */
+.bar{grid-area:bar;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:10px 14px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r)}
+.brand{display:flex;flex-direction:column;margin-right:auto;min-width:0}
+.brand strong{font:700 21px/1.05 var(--font-label);letter-spacing:.05em;text-transform:uppercase}
+.brand span{font-size:13px;color:var(--muted)}
+.clock{font:500 15px/1 var(--font-data);font-variant-numeric:tabular-nums;padding:8px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--line);white-space:nowrap}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.btn{font:600 14px/1 var(--font-ui);padding:8px 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+#btnPlay{min-width:66px}
+.scen{position:relative}
+.scen summary{list-style:none}
+.scen summary::-webkit-details-marker{display:none}
+.scen summary::after{content:"▾";margin-left:6px;font-size:12px}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:min(340px,80vw);display:flex;flex-direction:column;gap:2px;padding:6px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 28px rgba(0,0,0,.2)}
+.menu button{display:flex;flex-direction:column;gap:2px;text-align:left;padding:9px 10px;border:0;border-radius:8px;background:none;cursor:pointer}
+.menu button:hover{background:var(--surface)}
+.menu b{font-weight:600}
+.menu span{font-size:13px;color:var(--muted)}
+
+/* stage rail */
+.rail{grid-area:rail;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r)}
+.rail-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px}
+.eyebrow{font:600 13px/1 var(--font-label);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0}
+.link{border:0;background:none;color:var(--accent);font-weight:600;font-size:14px;cursor:pointer;padding:4px}
+.stages{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.stage{display:grid;grid-template-columns:10px 20px minmax(0,1fr);align-items:center;gap:8px;width:100%;text-align:left;padding:7px 8px;border:1px solid transparent;border-radius:8px;background:none;cursor:pointer;font-size:14.5px;line-height:1.2}
+.stage:hover{background:var(--surface)}
+.stage[aria-current="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.stage .n{font:500 13px/1 var(--font-data);color:var(--muted);text-align:right}
+.stage .short{display:none}
+.lamp{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--ok)}
+.lamp[data-s="warn"]{background:var(--warn)}
+.lamp[data-s="bad"]{background:var(--bad)}
+.lamp[data-s="off"]{background:var(--line)}
+
+/* 3D view */
+.view{grid-area:view;position:relative;min-height:0;overflow:hidden;border:1px solid var(--line);border-radius:var(--r);background:var(--scene-bg)}
+#viewport{position:absolute;inset:0}
+#viewport canvas{display:block;touch-action:none}
+.label-layer{position:absolute;top:0;left:0;pointer-events:none;z-index:1}
+.zone-label{font:600 12.5px/1 var(--font-label);letter-spacing:.09em;text-transform:uppercase;color:var(--muted);white-space:nowrap;pointer-events:none;padding:2px 0}
+.zone-label em{font-style:normal;font-family:var(--font-data);font-weight:500;letter-spacing:0;margin-left:4px}
+.badge{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 2px;border-radius:999px;border:1px solid var(--line);background:var(--raised);color:var(--ink);font:500 12.5px/1 var(--font-data);font-variant-numeric:tabular-nums;white-space:nowrap;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.badge b{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--raised);font:600 12px/1 var(--font-ui)}
+.badge.compact{padding:2px;gap:0}
+.badge.compact span{display:none}
+.badge.sel{border-color:var(--accent)}
+.badge.sel b{background:var(--accent);color:var(--accent-ink)}
+.label-layer.far .zone-label,.label-layer.far .tag{visibility:hidden}
+.tag{pointer-events:none;font:500 12px/1.2 var(--font-data);padding:3px 7px;border-radius:6px;background:var(--raised);border:1px solid var(--warn);color:var(--ink);white-space:nowrap}
+.overlay{position:absolute;z-index:2;bottom:10px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12.5px;color:var(--muted);background:var(--raised);border:1px solid var(--line);padding:5px 9px;border-radius:8px;pointer-events:none}
+.hint{left:10px}
+.legend{right:10px}
+.sw{display:inline-block;width:16px;height:5px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.boot-fail{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted);font-size:15px}
+
+/* machine panel */
+.panel{grid-area:panel;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:14px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r)}
+.p-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start}
+.p-no{font:700 30px/1 var(--font-label);color:var(--accent);min-width:30px}
+.p-head h2{font:700 22px/1.05 var(--font-label);letter-spacing:.02em;margin:0;text-wrap:balance}
+.chip{display:inline-flex;align-items:center;gap:6px;margin-top:7px;font:600 12.5px/1 var(--font-ui);padding:4px 9px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+.chip .lamp{width:8px;height:8px}
+.p-what{margin:0;font-size:14.5px;max-width:62ch}
+.vals{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px 12px;margin:0;font-size:14px;padding-top:10px;border-top:1px solid var(--line)}
+.vals dt{color:var(--muted)}
+.vals dd{margin:0;font:500 13.5px/1.35 var(--font-data);font-variant-numeric:tabular-nums;text-align:right}
+.how{margin:0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:5px}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px;font-size:13.5px}
+.log li{display:grid;grid-template-columns:8px auto minmax(0,1fr);gap:7px;align-items:baseline}
+.log li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--line);transform:translateY(-1px)}
+.log li[data-k="ok"]::before{background:var(--ok)}
+.log li[data-k="warn"]::before{background:var(--warn)}
+.log li[data-k="bad"]::before{background:var(--bad)}
+.log time{font:500 12px/1.3 var(--font-data);color:var(--muted);white-space:nowrap}
+
+/* KPI strip */
+.kpis{grid-area:kpis;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.kpi{display:flex;flex-direction:column;gap:3px;min-width:0;padding:8px 12px;background:var(--raised);border:1px solid var(--line);border-radius:var(--r)}
+.kpi[data-s="warn"]{border-color:var(--warn);box-shadow:inset 0 3px 0 var(--warn)}
+.kpi[data-s="bad"]{border-color:var(--bad);box-shadow:inset 0 3px 0 var(--bad)}
+.k-l{font:600 12.5px/1 var(--font-label);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.k-v{font:500 19px/1.15 var(--font-data);font-variant-numeric:tabular-nums;white-space:nowrap}
+.k-v small{font-size:12px;color:var(--muted)}
+.k-s{font-size:12.5px;color:var(--muted);line-height:1.25}
+
+@media (max-width:1280px){
+  .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media (max-width:1100px){
+  .app{height:auto;min-height:100%;grid-template-columns:210px minmax(0,1fr);grid-template-rows:auto auto auto auto;grid-template-areas:"bar bar" "rail view" "panel panel" "kpis kpis"}
+  .view{height:62vh;min-height:360px}
+}
+@media (max-width:720px){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-areas:"bar" "view" "rail" "panel" "kpis"}
+  .view{height:58vh;min-height:320px}
+  .stages{flex-direction:row;overflow-x:auto;padding-bottom:4px}
+  .stage{grid-template-columns:10px auto auto;white-space:nowrap;width:auto}
+  .stage .full{display:none}
+  .stage .short{display:inline}
+  .hint{display:none}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .brand strong{font-size:19px}
+}
+@media (prefers-reduced-motion: reduce){ *{scroll-behavior:auto} }
+
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <strong>UHT milk plant</strong>
+      <span>Flow preview · example data, simplified models, not to scale</span>
+    </div>
+    <output class="clock" id="clock" aria-label="Simulation time">Day 8 · 06:00</output>
+    <div class="seg" role="group" aria-label="Simulation speed">
+      <button class="btn" id="btnPlay" type="button">Pause</button>
+      <button class="btn" type="button" data-speed="1" aria-pressed="false">×1</button>
+      <button class="btn" type="button" data-speed="10" aria-pressed="false">×10</button>
+      <button class="btn" type="button" data-speed="100" aria-pressed="true">×100</button>
+      <button class="btn" type="button" data-speed="1000" aria-pressed="false">×1,000</button>
+      <button class="btn" type="button" data-speed="10000" aria-pressed="false">×10,000</button>
+    </div>
+    <button class="btn" id="btnTour" type="button" aria-pressed="false">Guided tour</button>
+    <details class="scen" id="scen">
+      <summary class="btn">Scenarios</summary>
+      <div class="menu">
+        <button type="button" data-fault="uht"><b>UHT temperature drop</b><span>Steam dips, milk is diverted, the line is cleaned and re-sterilized</span></button>
+        <button type="button" data-fault="filler"><b>Filler A breakdown</b><span>30 minutes down; the aseptic tank absorbs the extra milk</span></button>
+        <button type="button" data-fault="qa"><b>Failed incubation sample</b><span>The oldest batch on hold is blocked</span></button>
+      </div>
+    </details>
+  </header>
+
+  <nav class="rail" aria-label="Process stages">
+    <div class="rail-head"><h2 class="eyebrow">Stages</h2><button class="link" id="btnOverview" type="button">Whole plant</button></div>
+    <ol class="stages" id="stages">
+      <li><button class="stage" type="button" data-stage="1"><span class="lamp" data-s="ok"></span><span class="n">1</span><span><span class="full">Standardization &amp; Formulation</span><span class="short">Standardize</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="2"><span class="lamp" data-s="ok"></span><span class="n">2</span><span><span class="full">Preheating &amp; Deaeration</span><span class="short">Preheat</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="3"><span class="lamp" data-s="ok"></span><span class="n">3</span><span><span class="full">Homogenization</span><span class="short">Homogenize</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="4"><span class="lamp" data-s="ok"></span><span class="n">4</span><span><span class="full">UHT Treatment</span><span class="short">UHT</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="5"><span class="lamp" data-s="ok"></span><span class="n">5</span><span><span class="full">Flash Cooling</span><span class="short">Flash cool</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="6"><span class="lamp" data-s="ok"></span><span class="n">6</span><span><span class="full">Aseptic Storage (Buffer)</span><span class="short">Aseptic tank</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="7"><span class="lamp" data-s="ok"></span><span class="n">7</span><span><span class="full">Aseptic Packaging</span><span class="short">Filling</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="8"><span class="lamp" data-s="ok"></span><span class="n">8</span><span><span class="full">Secondary Packaging &amp; Palletization</span><span class="short">Packing</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="9"><span class="lamp" data-s="warn"></span><span class="n">9</span><span><span class="full">Quarantine &amp; QA Testing</span><span class="short">Quarantine</span></span></button></li>
+      <li><button class="stage" type="button" data-stage="10"><span class="lamp" data-s="ok"></span><span class="n">10</span><span><span class="full">Warehousing &amp; Ambient Distribution</span><span class="short">Warehouse</span></span></button></li>
+    </ol>
+  </nav>
+
+  <main class="view" aria-label="3D view of the plant">
+    <div id="viewport"></div>
+    <div class="overlay hint">Drag to orbit · scroll to zoom · click a machine</div>
+    <div class="overlay legend" aria-label="Pipe colour shows milk temperature">
+      <span><i class="sw" style="background:var(--t4)"></i>4 °C</span>
+      <span><i class="sw" style="background:var(--t20)"></i>20 °C</span>
+      <span><i class="sw" style="background:var(--t80)"></i>80 °C</span>
+      <span><i class="sw" style="background:var(--t140)"></i>140 °C</span>
+    </div>
+  </main>
+
+  <aside class="panel" aria-label="Selected stage">
+    <div class="p-head">
+      <span class="p-no" id="pNo">All</span>
+      <div>
+        <h2 id="pName">Whole plant</h2>
+        <span class="chip"><span class="lamp" id="pLamp" data-s="ok"></span><span id="pChip">Running</span></span>
+      </div>
+    </div>
+    <p class="p-what" id="pWhat">Milk enters at the silos (top left), runs through the UHT line, becomes packs in the filling hall, and comes back along the bottom as pallets: quarantine first, then the warehouse and the trucks.</p>
+    <dl class="vals" id="pVals" hidden></dl>
+    <ul class="how" id="pHow">
+      <li>Pick a stage from the list, or click a numbered tag or a machine in the plant.</li>
+      <li>Drag to orbit, scroll or pinch to zoom.</li>
+      <li>Speed up to ×1,000 to watch batches leave quarantine.</li>
+      <li>Try a fault from Scenarios and watch the plant react.</li>
+      <li>Keys: 1–9 and 0 pick stages, Space pauses, O shows the whole plant.</li>
+    </ul>
+    <h3 class="eyebrow">What happened</h3>
+    <ol class="log" id="log" aria-live="polite">
+      <li data-k="info"><time>D8 06:00</time><span>Preview opens on day 8 with example history: 21 batches on hold, 520 pallets in stock.</span></li>
+    </ol>
+  </aside>
+
+  <footer class="kpis" aria-label="Plant KPIs">
+    <div class="kpi" id="k-uht"><span class="k-l">UHT flow</span><span class="k-v">16,000 <small>L/h</small></span><span class="k-s">production</span></div>
+    <div class="kpi" id="k-bstar"><span class="k-l">Sterility B*</span><span class="k-v">1.19</span><span class="k-s">F0 5.2 min · 140.0 °C</span></div>
+    <div class="kpi" id="k-tank"><span class="k-l">Aseptic tank</span><span class="k-v">52 <small>%</small></span><span class="k-s">10,400 of 20,000 L</span></div>
+    <div class="kpi" id="k-fill"><span class="k-l">Filling</span><span class="k-v">15,000 <small>packs/h</small></span><span class="k-s">OEE —</span></div>
+    <div class="kpi" id="k-pallets"><span class="k-l">Pallets made</span><span class="k-v">0</span><span class="k-s">current pallet 50/84 trays</span></div>
+    <div class="kpi" id="k-hold"><span class="k-l">On hold</span><span class="k-v">2,178 <small>pallets</small></span><span class="k-s">21 batches + 1 filling</span></div>
+    <div class="kpi" id="k-stock"><span class="k-l">In stock</span><span class="k-v">520 <small>pallets</small></span><span class="k-s">1.6 days of cover</span></div>
+    <div class="kpi" id="k-trucks"><span class="k-l">Trucks</span><span class="k-v">0</span><span class="k-s">next day 8 · 06:40</span></div>
+  </footer>
+</div>
+
+<script>
+  setTimeout(function () {
+    if (window.__plantBooted) return;
+    var v = document.getElementById('viewport');
+    if (v && !v.querySelector('.boot-fail')) v.insertAdjacentHTML('beforeend', '<div class="boot-fail">The 3D view could not start. It needs WebGL and the three.js library from cdn.jsdelivr.net.</div>');
+  }, 9000);
+</script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* =========================================================================
+   Settings: the defaults from the research & plan doc
+   ========================================================================= */
+const H = 3600, DAY = 86400;
+const P = {
+  uhtFlow: 16000, hold: 4, Tset: 140, Tfault: 137.6,
+  tankCap: 20000, tankStart: 10400, tankMin: 150,
+  fillerRate: 7500, fillerIdeal: 8000, mtbf: 8 * H, mttr: 12 * 60,
+  packsPerTray: 12, traysPerPallet: 84,
+  shift: 8 * H, quarantine: 7 * DAY,
+  aicEvery: 10 * H, aicDur: 30 * 60, cipDur: 80 * 60, sterDur: 30 * 60, divertDur: 3 * 60,
+  truckEvery: 2.5 * H, truckCap: 33, failPerPack: 0.0002, rejectCap: 6000,
+};
+const PACKS_PER_PALLET = P.packsPerTray * P.traysPerPallet;
+const START = 7 * DAY + 6 * H;               // day 8, 06:00
+const PALLETS_PER_DAY = P.truckCap * 24 / 2.5;
+
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const plural = (n, w) => `${Number(n).toLocaleString('en-US')} ${w}${n === 1 ? '' : 's'}`;
+const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pad = n => String(n).padStart(2, '0');
+const F0 = (T, t) => t / 60 * Math.pow(10, (T - 121.1) / 10);
+const Bstar = (T, t) => t / 10.1 * Math.pow(10, (T - 135) / 10.5);
+function fmtAbs(a) { const d = Math.floor(a / DAY) + 1, s = a % DAY; return `day ${d} · ${pad(Math.floor(s / H))}:${pad(Math.floor((s % H) / 60))}`; }
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rng = mulberry32(81006);
+const expRand = m => -Math.log(1 - rng()) * m;
+
+/* =========================================================================
+   Simulation model (no three.js in here)
+   ========================================================================= */
+let logDirty = true;
+const M = {
+  t: 0, ev: [], log: [],
+  uht: { mode: 'production', timer: 0, T: P.Tset, throttled: false, sinceAic: 6 * H, fault: false, diverts: 0 },
+  tankV: P.tankStart, Qin: P.uhtFlow, Qout: 2 * P.fillerRate, Qreject: 0, diverted: 0, rejectL: 0,
+  fillers: [0, 1].map(i => ({ name: 'AB'[i], mode: 'running', timer: 0, nextFail: expRand(P.mtbf), run: 0, planned: 0, acc: 0, packs: 0, vis: 0, last: -1 })),
+  packs: 0, trays: 0, palletPacks: 600, pallets: 0, extraSamples: 0,
+  batches: [], cur: null, nextId: 1, blocked: 0, lastBlock: -1e9,
+  stock: 520, shipped: 0, trucks: 0, nextTruck: START + 40 * 60, truckWaiting: false,
+};
+const abs = () => START + M.t;
+function log(msg, kind = 'info') { M.log.unshift({ at: abs(), msg, kind }); if (M.log.length > 30) M.log.pop(); logDirty = true; }
+function newBatch(start) {
+  const b = { id: M.nextId++, start, end: start + P.shift, pallets: 0, status: 'filling', releaseAt: start + P.shift + P.quarantine, samples: 0, failed: false };
+  M.batches.push(b); M.cur = b; return b;
+}
+for (let i = 1; i <= 21; i++) {   // a week of example history, three 8-hour batches a day
+  const start = 6 * H + (i - 1) * P.shift;
+  M.batches.push({ id: M.nextId++, start, end: start + P.shift, pallets: 100 + (i * 37) % 9, status: 'hold', releaseAt: start + P.shift + P.quarantine, samples: 34, failed: false });
+}
+newBatch(START);
+log('Preview opens on day 8 with example history: 21 batches on hold, 520 pallets in stock.');
+
+function stopFiller(f, dur, why) { f.mode = 'stopped'; f.timer = dur; M.extraSamples += 2; log(`Filler ${f.name} stopped (${why}); back in about ${Math.round(dur / 60)} min`, 'warn'); }
+
+function step(dt) {
+  M.t += dt;
+  const now = abs(), u = M.uht;
+  u.T += ((u.fault ? P.Tfault : P.Tset) - u.T) * Math.min(1, dt / 15);
+  let Qin = 0, Qrej = 0;
+  const level = M.tankV / P.tankCap;
+
+  if (u.mode === 'production') {
+    u.sinceAic += dt;
+    if (!u.throttled && level > 0.9) { u.throttled = true; log('Aseptic tank above 90%: UHT plant throttled to 50%', 'warn'); }
+    else if (u.throttled && level < 0.6) { u.throttled = false; log('Aseptic tank below 60%: UHT plant back to full flow'); }
+    Qin = P.uhtFlow * (u.throttled ? 0.5 : 1);
+    if (level > 0.995 && Qin > M.Qout) Qin = M.Qout;
+    const b = Bstar(u.T, P.hold);
+    if (b < 1) {
+      u.mode = 'divert'; u.timer = P.divertDur; u.diverts++; Qin = 0;
+      log(`UHT outlet ${u.T.toFixed(1)} °C, B* ${b.toFixed(2)}: milk diverted to the reject tank`, 'bad');
+    } else if (u.sinceAic >= P.aicEvery) {
+      u.mode = 'aic'; u.timer = P.aicDur; Qin = 0;
+      log('UHT plant starts a 30-min intermediate clean; fillers keep running from the tank');
+    }
+  } else {
+    u.timer -= dt;
+    if (u.mode === 'divert') {
+      Qrej = P.uhtFlow; M.diverted += Qrej * dt / H; M.rejectL = Math.min(P.rejectCap, M.rejectL + Qrej * dt / H);
+      if (u.timer <= 0) { u.mode = 'cip'; u.timer = P.cipDur; u.fault = false; log('Line flushed. Cleaning in place: 80 min', 'warn'); }
+    } else if (u.mode === 'cip') {
+      if (u.timer <= 0) { u.mode = 'sterilize'; u.timer = P.sterDur; log('Re-sterilizing with hot water at 125 °C or more: 30 min'); }
+    } else if (u.mode === 'sterilize') {
+      M.rejectL = Math.max(0, M.rejectL - P.rejectCap * dt / P.sterDur);
+      if (u.timer <= 0) { u.mode = 'production'; u.sinceAic = 0; u.T = P.Tset; M.rejectL = 0; log('UHT plant back in production', 'ok'); }
+    } else if (u.mode === 'aic') {
+      if (u.timer <= 0) { u.mode = 'production'; u.sinceAic = 0; log('Intermediate clean finished; UHT plant back in production', 'ok'); }
+    }
+  }
+
+  let Qout = 0, made = 0;
+  for (const f of M.fillers) {
+    f.planned += dt;
+    if (f.mode === 'stopped') {
+      f.timer -= dt;
+      if (f.timer > 0) continue;
+      f.mode = 'running'; f.nextFail = expRand(P.mtbf); log(`Filler ${f.name} repaired and running`, 'ok');
+    }
+    f.nextFail -= dt;
+    if (f.nextFail <= 0) { stopFiller(f, 120 + expRand(P.mttr), 'jaw fault'); continue; }
+    if (M.tankV <= P.tankMin) {
+      if (f.mode !== 'starved') { f.mode = 'starved'; log(`Filler ${f.name} waiting: aseptic tank empty`, 'warn'); }
+      continue;
+    }
+    f.mode = 'running';
+    f.run += dt; Qout += P.fillerRate; f.acc += P.fillerRate * dt / H;
+    const whole = Math.floor(f.acc);
+    if (whole) { f.acc -= whole; f.packs += whole; f.vis += whole; made += whole; }
+  }
+  M.tankV = clamp(M.tankV + (Qin - Qout) * dt / H, 0, P.tankCap);
+  M.Qin = Qin; M.Qout = Qout; M.Qreject = Qrej;
+
+  if (made) {
+    M.packs += made; M.palletPacks += made;
+    const traysNow = Math.floor(M.packs / P.packsPerTray);
+    if (traysNow > M.trays) { M.ev.push({ type: 'trays', n: traysNow - M.trays }); M.trays = traysNow; }
+    while (M.palletPacks >= PACKS_PER_PALLET) { M.palletPacks -= PACKS_PER_PALLET; M.pallets++; M.cur.pallets++; M.ev.push({ type: 'pallet', batch: M.cur.id }); }
+  }
+
+  if (now >= M.cur.end) {
+    const b = M.cur; b.status = 'hold'; b.samples = 32 + M.extraSamples; M.extraSamples = 0;
+    log(`Batch ${b.id} closed with ${b.pallets} pallets; on hold until ${fmtAbs(b.releaseAt)}`);
+    newBatch(b.end);
+  }
+
+  for (const b of M.batches) {
+    if (b.status !== 'hold' || now < b.releaseAt) continue;
+    const pFail = 1 - Math.pow(1 - P.failPerPack, b.samples);
+    if (b.failed || rng() < pFail) {
+      b.status = 'blocked'; M.blocked += b.pallets; M.lastBlock = now; M.ev.push({ type: 'block', id: b.id });
+      log(`Batch ${b.id} failed incubation: ${b.pallets} pallets blocked`, 'bad');
+    } else {
+      b.status = 'released'; M.stock += b.pallets; M.ev.push({ type: 'release', id: b.id });
+      log(`Batch ${b.id} passed QA: ${b.pallets} pallets released to the warehouse`, 'ok');
+    }
+  }
+  M.batches = M.batches.filter(b => b.status === 'hold' || b.status === 'filling');
+
+  if (now >= M.nextTruck) {
+    if (M.stock >= P.truckCap) {
+      M.stock -= P.truckCap; M.shipped += P.truckCap; M.trucks++; M.truckWaiting = false;
+      M.nextTruck = Math.max(M.nextTruck + P.truckEvery, now + 20 * 60);
+      M.ev.push({ type: 'truck' });
+      log(`Truck ${M.trucks} left with ${P.truckCap} pallets`);
+    } else if (!M.truckWaiting) { M.truckWaiting = true; log('Truck waiting at the dock: not enough released stock', 'warn'); }
+  }
+}
+
+function triggerFault(kind) {
+  if (kind === 'uht') {
+    if (M.uht.mode !== 'production') { log('The UHT plant is not in production right now; try again in a moment', 'warn'); return 4; }
+    M.uht.fault = true; log('Steam supply dips: UHT outlet temperature is falling', 'warn'); return 4;
+  }
+  if (kind === 'filler') {
+    const f = M.fillers[0];
+    if (f.mode === 'stopped') { log('Filler A is already stopped', 'warn'); return 7; }
+    stopFiller(f, 30 * 60, 'sealing jaw fault'); return 6;
+  }
+  if (kind === 'qa') {
+    const b = M.batches.filter(x => x.status === 'hold').sort((x, y) => x.releaseAt - y.releaseAt)[0];
+    if (!b) return 9;
+    b.status = 'blocked'; M.blocked += b.pallets; M.lastBlock = abs(); M.ev.push({ type: 'block', id: b.id });
+    M.batches = M.batches.filter(x => x !== b);
+    log(`Incubation sample from batch ${b.id} failed: ${b.pallets} pallets blocked`, 'bad'); return 9;
+  }
+  return 0;
+}
+
+function modeText() {
+  const u = M.uht;
+  return { production: u.throttled ? 'production at 50% (tank high)' : 'production', aic: 'intermediate clean', divert: 'diverting to reject', cip: 'cleaning in place', sterilize: 'sterilizing' }[u.mode];
+}
+function oee() {
+  const run = M.fillers.reduce((s, f) => s + f.run, 0), plan = M.fillers.reduce((s, f) => s + f.planned, 0);
+  return plan > 0 ? `${Math.round(run / plan * P.fillerRate / P.fillerIdeal * 100)}%` : '—';
+}
+function fillerText(f) { return f.mode === 'running' ? `running · ${fmt(P.fillerRate)}/h` : f.mode === 'starved' ? 'waiting for milk' : `stopped · ${Math.ceil(f.timer / 60)} min left`; }
+function stageStatus(id) {
+  const m = M.uht.mode;
+  switch (id) {
+    case 1: return 'ok';
+    case 2: case 3: case 5: return m === 'production' ? 'ok' : m === 'divert' ? 'bad' : 'warn';
+    case 4: return m === 'divert' ? 'bad' : m !== 'production' ? 'warn' : Bstar(M.uht.T, P.hold) < 1.05 ? 'warn' : 'ok';
+    case 6: { const l = M.tankV / P.tankCap; return l < 0.02 ? 'bad' : (l < 0.1 || l > 0.9) ? 'warn' : 'ok'; }
+    case 7: { const r = M.fillers.filter(f => f.mode === 'running').length; return r === 2 ? 'ok' : r === 1 ? 'warn' : 'bad'; }
+    case 8: return M.Qout > 0 ? 'ok' : 'warn';
+    case 9: return abs() - M.lastBlock < DAY ? 'bad' : 'warn';
+    case 10: return M.truckWaiting ? 'warn' : 'ok';
+  }
+  return 'ok';
+}
+function stageChip(id) {
+  const m = M.uht.mode;
+  switch (id) {
+    case 1: return 'Standardizing to 3.5% fat';
+    case 2: case 3: case 5: return m === 'production' ? 'Running' : m === 'divert' ? 'Upstream of a divert' : `UHT plant: ${modeText()}`;
+    case 4: return m === 'production' ? (Bstar(M.uht.T, P.hold) < 1.05 ? 'Temperature falling' : 'Sterilizing milk') : `UHT plant: ${modeText()}`;
+    case 6: { const l = M.tankV / P.tankCap; return l < 0.02 ? 'Empty: fillers waiting' : l > 0.9 ? 'High level' : l < 0.1 ? 'Low level' : 'Buffering'; }
+    case 7: { const r = M.fillers.filter(f => f.mode === 'running').length; return r === 2 ? 'Both fillers running' : r === 1 ? 'One filler running' : 'No filler running'; }
+    case 8: return M.Qout > 0 ? 'Packing' : 'Waiting for packs';
+    case 9: return abs() - M.lastBlock < DAY ? 'A batch was blocked today' : 'Batches on hold';
+    case 10: return M.truckWaiting ? 'Truck waiting for stock' : 'Shipping';
+  }
+  return '';
+}
+function stageValues(id) {
+  const u = M.uht, flowing = u.mode === 'production' || u.mode === 'divert';
+  const flow = `${fmt(u.mode === 'divert' ? M.Qreject : M.Qin)} L/h`;
+  switch (id) {
+    case 1: return [['Fat in → out', '4.0% → 3.5%'], ['Cream remixed', '8.6% of the flow'], ['Separation', '60 °C'], ['Feed to UHT', flow]];
+    case 2: return [['Feed in', '4 °C'], ['Preheater out', flowing ? '80 °C' : '—'], ['Deaerator', flowing ? '76 °C (4 °C flash)' : '—'], ['Flow', flow]];
+    case 3: return [['Stage 1', '200 bar'], ['Stage 2', '30 bar'], ['Fat globules', 'under 1 µm'], ['Flow', flow]];
+    case 4: return [['Holding tube outlet', `${u.T.toFixed(1)} °C`], ['Holding time', '4 s'], ['F0', `${F0(u.T, P.hold).toFixed(1)} min`], ['B*', Bstar(u.T, P.hold).toFixed(2)], ['Mode', modeText()], ['Diverted so far', `${fmt(M.diverted)} L`]];
+    case 5: return [['Flash vessel out', flowing ? '80 °C' : '—'], ['Cooler out', flowing ? '20 °C' : '—'], ['Water boiled off', 'equals steam added'], ['Flow', flow]];
+    case 6: return [['Level', `${fmt(M.tankV / P.tankCap * 100)}% · ${fmt(M.tankV)} L`], ['Inflow', `${fmt(M.Qin)} L/h`], ['Outflow', `${fmt(M.Qout)} L/h`], ['UHT plant', modeText()], ['Sterile air', 'overpressure held']];
+    case 7: return [['Filler A', fillerText(M.fillers[0])], ['Filler B', fillerText(M.fillers[1])], ['Packs per hour', fmt(M.Qout)], ['OEE since start', oee()], ['Packs since start', fmt(M.packs)]];
+    case 8: return [['Trays made', fmt(M.trays)], ['Pallets made', fmt(M.pallets)], ['Current pallet', `${Math.floor(M.palletPacks / P.packsPerTray)} of 84 trays`], ['Current batch', `#${M.cur.id}`]];
+    case 9: {
+      const hold = M.batches.filter(b => b.status === 'hold').sort((a, b) => a.releaseAt - b.releaseAt);
+      const next = hold[0];
+      return [['Batches on hold', String(hold.length)], ['Pallets on hold', fmt(hold.reduce((s, b) => s + b.pallets, 0))], ['Filling now', `#${M.cur.id} · ${plural(M.cur.pallets, 'pallet')}`], ['Next release', next ? `#${next.id}, ${fmtAbs(next.releaseAt)}` : '—'], ['Blocked so far', `${fmt(M.blocked)} pallets`]];
+    }
+    case 10: return [['In stock', `${fmt(M.stock)} pallets`], ['Days of cover', (M.stock / PALLETS_PER_DAY).toFixed(1)], ['Trucks shipped', String(M.trucks)], ['Pallets shipped', fmt(M.shipped)], ['Next truck', M.truckWaiting ? 'waiting for stock' : fmtAbs(M.nextTruck)]];
+  }
+  return [];
+}
+function badgeText(id) {
+  const u = M.uht;
+  switch (id) {
+    case 1: return '3.5% fat';
+    case 2: return u.mode === 'production' || u.mode === 'divert' ? '80 °C' : u.mode === 'aic' ? 'AIC' : u.mode === 'cip' ? 'CIP' : 'SIP';
+    case 3: return '200 bar';
+    case 4: return `${u.T.toFixed(1)} °C`;
+    case 5: return '80 → 20 °C';
+    case 6: return `${fmt(M.tankV / P.tankCap * 100)}%`;
+    case 7: return `${fmt(M.Qout)}/h`;
+    case 8: return plural(M.pallets, 'pallet');
+    case 9: return `${fmt(M.batches.reduce((s, b) => s + b.pallets, 0))} on hold`;
+    case 10: return `${fmt(M.stock)} in stock`;
+  }
+  return '';
+}
+
+const STAGES = [
+  { id: 1, name: 'Standardization & Formulation', what: 'A disc-stack separator splits warm milk (55–65 °C) into skim milk and 35–40% cream, and in-line control remixes cream to 3.5% fat. The mix tank adds ingredients and feeds the UHT plant at about 4 °C.' },
+  { id: 2, name: 'Preheating & Deaeration', what: 'A plate heat exchanger warms the feed to about 80 °C. In the vacuum deaerator the milk boils 4–5 °C below that, and the air leaves through the vacuum pump.' },
+  { id: 3, name: 'Homogenization', what: 'A piston pump pushes milk through a gap of about 0.1 mm: 200 bar in the first stage, 30 bar in the second. Fat globules shrink below 1 µm, so no cream layer forms on the shelf.' },
+  { id: 4, name: 'UHT Treatment', what: 'Steam injection heats the milk to 140 °C and the coiled holding tube keeps it there for 4 s. If B* falls below 1 (about 139.2 °C), the diversion valve sends the milk to the reject tank.' },
+  { id: 5, name: 'Flash Cooling', what: 'A vacuum vessel drops the milk from 140 °C to about 80 °C at once and boils off the water the steam added. A three-pass tubular cooler then brings it to 20 °C.' },
+  { id: 6, name: 'Aseptic Storage (Buffer)', what: 'A 20,000 L sterile tank under sterile-air overpressure sits between the UHT plant and the fillers, so either side can stop without stopping the other.' },
+  { id: 7, name: 'Aseptic Packaging', what: 'Two fillers sterilize the carton material in hydrogen peroxide, form a tube, and fill and seal 1 L packs below the liquid level: 7,500 packs per hour each.' },
+  { id: 8, name: 'Secondary Packaging & Palletization', what: 'Packs go into shrink-wrapped trays of 12. A robot stacks 84 trays on each pallet (1,008 L), which is stretch-wrapped and labelled with an SSCC.' },
+  { id: 9, name: 'Quarantine & QA Testing', what: 'Each 8-hour batch stays on hold for 7 days while sample packs incubate at 55 °C. A failed sample blocks the whole batch. Blocks age from right to left.' },
+  { id: 10, name: 'Warehousing & Ambient Distribution', what: 'Released pallets are stored at room temperature (6–9 months shelf life) and shipped first-expired-first-out, 33 pallets per truck.' },
+];
+const OVERVIEW_TEXT = 'Milk enters at the silos (top left), runs through the UHT line, becomes packs in the filling hall, and comes back along the bottom as pallets: quarantine first, then the warehouse and the trucks.';
+
+/* =========================================================================
+   3D scene
+   ========================================================================= */
+const host = $('#viewport');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+host.appendChild(renderer.domElement);
+const labels = new CSS2DRenderer();
+labels.domElement.className = 'label-layer';
+host.appendChild(labels.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 700);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.maxPolarAngle = 1.38; controls.minDistance = 5; controls.maxDistance = 320;
+const OV_TARGET = new THREE.Vector3(-13, 0, 3), OV_DIR = new THREE.Vector3(0, .74, .67).normalize();
+function overviewPos() { const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect; return OV_TARGET.clone().addScaledVector(OV_DIR, clamp(58 / tanH, 105, 290)); }
+let userMoved = false;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa7b2, 1.3));
+const sun = new THREE.DirectionalLight(0xffffff, 1.9);
+sun.position.set(28, 80, 46); sun.target.position.set(-12, 0, 2);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -80, right: 80, top: 80, bottom: -80, near: 10, far: 240 });
+sun.shadow.camera.updateProjectionMatrix();
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+scene.add(sun, sun.target);
+
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888888';
+const C = {};
+const std = o => new THREE.MeshStandardMaterial(o);
+const MAT = {
+  floor: std({ roughness: .95 }), proc: std({ roughness: .9 }), pack: std({ roughness: .9 }), quar: std({ roughness: .9 }), ware: std({ roughness: .9 }), apron: std({ roughness: .95 }),
+  steel: std({ metalness: .55, roughness: .38 }), steelDark: std({ metalness: .45, roughness: .55 }),
+  paint: std({ color: 0x4f7896, metalness: .25, roughness: .55 }), panel: std({ color: 0xe3e8ec, metalness: .15, roughness: .45 }),
+  glass: std({ color: 0xb9d6ea, transparent: true, opacity: .25, roughness: .1, metalness: 0, depthWrite: false }),
+  shell: std({ color: 0xc9d3da, transparent: true, opacity: .3, roughness: .25, metalness: .3, depthWrite: false }),
+  milk: std({ color: 0xfbfaf4, roughness: .55, emissive: 0x2a2a26 }), carton: std({ color: 0xf4f6f8, roughness: .5 }),
+  tray: std({ color: 0xc29a5e, roughness: .85 }), load: std({ color: 0xdccdb0, roughness: .7 }), wood: std({ color: 0xa27b4c, roughness: .9 }),
+  belt: std({ color: 0x39424a, roughness: .85 }), dark: std({ color: 0x2c343b, roughness: .7 }), reel: std({ color: 0xd8cdb2, roughness: .8 }),
+  cab: std({ color: 0x1d64a8, roughness: .45, metalness: .2 }), trailer: std({ color: 0xeceff1, roughness: .6 }),
+  beam: std({ color: 0xd17a22, roughness: .6, metalness: .2 }), utility: std({ color: 0x9aa6ae, roughness: .5, metalness: .4 }),
+  gauge: std({ color: 0xf5f5f0, roughness: .4 }), pipe: std({ vertexColors: true, roughness: .35, metalness: .2 }),
+  particle: std({ roughness: .4 }),
+  ring: new THREE.MeshBasicMaterial({ transparent: true, opacity: .5, depthWrite: false }),
+  line: new THREE.LineBasicMaterial({ transparent: true, opacity: .7 }), hatch: new THREE.LineBasicMaterial({}),
+};
+const STOPS = [[4, new THREE.Color()], [20, new THREE.Color()], [60, new THREE.Color()], [80, new THREE.Color()], [140, new THREE.Color()]];
+const lampList = [];
+function applyTheme() {
+  for (const k of ['scene-bg', 'floor', 'steel', 'steel-dark', 'zone-proc', 'zone-pack', 'zone-quar', 'zone-ware', 'apron', 'ok', 'warn', 'bad', 'accent', 't4', 't20', 't60', 't80', 't140']) C[k] = cssVar('--' + k);
+  scene.background = new THREE.Color(C['scene-bg']);
+  MAT.floor.color.set(C.floor); MAT.proc.color.set(C['zone-proc']); MAT.pack.color.set(C['zone-pack']);
+  MAT.quar.color.set(C['zone-quar']); MAT.ware.color.set(C['zone-ware']); MAT.apron.color.set(C.apron);
+  MAT.steel.color.set(C.steel); MAT.steelDark.color.set(C['steel-dark']);
+  MAT.ring.color.set(C.accent); MAT.line.color.set(C['steel-dark']); MAT.hatch.color.set(C.warn);
+  STOPS[0][1].set(C.t4); STOPS[1][1].set(C.t20); STOPS[2][1].set(C.t60); STOPS[3][1].set(C.t80); STOPS[4][1].set(C.t140);
+  for (const l of lampList) setLamp(l, l.userData.state, true);
+}
+const _c = new THREE.Color();
+function tempColor(T, out = _c) {
+  if (T <= STOPS[0][0]) return out.copy(STOPS[0][1]);
+  for (let i = 1; i < STOPS.length; i++) if (T <= STOPS[i][0]) { const [t0, c0] = STOPS[i - 1], [t1, c1] = STOPS[i]; return out.lerpColors(c0, c1, (T - t0) / (t1 - t0)); }
+  return out.copy(STOPS[STOPS.length - 1][1]);
+}
+
+const G = {
+  box: new THREE.BoxGeometry(1, 1, 1), cyl: new THREE.CylinderGeometry(1, 1, 1, 40), cyl8: new THREE.CylinderGeometry(1, 1, 1, 8),
+  cylLo: new THREE.CylinderGeometry(1, 1, 1, 14), coneDown: new THREE.CylinderGeometry(1, .22, 1, 40), coneUp: new THREE.CylinderGeometry(.22, 1, 1, 40),
+  sph: new THREE.SphereGeometry(1, 20, 14), dome: new THREE.SphereGeometry(1, 40, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+};
+const clickables = [];
+function add(g, m, p, s = [1, 1, 1], o = {}) {
+  const x = new THREE.Mesh(g, m);
+  x.position.set(p[0], p[1], p[2]); x.scale.set(s[0], s[1], s[2]);
+  if (o.rx) x.rotation.x = o.rx; if (o.ry) x.rotation.y = o.ry; if (o.rz) x.rotation.z = o.rz;
+  x.castShadow = o.cast !== false; x.receiveShadow = true;
+  if (o.stage) { x.userData.stage = o.stage; clickables.push(x); }
+  (o.parent || scene).add(x); return x;
+}
+function legs(cx, cz, r, h, n, stage, rad = .07) {
+  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + .4; add(G.cylLo, MAT.steelDark, [cx + r * Math.cos(a), h / 2, cz + r * Math.sin(a)], [rad, h, rad], { stage }); }
+}
+function lamp(p, stage) {
+  const x = add(G.sph, std({ roughness: .3 }), p, [.17, .17, .17], { stage, cast: false });
+  x.userData.state = 'off'; lampList.push(x); setLamp(x, 'off', true); return x;
+}
+function setLamp(x, s, force) {
+  if (!force && x.userData.state === s) return;
+  x.userData.state = s;
+  const col = s === 'ok' ? C.ok : s === 'warn' ? C.warn : s === 'bad' ? C.bad : C['steel-dark'];
+  if (!col) return;
+  x.material.color.set(col); x.material.emissive.set(s === 'off' ? '#000000' : col); x.material.emissiveIntensity = s === 'off' ? 0 : .85;
+}
+applyTheme();
+
+/* floor and zones */
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), MAT.floor);
+floor.rotation.x = -Math.PI / 2; floor.position.set(-12, 0, 8); floor.receiveShadow = true; scene.add(floor);
+const ZONES = [
+  { label: 'Silo yard & mixing', st: '1', x0: -63, x1: -38, z0: -23, z1: -5, m: 'proc' },
+  { label: 'UHT process hall', st: '2–5', x0: -35, x1: -6, z0: -23, z1: -5, m: 'proc' },
+  { label: 'Aseptic tank', st: '6', x0: -3, x1: 11, z0: -23, z1: -5, m: 'proc' },
+  { label: 'Filling hall', st: '7', x0: 14, x1: 37, z0: -23, z1: -5, m: 'pack' },
+  { label: 'Packaging hall', st: '8', x0: 14, x1: 37, z0: 2, z1: 19, m: 'pack' },
+  { label: 'Quarantine & QA lab', st: '9', x0: -11, x1: 11, z0: 2, z1: 19, m: 'quar' },
+  { label: 'Warehouse & dispatch', st: '10', x0: -63, x1: -14, z0: 2, z1: 19, m: 'ware' },
+];
+for (const z of ZONES) {
+  add(G.box, MAT[z.m], [(z.x0 + z.x1) / 2, .02, (z.z0 + z.z1) / 2], [z.x1 - z.x0, .04, z.z1 - z.z0], { cast: false });
+  const pts = [[z.x0, z.z0], [z.x1, z.z0], [z.x1, z.z1], [z.x0, z.z1]].map(([x, zz]) => new THREE.Vector3(x, .06, zz));
+  scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), MAT.line));
+  const el = document.createElement('div'); el.className = 'zone-label';
+  el.textContent = z.label; const em = document.createElement('em'); em.textContent = z.st; el.appendChild(em);
+  const o = new CSS2DObject(el); o.position.set(z.x0 + .6, .06, z.z0 + .6); o.center.set(0, 0); scene.add(o);
+}
+add(G.box, MAT.apron, [-38.5, .015, 26], [49, .03, 14], { cast: false });
+
+/* stage 1: silos, separator, standardization skid, mix tank */
+for (const z of [-18.5, -9.5]) {
+  add(G.cyl, MAT.steelDark, [-59, .3, z], [2.45, .6, 2.45], { stage: 1 });
+  add(G.cyl, MAT.steel, [-59, 5.6, z], [2.2, 10, 2.2], { stage: 1 });
+  add(G.dome, MAT.steel, [-59, 10.6, z], [2.2, .8, 2.2], { stage: 1 });
+  add(G.box, MAT.steelDark, [-56.75, 5.6, z], [.08, 9.6, .5], { stage: 1 });
+}
+add(G.box, MAT.paint, [-51.5, .4, -14], [1.7, .8, 1.7], { stage: 1 });
+const sepBowl = new THREE.Group(); sepBowl.position.set(-51.5, 1.35, -14); scene.add(sepBowl);
+add(G.cyl8, MAT.steel, [0, 0, 0], [.6, 1.1, .6], { stage: 1, parent: sepBowl });
+add(G.coneUp, MAT.steel, [0, .75, 0], [.6, .4, .6], { stage: 1, parent: sepBowl });
+add(G.box, MAT.steelDark, [.56, 0, 0], [.12, .9, .16], { stage: 1, parent: sepBowl });
+add(G.box, MAT.paint, [-51.5, .4, -15.55], [.8, .8, 1.0], { stage: 1 });
+add(G.box, MAT.steelDark, [-47.6, .55, -14], [2.8, .1, 1.3], { stage: 1 });
+for (const x of [-48.5, -47.6, -46.7]) add(G.cylLo, MAT.utility, [x, .95, -13.55], [.14, .6, .14], { stage: 1 });
+for (const x of [-48.8, -46.4]) add(G.box, MAT.steelDark, [x, .28, -14], [.08, .55, 1.1], { stage: 1 });
+legs(-42.4, -14, 1.15, .75, 4, 1, .08);
+add(G.cyl, MAT.steel, [-42.4, 2.45, -14], [1.5, 3.4, 1.5], { stage: 1 });
+add(G.dome, MAT.steel, [-42.4, 4.15, -14], [1.5, .38, 1.5], { stage: 1 });
+add(G.box, MAT.paint, [-42.4, 4.8, -14], [.55, .6, .55], { stage: 1 });
+const agitator = add(G.box, MAT.steelDark, [-42.4, 5.15, -14], [1.1, .06, .12], { stage: 1 });
+
+/* stage 2: balance tank, plate heat exchanger, deaerator */
+add(G.cyl, MAT.steel, [-33, 1.0, -14], [.55, 1.4, .55], { stage: 2 });
+add(G.box, MAT.paint, [-31.9, .25, -13.1], [.6, .5, .5], { stage: 2 });
+for (const x of [-30.2, -27.6]) add(G.box, MAT.paint, [x, 1.15, -14], [.26, 2.1, 1.15], { stage: 2 });
+{
+  const plates = new THREE.InstancedMesh(G.box, MAT.steel, 18), d = new THREE.Object3D();
+  for (let i = 0; i < 18; i++) { d.position.set(-29.95 + i * .122, 1.1, -14); d.scale.set(.055, 1.75, .95); d.updateMatrix(); plates.setMatrixAt(i, d.matrix); }
+  plates.castShadow = true; plates.receiveShadow = true; plates.userData.stage = 2; clickables.push(plates); scene.add(plates);
+}
+for (const z of [-14.45, -13.55]) add(G.box, MAT.steelDark, [-28.9, 2.25, z], [3.0, .1, .1], { stage: 2 });
+legs(-24.8, -14, .55, .6, 3, 2, .06);
+add(G.coneDown, MAT.steel, [-24.8, .7, -14], [.7, .5, .7], { stage: 2 });
+add(G.cyl, MAT.steel, [-24.8, 2.2, -14], [.7, 2.5, .7], { stage: 2 });
+add(G.dome, MAT.steel, [-24.8, 3.45, -14], [.7, .32, .7], { stage: 2 });
+add(G.cyl, MAT.utility, [-24.8, 4.1, -14], [.28, .7, .28], { stage: 2 });
+add(G.box, MAT.paint, [-23.5, .23, -12.8], [.6, .45, .6], { stage: 2 });
+
+/* stage 3: homogenizer */
+add(G.box, MAT.steelDark, [-20.5, .1, -14], [2.5, .2, 1.5], { stage: 3 });
+add(G.box, MAT.paint, [-20.5, .75, -14], [2.2, 1.1, 1.3], { stage: 3 });
+const pistons = [-21.1, -20.5, -19.9].map(x => add(G.cylLo, MAT.steel, [x, .8, -13.1], [.09, .55, .09], { stage: 3, rx: Math.PI / 2 }));
+add(G.cyl, MAT.paint, [-20.5, .55, -15.35], [.42, 1.2, .42], { stage: 3, rz: Math.PI / 2 });
+for (const x of [-21.0, -20.1]) add(G.cylLo, MAT.gauge, [x, 1.34, -13.75], [.13, .06, .13], { stage: 3 });
+
+/* stage 4: steam injector, holding tube, diversion valve, reject tank, boiler house */
+add(G.cylLo, MAT.steel, [-17, 1.0, -14], [.18, .75, .18], { stage: 4 });
+add(G.box, MAT.dark, [-17, 1.2, -21.3], [3.2, 2.4, 2.2], { stage: 4 });
+add(G.cylLo, MAT.steelDark, [-16, 3.5, -21.7], [.22, 2.3, .22], { stage: 4 });
+for (const dx of [-.75, .75]) add(G.box, MAT.steelDark, [-14.8 + dx, 1.3, -14], [.06, 2.6, .06], { stage: 4 });
+add(G.box, MAT.steelDark, [-12.6, 2.5, -14], [.45, .45, .45], { stage: 4 });
+const fdvLamp = lamp([-12.6, 2.92, -14], 4);
+add(G.cyl, MAT.shell, [-12.6, .85, -10.5], [.75, 1.6, .75], { stage: 4, cast: false });
+const rejectMilk = add(G.cyl, MAT.milk, [-12.6, .1, -10.5], [.7, .01, .7], { stage: 4 });
+
+/* stage 5: flash vessel, condenser, tubular cooler headers */
+legs(-10, -14, .7, .75, 3, 5, .07);
+add(G.coneDown, MAT.steel, [-10, .7, -14], [.85, .6, .85], { stage: 5 });
+add(G.cyl, MAT.steel, [-10, 2.5, -14], [.85, 3.0, .85], { stage: 5 });
+add(G.dome, MAT.steel, [-10, 4.0, -14], [.85, .35, .85], { stage: 5 });
+add(G.cyl, MAT.utility, [-8.25, 4.9, -14], [.3, 1.3, .3], { stage: 5, rz: Math.PI / 2 });
+for (const x of [-9.45, -5.95]) add(G.box, MAT.steelDark, [x, .8, -11.6], [.22, 1.0, .4], { stage: 5 });
+
+/* stage 6: aseptic tank */
+legs(4, -14, 1.35, 1.0, 3, 6, .1);
+add(G.cyl, MAT.steel, [4, 1.04, -14], [1.82, .08, 1.82], { stage: 6 });
+add(G.cyl, MAT.shell, [4, 3.3, -14], [1.8, 4.5, 1.8], { stage: 6, cast: false });
+add(G.dome, MAT.steel, [4, 5.55, -14], [1.8, .45, 1.8], { stage: 6 });
+const tankMilk = add(G.cyl, MAT.milk, [4, 1.1, -14], [1.7, .01, 1.7], { stage: 6 });
+add(G.cylLo, MAT.utility, [5.3, 6.15, -14], [.16, .6, .16], { stage: 6 });
+const tankLamp = lamp([4, 6.25, -14], 6);
+
+/* stage 7: two aseptic fillers */
+const filler3D = [-17.5, -10.5].map((z, i) => {
+  add(G.box, MAT.panel, [20, 1.2, z], [3.2, 2.4, 2.2], { stage: 7 });
+  add(G.box, MAT.glass, [20, 2.95, z], [2.0, 1.1, 1.6], { stage: 7, cast: false });
+  add(G.cylLo, MAT.milk, [19.7, 2.95, z], [.13, 1.0, .13], { stage: 7 });
+  add(G.box, MAT.steelDark, [20, 3.53, z], [2.1, .06, 1.7], { stage: 7 });
+  const reel = new THREE.Group(); reel.position.set(19.2, 1.0, z + (i === 0 ? -1.42 : 1.42)); scene.add(reel);
+  add(G.cyl, MAT.reel, [0, 0, 0], [.78, .34, .78], { stage: 7, parent: reel, rx: Math.PI / 2 });
+  add(G.box, MAT.steelDark, [0, 0, 0], [1.2, .1, .36], { stage: 7, parent: reel });
+  return { reel, lamp: lamp([21.3, 3.75, z], 7) };
+});
+
+/* conveyors, tray-shrink tunnel, palletizer, stretch wrapper (stage 8) */
+function poly(points) {
+  const v = points.map(p => new THREE.Vector3(p[0], p[1], p[2])), T = points.map(p => p[3] ?? 20), cum = [0];
+  for (let i = 1; i < v.length; i++) cum.push(cum[i - 1] + v[i].distanceTo(v[i - 1]));
+  return { v, T, cum, len: cum[cum.length - 1] };
+}
+function seg(pl, s) { let lo = 1, hi = pl.cum.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (pl.cum[mid] < s) lo = mid + 1; else hi = mid; } return lo; }
+function sample(pl, s, out) {
+  if (s <= 0) { out.copy(pl.v[0]); return pl.T[0]; }
+  if (s >= pl.len) { out.copy(pl.v[pl.v.length - 1]); return pl.T[pl.T.length - 1]; }
+  const i = seg(pl, s), L = pl.cum[i] - pl.cum[i - 1], k = L > 0 ? (s - pl.cum[i - 1]) / L : 0;
+  out.lerpVectors(pl.v[i - 1], pl.v[i], k); return pl.T[i - 1] + (pl.T[i] - pl.T[i - 1]) * k;
+}
+function heading(pl, s) { const i = seg(pl, clamp(s, 0.001, pl.len - 0.001)); const a = pl.v[i - 1], b = pl.v[i]; return Math.atan2(b.z - a.z, b.x - a.x); }
+const BELT = .86;
+const LINE_A = poly([[21.75, BELT, -17.5], [34, BELT, -17.5], [34, BELT, 4.9]]);
+const LINE_B = poly([[21.75, BELT, -10.5], [32, BELT, -10.5], [32, BELT, 4.9]]);
+const TRAY_LINE = poly([[33, BELT, 8.4], [33, BELT, 11.2], [29.85, BELT, 11.2]]);
+function conveyor(pl, stage) {
+  for (let i = 1; i < pl.v.length; i++) {
+    const a = pl.v[i - 1], b = pl.v[i], ang = Math.atan2(b.z - a.z, b.x - a.x), L = a.distanceTo(b) + .62;
+    const cx = (a.x + b.x) / 2, cz = (a.z + b.z) / 2, sx = -Math.sin(ang), sz = Math.cos(ang);
+    add(G.box, MAT.belt, [cx, .8, cz], [L, .1, .62], { stage, ry: -ang });
+    for (const off of [-.36, .36]) add(G.box, MAT.steelDark, [cx + sx * off, .9, cz + sz * off], [L, .12, .05], { stage, ry: -ang, cast: false });
+    const n = Math.max(1, Math.round(L / 3));
+    for (let k = 0; k <= n; k++) { const f = k / n, x = a.x + (b.x - a.x) * f, z = a.z + (b.z - a.z) * f; for (const off of [-.28, .28]) add(G.box, MAT.steelDark, [x + sx * off, .38, z + sz * off], [.06, .76, .06], { stage, cast: false }); }
+  }
+}
+conveyor(LINE_A, 7); conveyor(LINE_B, 7); conveyor(TRAY_LINE, 8);
+add(G.box, MAT.paint, [33, .95, 6.65], [3.6, 1.7, 3.3], { stage: 8 });
+for (const z of [4.98, 8.32]) add(G.box, MAT.dark, [33, .95, z], [2.6, .9, .06], { stage: 8, cast: false });
+add(G.cyl, MAT.paint, [28.3, .3, 13.2], [.55, .6, .55], { stage: 8 });
+add(G.cylLo, MAT.paint, [28.3, 1.45, 13.2], [.22, 1.7, .22], { stage: 8 });
+const arm = new THREE.Group(); arm.position.set(28.3, 2.35, 13.2); scene.add(arm);
+add(G.box, MAT.paint, [1.22, 0, 0], [2.45, .2, .26], { stage: 8, parent: arm });
+add(G.cylLo, MAT.steelDark, [2.45, -.35, 0], [.06, .6, .06], { stage: 8, parent: arm });
+add(G.box, MAT.steelDark, [2.45, -.7, 0], [.55, .14, .45], { stage: 8, parent: arm });
+const ANG_PICK = Math.atan2(-(11.2 - 13.2), 29.85 - 28.3);
+const ANG_PLACE = Math.atan2(-(14.4 - 13.2), 26.2 - 28.3) + Math.PI * 2;
+add(G.box, MAT.wood, [26.2, .08, 14.4], [1.5, .16, 1.15], { stage: 8 });
+const stack = add(G.box, MAT.load, [26.2, .2, 14.4], [1.42, .05, 1.08], { stage: 8 });
+add(G.cyl, MAT.steelDark, [21.6, .06, 14.4], [1.05, .12, 1.05], { stage: 8 });
+add(G.box, MAT.paint, [20.15, 1.35, 13.35], [.2, 2.7, .2], { stage: 8 });
+const carriage = add(G.box, MAT.steelDark, [20.35, .6, 13.5], [.32, .22, .5], { stage: 8 });
+
+/* stage 9: quarantine area and QA lab */
+{
+  const pts = [[-10.9, 3.0], [7.2, 3.0], [7.2, 17.6], [-10.9, 17.6]].map(([x, z]) => new THREE.Vector3(x, .07, z));
+  scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), MAT.hatch));
+}
+add(G.box, MAT.panel, [9.4, 1.3, 5.6], [2.8, 2.6, 4.4], { stage: 9 });
+add(G.box, MAT.steelDark, [9.4, 2.65, 5.6], [3.0, .1, 4.6], { stage: 9 });
+for (const x of [8.6, 9.4, 10.2]) add(G.box, MAT.steel, [x, .5, 8.45], [.66, 1.0, .5], { stage: 9 });
+
+/* stage 10: racks, stock, dock doors, truck */
+const RACK_Z = [4.9, 8.7, 12.5, 16.3], NBAY = 16, LEVELS = [0, 1.6, 3.2];
+{
+  const up = new THREE.InstancedMesh(G.box, MAT.steelDark, (NBAY + 1) * RACK_Z.length * 2), d = new THREE.Object3D(); let n = 0;
+  for (const z of RACK_Z) for (let i = 0; i <= NBAY; i++) for (const dz of [-.55, .55]) { d.position.set(-61 + i * 2.5, 2.25, z + dz); d.scale.set(.09, 4.5, .09); d.updateMatrix(); up.setMatrixAt(n++, d.matrix); }
+  up.castShadow = true; up.userData.stage = 10; clickables.push(up); scene.add(up);
+  const bm = new THREE.InstancedMesh(G.box, MAT.beam, RACK_Z.length * 2 * 2); n = 0;
+  for (const z of RACK_Z) for (const y of [1.55, 3.15]) for (const dz of [-.55, .55]) { d.position.set(-41, y, z + dz); d.scale.set(40, .12, .07); d.updateMatrix(); bm.setMatrixAt(n++, d.matrix); }
+  bm.castShadow = true; bm.userData.stage = 10; clickables.push(bm); scene.add(bm);
+}
+const UNIT_MAX = NBAY * RACK_Z.length * LEVELS.length;
+const units = new THREE.InstancedMesh(G.box, MAT.load, UNIT_MAX);
+{
+  const d = new THREE.Object3D(); let n = 0;
+  for (const y of LEVELS) for (const z of RACK_Z) for (let i = 0; i < NBAY; i++) { d.position.set(-59.75 + i * 2.5, y + .74, z); d.scale.set(2.2, 1.25, 1.02); d.updateMatrix(); units.setMatrixAt(n++, d.matrix); }
+  units.castShadow = true; units.receiveShadow = true; units.userData.stage = 10; clickables.push(units); scene.add(units);
+}
+const DOORS = [-54, -46, -38];
+for (const x of DOORS) { add(G.box, MAT.dark, [x, 1.9, 19.15], [3.4, 3.8, .3], { stage: 10 }); add(G.box, MAT.steel, [x, 1.8, 19.32], [3.0, 3.4, .06], { stage: 10 }); }
+const truck = new THREE.Group(); truck.visible = false; scene.add(truck);
+add(G.box, MAT.trailer, [0, 1.75, 5.0], [2.5, 2.7, 9.6], { stage: 10, parent: truck });
+add(G.box, MAT.cab, [0, 1.55, 11.0], [2.4, 2.5, 2.2], { stage: 10, parent: truck });
+for (const zz of [1.5, 3.0, 9.0, 11.2]) for (const xx of [-1.15, 1.15]) add(G.cylLo, MAT.dark, [xx, .45, zz], [.45, .3, .45], { stage: 10, parent: truck, rz: Math.PI / 2 });
+
+/* pipes: colour follows milk temperature */
+const tA = new THREE.Vector3(), tB = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+const jointMats = new Map();
+function jointMat(T) { const k = Math.round(T); if (!jointMats.has(k)) jointMats.set(k, std({ color: tempColor(T).clone(), roughness: .35, metalness: .2 })); return jointMats.get(k); }
+const pipeMeshes = [];
+function pipeRun(points, r = .11, mat = MAT.pipe) {
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    tA.set(a[0], a[1], a[2]); tB.set(b[0], b[1], b[2]);
+    const len = tA.distanceTo(tB); if (len < .01) continue;
+    const g = new THREE.CylinderGeometry(r, r, len, 12, Math.max(1, Math.round(len / 1.5)), true);
+    if (mat === MAT.pipe) {
+      const pos = g.attributes.position, cols = new Float32Array(pos.count * 3);
+      for (let k = 0; k < pos.count; k++) { tempColor(a[3] + (b[3] - a[3]) * (pos.getY(k) / len + .5)); cols[k * 3] = _c.r; cols[k * 3 + 1] = _c.g; cols[k * 3 + 2] = _c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+    }
+    const m = new THREE.Mesh(g, mat);
+    m.position.addVectors(tA, tB).multiplyScalar(.5);
+    m.quaternion.setFromUnitVectors(UP, tB.clone().sub(tA).normalize());
+    m.castShadow = true; scene.add(m); pipeMeshes.push({ m, a, b, mat });
+    if (i < points.length - 1) { const j = new THREE.Mesh(G.sph, mat === MAT.pipe ? jointMat(b[3]) : mat); j.position.copy(tB); j.scale.setScalar(r * 1.05); scene.add(j); pipeMeshes.push({ j, T: b[3], mat }); }
+  }
+}
+class Helix extends THREE.Curve {
+  getPoint(t, target = new THREE.Vector3()) { const a = Math.PI + t * 5.5 * 2 * Math.PI; return target.set(-14.8 + .6 * Math.cos(a), .9 + 1.6 * t, -14 + .6 * Math.sin(a)); }
+}
+const PRE = [[-55.6, .9, -14, 4], [-52.3, .9, -14, 40], [-52.3, 1.2, -14, 58], [-50.7, 1.2, -14, 60], [-48.9, 1.2, -14, 60], [-46.3, 1.2, -14, 40], [-43.9, 1.2, -14, 6],
+  [-42.4, 1.2, -14, 4], [-42.4, .7, -14, 4], [-40.9, .7, -14, 4], [-33.55, .7, -14, 4], [-33, .7, -14, 4], [-32.45, .5, -14, 4], [-30.35, .5, -14, 4],
+  [-28.9, .5, -14, 40], [-28.9, 1.7, -14, 70], [-27.45, 1.7, -14, 80], [-26.2, 1.7, -14, 80], [-26.2, 3.0, -14, 80], [-25.5, 3.0, -14, 80],
+  [-24.8, 2.0, -14, 77], [-24.8, .45, -14, 76], [-23.2, .45, -14, 76], [-23.2, .7, -14, 76], [-21.65, .7, -14, 76], [-20.5, .7, -14, 77], [-19.35, .9, -14, 78],
+  [-17.2, .9, -14, 78], [-17, .9, -14, 140], [-15.4, .9, -14, 140]];
+const HELIX = []; { const hc = new Helix(); for (let i = 1; i <= 120; i++) { const p = hc.getPoint(i / 120); HELIX.push([p.x, p.y, p.z, 140]); } }
+const FDV = [-12.6, 2.5, -14, 140];
+const MAIN = poly([...PRE, ...HELIX, FDV]);
+const PROD = poly([FDV, [-11.6, 2.5, -14, 140], [-11.6, 3.3, -14, 140], [-10.85, 3.3, -14, 140], [-10, 2.5, -14, 80], [-10, .4, -14, 80], [-10, .4, -11.6, 80], [-9.3, .5, -11.6, 80],
+  [-6.1, .5, -11.6, 60], [-6.1, .8, -11.6, 60], [-9.3, .8, -11.6, 40], [-9.3, 1.1, -11.6, 40], [-6.1, 1.1, -11.6, 20], [1.0, 1.1, -11.6, 20], [1.0, 1.1, -14, 20], [2.2, 1.1, -14, 20], [4, 1.6, -14, 20]]);
+const DIV = poly([FDV, [-12.6, 2.5, -13.2, 140], [-12.6, 2.5, -10.5, 135], [-12.6, 1.7, -10.5, 130], [-12.6, .6, -10.5, 120]]);
+const OUT_A = poly([[4, 1.0, -14, 20], [4, .55, -14, 20], [13, .55, -14, 20], [13, .55, -17.5, 20], [18.4, .55, -17.5, 20], [19.7, 2.5, -17.5, 20]]);
+const OUT_B = poly([[4, 1.0, -14, 20], [4, .55, -14, 20], [13, .55, -14, 20], [13, .55, -10.5, 20], [18.4, .55, -10.5, 20], [19.7, 2.5, -10.5, 20]]);
+function buildPipes() {
+  for (const p of pipeMeshes) { scene.remove(p.m || p.j); (p.m || p.j).geometry !== G.sph && (p.m || p.j).geometry.dispose(); }
+  pipeMeshes.length = 0; jointMats.forEach(m => m.dispose()); jointMats.clear();
+  pipeRun([[-56.85, .9, -18.5, 4], [-55.6, .9, -18.5, 4], [-55.6, .9, -9.5, 4], [-56.85, .9, -9.5, 4]]);
+  pipeRun(PRE); pipeRun([HELIX[HELIX.length - 1], FDV]);
+  pipeRun(PROD.v.map((v, i) => [v.x, v.y, v.z, PROD.T[i]]));
+  pipeRun(DIV.v.map((v, i) => [v.x, v.y, v.z, DIV.T[i]]));
+  pipeRun(OUT_A.v.map((v, i) => [v.x, v.y, v.z, 20]));
+  pipeRun([[13, .55, -14, 20], [13, .55, -10.5, 20], [18.4, .55, -10.5, 20], [19.7, 2.5, -10.5, 20]]);
+  pipeRun([[-17, 1.38, -14], [-17, 4.2, -14], [-17, 4.2, -20.2], [-17, 2.45, -20.2]], .07, MAT.utility);
+  pipeRun([[-10, 4.35, -14], [-10, 4.9, -14], [-8.9, 4.9, -14]], .1, MAT.utility);
+  pipeRun([[-24.8, 4.45, -14], [-24.8, 4.75, -14], [-23.5, 4.75, -14], [-23.5, .45, -12.8]], .06, MAT.utility);
+  pipeRun([[5.3, 6.45, -14], [5.3, 6.7, -14], [4.6, 6.7, -14], [4.6, 5.95, -14]], .05, MAT.utility);
+}
+buildPipes();
+const helixGeo = new THREE.TubeGeometry(new Helix(), 260, .085, 10, false);
+function colorHelix() { const n = helixGeo.attributes.position.count, cols = new Float32Array(n * 3); tempColor(140); for (let k = 0; k < n; k++) { cols[k * 3] = _c.r; cols[k * 3 + 1] = _c.g; cols[k * 3 + 2] = _c.b; } helixGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3)); }
+colorHelix();
+const helixMesh = new THREE.Mesh(helixGeo, MAT.pipe); helixMesh.castShadow = true; helixMesh.userData.stage = 4; clickables.push(helixMesh); scene.add(helixMesh);
+
+/* moving things: milk, cartons, trays, pallets */
+function instanced(geo, mat, max, cast = true) { const m = new THREE.InstancedMesh(geo, mat, max); m.count = 0; m.castShadow = cast; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; }
+const partMesh = instanced(G.sph, MAT.particle, 480, false);
+partMesh.setColorAt(0, new THREE.Color(1, 1, 1));
+const cartMesh = instanced(G.box, MAT.carton, 280);
+const trayMesh = instanced(G.box, MAT.tray, 60);
+const palBase = instanced(G.box, MAT.wood, 24), palLoad = instanced(G.box, MAT.load, 24);
+const parts = [], cartons = [], trays = [], pallets = [];
+const dummy = new THREE.Object3D(), tmpV = new THREE.Vector3(), white = new THREE.Color(1, 1, 1);
+let vt = 0, upAcc = 0, downAcc = 0, nextOut = 0, trayPend = 0, lastTray = -9, lastPal = -9, armBusy = 0, wrapBusy = 0;
+
+function spawnUp(s = 0) { parts.push({ pl: MAIN, s, main: true }); }
+function spawnDown(s = 0) {
+  const run = M.fillers.map((f, i) => f.mode === 'running' ? i : -1).filter(i => i >= 0);
+  if (!run.length) return;
+  const i = run[nextOut++ % run.length];
+  parts.push({ pl: i ? OUT_B : OUT_A, s, main: false });
+}
+
+/* quarantine blocks: one block per batch; they age from right to left */
+const blocks = new Map(), outcomes = new Map();
+const tagEl = document.createElement('div'); tagEl.className = 'tag';
+const tag = new CSS2DObject(tagEl); tag.center.set(.5, 1); scene.add(tag);
+function slot(rank) { const col = Math.floor(rank / 4), row = rank % 4; return [-9.6 + col * 2.55, 4.6 + row * 3.8]; }
+function makeBlock(b, x, z) {
+  const box = add(G.box, MAT.load, [x, .5, z], [2.0, 1, 3.0], { stage: 9 });
+  const l = lamp([x, 1.4, z], 9); setLamp(l, 'warn');
+  const h = Math.max(.12, b.pallets / 108 * 2.6);
+  return { box, lamp: l, x, z, tx: x, tz: z, h, curH: h, out: null, t: 0 };
+}
+function dropBlock(id, k) {
+  for (const o of [k.box, k.lamp]) { scene.remove(o); const i = clickables.indexOf(o); if (i >= 0) clickables.splice(i, 1); }
+  const li = lampList.indexOf(k.lamp); if (li >= 0) lampList.splice(li, 1); k.lamp.material.dispose(); blocks.delete(id);
+}
+function syncBlocks(vdt) {
+  const list = M.batches.slice().sort((a, b) => a.id - b.id), ids = new Set();
+  list.forEach((b, r) => {
+    ids.add(b.id);
+    const [tx, tz] = slot(r);
+    let k = blocks.get(b.id);
+    if (!k) { k = makeBlock(b, tx, tz); blocks.set(b.id, k); }
+    k.tx = tx; k.tz = tz; k.h = Math.max(.12, b.pallets / 108 * 2.6);
+  });
+  for (const [id, k] of blocks) if (!ids.has(id) && !k.out) { k.out = outcomes.get(id) || 'release'; k.t = 0; }
+  const f4 = Math.min(1, vdt * 4), f6 = Math.min(1, vdt * 6);
+  for (const [id, k] of [...blocks]) {
+    if (k.out === 'release') {
+      k.t += vdt; setLamp(k.lamp, 'ok');
+      if (k.t > .5) k.x += (-15 - k.x) * Math.min(1, vdt * 2.4);
+      if (k.t > 1.9) { dropBlock(id, k); continue; }
+    } else if (k.out === 'block') {
+      k.t += vdt; setLamp(k.lamp, 'bad');
+      if (k.t > .9) k.curH = Math.max(.02, k.curH * (1 - Math.min(1, vdt * 1.6)));
+      if (k.t > 2.6) { dropBlock(id, k); continue; }
+    } else {
+      k.x += (k.tx - k.x) * f4; k.z += (k.tz - k.z) * f4; k.curH += (k.h - k.curH) * f6; setLamp(k.lamp, 'warn');
+    }
+    k.box.scale.set(2.0, k.curH, 3.0); k.box.position.set(k.x, k.curH / 2 + .03, k.z); k.lamp.position.set(k.x, k.curH + .32, k.z);
+  }
+  const oldest = list.find(b => b.status === 'hold'), ko = oldest && blocks.get(oldest.id);
+  tag.visible = !!ko;
+  if (ko) { tag.position.set(ko.x, ko.curH + .7, ko.z); tagEl.textContent = `Batch ${oldest.id} · release ${fmtAbs(oldest.releaseAt)}`; }
+}
+function spawnPallet(batchId) {
+  if (vt - lastPal < 1.0 || pallets.length >= 24) return;
+  lastPal = vt;
+  const list = M.batches.slice().sort((a, b) => a.id - b.id), r = list.findIndex(b => b.id === batchId);
+  const [sx, sz] = slot(Math.max(0, r));
+  pallets.push({ pl: poly([[26.2, .1, 14.4], [21.6, .1, 14.4], [12.4, .1, 14.4], [12.4, .1, sz], [sx + 1.4, .1, sz]]), s: 0, wrap: 0, spin: 0 });
+}
+
+/* truck: arrives at a dock door, loads, leaves */
+const truckAnim = { phase: 'idle', t: 0, door: 0, pending: 0 };
+function startTruck() {
+  if (truckAnim.phase !== 'idle') { truckAnim.pending = Math.min(1, truckAnim.pending + 1); return; }
+  truckAnim.phase = 'in'; truckAnim.t = 0; truckAnim.door = (truckAnim.door + 1) % DOORS.length;
+  truck.position.set(DOORS[truckAnim.door], 0, 53.5); truck.visible = true;
+}
+function updateTruck(vdt) {
+  const A = truckAnim; if (A.phase === 'idle') return; A.t += vdt;
+  if (A.phase === 'in') { const k = Math.min(1, A.t / 2.2), e = 1 - Math.pow(1 - k, 3); truck.position.z = 19.5 + 34 * (1 - e); if (k >= 1) { A.phase = 'dock'; A.t = 0; } }
+  else if (A.phase === 'dock') { truck.position.z = 19.5; if (A.t >= 1.6) { A.phase = 'out'; A.t = 0; } }
+  else { const k = Math.min(1, A.t / 2.2); truck.position.z = 19.5 + 40 * k * k * k; if (k >= 1) { A.phase = 'idle'; truck.visible = false; if (A.pending) { A.pending--; startTruck(); } } }
+}
+
+/* labels: one numbered tag per stage with a live value */
+const BADGE = { 1: [-50.5, 3.6, -14], 2: [-28.9, 3.0, -14], 3: [-20.5, 2.2, -14], 4: [-14.8, 3.4, -14], 5: [-10, 5.3, -14], 6: [4, 7.2, -14], 7: [20, 4.6, -14], 8: [27.5, 3.8, 12], 9: [-1.8, 3.6, 10.3], 10: [-40, 5.4, 10.6] };
+const badges = STAGES.map(st => {
+  const el = document.createElement('button'); el.type = 'button'; el.className = 'badge'; el.setAttribute('aria-label', `Stage ${st.id}: ${st.name}`);
+  const b = document.createElement('b'); b.textContent = st.id; const span = document.createElement('span'); el.append(b, span);
+  el.addEventListener('click', ev => { ev.stopPropagation(); setTour(false); select(st.id); });
+  const o = new CSS2DObject(el); o.position.set(...BADGE[st.id]); scene.add(o);
+  return { id: st.id, el, span };
+});
+const ring = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 72), MAT.ring);
+ring.rotation.x = -Math.PI / 2; ring.position.y = .08; ring.visible = false; scene.add(ring);
+const FOCUS = { 1: [-50, 1.5, -14], 2: [-28, 1.5, -14], 3: [-20.5, 1, -14], 4: [-15, 1.4, -13], 5: [-9, 1.8, -13], 6: [4, 3, -14], 7: [23, 1.4, -14], 8: [28, 1, 10.5], 9: [-1.5, 1, 10.3], 10: [-39, 1.5, 11.5] };
+const CAMOFF = { 1: [3, 15, 21], 2: [1, 7.5, 12], 3: [1, 5, 9], 4: [1, 6, 10], 5: [1, 7, 11], 6: [1, 8, 14], 7: [2, 12, 17], 8: [2, 13, 16], 9: [1, 19, 22], 10: [2, 27, 33] };
+const RING_R = { 1: 10.5, 2: 4.4, 3: 2.6, 4: 3.6, 5: 3.4, 6: 3.2, 7: 7, 8: 7.5, 9: 11.5, 10: 25 };
+
+/* camera moves and tour */
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let fly = null, tour = null;
+function flyTo(pos, target) {
+  if (reduceMotion) { camera.position.copy(pos); controls.target.copy(target); return; }
+  fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos.clone(), t1: target.clone(), k: 0 };
+}
+function updateFly(dt) {
+  if (!fly) return;
+  fly.k = Math.min(1, fly.k + dt / 1.25);
+  const k = fly.k, e = k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+  camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.t0, fly.t1, e);
+  if (k >= 1) fly = null;
+}
+const btnTour = $('#btnTour');
+function setTour(on) {
+  if (!on && !tour) return;
+  tour = on ? { i: 1, t: 0 } : null;
+  btnTour.setAttribute('aria-pressed', String(!!on)); btnTour.textContent = on ? 'Stop tour' : 'Guided tour';
+  if (on) select(1);
+}
+function updateTour(dt) {
+  if (!tour) return;
+  tour.t += dt;
+  if (tour.t < 5) return;
+  tour.t = 0; tour.i++;
+  if (tour.i > 10) { setTour(false); select(0); return; }
+  select(tour.i);
+}
+
+/* =========================================================================
+   UI
+   ========================================================================= */
+const railBtns = [...document.querySelectorAll('.stage[data-stage]')];
+const pNo = $('#pNo'), pName = $('#pName'), pWhat = $('#pWhat'), pLamp = $('#pLamp'), pChip = $('#pChip'), pVals = $('#pVals'), pHow = $('#pHow'), logEl = $('#log'), clockEl = $('#clock');
+const K = {}; for (const id of ['uht', 'bstar', 'tank', 'fill', 'pallets', 'hold', 'stock', 'trucks']) { const r = $('#k-' + id); K[id] = { r, v: r.querySelector('.k-v'), s: r.querySelector('.k-s') }; }
+let selected = 0;
+function select(id, flyCam = true) {
+  selected = id;
+  for (const b of railBtns) b.setAttribute('aria-current', String(Number(b.dataset.stage) === id));
+  for (const b of badges) b.el.classList.toggle('sel', b.id === id);
+  if (id === 0) { ring.visible = false; if (flyCam) flyTo(overviewPos(), OV_TARGET); }
+  else {
+    const f = FOCUS[id], o = CAMOFF[id];
+    ring.visible = true; ring.position.set(f[0], .08, f[2]); ring.scale.set(RING_R[id], RING_R[id], 1);
+    if (flyCam) flyTo(new THREE.Vector3(f[0] + o[0], f[1] + o[1], f[2] + o[2]), new THREE.Vector3(f[0], f[1], f[2]));
+  }
+  renderPanel(true);
+}
+function renderPanel(full) {
+  if (selected === 0) {
+    if (full) { pNo.textContent = 'All'; pName.textContent = 'Whole plant'; pWhat.textContent = OVERVIEW_TEXT; pVals.hidden = true; pHow.hidden = false; }
+    const worst = [1, 2, 3, 4, 5, 6, 7, 8, 10].map(stageStatus);
+    pLamp.dataset.s = worst.includes('bad') ? 'bad' : worst.includes('warn') ? 'warn' : 'ok';
+    pChip.textContent = `UHT plant: ${modeText()}`;
+    return;
+  }
+  const st = STAGES[selected - 1];
+  if (full) { pNo.textContent = st.id; pName.textContent = st.name; pWhat.textContent = st.what; pVals.hidden = false; pHow.hidden = true; }
+  pLamp.dataset.s = stageStatus(st.id); pChip.textContent = stageChip(st.id);
+  const rows = stageValues(st.id);
+  pVals.replaceChildren(...rows.flatMap(([k, v]) => { const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = k; dd.textContent = v; return [dt, dd]; }));
+}
+function renderLog() {
+  logEl.replaceChildren(...M.log.slice(0, 8).map(e => {
+    const li = document.createElement('li'), tm = document.createElement('time'), sp = document.createElement('span');
+    li.dataset.k = e.kind; tm.textContent = fmtAbs(e.at).replace('day ', 'D').replace(' · ', ' '); sp.textContent = e.msg; li.append(tm, sp); return li;
+  }));
+  logDirty = false;
+}
+function setK(id, v, unit, sub, s) {
+  const k = K[id]; k.v.textContent = v;
+  if (unit) { const sm = document.createElement('small'); sm.textContent = unit; k.v.append(' ', sm); }
+  k.s.textContent = sub; k.r.dataset.s = s || '';
+}
+function renderUI() {
+  const u = M.uht, a = abs();
+  clockEl.textContent = fmtAbs(a).replace('day', 'Day');
+  const flowing = u.mode === 'production' || u.mode === 'divert';
+  setK('uht', fmt(u.mode === 'divert' ? M.Qreject : M.Qin), 'L/h', modeText(), u.mode === 'divert' ? 'bad' : u.mode === 'production' ? '' : 'warn');
+  const b = Bstar(u.T, P.hold);
+  setK('bstar', flowing ? b.toFixed(2) : '—', '', `F0 ${F0(u.T, P.hold).toFixed(1)} min · ${u.T.toFixed(1)} °C`, flowing && b < 1 ? 'bad' : flowing && b < 1.05 ? 'warn' : '');
+  const lvl = M.tankV / P.tankCap * 100;
+  setK('tank', fmt(lvl), '%', `${fmt(M.tankV)} of 20,000 L`, lvl < 2 ? 'bad' : (lvl < 10 || lvl > 90) ? 'warn' : '');
+  setK('fill', fmt(M.Qout), 'packs/h', `OEE ${oee()}`, M.Qout === 0 ? 'bad' : M.Qout < 2 * P.fillerRate ? 'warn' : '');
+  setK('pallets', fmt(M.pallets), '', `current pallet ${Math.floor(M.palletPacks / P.packsPerTray)}/84 trays`, '');
+  const holdN = M.batches.filter(x => x.status === 'hold').length;
+  setK('hold', fmt(M.batches.reduce((s, x) => s + x.pallets, 0)), 'pallets', `${holdN} batches + 1 filling`, abs() - M.lastBlock < DAY ? 'bad' : '');
+  setK('stock', fmt(M.stock), 'pallets', `${(M.stock / PALLETS_PER_DAY).toFixed(1)} days of cover`, M.stock < P.truckCap ? 'warn' : '');
+  setK('trucks', fmt(M.trucks), '', M.truckWaiting ? 'truck waiting for stock' : `next ${fmtAbs(M.nextTruck)}`, M.truckWaiting ? 'warn' : '');
+  for (const btn of railBtns) btn.querySelector('.lamp').dataset.s = stageStatus(Number(btn.dataset.stage));
+  const camDist = camera.position.distanceTo(controls.target);
+  labels.domElement.classList.toggle('far', camDist > 170);
+  for (const bd of badges) { bd.span.textContent = badgeText(bd.id); bd.el.classList.toggle('compact', camDist > 80 && bd.id !== selected); }
+  renderPanel(false);
+  if (logDirty) renderLog();
+}
+
+/* controls */
+let playing = true, speed = 100;
+const btnPlay = $('#btnPlay');
+function togglePlay() { playing = !playing; btnPlay.textContent = playing ? 'Pause' : 'Play'; }
+btnPlay.addEventListener('click', togglePlay);
+for (const b of document.querySelectorAll('[data-speed]')) b.addEventListener('click', () => {
+  speed = Number(b.dataset.speed);
+  for (const x of document.querySelectorAll('[data-speed]')) x.setAttribute('aria-pressed', String(x === b));
+  if (!playing) togglePlay();
+});
+btnTour.addEventListener('click', () => setTour(!tour));
+$('#btnOverview').addEventListener('click', () => { setTour(false); select(0); });
+for (const b of railBtns) b.addEventListener('click', () => { setTour(false); select(Number(b.dataset.stage)); });
+const scen = $('#scen');
+for (const b of document.querySelectorAll('[data-fault]')) b.addEventListener('click', () => {
+  scen.open = false; setTour(false);
+  const st = triggerFault(b.dataset.fault);
+  if (!playing) togglePlay();
+  if (st) select(st);
+  renderUI();
+});
+document.addEventListener('click', e => { if (scen.open && !scen.contains(e.target)) scen.open = false; });
+window.addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('button, input, select, textarea, summary')) return;
+  if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  else if (/^[0-9]$/.test(e.key)) { setTour(false); select(e.key === '0' ? 10 : Number(e.key)); }
+  else if (e.key === 'o' || e.key === 'O' || e.key === 'Escape') { setTour(false); select(0); }
+});
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(); let down = null;
+renderer.domElement.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!down) return;
+  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), quick = performance.now() - down.t < 450; down = null;
+  if (moved > 6 || !quick) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(clickables, false).find(h => h.object.userData.stage);
+  if (hit) select(hit.object.userData.stage);
+});
+controls.addEventListener('start', () => { fly = null; userMoved = true; setTour(false); });
+
+/* theme changes */
+const onTheme = () => { applyTheme(); buildPipes(); colorHelix(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onTheme);
+new MutationObserver(onTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+/* sizing */
+function resize() {
+  const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h); labels.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+  if (selected === 0 && !userMoved && !fly) { camera.position.copy(overviewPos()); controls.target.copy(OV_TARGET); }
+}
+new ResizeObserver(resize).observe(host); resize();
+
+/* =========================================================================
+   Frame loop
+   ========================================================================= */
+function updateVisuals(vdt) {
+  vt += vdt;
+  for (const e of M.ev) {
+    if (e.type === 'trays') trayPend += e.n;
+    else if (e.type === 'pallet') spawnPallet(e.batch);
+    else if (e.type === 'release' || e.type === 'block') outcomes.set(e.id, e.type);
+    else if (e.type === 'truck') startTruck();
+  }
+  M.ev.length = 0;
+  const u = M.uht;
+
+  sepBowl.rotation.y += vdt * 9;
+  agitator.rotation.y += vdt * 2.2;
+  pistons.forEach((p, i) => { p.position.z = -13.1 + .12 * Math.sin(vt * (u.throttled ? 6 : 11) + i * 2.09); });
+  filler3D.forEach((f, i) => { if (M.fillers[i].mode === 'running') f.reel.rotation.z -= vdt * 1.6; setLamp(f.lamp, M.fillers[i].mode === 'running' ? 'ok' : M.fillers[i].mode === 'starved' ? 'warn' : 'bad'); });
+  setLamp(fdvLamp, u.mode === 'production' ? 'ok' : u.mode === 'divert' ? 'bad' : 'warn');
+  setLamp(tankLamp, stageStatus(6));
+  const th = Math.max(.01, M.tankV / P.tankCap * 4.35); tankMilk.scale.y = th; tankMilk.position.y = 1.1 + th / 2;
+  const rh = Math.max(.01, M.rejectL / P.rejectCap * 1.45); rejectMilk.scale.y = rh; rejectMilk.position.y = .1 + rh / 2;
+  const sh = Math.max(.02, M.palletPacks / PACKS_PER_PALLET * 2.0); stack.scale.y = sh; stack.position.y = .16 + sh / 2;
+  MAT.ring.opacity = .35 + .25 * Math.sin(vt * 3 + 1);
+
+  // milk particles
+  const upRate = 7 * (M.Qin + M.Qreject) / P.uhtFlow, downRate = 6 * M.Qout / (2 * P.fillerRate);
+  upAcc += vdt * upRate; while (upAcc >= 1) { upAcc--; if (parts.length < 470) spawnUp(); }
+  downAcc += vdt * downRate; while (downAcc >= 1) { downAcc--; if (parts.length < 470) spawnDown(); }
+  let n = 0;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.s += vdt * (p.main ? 4.2 : 3.2);
+    if (p.pl === MAIN && p.s >= MAIN.len) { p.s -= MAIN.len; p.pl = u.mode === 'divert' ? DIV : PROD; }
+    if (p.s >= p.pl.len) { parts.splice(i, 1); continue; }
+  }
+  for (const p of parts) {
+    const T = sample(p.pl, p.s, tmpV);
+    dummy.position.copy(tmpV); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(.145); dummy.updateMatrix();
+    partMesh.setMatrixAt(n, dummy.matrix); partMesh.setColorAt(n, tempColor(T).lerp(white, .55)); n++;
+  }
+  partMesh.count = n; partMesh.instanceMatrix.needsUpdate = true; if (partMesh.instanceColor) partMesh.instanceColor.needsUpdate = true;
+
+  // cartons on the two filler lines
+  M.fillers.forEach((f, i) => { if (f.vis > 0 && vt - f.last >= .34) { f.vis = 0; f.last = vt; if (cartons.length < 280) cartons.push({ pl: i ? LINE_B : LINE_A, s: 0 }); } });
+  n = 0;
+  for (let i = cartons.length - 1; i >= 0; i--) { const c = cartons[i]; c.s += vdt * 1.7; if (c.s >= c.pl.len) cartons.splice(i, 1); }
+  for (const c of cartons) { sample(c.pl, c.s, tmpV); dummy.position.set(tmpV.x, BELT + .22, tmpV.z); dummy.rotation.set(0, -heading(c.pl, c.s), 0); dummy.scale.set(.2, .44, .17); dummy.updateMatrix(); cartMesh.setMatrixAt(n++, dummy.matrix); }
+  cartMesh.count = n; cartMesh.instanceMatrix.needsUpdate = true;
+
+  // trays to the palletizer
+  if (trayPend > 0 && vt - lastTray >= .7) { trayPend = 0; lastTray = vt; if (trays.length < 60) trays.push({ s: 0 }); }
+  n = 0;
+  for (let i = trays.length - 1; i >= 0; i--) { const t = trays[i]; t.s += vdt * 1.2; if (t.s >= TRAY_LINE.len) { trays.splice(i, 1); armBusy = 1.6; } }
+  for (const t of trays) { sample(TRAY_LINE, t.s, tmpV); dummy.position.set(tmpV.x, BELT + .2, tmpV.z); dummy.rotation.set(0, -heading(TRAY_LINE, t.s), 0); dummy.scale.set(.6, .4, .5); dummy.updateMatrix(); trayMesh.setMatrixAt(n++, dummy.matrix); }
+  trayMesh.count = n; trayMesh.instanceMatrix.needsUpdate = true;
+  armBusy = Math.max(0, armBusy - vdt);
+  const armK = armBusy > 0 ? .5 - .5 * Math.cos(vt * 3.9) : 0;
+  arm.rotation.y += ((ANG_PICK + (ANG_PLACE - ANG_PICK) * armK) - arm.rotation.y) * Math.min(1, vdt * 8);
+
+  // pallets: wrapper, then into quarantine
+  n = 0; wrapBusy = 0;
+  for (let i = pallets.length - 1; i >= 0; i--) {
+    const p = pallets[i];
+    if (p.s >= p.pl.cum[1] && p.wrap < 1.1) { p.wrap += vdt; p.spin += vdt * 6; wrapBusy = 1; }
+    else p.s += vdt * 2.4;
+    if (p.s >= p.pl.len) pallets.splice(i, 1);
+  }
+  for (const p of pallets) {
+    sample(p.pl, Math.min(p.s, p.pl.len), tmpV);
+    dummy.rotation.set(0, p.spin, 0);
+    dummy.position.set(tmpV.x, .08, tmpV.z); dummy.scale.set(1.5, .16, 1.15); dummy.updateMatrix(); palBase.setMatrixAt(n, dummy.matrix);
+    dummy.position.set(tmpV.x, 1.16, tmpV.z); dummy.scale.set(1.42, 2.0, 1.08); dummy.updateMatrix(); palLoad.setMatrixAt(n, dummy.matrix); n++;
+  }
+  palBase.count = palLoad.count = n; palBase.instanceMatrix.needsUpdate = true; palLoad.instanceMatrix.needsUpdate = true;
+  carriage.position.y = wrapBusy ? .5 + 1.9 * (.5 - .5 * Math.cos(vt * 4)) : carriage.position.y;
+
+  syncBlocks(vdt);
+  units.count = Math.min(UNIT_MAX, Math.ceil(M.stock / 10));
+  updateTruck(vdt);
+}
+
+/* fill the lines so the first frame already shows the flow */
+for (let s = 0; s < MAIN.len; s += .6) spawnUp(s);
+for (let s = 0; s < PROD.len; s += .6) parts.push({ pl: PROD, s, main: true });
+for (let s = 0; s < OUT_A.len; s += 1.06) { parts.push({ pl: OUT_A, s, main: false }); parts.push({ pl: OUT_B, s: s + .53, main: false }); }
+for (let s = 0; s < LINE_A.len; s += .58) cartons.push({ pl: LINE_A, s });
+for (let s = .29; s < LINE_B.len; s += .58) cartons.push({ pl: LINE_B, s });
+for (let s = 0; s < TRAY_LINE.len; s += .84) trays.push({ s });
+
+select(0, false);
+updateVisuals(0);
+renderUI();
+window.__plantBooted = true;
+
+let last = performance.now(), uiT = 0;
+function frame(now) {
+  const dt = Math.min(.25, (now - last) / 1000); last = now;
+  if (playing) {
+    let simDt = dt * speed;
+    const chunk = speed <= 10 ? .5 : speed <= 100 ? 2 : speed <= 1000 ? 10 : 30;
+    while (simDt > 1e-6) { const d = Math.min(chunk, simDt); step(d); simDt -= d; }
+  }
+  updateVisuals(playing ? dt : 0);
+  updateFly(dt); updateTour(dt);
+  controls.update();
+  renderer.render(scene, camera); labels.render(scene, camera);
+  uiT += dt; if (uiT > .2) { uiT = 0; renderUI(); }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
