@@ -14,18 +14,18 @@ Formulas, from [Simulation model](06-simulation-model.md#core-formulas):
 
 ## Formulas
 
-Pure functions, tested from phase 1 ([D10](DECISIONS.md#d10-formula-tests-in-phase-1)).
+Pure functions, tested from phase 1 ([D10](DECISIONS.md#d10-formula-tests-in-phase-1)), except the rows marked *phase 3*. H2–H5 (the stage 1 mass balance) and H8 (homogenizer power) have no pure function yet, so phase 3 tests them against the stage 1 and stage 3 models. H20 and H23 follow directly from `divertLimitC` and `f0Min` but have no test of their own yet.
 
 | # | What | Formula with inputs | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
 | H1 | Cream share to remix | (3.5 − 0.05) ÷ (40 − 0.05) = 3.45 ÷ 39.95 | 0.08636 (plan: 0.086) | ±0.00001 | [Core formulas](06-simulation-model.md#core-formulas); [review](REVIEW.md#checked-and-correct) |
-| H2 | Surplus cream, as a share of raw milk at 4.0% fat | (4.0 − 3.5) ÷ (40 − 3.5) = 0.5 ÷ 36.5 | 0.01370 | ±0.00001 | [D2](DECISIONS.md#d2-missing-defaults) |
-| H3 | Raw milk needed for 16,000 L/h of 3.5% milk | 16,000 ÷ (1 − 0.013699) = 16,000 ÷ 0.986301 | 16,222.22 L/h | ±0.01 | Mass balance; litres treated as kilograms (sim assumption) |
-| H4 | Surplus cream at 16,000 L/h | 16,222.22 − 16,000 | 222.22 L/h | ±0.01 | Stage 1, "surplus cream (L/h)" |
-| H5 | The fat balance closes | (16,222.22 × 4.0 − 16,000 × 3.5) ÷ 222.22 = (64,888.89 − 56,000) ÷ 222.22 | 40.000% (the cream fat) | ±0.001 | Mass balance |
+| H2 | Surplus cream, as a share of raw milk at 4.0% fat (*phase 3*) | (4.0 − 3.5) ÷ (40 − 3.5) = 0.5 ÷ 36.5 | 0.01370 | ±0.00001 | [D2](DECISIONS.md#d2-missing-defaults) |
+| H3 | Raw milk needed for 16,000 L/h of 3.5% milk (*phase 3*) | 16,000 ÷ (1 − 0.013699) = 16,000 ÷ 0.986301 | 16,222.22 L/h | ±0.01 | Mass balance; litres treated as kilograms (sim assumption) |
+| H4 | Surplus cream at 16,000 L/h (*phase 3*) | 16,222.22 − 16,000 | 222.22 L/h | ±0.01 | Stage 1, "surplus cream (L/h)" |
+| H5 | The fat balance closes (*phase 3*) | (16,222.22 × 4.0 − 16,000 × 3.5) ÷ 222.22 = (64,888.89 − 56,000) ÷ 222.22 | 40.000% (the cream fat) | ±0.001 | Mass balance |
 | H6 | Deaerator outlet | 80 − 4 | 76 °C | exact | [Chart values](02-uht-line-at-a-glance.md#chart-values-as-text); [D9](DECISIONS.md#d9-other-open-values) |
 | H7 | Homogenizer outlet | 76 + (200 + 30) ÷ 40 = 76 + 5.75 | 81.75 °C (shown as about 82 °C) | ±0.001 | [R7](REVIEW.md#r7-homogenizer-outlet); [D5](DECISIONS.md#d5-homogenizer-outlet) |
-| H8 | Homogenizer hydraulic power, handbook example | 10,000 L/h ÷ 3,600 = 2.778 L/s; 0.002778 m³/s × 20,000,000 Pa = 55,556 W | 55.556 kW (68 kW drawn means about 82% efficiency) | ±0.001 | [Review](REVIEW.md#checked-and-correct); Stage 3 |
+| H8 | Homogenizer hydraulic power, handbook example (*phase 3*) | 10,000 L/h ÷ 3,600 = 2.778 L/s; 0.002778 m³/s × 20,000,000 Pa = 55,556 W | 55.556 kW (68 kW drawn means about 82% efficiency) | ±0.001 | [Review](REVIEW.md#checked-and-correct); Stage 3 |
 | H9 | Holding-tube volume | 16,000 L/h ÷ 3,600 × 4 s = 4.444 L/s × 4 s | 17.778 L | ±0.001 | [R6](REVIEW.md#r6-holding-time) |
 | H10 | Hold at 50% flow | 17.778 L ÷ (8,000 ÷ 3,600) L/s = 17.778 ÷ 2.222 | 8.000 s | ±0.001 | [R6](REVIEW.md#r6-holding-time) |
 | H11 | F0 at 140 °C, 4 s | (4 ÷ 60) × 10^((140 − 121.1) ÷ 10) = 0.06667 × 10^1.89 = 0.06667 × 77.625 | 5.175 min (plan: 5.2; review: 5.17) | ±0.001 | [Core formulas](06-simulation-model.md#core-formulas); [review](REVIEW.md#checked-and-correct) |
@@ -46,7 +46,9 @@ Pure functions, tested from phase 1 ([D10](DECISIONS.md#d10-formula-tests-in-pha
 
 ## Counts and rates
 
-Arithmetic on `plant.json` values. These can be tested now against the config, and again in phase 4 against the model's counters.
+Arithmetic on `plant.json` values. The config test checks H26, H27, H29, H31, H32, H38 and H42 now, and the formula test checks H51; the other rows can be checked against the config the same way. Phase 3 checks the tank and divert rows (H31–H37) against the model, and phase 4 the pack, pallet, batch and truck rows against its counters.
+
+A **pallet-load** is 1,008 packs (H26). The last pallet of each batch is closed part-full ([D1](DECISIONS.md#d1-batch-size), H28), so a batch at full rate is 59.52 pallet-loads but 60 pallets. The model's pallet counters (pallets made, on hold and in stock) and the trucks count pallets. Rows that divide packs by 1,008 give pallet-loads and say so. The pallet figures after breakdowns (H40, H43) come from a 20,000-day run of D2's failure and repair times, and are context, not tested.
 
 | # | What | Formula with inputs | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
@@ -62,29 +64,29 @@ Arithmetic on `plant.json` values. These can be tested now against the config, a
 | H35 | Divert volume | 16,000 L/h × 180 s ÷ 3,600 | 800 L at full flow (400 L at 50%) | exact | [D2](DECISIONS.md#d2-missing-defaults) |
 | H36 | UHT plant out after a divert | 3 min divert + 80 min CIP + 30 min sterilizing | 113 min | exact | [D2](DECISIONS.md#d2-missing-defaults) |
 | H37 | Tank runs dry after a divert from 50% | (10,000 − 150) L ÷ 15,000 L/h = 0.6567 h | 39.4 min; the fillers would need 15,000 × 113 ÷ 60 = 28,250 L, more than the whole tank | ±0.01 | [Fault scenarios](06-simulation-model.md#fault-scenarios) |
-| H38 | Most pallets a day | 2 × 7,500 packs/h × 24 h ÷ 1,008 | 357.14 | ±0.01 | [R9](REVIEW.md#r9-quarantine-scale) |
+| H38 | Most pallets a day | 2 × 7,500 packs/h × 24 h ÷ 1,008; 6 batches (H30) × 60 pallets (H28) | 357.14 pallet-loads; 360 pallets | ±0.01; exact | [R9](REVIEW.md#r9-quarantine-scale); [D1](DECISIONS.md#d1-batch-size) |
 | H39 | Filler availability | 28,800 s ÷ (28,800 + 120 + 720) s = 480 min ÷ 494 min | 0.97166 | ±0.00001 | [D2](DECISIONS.md#d2-missing-defaults) |
-| H40 | Pallets a day after breakdowns | 357.14 × 0.97166 | 347.02 | ±0.01 | [D3](DECISIONS.md#d3-truck-payload) |
+| H40 | Pallets a day after breakdowns | 357.14 × 0.97166 | 347.02 pallet-loads (about 350 pallets, 58.3 a batch) | ±0.01 (pallets: context) | [D3](DECISIONS.md#d3-truck-payload) |
 | H41 | Trucks a day | 86,400 s ÷ 6,000 s | 14.4 | exact | [D3](DECISIONS.md#d3-truck-payload) |
 | H42 | Pallets shipped a day | 14.4 × 22; the preview: 33 × 24 ÷ 2.5 | 316.8 (about 317) | exact | [D3](DECISIONS.md#d3-truck-payload); [R3](REVIEW.md#r3-truck-payload) |
-| H43 | Stock growth | 347.02 − 316.8 | +30.2 pallets a day | ±0.01 | [D3](DECISIONS.md#d3-truck-payload) |
+| H43 | Stock growth | 347.02 − 316.8 | +30.22 a day with output in pallet-loads; in pallets, as the stock counts them, about +33 (350 − 316.8) | ±0.01 (pallets: context) | [D3](DECISIONS.md#d3-truck-payload) |
 | H44 | Days of cover | Released stock ÷ 316.8; for 634 pallets: 634 ÷ 316.8 | 2.00 days | ±0.01 | [D2](DECISIONS.md#d2-missing-defaults) |
 | H45 | Truck weight | 22 × 1.1 t; 33 × 1.1 t | 24.2 t; 36.3 t | ±0.1 (context, not tested) | [R3](REVIEW.md#r3-truck-payload) |
 | H46 | Batch failure chance | 1 − 0.9998^16 = 1 − 0.9968048 | 0.0031952 (0.32%) | ±0.0000001 | [R10](REVIEW.md#r10-rare-qa-failures) |
 | H47 | Batch failure chance with one stop (18 samples) | 1 − 0.9998^18 | 0.0035939 (0.36%) | ±0.0000001 | [R10](REVIEW.md#r10-rare-qa-failures) |
 | H48 | Days between random blocked batches | 1 ÷ (6 × 0.0031952) = 1 ÷ 0.019171 | 52.16 days (review: about 50) | ±0.01 | [R10](REVIEW.md#r10-rare-qa-failures) |
-| H49 | Most pallets in quarantine (7 days) | 357.14 × 7 | 2,500 pallets | ±0.1 | [R9](REVIEW.md#r9-quarantine-scale) |
+| H49 | Pallets in quarantine (7 days) | 7 days of output: 357.14 × 7. At full rate: 42 batches on hold (21 shift changes × 2 fillers) × 60, plus up to 2 × 60 on the two open batches | 2,500 pallet-loads; 2,520 pallets just after a release, up to 2,640 just before the next | ±0.1; exact | [R9](REVIEW.md#r9-quarantine-scale); [D1](DECISIONS.md#d1-batch-size) |
 | H50 | First release, starting empty on day 1 | Batch 1 ends day 1, 14:00; + 7 days | Day 8, 14:00 (sim time 655,200 s) | exact | [D11](DECISIONS.md#d11-opening-state) |
 | H51 | OEE example: one filler, one 8-hour shift, one 14-min stop | A = (480 − 14) ÷ 480 = 0.97083; P = 7,500 ÷ 8,000 = 0.9375; Q = 1 (no reject rate yet); OEE = 0.97083 × 0.9375 × 1 | 0.91016 (91.0%); 466 ÷ 60 × 7,500 = 58,250 packs | ±0.00001 | [OEE](06-simulation-model.md#core-formulas) |
 | H52 | Long-run OEE | 0.97166 × 0.9375 × 1 | 0.91093 (91.1%) | ±0.00001 | Same |
 
 ## Clock
 
-Tested with `clock.ts` in phase 1 ([D8](DECISIONS.md#d8-clock)).
+H53–H55 are tested in phase 1 ([D8](DECISIONS.md#d8-clock)): H53 through the shift grid (`quality.firstShiftStartS`, which stays at 06:00 if [D11](DECISIONS.md#d11-opening-state) moves the clock's start), H54 with the config and H55 with `clock.ts`. H56 and H57 explain the 10 s step and have no test of their own; phase 3's step-size test covers the tank.
 
 | # | What | Formula with inputs | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
-| H53 | Start time | 6 h × 3,600 | 21,600 s (day 1, 06:00) | exact | [D8](DECISIONS.md#d8-clock) |
+| H53 | Start time and first shift | 6 h × 3,600 | 21,600 s (day 1, 06:00): `clock.startTimeS` and `quality.firstShiftStartS` | exact | [D8](DECISIONS.md#d8-clock); [D1](DECISIONS.md#d1-batch-size) |
 | H54 | 7 days at ×10,000 | 7 × 86,400 s ÷ 10,000 = 604,800 ÷ 10,000 | 60.48 s of real time (about a minute) | ±0.01 | [How time works](06-simulation-model.md#how-time-works); [review](REVIEW.md#checked-and-correct) |
 | H55 | Steps in a capped 0.1 s frame | ×10,000: 0.1 × 10,000 ÷ 10 s; ×1,000: 0.1 × 1,000 ÷ 1 s | 100 steps each, under the 500 cap | exact | [D8](DECISIONS.md#d8-clock) |
 | H56 | Steps per frame at ×10,000 and 60 fps | 10,000 ÷ 60 = 166.7 s ÷ 10 s | 16.7 | ±0.1 | [D8](DECISIONS.md#d8-clock) |
@@ -96,10 +98,10 @@ Run the model with seed 81006 and compare. These are for phases 3 and 4; the lon
 
 | # | What | How | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
-| H58 | Output over 30 days | Pallets made ÷ 30 | About 347 a day (H40); a one-year run gave 346.9 | ±3% | [D2](DECISIONS.md#d2-missing-defaults) |
+| H58 | Output over 30 days | Pallets made ÷ 30 | About 350 pallets a day (347 pallet-loads, H40); a one-year run of the preview, which carries part-full pallets over, gave 346.9 pallet-loads | ±3% | [D2](DECISIONS.md#d2-missing-defaults) |
 | H59 | Share of production time throttled | Throttled time ÷ production time | About 9% (one-year run: 8.8%) | ±3 points | [D2](DECISIONS.md#d2-missing-defaults) |
 | H60 | Tank balance | Level change = litres in − litres out, every step | Exact to rounding | ±0.001 L | Plan 06, tank level formula |
-| H61 | Pack balance | Packs made = 1,008 × full pallets + packs on open pallets + samples taken | Exact | exact | Plan 06, discrete model |
+| H61 | Pack balance | Packs made = packs on closed pallets (1,008 each, fewer on the last of a batch) + packs on open pallets + samples taken | Exact | exact | Plan 06, discrete model |
 | H62 | Temperature drop at full flow and at 50% | Trigger `uhtTempDrop` in each state | Divert both times; reject tank +800 L or +400 L; back in production after 113 min | exact | H24, H35, H36 |
 | H63 | Noise never diverts | 7 days at 140 °C, no faults | 0 diverts | exact | H21 |
 
@@ -109,7 +111,7 @@ Every value in the review's [Checked and correct](REVIEW.md#checked-and-correct)
 
 1. **Fault temperature (H24, H25).** The preview's 137.6 °C gives B\* 1.40 when the plant runs at 50% and the hold is 8 s, so the temperature-drop scenario would not divert. [D2](DECISIONS.md#d2-missing-defaults) sets 135.5 °C.
 2. **F0 under noise (H22, H23).** With ±0.3 °C of noise the displayed F0 falls below the 5 min target whenever the reading is under 139.85 °C. Status colours should follow B\*, not F0 ([D4](DECISIONS.md#d4-divert-rule-and-display-noise)).
-3. **Pallets per batch (H28).** "About 60 pallets" is 59.5 at full rate and about 57.8 after mean downtime. The last pallet of each batch is part-full ([D1](DECISIONS.md#d1-batch-size)).
+3. **Pallets per batch (H28).** "About 60 pallets" is 59.5 pallet-loads at full rate and about 57.8 after mean downtime. The last pallet of each batch is part-full ([D1](DECISIONS.md#d1-batch-size)), so the model counts 60 pallets at full rate and about 58.3 after mean downtime: at most 360 pallets a day, not 357 (H38).
 4. **Homogenizer pressures (H7).** 81.75 °C reads 200 bar and 30 bar as two drops in series (230 bar in total). If 200 bar were the total, the outlet would be 81.0 °C ([D5](DECISIONS.md#d5-homogenizer-outlet)).
 5. **Flash vessel.** Removing exactly the water the steam added returns the milk to its temperature before the injector, 81.75 °C, while the chart shows 80 °C. That is within "about 80 °C" in the sources, so the chart keeps 80 °C ([D5](DECISIONS.md#d5-homogenizer-outlet)).
 

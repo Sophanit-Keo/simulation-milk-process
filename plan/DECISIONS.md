@@ -25,8 +25,8 @@ This log settles the numbers and rules that the plan left open or that the [revi
 - **Date:** 2026-10-12
 - **Review note:** [R1](REVIEW.md#r1-batch-size)
 - **Decision:** a batch is one filler for one 8-hour shift: 7,500 packs/h × 8 h = 60,000 packs, about 60 pallets. QA takes 16 samples per batch (one every 30 min), plus 2 after each stop. Shifts start at 06:00, 14:00 and 22:00, so the two fillers make 6 batches a day. Each pallet carries one batch, so the last pallet of a batch is closed part-full: 59 full pallets and one of 528 packs (44 trays).
-- **Why:** sampling is already per filler (1 pack per filler every 30 min), so a per-filler batch puts samples and pallets in the same unit. A fault or a failed sample on one filler then blocks only that filler's shift, about 60 pallets instead of the preview's 100–119. The GS1 pallet label shows one batch number, which is why a pallet never mixes two batches. The chance that a batch fails stays 1 − 0.9998^16 ≈ 0.32% ([R10](REVIEW.md#r10-rare-qa-failures)). With the mean filler downtime from D2 (2.8%), a batch averages about 58,300 packs (57.8 pallets).
-- **What it changes:** `quality.batchS` 28,800, `quality.sampleEveryS` 1,800, `quality.samplesAfterStop` 2. The Batch row in [default settings](06-simulation-model.md#default-settings). Code taken from the preview must not keep its two-filler batch or its 32 samples.
+- **Why:** sampling is already per filler (1 pack per filler every 30 min), so a per-filler batch puts samples and pallets in the same unit. A fault or a failed sample on one filler then blocks only that filler's shift, about 60 pallets instead of the preview's 100–119. The GS1 pallet label shows one batch number, which is why a pallet never mixes two batches. The chance that a batch fails stays 1 − 0.9998^16 ≈ 0.32% ([R10](REVIEW.md#r10-rare-qa-failures)). With the mean filler downtime from D2 (2.8%), a batch averages about 58,300 packs: 57.8 pallet-loads of 1,008 packs, or about 58.3 pallets counting the part-full last one.
+- **What it changes:** `quality.batchS` 28,800, `quality.sampleEveryS` 1,800, `quality.samplesAfterStop` 2, and `quality.firstShiftStartS` 21,600 (day 1, 06:00), the start of the shift grid the model reads instead of a constant. The Batch row in [default settings](06-simulation-model.md#default-settings). Code taken from the preview must not keep its two-filler batch or its 32 samples.
 
 ## D2. Missing defaults
 
@@ -63,7 +63,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 - **Date:** 2026-10-12
 - **Review note:** [R3](REVIEW.md#r3-truck-payload)
 - **Decision:** 22 pallets per truck, one truck every 100 min: 14.4 trucks and 316.8 ≈ 317 pallets a day.
-- **Why:** a pallet of 1,008 × 1 L packs weighs about 1.1 t (about 1,040 kg of milk plus cartons, film and the pallet). 22 pallets weigh about 24 t, within the roughly 24–25 t payload of a 40 t articulated truck. The 33 pallets that fit the 13.6 m floor would weigh about 36 t. A truck every 100 min keeps the preview's daily rate (33 pallets every 2.5 h is also 316.8 a day). That is below the fillers' maximum of 357 pallets a day and below the 347 a day they average after breakdowns. Stock therefore grows by about 30 pallets a day, and the demand-spike scenario draws it down.
+- **Why:** a pallet of 1,008 × 1 L packs weighs about 1.1 t (about 1,040 kg of milk plus cartons, film and the pallet). 22 pallets weigh about 24 t, within the roughly 24–25 t payload of a 40 t articulated truck. The 33 pallets that fit the 13.6 m floor would weigh about 36 t. A truck every 100 min keeps the preview's daily rate (33 pallets every 2.5 h is also 316.8 a day). That is below the fillers' maximum of 360 pallets a day (357 pallet-loads of 1,008 packs) and below the roughly 350 a day (347 pallet-loads) they average after breakdowns. Stock therefore grows by about 33 pallets a day ([H43](hand-calculations.md#counts-and-rates)), and the demand-spike scenario draws it down.
 - **What it changes:** `warehouse.palletsPerTruck` 22, `warehouse.truckEveryS` 6,000. The Truck row in [default settings](06-simulation-model.md#default-settings). The 33-pallet floor limit is no longer used, so nothing needs adding to Accepted simplifications.
 
 ## D4. Divert rule and display noise
@@ -127,7 +127,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | Sterile-air headspace | 3.0 bar at most | `asepticTank.maxHeadspaceBar` = 3.0 | [Tetra Alsafe](https://www.machineryworld.com/wp-content/uploads/2020/11/pd10196_tetra_alsafe.pdf) |
 | Tray catch-up speed | Up to 30% faster after a stop | `packaging.catchUpFrac` = 0.3 | [Tray Shrink 30](https://www.tetrapak.com/en-cz/solutions/packaging/downstream-equipment/film-wrappers/tetra-pak-tray-shrink-30) |
 
-- **Why:** 7 days at 55 °C cuts the quarantine to less than half of 15 days at 30 °C: at most about 2,500 pallets on hold instead of 5,350 ([R9](REVIEW.md#r9-quarantine-scale)), and it matches the preview. 4 °C matches the 76 °C in the chart. The other values take the sources' figure as given.
+- **Why:** 7 days at 55 °C cuts the quarantine to less than half of 15 days at 30 °C: about 2,500 pallets on hold (7 days of output) instead of about 5,360 (15 days) ([H49](hand-calculations.md#counts-and-rates), [R9](REVIEW.md#r9-quarantine-scale)), and it matches the preview. 4 °C matches the 76 °C in the chart. The other values take the sources' figure as given.
 - **What it changes:** the keys in the table. Shelf life and quarantine in [default settings](06-simulation-model.md#default-settings).
 
 ## D10. Formula tests in phase 1
@@ -146,7 +146,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 - **Review note:** none
 - **Decision:** open on day 8 at 06:00 with a week of history, as the preview does: 42 batches on hold (6 a day for 7 days; the oldest is released at 14:00 that day) and 634 pallets of released stock (two days of shipments). This needs three `plant.json` keys from `lead`: `clock.startTimeS` = 626,400, `quality.historyDays` = 7 and `warehouse.startStockPallets` = 634.
 - **Why:** with a day-1 start and an empty plant, the first batch ends on day 1 at 14:00 and is released on day 8 at 14:00 at the earliest. Until then stock is zero, about 105 trucks find nothing to load, the order fill rate reads 0%, and stages 9 and 10 show nothing. That is about 63 s at ×10,000, 11 min at ×1,000 and almost 18 h at ×10.
-- **What it changes:** `clock.startTimeS` and the two new keys once the contract has them. A history of about 2,430 pallets on hold also starts the quarantine view at its full size ([R9](REVIEW.md#r9-quarantine-scale)).
+- **What it changes:** `clock.startTimeS` and the two new keys once the contract has them. A history of about 2,450 pallets on hold (42 batches of about 58.3) also starts the quarantine view at its full size ([R9](REVIEW.md#r9-quarantine-scale)).
 
 ## D12. Conveyor models
 

@@ -45,7 +45,7 @@ Each new snapshot field follows the same path: `sim` lists it in its hand-off no
 
 ## Watch for
 
-- **Random diverts.** Display noise above ±0.3 °C crosses the 139.2 °C limit ([R4](../REVIEW.md#r4-divert-rule)).
+- **Random diverts.** At a 4 s hold, display noise above about ±0.78 °C crosses the 139.22 °C limit ([H13, H14](../hand-calculations.md#formulas)). [D4](../DECISIONS.md#d4-divert-rule-and-display-noise) caps it at ±0.3 °C with no normal-distribution tails, so noise alone never diverts ([R4](../REVIEW.md#r4-divert-rule)).
 - **Slow steps at ×10,000.** Check the step-size rule early, before adding detail.
 - **The filler stub.** Keep it behind the same interface the phase-4 fillers will use, so swapping it touches one file.
 

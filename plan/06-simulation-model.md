@@ -65,7 +65,7 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | Cleaning | Full CIP 80 min; intermediate clean 30 min | CIP takes 70–90 min, AIC 30 min ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
 | Intermediate clean interval | Every 10 h of production | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Full CIP trigger | Only after a divert, then 30 min sterilizing at 125 °C | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
-| Batch | One filler for one 8-hour shift (60,000 packs, about 60 pallets) | Sim assumption ([D1](DECISIONS.md#d1-batch-size)) |
+| Batch | One filler for one 8-hour shift (60,000 packs, about 60 pallets); shifts start at 06:00, 14:00 and 22:00, the first on day 1 at 06:00 | Sim assumption ([D1](DECISIONS.md#d1-batch-size)) |
 | QA samples | 1 pack per filler every 30 min, plus 2 after each stop | Sim assumption |
 | Quarantine | 7 days at 55 °C (default) or 15 days at 30 °C | [Regulation 853/2004](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX), [D9](DECISIONS.md#d9-other-open-values) |
 | Microbial failure rate | 0.02% of packs | [UHT milk module](https://ebooks.inflibnet.ac.in/ftp04/chapter/uht-milk-and-milk-products/) |

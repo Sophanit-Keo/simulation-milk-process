@@ -128,7 +128,7 @@ For others:  <follow-up tasks this creates, by agent>
 
 ### Definition of done
 
-- `npm run check` passes: typecheck, lint, Vitest.
+- `npm run check` passes: typecheck, lint, Vitest and the asset-script tests.
 - No `three` import under `src/sim/`, and units converted only in `units.ts`.
 - Any new snapshot fields appear in the hand-off note.
 - Any changed numbers have been reviewed by `process`.

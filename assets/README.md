@@ -89,7 +89,7 @@ For every model we make, including any the developer models by hand:
 |---|---|
 | `node assets/scripts/glb-stats.mjs <file.glb> [--max-triangles N] [--json]` | Parses the GLB header and JSON chunk, then prints the node tree, meshes and primitives, triangles per mesh and in total, world bounds in metres, materials, textures, and the sizes of embedded images (PNG, JPEG, WebP, KTX2). It warns about the rules above that it can check from the file. Exit 1 if over `--max-triangles`, 2 for an unreadable file. It treats the file as untrusted data: it only parses it, never opens the URIs it names, and escapes its strings before printing them. It has no dependencies. |
 | `node assets/scripts/glb-load-check.mjs <file.glb>... [--port 5186] [--shots <dir>]` | Loads each GLB with GLTFLoader at the pinned three.js in Playwright's Chromium and renders it once. Fails on a load error, a 404 (a missing texture, say) or any console error. It serves only three.js and each model's own folder, on 127.0.0.1:5186, and stops when done. Needs `npm ci`. |
-| `node --test assets/scripts/glb-stats.test.mjs` | Tests for `glb-stats` on GLBs built in memory, including broken and hostile ones. It isn't part of `npm run check` yet, because Vitest only collects `tests/**/*.test.ts`. |
+| `node --test assets/scripts/glb-stats.test.mjs` | Tests for `glb-stats` on GLBs built in memory, including broken and hostile ones. Runs in `npm run check` and CI as `npm run test:assets`. |
 
 ## Kenney kits: phase-1 check (2026-10-12)
 
