@@ -33,7 +33,9 @@ $$
 
 At 140 °C for 4 s this gives F0 ≈ 5.2 min and B\* ≈ 1.19, inside the targets. Divert when B\* falls below 1, which for a 4 s hold means below about 139.2 °C.
 
-> **Review note:** the margin between the set point and the divert limit is only 0.8 °C, and the 4 s hold (and with it the 139.2 °C limit) changes whenever the flow does. See [R4](REVIEW.md#r4-divert-rule) and [R6](REVIEW.md#r6-holding-time).
+> **Decided:** keep the 140 °C set point and cap display noise at ±0.3 °C, so noise alone never crosses the 0.78 °C margin. See [D4](DECISIONS.md#d4-divert-rule-and-display-noise).
+>
+> **Review note:** the 4 s hold (and with it the 139.2 °C limit) changes whenever the flow does. At 50% flow the hold is 8 s and the limit about 136.1 °C. See [R6](REVIEW.md#r6-holding-time).
 
 Filler efficiency, as defined by [OEE.com](https://www.oee.com/calculating-oee/):
 
@@ -43,25 +45,38 @@ $$
 
 ## Default settings
 
-Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-glance.md), which also [lists them as text](02-uht-line-at-a-glance.md#chart-values-as-text).
+Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-glance.md), which also [lists them as text](02-uht-line-at-a-glance.md#chart-values-as-text). `src/data/plant.json` holds the same values, and the [decision log](DECISIONS.md) names the key for each one.
 
 | Setting | Default | Basis |
 |---|---|---|
+| Raw-milk fat | 4.0% | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | UHT plant capacity | 16,000 L/h | Direct plants run 2,000–45,000 L/h ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
 | Fillers | 2 × 7,500 packs/h, 1 L | Below the 8,000/h maximum of the [A3/Flex](https://www.tetrapak.com/solutions/packaging/filling-machines/tetra-pak-a3flex) |
-| Homogenizer | 200 bar + 30 bar | 180–250 bar; second stage about 30 bar ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)) |
-| Holding time | 4 s | Practical range 4–6 s ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
+| Filler time between failures | Random (exponential), mean 8 h of running | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Filler repair time | 2 min + random (exponential), mean 12 min | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Homogenizer | 200 bar + 30 bar; outlet about 82 °C | 180–250 bar; second stage about 30 bar; 1 °C per 40 bar ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers), [D5](DECISIONS.md#d5-homogenizer-outlet)) |
+| Holding time | 4 s at full flow | Practical range 4–6 s ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
+| UHT display noise | ±0.3 °C at most | Keeps B\* at 1.11 or more at 140 °C ([D4](DECISIONS.md#d4-divert-rule-and-display-noise)) |
+| UHT fault temperature | Falls to 135.5 °C | Sim assumption; diverts at 4 s and at 8 s hold ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Divert before cleaning | 3 min | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Reject tank | 6,000 L | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Aseptic tank | 20,000 L, starts 50% full | Sizes run 7,000–50,000 L ([Tetra Alsafe](https://www.machineryworld.com/wp-content/uploads/2020/11/pd10196_tetra_alsafe.pdf)) |
+| Tank thresholds | UHT plant to 50% above 90% full, back to full flow below 60%; fillers stop below 150 L | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Cleaning | Full CIP 80 min; intermediate clean 30 min | CIP takes 70–90 min, AIC 30 min ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
-| Batch | One filler shift of 8 h (60,000 packs) | Sim assumption |
+| Intermediate clean interval | Every 10 h of production | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Full CIP trigger | Only after a divert, then 30 min sterilizing at 125 °C | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Batch | One filler for one 8-hour shift (60,000 packs, about 60 pallets) | Sim assumption ([D1](DECISIONS.md#d1-batch-size)) |
 | QA samples | 1 pack per filler every 30 min, plus 2 after each stop | Sim assumption |
-| Quarantine | 7 days (55 °C option) or 15 days (30 °C) | [Regulation 853/2004](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX) |
+| Quarantine | 7 days at 55 °C (default) or 15 days at 30 °C | [Regulation 853/2004](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX), [D9](DECISIONS.md#d9-other-open-values) |
 | Microbial failure rate | 0.02% of packs | [UHT milk module](https://ebooks.inflibnet.ac.in/ftp04/chapter/uht-milk-and-milk-products/) |
 | Pack, tray, pallet | 1 L; 12 packs; 84 trays | Sim assumptions |
-| Shelf life | 6 months | Six to nine months ([GEA](https://www.gea.com/en/stories/shelf-stable-milk-conscientious-convenience/)) |
-| Truck | 33 pallets | Standard 13.6 m trailer ([Eurowag](https://eurowag.com/blog/how-many-euro-pallets-can-be-loaded-onto-a-truck)) |
+| Shelf life | 6 months (182 days) | Six to nine months ([GEA](https://www.gea.com/en/stories/shelf-stable-milk-conscientious-convenience/)) |
+| Truck | 22 pallets, one every 100 min (about 317 pallets a day) | About 24 t, within the 24–25 t payload of a 40 t truck ([D3](DECISIONS.md#d3-truck-payload)) |
+| Demand | Trucks only; a truck waits at the dock until enough stock is released | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Random seed | 81006 (mulberry32), so every run repeats | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Sim clock | Day 1 at 06:00, ×10; 1 s steps, 10 s steps above ×1,000 | Sim assumption ([D8](DECISIONS.md#d8-clock)) |
 
-> **Review note:** before these go into `plant.json`, settle what a batch is, add the defaults this table leaves out, and check the truck's weight. See [R1](REVIEW.md#r1-batch-size), [R2](REVIEW.md#r2-missing-defaults) and [R3](REVIEW.md#r3-truck-payload).
+> **Decided:** a batch is one filler for one 8-hour shift ([D1](DECISIONS.md#d1-batch-size)), the eleven missing defaults are set ([D2](DECISIONS.md#d2-missing-defaults)), and a truck carries 22 pallets every 100 min ([D3](DECISIONS.md#d3-truck-payload)). Each stays Proposed until the developer approves it in the [decision log](DECISIONS.md). [Hand calculations](hand-calculations.md) lists the expected values QA tests against.
 
 ## KPIs on screen
 

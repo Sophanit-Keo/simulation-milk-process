@@ -20,7 +20,7 @@ The sim uses the dots as set points and colours each pipe from them; the separat
 
 ## Chart values as text
 
-*Transcribed from the chart above. The values match the stage panels in the preview.*
+*Transcribed from the chart above, except the homogenizer outlet (see the note below). The other values match the stage panels in the preview.*
 
 | Stage | Point on the line | Sim default | Range in the sources |
 |---|---|---|---|
@@ -29,7 +29,7 @@ The sim uses the dots as set points and colours each pipe from them; the separat
 | 1 | UHT feed tank | 4 °C | — |
 | 2 | Preheater | 80 °C | 75–80 °C |
 | 2 | Deaerator | 76 °C | — |
-| 3 | Homogenizer | 76 °C | — |
+| 3 | Homogenizer | 76 °C in, about 82 °C out | — |
 | 4 | UHT holding tube | 140 °C, held about 4 s | 140–150 °C; EU minimum 135 °C |
 | 5 | Flash vessel | 80 °C | — |
 | 5 | Final cooler | 20 °C | — |
@@ -37,7 +37,7 @@ The sim uses the dots as set points and colours each pipe from them; the separat
 | 7 | Filler | 20 °C | — |
 | 10 | Warehouse | 25 °C | 20–30 °C |
 
-> **Review note:** the homogenizer row shows 76 °C, but Stage 3 also simulates a temperature rise of about 1 °C per 40 bar. See [R7](REVIEW.md#r7-homogenizer-outlet).
+> **Decided:** the homogenizer adds 1 °C per 40 bar, so 200 + 30 bar takes the milk from 76 °C to 81.75 °C, about 82 °C. The chart image above and the [wireframe](08-user-interface.md) still show 76 °C until they are redrawn. See [D5](DECISIONS.md#d5-homogenizer-outlet).
 
 ---
 

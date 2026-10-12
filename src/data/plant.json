@@ -37,7 +37,7 @@
     "setpointC": 140,
     "holdAtCapacityS": 4,
     "displayNoiseC": 0.3,
-    "faultTempC": 137.6,
+    "faultTempC": 135.5,
     "divertBeforeCleaningS": 180,
     "rejectTankL": 6000,
     "sterilizeTempC": 125,
