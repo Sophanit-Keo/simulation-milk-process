@@ -10,7 +10,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 |---|---|---|---|---|
 | 1. Setup | 1 | lead, process | Project runs; `plant.json` settled | [Phase 1](phase-1-setup.md) |
 | 2. Grey-box plant | 2–3 | scene | **G1** · grey-box plant | [Phase 2](phase-2-grey-box.md) |
-| 3. Liquid line (1–6) | 4–6 | sim | Stages 1–6 live; formula tests pass | [Phase 3](phase-3-liquid-line.md) |
+| 3. Liquid line (1–6) | 4–6 | sim | Stages 1–6 live; model tests pass | [Phase 3](phase-3-liquid-line.md) |
 | 4. Packs to trucks (7–10) | 7–9 | sim | **G2** · scope freeze | [Phase 4](phase-4-packs-to-trucks.md) |
 | 5. Detail & scenarios | 10–11 | assets, sim | Hero models, six faults, guided tour | [Phase 5](phase-5-detail-and-scenarios.md) |
 | 6. Polish & present | 12 | qa, lead | **G3** · final demo | [Phase 6](phase-6-polish-and-present.md) |
@@ -41,7 +41,7 @@ Bold marks the agents on the critical path in that phase.
 | `scene` | World, renderer, camera | **Zones, grey boxes, pipes, fly-to** | Liquid-line animation | Tokens, quarantine, racks, trucks | Hero swap, tour camera | Performance, polish |
 | `assets` | Pipeline, kit check | Kit, tokens, hero specs | Hero block-outs | First-pass hero GLBs | **Finish hero models** | Optimise only |
 | `ui` | App shell | Bar, rail, panel, KPI strip | Panels 1–6, sliders, charts | Panels 7–10, batch list | Scenario menu, tour, About panel | Polish |
-| `qa` | Test harness, formula tests written first | Smoke tests, perf baseline | Formula, balance and soak tests | Conservation tests, silo-to-truck run | Scenario tests | **60 fps check, regression** |
+| `qa` | Test harness, clock, queue and formula tests | Smoke tests, perf baseline | Formula, balance and soak tests | Conservation tests, silo-to-truck run | Scenario tests | **60 fps check, regression** |
 
 ## How the agents work together
 
@@ -128,7 +128,7 @@ For others:  <follow-up tasks this creates, by agent>
 
 ### Definition of done
 
-- `npm run check` passes: typecheck, lint, Vitest.
+- `npm run check` passes: typecheck, lint, Vitest and the asset-script tests.
 - No `three` import under `src/sim/`, and units converted only in `units.ts`.
 - Any new snapshot fields appear in the hand-off note.
 - Any changed numbers have been reviewed by `process`.

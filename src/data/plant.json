@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 2,
+  "seed": 81006,
+  "clock": {
+    "startTimeS": 21600,
+    "defaultSpeed": 10,
+    "baseStepS": 1,
+    "fastStepS": 10,
+    "fastStepAboveSpeed": 1000,
+    "maxStepsPerFrame": 500,
+    "maxFrameS": 0.1
+  },
+  "product": {
+    "fatPct": 3.5,
+    "packVolumeL": 1,
+    "shelfLifeDays": 182
+  },
+  "standardization": {
+    "rawMilkFatPct": 4.0,
+    "skimFatPct": 0.05,
+    "creamFatPct": 40,
+    "siloTempC": 4,
+    "separatorTempC": 60,
+    "feedTankTempC": 4
+  },
+  "preheating": {
+    "preheatTempC": 80,
+    "deaeratorDropC": 4
+  },
+  "homogenizer": {
+    "stage1Bar": 200,
+    "stage2Bar": 30,
+    "barPerDegreeC": 40
+  },
+  "uht": {
+    "capacityLph": 16000,
+    "setpointC": 140,
+    "holdAtCapacityS": 4,
+    "displayNoiseC": 0.3,
+    "faultTempC": 135.5,
+    "divertBeforeCleaningS": 180,
+    "rejectTankL": 6000,
+    "sterilizeTempC": 125,
+    "sterilizeS": 1800
+  },
+  "flashCooling": {
+    "flashTempC": 80,
+    "coolerTempC": 20
+  },
+  "asepticTank": {
+    "capacityL": 20000,
+    "startFrac": 0.5,
+    "throttleAboveFrac": 0.9,
+    "resumeBelowFrac": 0.6,
+    "throttledFlowFrac": 0.5,
+    "fillersStopBelowL": 150,
+    "maxHeadspaceBar": 3.0,
+    "tempC": 20
+  },
+  "cleaning": {
+    "cipS": 4800,
+    "aicS": 1800,
+    "aicEveryProductionS": 36000,
+    "cipAfterDivert": true
+  },
+  "fillers": {
+    "count": 2,
+    "ratePacksPerH": 7500,
+    "maxRatePacksPerH": 8000,
+    "mtbfMeanS": 28800,
+    "repairFixedS": 120,
+    "repairRandomMeanS": 720,
+    "tempC": 20
+  },
+  "packaging": {
+    "packsPerTray": 12,
+    "traysPerPallet": 84,
+    "catchUpFrac": 0.3
+  },
+  "quality": {
+    "batchS": 28800,
+    "firstShiftStartS": 21600,
+    "sampleEveryS": 1800,
+    "samplesAfterStop": 2,
+    "incubationTempC": 55,
+    "incubationDays": 7,
+    "failurePerPack": 0.0002
+  },
+  "warehouse": {
+    "tempC": 25,
+    "palletsPerTruck": 22,
+    "truckEveryS": 6000
+  }
+}

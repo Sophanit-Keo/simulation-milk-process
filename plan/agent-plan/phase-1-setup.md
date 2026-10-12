@@ -12,12 +12,12 @@ Get a running Vite + three.js + TypeScript project with CI, the contracts every 
 
 | Agent | Tasks | Hands off |
 |---|---|---|
-| `lead` | Scaffold Vite + TypeScript with the plan's [folder structure](../07-tech-stack-and-architecture.md#folder-structure), plus `src/contracts/`, `tests/` and `e2e/`. Pin `three` to an exact version (r186 is `0.186.0` on npm) along with `lil-gui`, `chart.js`, `vitest` and `eslint` ([R11](../REVIEW.md#r11-versions-and-hosting)). Set `base: '/simulation-milk-process/'` in `vite.config.ts` for GitHub Pages. Add CI (typecheck, lint, test, build, Pages deploy) and a lint rule that bans `three` imports in `src/sim/`. Draft contracts v0 (`PlantConfig`, `Snapshot`, `Command`, `ViewEvent`) and pick the units rule ([R8](../REVIEW.md#r8-units-in-typescript)). Open `plan/DECISIONS.md` and the task board. | Contracts v0, folder ownership map, `npm run check` |
+| `lead` | Scaffold Vite + TypeScript with the plan's [folder structure](../07-tech-stack-and-architecture.md#folder-structure), plus `src/contracts/`, `tests/` and `e2e/`. Pin `three` to an exact version (r186 is `0.186.0` on npm) along with `lil-gui`, `chart.js`, `vitest` and `eslint` ([R11](../REVIEW.md#r11-versions-and-hosting)). Build with the Vite base `/simulation-milk-process/` for GitHub Pages (CI sets it through `BASE_PATH`). Add CI (typecheck, lint, test, build, Pages deploy) and a lint rule that bans `three` imports in `src/sim/`. Draft contracts v0 (`PlantConfig`, `Snapshot`, `Command`, `ViewEvent`) and pick the units rule ([R8](../REVIEW.md#r8-units-in-typescript)). Open `plan/DECISIONS.md` and the task board. | Contracts v0, folder ownership map, `npm run check` |
 | `process` | Settle [R1](../REVIEW.md#r1-batch-size): a batch is one filler × 8 h. Add the eleven [R2](../REVIEW.md#r2-missing-defaults) defaults, starting from the preview's values. Settle [R3](../REVIEW.md#r3-truck-payload): 22 pallets per truck, or keep 33 as an accepted simplification. Settle [R4](../REVIEW.md#r4-divert-rule): a 140.5 °C set point, or noise kept under ±0.3 °C. Settle [R7](../REVIEW.md#r7-homogenizer-outlet): about 82 °C at the homogenizer outlet. Log each decision with its reason, update the [default settings](../06-simulation-model.md#default-settings) table, and write `src/data/plant.json`. Write a hand-calculation table for QA from the review's "Checked and correct" list and R6. | `plant.json`, decision log entries, hand-calculation table |
-| `sim` | `clock.ts`: sim time, pause, speeds ×1 to ×10,000, and the step-size rule (1 s; 10–60 s above ×1,000). `eventQueue.ts`: a binary heap that keeps equal-time events in insertion order. `rng.ts`: seeded mulberry32. `index.ts`: `createSim(config)` with `step()`, `dispatch(command)` and `snapshot()`. `mock.ts`: a plausible snapshot built from `plant.json`. | Mock snapshot for `scene` and `ui` |
+| `sim` | `clock.ts`: sim time, pause, speeds ×1 to ×10,000, and the step-size rule (1 s; 10–60 s above ×1,000). `eventQueue.ts`: a binary heap that keeps equal-time events in insertion order. `rng.ts`: seeded mulberry32. `formulas.ts`: the plan's core formulas (cream share, holding time, F0, B\*, divert limit, OEE) as pure functions. `index.ts`: `createSim(config)` with `step()`, `dispatch(command)` and `snapshot()`. `mock.ts`: a plausible snapshot built from `plant.json`. | Mock snapshot for `scene` and `ui` |
 | `scene` | `world.ts`: renderer, camera, OrbitControls, one shadow-casting light, floor, resize handling, and a hook into the frame loop. Read the preview's layout constants (zones, camera stops, pipe routes) to plan the phase-2 port. | Empty world that reads a snapshot |
 | `ui` | `index.html` grid (top bar, stage rail, 3D view, info panel, KPI strip) and the colour tokens with light and dark themes, ported from the preview. A top-bar clock that shows the mock snapshot's time. | App shell |
-| `qa` | Vitest set up. Tests for the clock (speeds, pause, step size) and the event queue (order, ties, popping due events). A test that `plant.json` matches `PlantConfig` with no missing keys. Formula tests written now from the hand-calculation table, marked skipped until phase 3. A browser smoke test: the page loads, the canvas exists, and there are no console errors. | Test harness; formula tests that define "done" for phase 3 |
+| `qa` | Vitest set up. Tests for the clock (speeds, pause, step size) and the event queue (order, ties, popping due events). A test that `plant.json` matches `PlantConfig` with no missing keys. Formula tests written now from the hand-calculation table. They run against the pure functions in `src/sim/formulas.ts`, which `sim` writes this week ([D10](../DECISIONS.md)). A browser smoke test: the page loads, the canvas exists, and there are no console errors. | Test harness; clock, queue and formula tests written from the same API spec as `sim` |
 | `assets` | Set up the asset pipeline: folders, GLB naming, polygon and texture budgets, `assets/LICENSES.md`. Download the [Kenney Conveyor Kit](https://kenney-assets.itch.io/conveyor-kit) (CC0) and check it loads with GLTFLoader at the pinned three.js version. | Asset rules |
 
 ## How they work together
@@ -32,16 +32,19 @@ Get a running Vite + three.js + TypeScript project with CI, the contracts every 
 - `lead` → all: contracts v0 and the ownership map.
 - `process` → `sim`, `qa`: `plant.json` and the hand-calculation table.
 - `sim` → `scene`, `ui`: the mock snapshot, so both can start before the model exists.
-- `qa` → `sim`: skipped formula tests, the target for phase 3.
+- `qa` → `sim`: clock, event-queue and formula tests written from the same API spec, as an independent check of `sim`'s code.
 
 ## Exit checklist
 
-- [ ] `npm run dev` shows the app shell, an empty 3D floor and a ticking sim clock.
+- [x] `npm run dev` shows the app shell, an empty 3D floor and a ticking sim clock.
 - [ ] `npm run check` and CI pass, and the Pages build loads with the right `base`.
-- [ ] `three` is pinned to an exact version in `package.json`.
-- [ ] `plant.json` holds every default, including the R2 rows, and the config test passes.
+- [x] `three` is pinned to an exact version in `package.json`.
+- [x] `plant.json` holds every default, including the R2 rows, and the config test passes.
 - [ ] The developer has approved R1, R2, R3, R4, R7 and R8 in `plan/DECISIONS.md`.
-- [ ] Contracts v0 are merged.
+- [x] Contracts v0 are merged.
+- [x] The clock, event-queue, formula and config tests pass, and so does the browser smoke test.
+
+Still open: `npm run check`, the build and the browser tests pass locally, but no workflow has run on GitHub yet. Open a pull request to `master` so `ci.yml` runs, and merge it once it is green. The repo owner sets Settings → Pages → Source to "GitHub Actions" once, so the Pages jobs in `ci.yml` can deploy `master`; then check that the site loads under `/simulation-milk-process/`. The developer approves the entries in the [decision log](../DECISIONS.md).
 
 ## Watch for
 

@@ -25,7 +25,7 @@ Gate 2 is the safety net: if the run from silo to truck does not work by week 9,
 
 ## Deliverables to tick off
 
-- [ ] Week 1: Vite + three.js project runs; `plant.json` holds the default settings
+- [x] Week 1: Vite + three.js project runs; `plant.json` holds the default settings
 - [ ] Week 3 (gate 1): grey-box plant with all seven zones, pipes and camera fly-to
 - [ ] Week 6: stages 1–6 live (levels, temperatures, F0 and B\*, divert); formula tests pass
 - [ ] Week 9 (gate 2): stages 7–10 live (packs, pallets, quarantine, warehouse, trucks); scope frozen
@@ -36,7 +36,7 @@ If the term runs past 12 weeks, the stretch list is: animated CIP cleaning, a st
 
 The [agent plan](agent-plan/README.md) breaks each phase down into tasks for seven agents working in parallel, with hand-offs and an exit checklist per phase.
 
-> **Review note:** settle the batch definition, the missing defaults and the truck load before writing `plant.json` in week 1. See [Decide before week 1](REVIEW.md#decide-before-week-1).
+> **Decided in week 1:** the batch definition, the missing defaults and the truck load are in the [decision log](DECISIONS.md), waiting for the developer's approval.
 
 ---
 

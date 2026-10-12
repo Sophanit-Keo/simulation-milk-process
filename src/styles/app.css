@@ -1,0 +1,368 @@
+/*
+ * One-screen layout (plan 08), ported from uht-plant-preview.html:
+ * top bar for time, stage rail | 3D view | info panel, KPI strip along the bottom.
+ */
+@import './fonts.css';
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.4 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* The middle row and columns use minmax(0, 1fr) so the 3D canvas and long panel
+   content can never push the grid past the window; the rail and panel scroll instead. */
+.app {
+  height: 100%;
+  padding: 12px 16px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 236px minmax(0, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'bar bar bar'
+    'rail view panel'
+    'kpis kpis kpis';
+}
+
+.card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+.eyebrow {
+  margin: 0;
+  font: 600 13px/1 var(--font-label);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Lamp colours are the same everywhere (plan 08). Idle is a hollow ring, so "off"
+   reads as unlit rather than as a fourth colour, and stays visible in both themes. */
+.lamp {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--muted);
+}
+.lamp[data-s='ok'] {
+  background: var(--ok);
+  box-shadow: none;
+}
+.lamp[data-s='warn'] {
+  background: var(--warn);
+  box-shadow: none;
+}
+.lamp[data-s='bad'] {
+  background: var(--bad);
+  box-shadow: none;
+}
+
+/* top bar */
+.bar {
+  grid-area: bar;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 14px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  margin-right: auto;
+  min-width: 0;
+}
+.brand h1 {
+  margin: 0;
+  font: 700 21px/1.05 var(--font-label);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.brand p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.sim-time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* min-width holds the box steady while the clock text changes length. */
+.clock {
+  min-width: 15ch;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font: 500 15px/1 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font: 600 13px/1 var(--font-ui);
+  white-space: nowrap;
+}
+.run .lamp {
+  width: 8px;
+  height: 8px;
+}
+.run .speed {
+  font: 500 13px/1 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+/* stage rail */
+.rail {
+  grid-area: rail;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+}
+.rail .eyebrow {
+  padding: 4px 4px 0;
+}
+
+.stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Written for any element, so phase 2 can swap the static rows for buttons. */
+.stage {
+  display: grid;
+  grid-template-columns: 10px 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  text-align: left;
+  font-size: 14.5px;
+  line-height: 1.2;
+}
+button.stage {
+  cursor: pointer;
+}
+button.stage:hover {
+  background: var(--surface);
+}
+.stage[aria-current='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.stage .n {
+  font: 500 13px/1 var(--font-data);
+  color: var(--muted);
+  text-align: right;
+}
+.stage .short {
+  display: none;
+}
+
+/* 3D view. #viewport fills the view absolutely, so the canvas inside it gets the
+   view's size without its own size ever feeding back into the grid. */
+.view {
+  grid-area: view;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--scene-bg);
+}
+#viewport {
+  position: absolute;
+  inset: 0;
+}
+#viewport canvas {
+  display: block;
+  touch-action: none;
+}
+
+/* info panel */
+.panel {
+  grid-area: panel;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+}
+.panel h2 {
+  margin: 0;
+  font: 700 22px/1.05 var(--font-label);
+  letter-spacing: 0.02em;
+  text-wrap: balance;
+}
+.panel .hint {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--muted);
+  max-width: 62ch;
+}
+
+/* KPI strip */
+.kpis {
+  grid-area: kpis;
+  min-width: 0;
+}
+.kpi-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 12px;
+}
+.kpi[data-s='warn'] {
+  border-color: var(--warn);
+  box-shadow: inset 0 3px 0 var(--warn);
+}
+.kpi[data-s='bad'] {
+  border-color: var(--bad);
+  box-shadow: inset 0 3px 0 var(--bad);
+}
+.k-l {
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+/* Units keep their case: L/h, not L/H. */
+.k-l .unit,
+.k-l sub {
+  text-transform: none;
+}
+.k-l sub {
+  font-size: 0.8em;
+  line-height: 0;
+}
+.k-v {
+  margin: 0;
+  font: 500 19px/1.15 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.k-v small {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Below 1100 px the screen stops being one screen: the page scrolls and the
+   view gets a fixed share of the window height instead. */
+@media (max-width: 1100px) {
+  .app {
+    height: auto;
+    min-height: 100%;
+    grid-template-columns: 210px minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas:
+      'bar bar'
+      'rail view'
+      'panel panel'
+      'kpis kpis';
+  }
+  .view {
+    height: 62vh;
+    min-height: 360px;
+  }
+  .kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'bar' 'view' 'rail' 'panel' 'kpis';
+  }
+  .view {
+    height: 58vh;
+    min-height: 320px;
+  }
+  .stages {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .stage {
+    grid-template-columns: 10px auto auto;
+    width: auto;
+    white-space: nowrap;
+  }
+  .stage .full {
+    display: none;
+  }
+  .stage .short {
+    display: inline;
+  }
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .brand h1 {
+    font-size: 19px;
+  }
+}

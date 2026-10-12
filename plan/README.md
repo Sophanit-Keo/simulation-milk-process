@@ -24,6 +24,10 @@ Build a browser-based 3D simulation in Three.js of a UHT milk plant that runs al
 
 [REVIEW.md](REVIEW.md) checks the plan against hand calculations and the preview. Every worked number is right. Before week 1, settle what a batch is, add the defaults the plan doesn't set yet (breakdown rates, cleaning interval, tank limits, demand), and fix the truck load: 33 pallets of milk weigh about 36 t. Sections the review touches carry a short "Review note" with a link.
 
+## Decisions
+
+[DECISIONS.md](DECISIONS.md) settles the numbers the plan left open and the review questioned: batch size, missing defaults, truck load, divert margin, units and versions. Each entry stays Proposed until the developer approves it. [hand-calculations.md](hand-calculations.md) lists every expected value the tests check, with the arithmetic.
+
 ## Agent plan
 
 [Agent plan](agent-plan/README.md) splits the roadmap's six phases into work for seven agents: lead, process engineer, simulation, scene, assets, UI and QA. It lists the files each agent owns, the contracts they share, and how they hand work to each other. Each phase has its own page with tasks per agent and an exit checklist.

@@ -42,7 +42,7 @@ The U shape lets the guided tour follow the product in one loop and keeps quaran
 | Aseptic tank | 6 | Code: cylinder on three legs | Level and pressure | Must |
 | Aseptic fillers (2) | 7 | Blender (hero) | Reel turns, jaws seal, packs exit | Must |
 | 1 L carton, tray, pallet | 7–10 | Code: boxes + generic texture | `InstancedMesh` movement | Must |
-| Conveyors, accumulation table | 7–8 | [Kenney Conveyor Kit](https://kenney-assets.itch.io/conveyor-kit) (CC0, 60+ models) | Belt texture scrolls | Must |
+| Conveyors, accumulation table | 7–8 | [Kenney Factory Kit](https://kenney.nl/assets/factory-kit) (CC0), successor of the [Conveyor Kit](https://kenney-assets.itch.io/conveyor-kit); see [D12](DECISIONS.md#d12-conveyor-models) | Belt texture scrolls | Must |
 | Tray-shrink tunnel | 8 | Code: box tunnel | Trays pass through | Should |
 | Palletizer robot | 8 | Blender (hero) | Pick-and-place loop | Should |
 | Stretch wrapper | 8 | Code: turntable + mast | Turntable rotates | Could |

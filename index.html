@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Browser-based 3D simulation of a UHT milk plant, from standardization to ambient distribution.">
+<meta name="color-scheme" content="light dark">
+<title>UHT Milk Plant Simulation</title>
+</head>
+<body>
+<!-- One screen (plan 08). main.ts needs #app and #viewport; the HUD fills #bar. -->
+<div id="app" class="app">
+  <header id="bar" class="bar card" aria-label="Simulation time and controls">
+    <div class="brand">
+      <h1>UHT milk plant</h1>
+      <p>Simulation · example data, simplified models, not to scale</p>
+    </div>
+  </header>
+
+  <!-- Phase 1: a static list. Phase 2 renders it from data with live lamps and fly-to. -->
+  <nav id="rail" class="rail card" aria-labelledby="rail-title">
+    <h2 class="eyebrow" id="rail-title">Stages</h2>
+    <ol class="stages">
+      <li class="stage" data-stage="1"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">1</span><span><span class="full">Standardization &amp; Formulation</span><span class="short">Standardize</span></span></li>
+      <li class="stage" data-stage="2"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">2</span><span><span class="full">Preheating &amp; Deaeration</span><span class="short">Preheat</span></span></li>
+      <li class="stage" data-stage="3"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">3</span><span><span class="full">Homogenization</span><span class="short">Homogenize</span></span></li>
+      <li class="stage" data-stage="4"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">4</span><span><span class="full">UHT Treatment</span><span class="short">UHT</span></span></li>
+      <li class="stage" data-stage="5"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">5</span><span><span class="full">Flash Cooling</span><span class="short">Flash cool</span></span></li>
+      <li class="stage" data-stage="6"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">6</span><span><span class="full">Aseptic Storage (Buffer)</span><span class="short">Aseptic tank</span></span></li>
+      <li class="stage" data-stage="7"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">7</span><span><span class="full">Aseptic Packaging</span><span class="short">Filling</span></span></li>
+      <li class="stage" data-stage="8"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">8</span><span><span class="full">Secondary Packaging &amp; Palletization</span><span class="short">Packing</span></span></li>
+      <li class="stage" data-stage="9"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">9</span><span><span class="full">Quarantine &amp; QA Testing</span><span class="short">Quarantine</span></span></li>
+      <li class="stage" data-stage="10"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">10</span><span><span class="full">Warehousing &amp; Ambient Distribution</span><span class="short">Warehouse</span></span></li>
+    </ol>
+  </nav>
+
+  <main class="view card" aria-label="3D view of the plant">
+    <div id="viewport"></div>
+  </main>
+
+  <aside id="panel" class="panel card" aria-label="Selected stage">
+    <h2>Select a stage</h2>
+    <p class="hint">What the machine does, its live values and its set points show here.</p>
+  </aside>
+
+  <!-- A labelled region, not <footer>: at the top level a footer is the page's contentinfo landmark. -->
+  <section id="kpis" class="kpis" aria-label="Plant KPIs">
+    <dl class="kpi-grid">
+      <div class="kpi card" data-kpi="uht"><dt class="k-l">UHT <span class="unit">L/h</span></dt><dd class="k-v">—</dd></div>
+      <div class="kpi card" data-kpi="sterility"><dt class="k-l">F<sub>0</sub> · B*</dt><dd class="k-v">—</dd></div>
+      <div class="kpi card" data-kpi="tank"><dt class="k-l">Tank</dt><dd class="k-v">—</dd></div>
+      <div class="kpi card" data-kpi="packs"><dt class="k-l">Packs<span class="unit">/h</span></dt><dd class="k-v">—</dd></div>
+      <div class="kpi card" data-kpi="oee"><dt class="k-l">OEE</dt><dd class="k-v">—</dd></div>
+      <div class="kpi card" data-kpi="hold"><dt class="k-l">On hold</dt><dd class="k-v">—</dd></div>
+      <div class="kpi card" data-kpi="stock"><dt class="k-l">Stock</dt><dd class="k-v">—</dd></div>
+      <div class="kpi card" data-kpi="trucks"><dt class="k-l">Trucks</dt><dd class="k-v">—</dd></div>
+    </dl>
+  </section>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
