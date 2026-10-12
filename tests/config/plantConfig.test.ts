@@ -77,6 +77,16 @@ describe('numbers that follow from plant.json', () => {
     expect(shippedPalletsPerDay).toBeLessThanOrEqual(madePalletsPerDay);
   });
 
+  it('with the D2 downtime, stock grows by about 30.22 pallet-loads a day (H40, H43)', () => {
+    const { mtbfMeanS, repairFixedS, repairRandomMeanS } = config.fillers;
+    const availabilityFrac = mtbfMeanS / (mtbfMeanS + repairFixedS + repairRandomMeanS);
+    const madePalletLoadsPerDay =
+      (config.fillers.count * config.fillers.ratePacksPerH * sToH(dayToS(1)) * availabilityFrac) / packsPerPallet;
+    const shippedPalletsPerDay = (dayToS(1) / config.warehouse.truckEveryS) * config.warehouse.palletsPerTruck;
+    expectWithin(madePalletLoadsPerDay, 347.02, 0.01);
+    expectWithin(madePalletLoadsPerDay - shippedPalletsPerDay, 30.22, 0.01);
+  });
+
   it('a full truck stays within its payload: 22 pallets × about 1.1 t ≤ 25 t (R3)', () => {
     expect(config.warehouse.palletsPerTruck * PALLET_T).toBeLessThanOrEqual(TRUCK_PAYLOAD_T);
   });

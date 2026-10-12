@@ -23,6 +23,7 @@ export interface Kpis {
   packsPerH: number;
   oeePct: number;
   traysMade: number;
+  /** Physical pallets, so each batch's part-full last pallet counts as one (D1). Same for palletsInStock. */
   palletsMade: number;
   batchesOnHold: number;
   batchesReleased: number;

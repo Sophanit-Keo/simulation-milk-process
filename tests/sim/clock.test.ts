@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SPEEDS, type Speed } from '../../src/contracts';
 import { Clock, type ClockOptions } from '../../src/sim/clock';
+import { expectWithin } from '../helpers/expectWithin';
 import { mulberry32 } from '../helpers/previewMulberry32';
 import { plantConfig } from '../helpers/plantConfig';
 
@@ -194,6 +195,16 @@ describe('Clock: advance', () => {
       expect(clock.timeS).toBe(steps);
     }
     expect(steps).toBeGreaterThan(0);
+  });
+});
+
+describe('Clock: the shipped settings', () => {
+  it('takes about 16.7 steps per 60 fps frame at x10,000 (H56)', () => {
+    const clock = shippedClock(10_000);
+    const frames = 600;
+    let steps = 0;
+    for (let i = 0; i < frames; i += 1) steps += clock.advance(1 / 60, () => {});
+    expectWithin(steps / frames, 16.7, 0.1);
   });
 });
 

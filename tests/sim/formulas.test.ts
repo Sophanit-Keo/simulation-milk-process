@@ -80,6 +80,16 @@ describe('the 140.5 °C alternative (R4)', () => {
   it('B* is 1.32 at 140.5 °C for 4 s (H18; review 1.32)', () => {
     expectWithin(bStar(140.5, 4), 1.323, 0.0001);
   });
+
+  it('leaves 1.276 °C of margin above the divert limit at 4 s (H20; review 1.3)', () => {
+    expectWithin(140.5 - divertLimitC(4), 1.276, 0.001);
+  });
+});
+
+describe('the 5 min F0 target (D4)', () => {
+  it('F0 reaches 5 min at 139.851 °C for 4 s (H23)', () => {
+    expectWithin(f0Min(139.851, 4), 5, 0.002);
+  });
 });
 
 describe('display noise and the fault temperature (D2, D4)', () => {

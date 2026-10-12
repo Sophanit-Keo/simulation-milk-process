@@ -14,7 +14,7 @@ Formulas, from [Simulation model](06-simulation-model.md#core-formulas):
 
 ## Formulas
 
-Pure functions, tested from phase 1 ([D10](DECISIONS.md#d10-formula-tests-in-phase-1)), except the rows marked *phase 3*. H2–H5 (the stage 1 mass balance) and H8 (homogenizer power) have no pure function yet, so phase 3 tests them against the stage 1 and stage 3 models. H20 and H23 follow directly from `divertLimitC` and `f0Min` but have no test of their own yet.
+Pure functions, tested from phase 1 ([D10](DECISIONS.md#d10-formula-tests-in-phase-1)), except the rows marked *phase 3*. H2–H5 (the stage 1 mass balance) and H8 (homogenizer power) have no pure function yet, so phase 3 tests them against the stage 1 and stage 3 models. H20 and H23 are tested through `divertLimitC` and `f0Min`.
 
 | # | What | Formula with inputs | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
@@ -48,7 +48,7 @@ Pure functions, tested from phase 1 ([D10](DECISIONS.md#d10-formula-tests-in-pha
 
 Arithmetic on `plant.json` values. The config test checks H26, H27, H29, H31, H32, H38 and H42 now, and the formula test checks H51; the other rows can be checked against the config the same way. Phase 3 checks the tank and divert rows (H31–H37) against the model, and phase 4 the pack, pallet, batch and truck rows against its counters.
 
-A **pallet-load** is 1,008 packs (H26). The last pallet of each batch is closed part-full ([D1](DECISIONS.md#d1-batch-size), H28), so a batch at full rate is 59.52 pallet-loads but 60 pallets. The model's pallet counters (pallets made, on hold and in stock) and the trucks count pallets. Rows that divide packs by 1,008 give pallet-loads and say so. The pallet figures after breakdowns (H40, H43) come from a 20,000-day run of D2's failure and repair times, and are context, not tested.
+A **pallet-load** is 1,008 packs (H26). The last pallet of each batch is closed part-full ([D1](DECISIONS.md#d1-batch-size), H28), so a batch at full rate is 59.52 pallet-loads but 60 pallets. The model's pallet counters (pallets made, on hold and in stock) and the trucks count pallets. Rows that divide packs by 1,008 give pallet-loads and say so. The pallet-load figures after breakdowns (H40, H43) are tested from D2's mean failure and repair times; the matching pallet figures come from a 20,000-day run of those times and are context, not tested.
 
 | # | What | Formula with inputs | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
@@ -82,7 +82,7 @@ A **pallet-load** is 1,008 packs (H26). The last pallet of each batch is closed 
 
 ## Clock
 
-H53–H55 are tested in phase 1 ([D8](DECISIONS.md#d8-clock)): H53 through the shift grid (`quality.firstShiftStartS`, which stays at 06:00 if [D11](DECISIONS.md#d11-opening-state) moves the clock's start), H54 with the config and H55 with `clock.ts`. H56 and H57 explain the 10 s step and have no test of their own; phase 3's step-size test covers the tank.
+H53–H55 are tested in phase 1 ([D8](DECISIONS.md#d8-clock)): H53 through the shift grid (`quality.firstShiftStartS`, which stays at 06:00 if [D11](DECISIONS.md#d11-opening-state) moves the clock's start), H54 with the config and H55 with `clock.ts`. H56 is tested with `clock.ts` at ×10,000 and 60 fps. H57 explains the 10 s step and has no test of its own; phase 3's step-size test covers the tank.
 
 | # | What | Formula with inputs | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
