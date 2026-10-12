@@ -119,11 +119,31 @@ export function createWorld(host: HTMLElement): World {
     if (!userMoved) frameOverview();
     renderer.render(scene, camera); // resizing clears the canvas; draw now rather than show a blank frame
   };
+  // The host's last content size, kept for a change of pixel ratio alone (below).
+  let hostWidthPx = 0;
+  let hostHeightPx = 0;
   // The content box, not clientHeight, so padding on the host can't feed back into the canvas size.
   const resizeObserver = new ResizeObserver(([entry]) => {
-    if (entry) resize(entry.contentRect.width, entry.contentRect.height);
+    if (!entry) return;
+    hostWidthPx = entry.contentRect.width;
+    hostHeightPx = entry.contentRect.height;
+    resize(hostWidthPx, hostHeightPx);
   });
   resizeObserver.observe(host);
+
+  // Moving the window to a screen with another pixel ratio changes devicePixelRatio but not the CSS
+  // size, so the observer stays quiet. A resolution query matches one ratio only: re-arm it on each change.
+  let ratioQuery: MediaQueryList | null = null;
+  const onRatioChange = (): void => {
+    resize(hostWidthPx, hostHeightPx);
+    watchRatio();
+  };
+  const watchRatio = (): void => {
+    ratioQuery?.removeEventListener('change', onRatioChange);
+    ratioQuery = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+    ratioQuery.addEventListener('change', onRatioChange);
+  };
+  watchRatio();
 
   return {
     update(_snapshot, realDtS) {
@@ -134,6 +154,7 @@ export function createWorld(host: HTMLElement): World {
     },
     dispose() {
       resizeObserver.disconnect();
+      ratioQuery?.removeEventListener('change', onRatioChange);
       stopWatchingTheme();
       controls.dispose();
       disposeScene(scene);

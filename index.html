@@ -6,9 +6,6 @@
 <meta name="description" content="Browser-based 3D simulation of a UHT milk plant, from standardization to ambient distribution.">
 <meta name="color-scheme" content="light dark">
 <title>UHT Milk Plant Simulation</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 </head>
 <body>
 <!-- One screen (plan 08). main.ts needs #app and #viewport; the HUD fills #bar. -->
@@ -46,7 +43,8 @@
     <p class="hint">What the machine does, its live values and its set points show here.</p>
   </aside>
 
-  <footer id="kpis" class="kpis" aria-label="Plant KPIs">
+  <!-- A labelled region, not <footer>: at the top level a footer is the page's contentinfo landmark. -->
+  <section id="kpis" class="kpis" aria-label="Plant KPIs">
     <dl class="kpi-grid">
       <div class="kpi card" data-kpi="uht"><dt class="k-l">UHT <span class="unit">L/h</span></dt><dd class="k-v">—</dd></div>
       <div class="kpi card" data-kpi="sterility"><dt class="k-l">F<sub>0</sub> · B*</dt><dd class="k-v">—</dd></div>
@@ -57,7 +55,7 @@
       <div class="kpi card" data-kpi="stock"><dt class="k-l">Stock</dt><dd class="k-v">—</dd></div>
       <div class="kpi card" data-kpi="trucks"><dt class="k-l">Trucks</dt><dd class="k-v">—</dd></div>
     </dl>
-  </footer>
+  </section>
 </div>
 <script type="module" src="/src/main.ts"></script>
 </body>

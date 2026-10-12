@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 /** How long the frame loop runs before a page is judged error-free, so errors thrown per frame show up. */
 const SETTLE_MS = 1_500;
@@ -7,7 +8,10 @@ const SETTLE_MS = 1_500;
 function collectErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console.error: ${message.text()}`);
+    if (message.type() !== 'error') return;
+    // The text of a failed load names no URL; the location does.
+    const { url } = message.location();
+    errors.push(`console.error: ${message.text()}${url ? ` (${url})` : ''}`);
   });
   page.on('pageerror', (error) => errors.push(`uncaught: ${error.message}`));
   return errors;
@@ -19,11 +23,13 @@ async function clockTimeS(page: Page): Promise<number> {
   return value === null || value.trim() === '' ? Number.NaN : Number(value);
 }
 
-test('the page loads with a 3D canvas and no errors', async ({ page }) => {
+test('the page loads with a 3D canvas, no errors and no third-party requests', async ({ page, thirdPartyRequests }) => {
   const errors = collectErrors(page);
   await page.goto('/');
   await expect(page.locator('#viewport canvas')).toBeVisible();
   await page.waitForTimeout(SETTLE_MS);
+  // First, so a blocked request fails with its URL rather than as the console error it also causes.
+  expect(thirdPartyRequests, 'requests to another origin').toEqual([]);
   expect(errors).toEqual([]);
 });
 
@@ -37,10 +43,11 @@ test('the sim clock ticks', async ({ page }) => {
     .toBeGreaterThan(firstS);
 });
 
-test('the mock snapshot (/?mock) loads with no errors', async ({ page }) => {
+test('the mock snapshot (/?mock) loads with no errors and no third-party requests', async ({ page, thirdPartyRequests }) => {
   const errors = collectErrors(page);
   await page.goto('/?mock');
   await expect(page.locator('#app')).toBeAttached();
   await page.waitForTimeout(SETTLE_MS);
+  expect(thirdPartyRequests, 'requests to another origin').toEqual([]);
   expect(errors).toEqual([]);
 });
