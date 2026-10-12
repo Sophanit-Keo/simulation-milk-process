@@ -11,6 +11,13 @@ const HEADLESS_IMPORTS = {
     { group: ['**/scene', '**/scene/*', '**/ui', '**/ui/*'], message: 'src/sim and src/contracts must not import the 3D view or the UI.' },
   ],
 };
+// Flat config merges `globals`, so the browser globals above cannot be taken away here, and
+// no-undef is off for .ts files. These names are banned outright instead; `npm run typecheck`
+// (tsconfig.headless.json, no DOM or Node types) catches every other browser or Node global.
+const HEADLESS_GLOBALS = [
+  'window', 'self', 'globalThis', 'document', 'navigator', 'location', 'requestAnimationFrame',
+  'localStorage', 'sessionStorage', 'indexedDB', 'fetch', 'XMLHttpRequest', 'process',
+].map((name) => ({ name, message: 'src/sim and src/contracts run headless: no browser or Node globals (plan 07).' }));
 
 export default defineConfig(
   { ignores: ['dist', 'node_modules', '.cache', '.claude', 'playwright-report', 'test-results', 'uht-plant-preview.html'] },
@@ -28,10 +35,11 @@ export default defineConfig(
   },
   {
     files: ['src/sim/**/*.ts', 'src/contracts/**/*.ts'],
-    languageOptions: { globals: {} },
     rules: {
       'no-restricted-imports': ['error', HEADLESS_IMPORTS],
-      'no-restricted-globals': ['error', 'window', 'document', 'navigator', 'location', 'requestAnimationFrame', 'localStorage'],
+      // no-restricted-imports does not see import(), so `import('three')` would slip through.
+      'no-restricted-syntax': ['error', { selector: 'ImportExpression', message: 'src/sim and src/contracts use static imports only: no import() (plan 07).' }],
+      'no-restricted-globals': ['error', ...HEADLESS_GLOBALS],
     },
   },
 );
