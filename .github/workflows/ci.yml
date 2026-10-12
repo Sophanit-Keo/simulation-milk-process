@@ -45,3 +45,47 @@ jobs:
           name: playwright-report
           path: playwright-report
           retention-days: 7
+
+  # GitHub Pages: deploy master (a push or a manual run; pull requests run on refs/pull/…),
+  # and only once every check above has passed.
+  # Needs Settings → Pages → Source set to "GitHub Actions" once.
+  pages-build:
+    name: Build for Pages
+    if: github.ref == 'refs/heads/master'
+    needs: [check, e2e]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+
+  pages-deploy:
+    name: Deploy to Pages
+    needs: pages-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # One deployment at a time; a newer one waits rather than cancelling the one in progress.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

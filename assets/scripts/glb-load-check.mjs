@@ -6,17 +6,18 @@
 //   node assets/scripts/glb-load-check.mjs <model.glb>... [--port 5186] [--shots <dir>]
 //
 // A static server on 127.0.0.1 serves three from node_modules, a one-file test page, and
-// each model's own folder (so textures next to it resolve) and nothing else. A model fails
-// on a load error, a failed request or any console error. --shots saves a PNG per model.
+// each model's own folder (so textures next to it resolve) and nothing else, not even through
+// a symlink. The page may load nothing but that server: any other URL a GLB names is blocked
+// before it leaves the machine, and fails the model. A model fails on a load error, a failed
+// or blocked request or any console error. --shots saves a PNG per model.
 // Exit codes: 0 all loaded, 1 a model failed, 2 bad arguments or the server/browser failed.
 
 import { mkdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
-import { chromium } from '@playwright/test';
 
 const HOST = '127.0.0.1';
 const DEFAULT_PORT = 5186; // the assets lane's port; strict, so a busy port is an error
@@ -109,7 +110,18 @@ window.glbCheckReady = true;
 </script>
 `;
 
-function serve(mounts, port) {
+/** Whether the test page may load `url`: only the local server (and its blob: URLs) or a data: URL. */
+export function isLocalRequest(url, port) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'data:' || u.origin === `http://${HOST}:${port}`;
+  } catch {
+    return false;
+  }
+}
+
+/** Serve the test page and the mounts ({ '/prefix/' => real path of its root }) on 127.0.0.1. */
+export function serve(mounts, port) {
   const server = createServer((req, res) => {
     const path = new URL(req.url ?? '/', `http://${HOST}`).pathname;
     if (path === '/') {
@@ -120,7 +132,8 @@ function serve(mounts, port) {
       if (!path.startsWith(prefix)) continue;
       let file;
       try {
-        file = resolve(root, decodeURIComponent(path.slice(prefix.length)));
+        // realpath follows symlinks, so a link inside a model's folder cannot reach outside it.
+        file = realpathSync(resolve(root, decodeURIComponent(path.slice(prefix.length))));
       } catch {
         break;
       }
@@ -179,20 +192,33 @@ async function main(argv) {
     console.error(`server on ${HOST}:${port} failed: ${err.message}`);
     return 2;
   }
-  const browser = await chromium.launch();
+  let browser;
+  try {
+    // Imported here, so a missing Playwright is reported like a missing browser.
+    const { chromium } = await import('@playwright/test');
+    browser = await chromium.launch();
+  } catch (err) {
+    console.error(`browser failed to start: ${err.message}`);
+    server.close();
+    return 2;
+  }
   let failed = 0;
   try {
     const page = await browser.newPage();
     const problems = [];
     page.on('console', (msg) => { if (msg.type() === 'error') problems.push(`console: ${msg.text()}`); });
     page.on('pageerror', (err) => problems.push(`page error: ${err.message}`));
-    page.on('requestfailed', (req) => problems.push(`request failed: ${req.url()}`));
+    page.on('requestfailed', (req) => problems.push(`request failed: ${req.url()} (${req.failure()?.errorText ?? 'unknown'})`));
     page.on('response', (r) => { if (r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
-    await page.goto(`http://${HOST}:${port}/`);
+    // Untrusted GLBs can name any URL; nothing but the local server is fetched.
+    await page.route('**/*', (route) =>
+      isLocalRequest(route.request().url(), port) ? route.continue() : route.abort('blockedbyclient'),
+    );
     try {
+      await page.goto(`http://${HOST}:${port}/`);
       await page.waitForFunction(() => window.glbCheckReady === true, null, { timeout: 15_000 });
-    } catch {
-      console.error(`test page did not start:\n  ${problems.join('\n  ') || 'timeout'}`);
+    } catch (err) {
+      console.error(`test page did not start:\n  ${problems.join('\n  ') || err.message.split('\n')[0]}`);
       return 2;
     }
     if (args.values.shots) mkdirSync(args.values.shots, { recursive: true });
@@ -228,4 +254,6 @@ async function main(argv) {
   return failed > 0 ? 1 : 0;
 }
 
-process.exitCode = await main(process.argv.slice(2));
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = await main(process.argv.slice(2));
+}
