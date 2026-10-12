@@ -25,7 +25,7 @@ Gate 2 is the safety net: if the run from silo to truck does not work by week 9,
 
 ## Deliverables to tick off
 
-- [ ] Week 1: Vite + three.js project runs; `plant.json` holds the default settings
+- [x] Week 1: Vite + three.js project runs; `plant.json` holds the default settings
 - [ ] Week 3 (gate 1): grey-box plant with all seven zones, pipes and camera fly-to
 - [ ] Week 6: stages 1–6 live (levels, temperatures, F0 and B\*, divert); formula tests pass
 - [ ] Week 9 (gate 2): stages 7–10 live (packs, pallets, quarantine, warehouse, trucks); scope frozen

@@ -36,13 +36,15 @@ Get a running Vite + three.js + TypeScript project with CI, the contracts every 
 
 ## Exit checklist
 
-- [ ] `npm run dev` shows the app shell, an empty 3D floor and a ticking sim clock.
+- [x] `npm run dev` shows the app shell, an empty 3D floor and a ticking sim clock.
 - [ ] `npm run check` and CI pass, and the Pages build loads with the right `base`.
-- [ ] `three` is pinned to an exact version in `package.json`.
-- [ ] `plant.json` holds every default, including the R2 rows, and the config test passes.
+- [x] `three` is pinned to an exact version in `package.json`.
+- [x] `plant.json` holds every default, including the R2 rows, and the config test passes.
 - [ ] The developer has approved R1, R2, R3, R4, R7 and R8 in `plan/DECISIONS.md`.
-- [ ] Contracts v0 are merged.
-- [ ] The clock, event-queue, formula and config tests pass, and so does the browser smoke test.
+- [x] Contracts v0 are merged.
+- [x] The clock, event-queue, formula and config tests pass, and so does the browser smoke test.
+
+Still open: `npm run check`, the build and the browser tests pass locally, but no workflow has run on GitHub yet. Open a pull request to `master` so `ci.yml` runs, and merge it once it is green. The repo owner sets Settings → Pages → Source to "GitHub Actions" once, so `pages.yml` can deploy `master`; then check that the site loads under `/simulation-milk-process/`. The developer approves the entries in the [decision log](../DECISIONS.md).
 
 ## Watch for
 
