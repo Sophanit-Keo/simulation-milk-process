@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { ViewBus, World } from '../contracts';
+import { createEquipmentHost } from './equipmentHost';
 import { FLOOR, OVERVIEW, PLANT_BOUNDS, PLANT_HEIGHT_M, overviewDistanceM, type RectM } from './layout';
 import { readSceneColor, watchTheme } from './theme';
 
@@ -92,6 +93,8 @@ export function createWorld(host: HTMLElement, _bus: ViewBus): World {
   floor.receiveShadow = true;
   scene.add(floor);
 
+  const equipmentHost = createEquipmentHost(scene);
+
   const applyTheme = (): void => {
     background.set(readSceneColor('--scene-bg'));
     floorMaterial.color.set(readSceneColor('--floor'));
@@ -146,8 +149,9 @@ export function createWorld(host: HTMLElement, _bus: ViewBus): World {
   watchRatio();
 
   return {
-    update(_snapshot, realDtS) {
+    update(snapshot, realDtS) {
       controls.update(realDtS);
+      equipmentHost.update(snapshot, realDtS);
     },
     render() {
       renderer.render(scene, camera);
@@ -156,6 +160,7 @@ export function createWorld(host: HTMLElement, _bus: ViewBus): World {
       resizeObserver.disconnect();
       ratioQuery?.removeEventListener('change', onRatioChange);
       stopWatchingTheme();
+      equipmentHost.dispose();
       controls.dispose();
       disposeScene(scene);
       renderer.dispose();
