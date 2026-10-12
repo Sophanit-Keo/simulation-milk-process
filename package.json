@@ -5,13 +5,13 @@
   "description": "Browser-based 3D simulation of a UHT milk plant, from standardization to ambient distribution.",
   "type": "module",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.headless.json",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,6 +20,9 @@
     "test:assets": "node --test assets/scripts/*.test.mjs"
   },
   "dependencies": {
+    "@fontsource/barlow": "5.3.0",
+    "@fontsource/barlow-condensed": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "chart.js": "4.5.1",
     "lil-gui": "0.21.0",
     "three": "0.186.1"

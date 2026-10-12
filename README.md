@@ -4,7 +4,7 @@ A browser-based 3D simulation of a UHT milk plant in three.js, from standardizat
 
 ## Run it
 
-Needs Node 22.12 or later.
+Needs Node 22.13 or later (22.x LTS or 24.x; see `.nvmrc`).
 
 ```sh
 npm ci
