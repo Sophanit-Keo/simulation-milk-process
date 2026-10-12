@@ -24,6 +24,10 @@ Build a browser-based 3D simulation in Three.js of a UHT milk plant that runs al
 
 [REVIEW.md](REVIEW.md) checks the plan against hand calculations and the preview. Every worked number is right. Before week 1, settle what a batch is, add the defaults the plan doesn't set yet (breakdown rates, cleaning interval, tank limits, demand), and fix the truck load: 33 pallets of milk weigh about 36 t. Sections the review touches carry a short "Review note" with a link.
 
+## Agent plan
+
+[Agent plan](agent-plan/README.md) splits the roadmap's six phases into work for seven agents: lead, process engineer, simulation, scene, assets, UI and QA. It lists the files each agent owns, the contracts they share, and how they hand work to each other. Each phase has its own page with tasks per agent and an exit checklist.
+
 ## Related files
 
 - 3D preview: [UHT Milk Plant Preview](https://claude.ai/artifact/8iJvem1sGHtitmtJDxUpY6), with a local copy at [uht-plant-preview.html](../uht-plant-preview.html)

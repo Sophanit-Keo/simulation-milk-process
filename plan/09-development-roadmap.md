@@ -34,6 +34,8 @@ Gate 2 is the safety net: if the run from silo to truck does not work by week 9,
 
 If the term runs past 12 weeks, the stretch list is: animated CIP cleaning, a steam and energy model, a switch between direct and indirect UHT, and a mobile layout.
 
+The [agent plan](agent-plan/README.md) breaks each phase down into tasks for seven agents working in parallel, with hand-offs and an exit checklist per phase.
+
 > **Review note:** settle the batch definition, the missing defaults and the truck load before writing `plant.json` in week 1. See [Decide before week 1](REVIEW.md#decide-before-week-1).
 
 ---
