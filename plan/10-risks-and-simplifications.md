@@ -22,6 +22,8 @@ The biggest risk is scope: ten stages plus detailed 3D is a lot for one person, 
 - One product and one pack size.
 - Cleaning is a timed machine state, not liquid moving through the pipes.
 - Failures follow simple random rates, not real plant data.
+- A full CIP runs only after a divert; real plants also clean at the end of each production run ([D2](DECISIONS.md#d2-missing-defaults)).
+- Demand is a truck of 22 pallets at a fixed interval, standing in for random daily orders ([D2](DECISIONS.md#d2-missing-defaults), [D3](DECISIONS.md#d3-truck-payload)).
 
 ---
 

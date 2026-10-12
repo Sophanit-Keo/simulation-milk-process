@@ -36,7 +36,7 @@ If the term runs past 12 weeks, the stretch list is: animated CIP cleaning, a st
 
 The [agent plan](agent-plan/README.md) breaks each phase down into tasks for seven agents working in parallel, with hand-offs and an exit checklist per phase.
 
-> **Review note:** settle the batch definition, the missing defaults and the truck load before writing `plant.json` in week 1. See [Decide before week 1](REVIEW.md#decide-before-week-1).
+> **Decided in week 1:** the batch definition, the missing defaults and the truck load are in the [decision log](DECISIONS.md), waiting for the developer's approval.
 
 ---
 

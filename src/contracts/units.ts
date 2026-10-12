@@ -4,11 +4,13 @@
  * Every quantity is a plain `number` whose name ends in its unit, and unit
  * conversions happen only in this file. Suffixes:
  *
- *   S, Min, H, Day     seconds, minutes, hours, days (sim time)
+ *   S, Min, H, Days    seconds, minutes, hours, days (sim time)
  *   L, Lph, Lps        litres, litres per hour, litres per second
  *   C, Bar, Kw         degrees Celsius, bar, kilowatts
  *   Pct, Frac          percent (0–100), fraction (0–1)
  *   Packs, Trays, Pallets, PacksPerH    counts and count rates
+ *   PerPack            a probability (0–1) per pack, such as failurePerPack
+ *   M, Rad, Deg, Px    metres (three.js world units), radians, degrees, CSS pixels
  *
  * Examples: `flowLph`, `holdS`, `levelL`, `setpointC`, `tankLevelPct`.
  */
@@ -29,3 +31,6 @@ export const lpsToLph = (flowLps: number): number => flowLps * SECONDS_PER_HOUR;
 
 export const fracToPct = (frac: number): number => frac * 100;
 export const pctToFrac = (pct: number): number => pct / 100;
+
+export const degToRad = (deg: number): number => (deg * Math.PI) / 180;
+export const radToDeg = (rad: number): number => (rad * 180) / Math.PI;

@@ -130,6 +130,29 @@ export interface PlantConfig {
   };
 }
 
+// Durations, rates and sizes the model divides by or steps with; zero would stall or divide by zero.
+const POSITIVE_KEYS = [
+  'clock.baseStepS',
+  'clock.fastStepS',
+  'clock.maxStepsPerFrame',
+  'clock.maxFrameS',
+  'product.packVolumeL',
+  'homogenizer.barPerDegreeC',
+  'uht.capacityLph',
+  'uht.holdAtCapacityS',
+  'asepticTank.capacityL',
+  'fillers.count',
+  'fillers.ratePacksPerH',
+  'fillers.mtbfMeanS',
+  'packaging.packsPerTray',
+  'packaging.traysPerPallet',
+  'quality.batchS',
+  'quality.sampleEveryS',
+  'quality.incubationDays',
+  'warehouse.palletsPerTruck',
+  'warehouse.truckEveryS',
+] as const;
+
 const INTEGER_KEYS = [
   'seed',
   'fillers.count',
@@ -160,10 +183,14 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   for (const path of INTEGER_KEYS) {
     if (!Number.isInteger(at(path))) fail(`${path} must be a whole number`);
   }
+  for (const path of POSITIVE_KEYS) {
+    const value = at(path);
+    if (!(typeof value === 'number' && value > 0)) fail(`${path} must be greater than 0`);
+  }
 
   const { clock, product, standardization: std, asepticTank: tank, fillers, uht } = config;
   if (!isSpeed(clock.defaultSpeed)) fail('clock.defaultSpeed must be one of the speed presets');
-  if (clock.baseStepS <= 0 || clock.fastStepS < clock.baseStepS) fail('clock steps must be positive, and fastStepS ≥ baseStepS');
+  if (clock.fastStepS < clock.baseStepS) fail('clock.fastStepS must be at least clock.baseStepS');
   if (!(std.skimFatPct < product.fatPct && product.fatPct < std.creamFatPct)) fail('product fat must lie between skim and cream fat');
   if (std.rawMilkFatPct < product.fatPct) fail('raw-milk fat must be at least the product fat, or there is no cream to remove');
   if (!(0 < tank.resumeBelowFrac && tank.resumeBelowFrac < tank.throttleAboveFrac && tank.throttleAboveFrac <= 1)) {
@@ -173,6 +200,5 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   if (tank.fillersStopBelowL >= tank.capacityL) fail('fillersStopBelowL must be below the tank capacity');
   if (fillers.ratePacksPerH > fillers.maxRatePacksPerH) fail('filler rate exceeds the machine maximum');
   if (uht.faultTempC >= uht.setpointC) fail('uht.faultTempC must be below the set point');
-  if (uht.capacityLph <= 0 || uht.holdAtCapacityS <= 0) fail('UHT capacity and holding time must be positive');
   return problems;
 }

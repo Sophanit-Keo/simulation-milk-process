@@ -15,6 +15,8 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'retain-on-failure',
+    // CI runners have no GPU; recent Chromium only falls back to software WebGL (SwiftShader) with this flag.
+    launchOptions: { args: ['--enable-unsafe-swiftshader'] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {

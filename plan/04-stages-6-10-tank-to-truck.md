@@ -13,7 +13,7 @@ A sterile tank sits between the UHT plant and the fillers, so either side can st
 - **3D:** vertical tank on three legs, valve cluster, sterile-air filter housing, floating level label.
 - **Simulate:** level changes by (inflow − outflow) each tick; high level throttles the UHT plant to 50%, low level pauses the fillers; headspace pressure.
 
-> **Review note:** the 50% throttle comes from indirect plants, and "high" and "low" level still need numbers, with a gap between them so the plant doesn't keep switching. See [R5](REVIEW.md#r5-plant-type-mix) and [R2](REVIEW.md#r2-missing-defaults).
+> **Review note:** the 50% throttle comes from indirect plants. See [R5](REVIEW.md#r5-plant-type-mix). **Decided:** throttle above 90%, back to full flow below 60%, fillers stop below 150 L. See [D2](DECISIONS.md#d2-missing-defaults).
 
 ## 7. Aseptic Packaging
 
@@ -24,7 +24,7 @@ The filler sterilizes the carton material, forms it into a tube, fills it with s
 - **3D:** filler cabinet with a glass aseptic zone, paper reel, vertical tube, moving sealing jaws, outfeed conveyor of cartons.
 - **Simulate:** packs per hour, random stops (time between failures, repair time), rejected packs, batch and date code on every pack.
 
-> **Review note:** time between failures and repair time have no default values yet. See [R2](REVIEW.md#r2-missing-defaults).
+> **Decided:** time between failures is random with a mean of 8 h; a repair takes 2 min plus a random time with a mean of 12 min. See [D2](DECISIONS.md#d2-missing-defaults).
 
 ## 8. Secondary Packaging & Palletization
 
@@ -54,7 +54,7 @@ Released pallets are stored and shipped at room temperature with no cold chain, 
 - **3D:** pallet racks, forklifts or AGVs on floor paths, loading dock, truck that leaves when full.
 - **Simulate:** stock by batch and best-before date, first-expired-first-out picking, random daily orders, truck dispatch, order fill rate.
 
-> **Review note:** "random daily orders" need a rate and an order size, and a full truck of 33 pallets would be far over the weight limit. See [R2](REVIEW.md#r2-missing-defaults) and [R3](REVIEW.md#r3-truck-payload).
+> **Decided:** demand is a truck of 22 pallets (about 24 t) every 100 min, about 317 pallets a day, and each truck counts as one order. See [D2](DECISIONS.md#d2-missing-defaults) and [D3](DECISIONS.md#d3-truck-payload).
 
 ---
 

@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run test:assets",
+    "test:assets": "node --test assets/scripts/*.test.mjs"
   },
   "dependencies": {
     "chart.js": "4.5.1",

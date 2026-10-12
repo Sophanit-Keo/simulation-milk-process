@@ -17,6 +17,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D9](#d9-other-open-values) | Shelf life, incubation, deaerator, headspace, catch-up | — | Proposed |
 | [D10](#d10-formula-tests-in-phase-1) | Formula tests active from phase 1 | — | Proposed |
 | [D11](#d11-opening-state) | Open on day 8 with a week of history | — | Proposed (needs a contract change) |
+| [D12](#d12-conveyor-models) | Kenney Factory Kit for conveyors | — | Proposed |
 
 ## D1. Batch size
 
@@ -146,6 +147,15 @@ This log settles the numbers and rules that the plan left open or that the [revi
 - **Decision:** open on day 8 at 06:00 with a week of history, as the preview does: 42 batches on hold (6 a day for 7 days; the oldest is released at 14:00 that day) and 634 pallets of released stock (two days of shipments). This needs three `plant.json` keys from `lead`: `clock.startTimeS` = 626,400, `quality.historyDays` = 7 and `warehouse.startStockPallets` = 634.
 - **Why:** with a day-1 start and an empty plant, the first batch ends on day 1 at 14:00 and is released on day 8 at 14:00 at the earliest. Until then stock is zero, about 105 trucks find nothing to load, the order fill rate reads 0%, and stages 9 and 10 show nothing. That is about 63 s at ×10,000, 11 min at ×1,000 and almost 18 h at ×10.
 - **What it changes:** `clock.startTimeS` and the two new keys once the contract has them. A history of about 2,430 pallets on hold also starts the quarantine view at its full size ([R9](REVIEW.md#r9-quarantine-scale)).
+
+## D12. Conveyor models
+
+- **Status:** Proposed
+- **Date:** 2026-10-12
+- **Review note:** none ([plan 05](05-layout-and-3d-assets.md#3d-asset-list) names the Conveyor Kit)
+- **Decision:** build the conveyors, accumulation table and other stage 7–8 kit pieces from the [Kenney Factory Kit 3.0](https://kenney.nl/assets/factory-kit) (CC0). Take only the `cover-*` tunnel from the older Conveyor Kit 2.0 if the tray-shrink tunnel needs it.
+- **Why:** kenney.nl no longer lists the Conveyor Kit (its page returns 404); it is still on itch.io. The Factory Kit is its successor: it holds every Conveyor Kit piece except the 12 tunnels, plus corners, T-junctions, slopes, lamps and floor markings. Both kits are CC0, and pieces from both loaded with GLTFLoader at three r186 in the phase-1 check. Details and the pieces to use are in [assets/README.md](../assets/README.md).
+- **What it changes:** the Conveyors row of the [3D asset list](05-layout-and-3d-assets.md#3d-asset-list) and [assets/LICENSES.md](../assets/LICENSES.md) once phase 2 commits the pieces.
 
 ---
 

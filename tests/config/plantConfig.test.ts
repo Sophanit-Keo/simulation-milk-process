@@ -112,6 +112,16 @@ describe('checkPlantConfig catches a broken copy', () => {
     expect(problems.join('\n')).toMatch(/faultTempC/);
   });
 
+  it.each([
+    ['quality.batchS', (copy: PlantConfig) => (copy.quality.batchS = 0)],
+    ['quality.sampleEveryS', (copy: PlantConfig) => (copy.quality.sampleEveryS = 0)],
+    ['warehouse.truckEveryS', (copy: PlantConfig) => (copy.warehouse.truckEveryS = 0)],
+    ['uht.capacityLph', (copy: PlantConfig) => (copy.uht.capacityLph = 0)],
+    ['clock.baseStepS', (copy: PlantConfig) => (copy.clock.baseStepS = 0)],
+  ])('a zero %s, which the model divides by or steps with', (path, change) => {
+    expect(problemsWith(change).join('\n')).toContain(`${path} must be greater than 0`);
+  });
+
   it('a value that is not finite', () => {
     expect(problemsWith((copy) => (copy.fillers.mtbfMeanS = Number.NaN)).join('\n')).toMatch(/fillers\.mtbfMeanS/);
   });
