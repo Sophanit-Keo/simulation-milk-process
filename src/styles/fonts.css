@@ -1,0 +1,15 @@
+/*
+ * Fonts, self-hosted from @fontsource so they ship in the bundle: the page makes no
+ * third-party request, and no font server can hold back first paint or the app.
+ * Latin subset only, and the weights the preview loaded from Google Fonts. Each
+ * @font-face uses font-display: swap, so text shows in the fallback stack until the
+ * font arrives. The family names ('Barlow', 'Barlow Condensed', 'IBM Plex Mono')
+ * are the ones the --font-* tokens in tokens.css ask for.
+ */
+@import '@fontsource/barlow/latin-400.css';
+@import '@fontsource/barlow/latin-500.css';
+@import '@fontsource/barlow/latin-600.css';
+@import '@fontsource/barlow-condensed/latin-500.css';
+@import '@fontsource/barlow-condensed/latin-600.css';
+@import '@fontsource/barlow-condensed/latin-700.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';

@@ -2,6 +2,7 @@
  * One-screen layout (plan 08), ported from uht-plant-preview.html:
  * top bar for time, stage rail | 3D view | info panel, KPI strip along the bottom.
  */
+@import './fonts.css';
 @import './tokens.css';
 
 *,
