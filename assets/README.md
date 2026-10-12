@@ -14,7 +14,7 @@ How 3D models and textures get into the plant: where files go, the rules every m
 | `assets/scripts/` | `glb-stats.mjs`, `glb-load-check.mjs` and their tests | Yes |
 | [`assets/LICENSES.md`](LICENSES.md) | One row for every file in `public/models/` and `public/textures/` | Yes |
 
-Vite copies `public/` to the build as it is. Load files through the base URL, so the same code works in dev (`/`) and on GitHub Pages (`/simulation-milk-process/`):
+Vite copies `public/` to the build as it is. Load files through the base URL, so the same code works in dev and on Vercel (`/`) and on GitHub Pages (`/simulation-milk-process/`):
 
 ```ts
 const url = `${import.meta.env.BASE_URL}models/separator.glb`;

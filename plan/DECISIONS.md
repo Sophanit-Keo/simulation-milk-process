@@ -99,7 +99,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 - **Status:** Proposed
 - **Date:** 2026-10-12
 - **Review note:** [R11](REVIEW.md#r11-versions-and-hosting)
-- **Decision:** `three` is pinned to `0.186.1` (r186). Production builds use the Vite base `/simulation-milk-process/` for GitHub Pages. TypeScript is pinned to `6.0.3`.
+- **Decision:** `three` is pinned to `0.186.1` (r186). CI's GitHub Pages build sets the Vite base to `/simulation-milk-process/` through `BASE_PATH`; every other build (Vercel, `vite preview`, local) uses `/`, so the same code deploys to either host. TypeScript is pinned to `6.0.3`.
 - **Why:** an exact version keeps the build repeatable, and the preview's r170 code must be tested against it. Pages serves the project from `/<repo-name>/`. typescript-eslint 8.71 supports TypeScript `>=4.8.4 <6.1.0`, so TypeScript stays on 6.0 until a typescript-eslint release supports 6.1.
 - **What it changes:** `package.json`, `vite.config.ts` (owned by `lead`).
 

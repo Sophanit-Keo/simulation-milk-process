@@ -11,7 +11,7 @@ npm ci
 npm run dev        # http://localhost:5173 (add ?mock to run on the mock snapshot)
 npm run check      # typecheck, lint and unit tests
 npm run e2e        # browser smoke test (Playwright, Chromium)
-npm run build      # production build for GitHub Pages, in dist/
+npm run build      # production build in dist/ (CI sets BASE_PATH=/simulation-milk-process/ for GitHub Pages)
 ```
 
 ## Layout

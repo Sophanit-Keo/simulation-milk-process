@@ -11,10 +11,10 @@ function nodeModulesRealPath(): string[] {
   }
 }
 
-// GitHub Pages serves the project from /<repo-name>/, so the production build and `vite preview`
-// of it need that base (plan review R11); the dev server stays at /.
-export default defineConfig(({ command, isPreview }) => ({
-  base: command === 'build' || isPreview ? '/simulation-milk-process/' : '/',
+// GitHub Pages serves the project from /<repo-name>/ (plan review R11), so CI's Pages build sets
+// BASE_PATH to that. Everything else serves from /: the dev server, `vite preview` and Vercel.
+export default defineConfig(() => ({
+  base: process.env.BASE_PATH ?? '/',
   cacheDir: '.cache/vite',
   server: {
     fs: { allow: [searchForWorkspaceRoot(process.cwd()), ...nodeModulesRealPath()] },
