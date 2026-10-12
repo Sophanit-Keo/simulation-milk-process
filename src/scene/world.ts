@@ -1,6 +1,201 @@
-// STUB (phase 1 scaffold): `scene` replaces this with the renderer, camera, lights and floor.
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { World } from '../contracts';
+import { FLOOR, OVERVIEW, PLANT_BOUNDS, PLANT_HEIGHT_M, overviewDistanceM, type RectM } from './layout';
+import { readSceneColor, watchTheme } from './theme';
 
-export function createWorld(_host: HTMLElement): World {
-  return { update() {}, render() {}, dispose() {} };
+const FOV_DEG = 40;
+const NEAR_M = 0.5;
+const FAR_M = 700;
+/** Sharper than 2× costs fill rate for little gain (plan 07: 60 fps on a mid-range laptop). */
+const MAX_PIXEL_RATIO = 2;
+/** About 79°: the orbit stops short of the horizon, so the camera stays above the floor. */
+const MAX_POLAR_RAD = 1.38;
+const MIN_DISTANCE_M = 5;
+const MAX_DISTANCE_M = 320;
+/** Used only when the host has no height of its own yet, so the view still shows. */
+const FALLBACK_ASPECT = 16 / 9;
+
+/** The preview's sun: high and from the dock side, so shadows fall short and back toward the milk row. */
+const SUN_DIRECTION = new THREE.Vector3(40, 80, 44).normalize();
+const SUN_DISTANCE_M = 120;
+const SHADOW_MAP_PX = 2048;
+/** Soft shadow edge in shadow-map texels. three r186 dropped PCFSoftShadowMap; PCFShadowMap with a radius replaces it. */
+const SHADOW_RADIUS = 3;
+
+/**
+ * The 3D view: renderer, camera, orbit controls, one shadow-casting light and the floor.
+ * Phase 1 draws an empty floor; the snapshot starts to drive the scene in phase 2.
+ */
+export function createWorld(host: HTMLElement): World {
+  // Make the WebGL 2 context here rather than in WebGLRenderer, which logs an error and throws
+  // when it can't (three.js needs WebGL 2 since r163). Without it the rest of the app still runs.
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('webgl2', { antialias: true, alpha: false });
+  if (!context) return createNoWebGlWorld(host);
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, context, antialias: true });
+  } catch {
+    return createNoWebGlWorld(host);
+  }
+  renderer.setPixelRatio(pixelRatio());
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  // Block, so no inline gap appears under it; zero height until measured, so a host that takes its
+  // height from its content doesn't measure the canvas's default 150 px.
+  canvas.style.display = 'block';
+  canvas.style.height = '0px';
+  host.append(canvas);
+
+  const scene = new THREE.Scene();
+  const background = new THREE.Color();
+  scene.background = background;
+
+  const camera = new THREE.PerspectiveCamera(FOV_DEG, FALLBACK_ASPECT, NEAR_M, FAR_M);
+  const overviewTarget = new THREE.Vector3(...OVERVIEW.targetM);
+  const overviewDirection = new THREE.Vector3(...OVERVIEW.direction).normalize();
+
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  // Pan along the floor, so the target keeps its height and the polar limit keeps the camera above the floor.
+  controls.screenSpacePanning = false;
+  controls.maxPolarAngle = MAX_POLAR_RAD;
+  controls.minDistance = MIN_DISTANCE_M;
+  controls.maxDistance = MAX_DISTANCE_M;
+  // Keep the target over the plant, so a long pan can't lose it; every stage focus lies within this radius.
+  const plant = centreOf(PLANT_BOUNDS);
+  controls.cursor.set(plant.xM, 0, plant.zM);
+  controls.maxTargetRadius = Math.max(PLANT_BOUNDS.xMaxM - PLANT_BOUNDS.xMinM, PLANT_BOUNDS.zMaxM - PLANT_BOUNDS.zMinM) / 2;
+  let userMoved = false;
+  controls.addEventListener('start', () => {
+    userMoved = true;
+  });
+
+  const sky = new THREE.HemisphereLight(0xffffff, 0x9aa7b2, 1.3);
+  const sun = new THREE.DirectionalLight(0xffffff, 1.9);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(SHADOW_MAP_PX, SHADOW_MAP_PX);
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.02;
+  sun.shadow.radius = SHADOW_RADIUS;
+  aimSunAt(sun, PLANT_BOUNDS);
+  scene.add(sky, sun, sun.target);
+
+  const floorMaterial = new THREE.MeshStandardMaterial({ roughness: 0.95 });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR.xMaxM - FLOOR.xMinM, FLOOR.zMaxM - FLOOR.zMinM), floorMaterial);
+  const floorCentre = centreOf(FLOOR);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(floorCentre.xM, 0, floorCentre.zM);
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const applyTheme = (): void => {
+    background.set(readSceneColor('--scene-bg'));
+    floorMaterial.color.set(readSceneColor('--floor'));
+  };
+  applyTheme();
+  const stopWatchingTheme = watchTheme(applyTheme);
+
+  const viewSize = new THREE.Vector2();
+  const frameOverview = (): void => {
+    const viewHalfWidthPerM = camera.getViewSize(1, viewSize).x / 2;
+    camera.position.copy(overviewTarget).addScaledVector(overviewDirection, overviewDistanceM(viewHalfWidthPerM));
+    controls.target.copy(overviewTarget);
+    controls.update();
+  };
+  frameOverview();
+
+  const resize = (widthPx: number, contentHeightPx: number): void => {
+    if (widthPx <= 0) return;
+    const heightPx = contentHeightPx > 0 ? contentHeightPx : Math.round(widthPx / FALLBACK_ASPECT);
+    renderer.setPixelRatio(pixelRatio());
+    renderer.setSize(widthPx, heightPx);
+    camera.aspect = widthPx / heightPx;
+    camera.updateProjectionMatrix();
+    // Like the preview: the overview refits the window until the viewer takes the camera.
+    if (!userMoved) frameOverview();
+    renderer.render(scene, camera); // resizing clears the canvas; draw now rather than show a blank frame
+  };
+  // The content box, not clientHeight, so padding on the host can't feed back into the canvas size.
+  const resizeObserver = new ResizeObserver(([entry]) => {
+    if (entry) resize(entry.contentRect.width, entry.contentRect.height);
+  });
+  resizeObserver.observe(host);
+
+  return {
+    update(_snapshot, realDtS) {
+      controls.update(realDtS);
+    },
+    render() {
+      renderer.render(scene, camera);
+    },
+    dispose() {
+      resizeObserver.disconnect();
+      stopWatchingTheme();
+      controls.dispose();
+      disposeScene(scene);
+      renderer.dispose();
+      renderer.forceContextLoss(); // free the GPU context now, not at garbage collection (Vite hot reloads)
+      canvas.remove();
+    },
+  };
+}
+
+function pixelRatio(): number {
+  return Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+}
+
+function centreOf(rect: RectM): { xM: number; zM: number } {
+  return { xM: (rect.xMinM + rect.xMaxM) / 2, zM: (rect.zMinM + rect.zMaxM) / 2 };
+}
+
+/**
+ * Points the one shadow-casting light (plan 07) at the plant and fits its shadow camera around
+ * a sphere holding every zone up to the tallest machine, plus room for that machine's shadow.
+ */
+function aimSunAt(sun: THREE.DirectionalLight, plant: RectM): void {
+  const centre = centreOf(plant);
+  const radiusM =
+    Math.hypot(plant.xMaxM - plant.xMinM, plant.zMaxM - plant.zMinM, PLANT_HEIGHT_M) / 2 + PLANT_HEIGHT_M;
+  sun.target.position.set(centre.xM, 0, centre.zM);
+  sun.position.copy(sun.target.position).addScaledVector(SUN_DIRECTION, SUN_DISTANCE_M);
+  const shadowCamera = sun.shadow.camera;
+  shadowCamera.left = -radiusM;
+  shadowCamera.right = radiusM;
+  shadowCamera.top = radiusM;
+  shadowCamera.bottom = -radiusM;
+  shadowCamera.near = SUN_DISTANCE_M - radiusM;
+  shadowCamera.far = SUN_DISTANCE_M + radiusM;
+  shadowCamera.updateProjectionMatrix();
+}
+
+function disposeScene(scene: THREE.Scene): void {
+  scene.traverse((object) => {
+    if (object instanceof THREE.Mesh) {
+      object.geometry.dispose();
+      for (const material of [object.material].flat()) material.dispose();
+    } else if (object instanceof THREE.Light) {
+      object.dispose(); // a shadow-casting light owns its shadow map
+    }
+  });
+}
+
+/** Without WebGL 2: a short message in the view, and a world that does nothing. */
+function createNoWebGlWorld(host: HTMLElement): World {
+  const message = document.createElement('p');
+  message.className = 'webgl-missing';
+  message.textContent =
+    'The 3D view needs WebGL 2, which this browser does not support or has turned off. The rest of the simulation still runs.';
+  message.style.cssText = 'margin:0;padding:24px;max-width:48ch;line-height:1.4'; // readable before any app CSS
+  host.append(message);
+  return {
+    update() {},
+    render() {},
+    dispose() {
+      message.remove();
+    },
+  };
 }
