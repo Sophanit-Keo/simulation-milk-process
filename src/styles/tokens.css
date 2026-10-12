@@ -1,0 +1,107 @@
+/*
+ * Colour, font and radius tokens, ported from uht-plant-preview.html.
+ * Names match the preview on purpose: the 3D view reads some of them by name
+ * (getComputedStyle), e.g. --scene-bg, --floor, --steel, the zone colours and
+ * the pipe colours --t4 … --t140.
+ *
+ * Theme: the light set is the default. The dark set applies when the OS asks
+ * for dark and the page hasn't forced light, or when the page forces dark with
+ * <html data-theme="dark">. CSS can't share one block between a media query and
+ * an attribute selector, so the dark set is written twice; keep them equal.
+ */
+
+:root {
+  /* surfaces and text */
+  --bg: #e8edf0;
+  --surface: #f4f7f8;
+  --raised: #ffffff;
+  --ink: #13212b;
+  --muted: #53687a;
+  --line: #cbd5dc;
+  --accent: #1767b0;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(23, 103, 176, 0.11);
+
+  /* lamps (plan 08): green running, amber on hold or warning, red stopped or blocked */
+  --ok: #1f8f57;
+  --warn: #c88a00;
+  --bad: #c63a2b;
+
+  /* 3D scene */
+  --scene-bg: #dde5ea;
+  --floor: #ccd6dc;
+  --steel: #b4c0c8;
+  --steel-dark: #76858f;
+  --zone-proc: #c1d3e2;
+  --zone-pack: #d5d2c8;
+  --zone-quar: #e5d4a8;
+  --zone-ware: #c8d0d6;
+  --apron: #b9c3ca;
+
+  /* pipe colour by milk temperature (plan 08): cold blue, through yellow, to UHT red; same in both themes */
+  --t4: #2b7bd0;
+  --t20: #2aa0c0;
+  --t60: #e3a21c;
+  --t80: #ea8027;
+  --t140: #d63b26;
+
+  --font-ui: 'Barlow', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-label: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --r: 10px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1419;
+    --surface: #131d24;
+    --raised: #18242d;
+    --ink: #e2eaef;
+    --muted: #93a5b3;
+    --line: #28363f;
+    --accent: #5aa6ec;
+    --accent-ink: #071420;
+    --accent-soft: rgba(90, 166, 236, 0.16);
+    --ok: #3cc47f;
+    --warn: #e8ad2c;
+    --bad: #f0604d;
+    --scene-bg: #111a20;
+    --floor: #1a252d;
+    --steel: #8b99a4;
+    --steel-dark: #56636d;
+    --zone-proc: #1d3141;
+    --zone-pack: #2a2924;
+    --zone-quar: #3a311d;
+    --zone-ware: #222c33;
+    --apron: #141d23;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d1419;
+  --surface: #131d24;
+  --raised: #18242d;
+  --ink: #e2eaef;
+  --muted: #93a5b3;
+  --line: #28363f;
+  --accent: #5aa6ec;
+  --accent-ink: #071420;
+  --accent-soft: rgba(90, 166, 236, 0.16);
+  --ok: #3cc47f;
+  --warn: #e8ad2c;
+  --bad: #f0604d;
+  --scene-bg: #111a20;
+  --floor: #1a252d;
+  --steel: #8b99a4;
+  --steel-dark: #56636d;
+  --zone-proc: #1d3141;
+  --zone-pack: #2a2924;
+  --zone-quar: #3a311d;
+  --zone-ware: #222c33;
+  --apron: #141d23;
+  color-scheme: dark;
+}
