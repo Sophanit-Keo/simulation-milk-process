@@ -4,14 +4,18 @@ import {
   STAGE_IDS,
   dayToS,
   hToS,
+  minToS,
   type Command,
   type Kpis,
+  type LogEntry,
   type PlantConfig,
   type Sim,
   type Snapshot,
 } from '../../src/contracts';
 import { createSim } from '../../src/sim';
+import { createCore } from '../../src/sim/core';
 import { createMockSim } from '../../src/sim/mock';
+import { expectWithin } from '../helpers/expectWithin';
 import { copyConfig, plantConfig } from '../helpers/plantConfig';
 
 const KPI_KEYS: (keyof Kpis)[] = [
@@ -61,19 +65,25 @@ function expectWellFormed(snap: Snapshot): void {
   }
 
   expect(snap.log.length).toBeLessThanOrEqual(LOG_LIMIT);
-  for (let i = 0; i < snap.log.length; i++) {
-    const entry = snap.log[i];
+  for (const entry of snap.log) {
     expect(LOG_KINDS).toContain(entry.kind);
     expect(entry.message.length).toBeGreaterThan(0);
     expect(Number.isFinite(entry.timeS)).toBe(true);
-    if (i > 0) expect(entry.timeS, 'log is newest first').toBeLessThanOrEqual(snap.log[i - 1].timeS);
   }
+  expectNewestFirst(snap.log, 'log');
   // Plain data only: survives a JSON round trip, so it holds no NaN, Infinity or functions.
   expect(JSON.parse(JSON.stringify(snap))).toEqual(snap);
 }
 
 function frames(sim: Sim, count: number): void {
   for (let i = 0; i < count; i++) sim.step(FRAME_S);
+}
+
+/** Fails on the first pair of log entries that is not newest first. */
+function expectNewestFirst(log: readonly LogEntry[], where: string): void {
+  for (let i = 1; i < log.length; i++) {
+    if (log[i].timeS > log[i - 1].timeS) expect.fail(`${where}: ${log[i].timeS} is listed below ${log[i - 1].timeS}`);
+  }
 }
 
 describe('createSim: snapshot', () => {
@@ -126,6 +136,85 @@ describe('createSim: snapshot', () => {
     config.clock.defaultSpeed = 7;
     expect(() => createSim(config)).toThrow(RangeError);
   });
+
+  it.each([
+    ['shorter than clock.fastStepS (5 s)', 5],
+    ['too small to move the time (1e-12 s)', 1e-12],
+  ])('throws a RangeError for a batch %s, instead of hanging on the first step', (_label, batchS) => {
+    const config = copyConfig();
+    config.quality.batchS = batchS;
+    expect(() => createSim(config).step(FRAME_S)).toThrow(RangeError);
+  });
+
+  it('throws a RangeError, instead of hanging, when far out in time a 1 s batch rounds away to nothing', () => {
+    const config = copyConfig();
+    Object.assign(config.clock, { startTimeS: 2 ** 53 - 4, baseStepS: 1, fastStepS: 1 });
+    Object.assign(config.quality, { batchS: 1, firstShiftStartS: 0 });
+    const sim = createSim(config);
+    // A shift change at 2^53 s would be rescheduled for 2^53 + 1, which rounds back to 2^53.
+    expect(() => frames(sim, 5)).toThrow(/batch/);
+  });
+});
+
+// Hand values from plan/hand-calculations.md, with the tolerance stated there. The static plant is the
+// plant at rest at plant.json's set points, so its values follow from the formulas alone.
+describe('createSim: the static plant matches the hand calculations', () => {
+  const staticSnapshot = () => createSim(plantConfig).snapshot();
+
+  it('stage 1 mixes back 8.636% cream for 3.5% milk (H1)', () => {
+    expectWithin(staticSnapshot().stages[1].values.creamShareFrac, 0.08636, 0.00001);
+  });
+
+  it('stage 2 leaves the deaerator at 80 − 4 = 76 °C (H6)', () => {
+    expect(staticSnapshot().stages[2].values.deaeratorTempC).toBe(76);
+  });
+
+  it('stage 3 takes the milk in at 76 °C and out at 81.75 °C after 200 + 30 bar (H7)', () => {
+    const { values } = staticSnapshot().stages[3];
+    expect(values.inletTempC).toBe(76);
+    expectWithin(values.outletTempC, 81.75, 0.001);
+  });
+
+  it('stage 4 holds 4 s at the full 16,000 L/h (H9, R6)', () => {
+    const { values } = staticSnapshot().stages[4];
+    expect(values.flowLph).toBe(16_000);
+    expectWithin(values.holdS, 4, 0.001);
+  });
+
+  it('stage 4 shows F0 5.175 min (H11), B* 1.1856 (H12) and a 139.224 °C divert limit (H13) at 140 °C', () => {
+    const { values } = staticSnapshot().stages[4];
+    expectWithin(values.f0Min, 5.175, 0.001);
+    expectWithin(values.bStar, 1.1856, 0.0001);
+    expectWithin(values.divertLimitC, 139.224, 0.001);
+  });
+
+  it('stage 6 starts half full: 10,000 L of 20,000 L, 50%', () => {
+    const { values } = staticSnapshot().stages[6];
+    expect(values.levelL).toBe(10_000);
+    expect(values.levelPct).toBe(50);
+  });
+
+  it('stage 8 puts 1,008 packs on a pallet (H26)', () => {
+    expect(staticSnapshot().stages[8].values.packsPerPallet).toBe(1_008);
+  });
+
+  it('stage 9 takes 16 samples per batch (H29)', () => {
+    expect(staticSnapshot().stages[9].values.samplesPerBatch).toBe(16);
+  });
+
+  it('the KPIs: 16,000 L/h in, 2 × 7,500 = 15,000 packs/h out, 1,000 L/h to spare (H31), and the tank at 50%', () => {
+    const { kpis } = staticSnapshot();
+    expect(kpis.uhtFlowLph).toBe(16_000);
+    expect(kpis.packsPerH).toBe(15_000);
+    expect(kpis.uhtFlowLph - kpis.packsPerH * plantConfig.product.packVolumeL).toBe(1_000);
+    expect(kpis.tankLevelPct).toBe(50);
+  });
+
+  it("the KPIs show stage 4's F0 and B*", () => {
+    const { kpis, stages } = staticSnapshot();
+    expect(kpis.f0Min).toBe(stages[4].values.f0Min);
+    expect(kpis.bStar).toBe(stages[4].values.bStar);
+  });
 });
 
 describe('createSim: clock', () => {
@@ -169,6 +258,16 @@ describe('createSim: clock', () => {
     expect(sim.snapshot().speed).toBe(speed);
     sim.step(FRAME_S);
     expect(sim.snapshot().timeS).toBe(plantConfig.clock.startTimeS + perFrameS);
+  });
+
+  it('does not jump when switched from x10,000 to x1: time saved up under 10 s steps is dropped', () => {
+    const sim = createSim(plantConfig);
+    sim.dispatch({ type: 'setSpeed', speed: 10_000 });
+    sim.step(0.0159); // 159 s: 15 steps of 10 s, 9 s left over
+    const switchedS = sim.snapshot().timeS;
+    sim.dispatch({ type: 'setSpeed', speed: 1 });
+    sim.step(1 / 60); // 0.017 s of sim time, under one step
+    expect(sim.snapshot().timeS).toBe(switchedS);
   });
 });
 
@@ -229,6 +328,34 @@ describe('createSim: shift changes', () => {
     expect(sim.snapshot().nextEventS).toBe(firstS + config.quality.batchS);
   });
 
+  it('takes the shift grid from quality.firstShiftStartS: 07:00 gives 07:00, 15:00 and 23:00', () => {
+    const config = dayOneConfig();
+    config.quality.firstShiftStartS = hToS(7);
+    const sim = createSim(config);
+    const runS: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      runS.push(sim.snapshot().nextEventS ?? Number.NaN);
+      sim.dispatch({ type: 'nextEvent' });
+    }
+    expect(runS).toEqual([hToS(7), hToS(15), hToS(23)]);
+  });
+
+  it('lands a step on every shift change after a speed change moves the steps off the 10 s grid, so each runs at its own time', () => {
+    const stepEndsS = new Set<number>();
+    const core = createCore(dayOneConfig(), { onStep: (_dtS, timeS) => void stepEndsS.add(timeS) });
+    core.dispatch({ type: 'setSpeed', speed: 1_000 });
+    core.step(1 / 60); // 16 steps of 1 s
+    expect(core.timeS).toBe(21_616);
+    core.dispatch({ type: 'setSpeed', speed: 10_000 });
+    for (let frame = 0; frame < 2_000; frame++) core.step(1 / 60);
+
+    const passedS: number[] = [];
+    for (let shiftS = nextShiftChangeS(21_616); shiftS <= core.timeS; shiftS += plantConfig.quality.batchS) passedS.push(shiftS);
+    expect(passedS.length).toBeGreaterThan(10);
+    // Each step runs the events due by its end, so a step ending on a shift change runs it at exactly that time.
+    for (const shiftS of passedS) expect(stepEndsS.has(shiftS), `a step ends at ${shiftS}`).toBe(true);
+  });
+
   it('never runs the clock past a due event without running it (2 days at x10,000)', () => {
     const sim = createSim(dayOneConfig());
     sim.dispatch({ type: 'setSpeed', speed: 10_000 });
@@ -265,12 +392,18 @@ describe('createSim: shift changes', () => {
 });
 
 describe('createSim: commands', () => {
-  it('setSetpoint uhtSetpointC shows in stage 4 and is logged', () => {
+  it('setSetpoint uhtSetpointC 140.5 °C shows in stage 4, moves F0 to 5.806 min (H19) and B* to 1.3230 (H18), and is logged', () => {
     const sim = createSim(plantConfig);
     const logBefore = sim.snapshot().log.length;
     sim.dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value: 140.5 });
     const snap = sim.snapshot();
-    expect(snap.stages[4].values.setpointC).toBe(140.5);
+    const { values } = snap.stages[4];
+    expect(values.setpointC).toBe(140.5);
+    expectWithin(values.f0Min, 5.806, 0.001);
+    expectWithin(values.bStar, 1.323, 0.0001);
+    expectWithin(values.divertLimitC, 139.224, 0.001); // follows the hold, not the set point (H13)
+    expect(snap.kpis.f0Min).toBe(values.f0Min);
+    expect(snap.kpis.bStar).toBe(values.bStar);
     expect(snap.log.length).toBe(logBefore + 1);
   });
 
@@ -287,13 +420,17 @@ describe('createSim: commands', () => {
     },
   );
 
-  it('setSetpoint accepts the other set points, logging each, without breaking the snapshot', () => {
+  it('setSetpoint applies the homogenizer pressure and filler rate to stages 3 and 7 and the KPIs, logging each', () => {
     const sim = createSim(plantConfig);
     const logBefore = sim.snapshot().log.length;
     sim.dispatch({ type: 'setSetpoint', key: 'homogenizerStage1Bar', value: 180 });
     sim.dispatch({ type: 'setSetpoint', key: 'fillerRatePacksPerH', value: 7_000 });
     const snap = sim.snapshot();
     expectWellFormed(snap);
+    expect(snap.stages[3].values.stage1Bar).toBe(180);
+    expectWithin(snap.stages[3].values.outletTempC, 81.25, 0.001); // 76 + (180 + 30) ÷ 40, as in H7
+    expect(snap.stages[7].values.ratePacksPerH).toBe(7_000);
+    expect(snap.kpis.packsPerH).toBe(14_000); // two fillers
     expect(snap.log.length).toBe(logBefore + 2);
   });
 
@@ -409,6 +546,36 @@ describe('createMockSim', () => {
     }
     expect(alarmed, 'frames with a warn or bad stage').toBeGreaterThan(0);
     expect(alarmed, 'frames with a warn or bad stage').toBeLessThan(frameCount);
+  });
+
+  it('keeps an amber UHT stage above the divert limit, so stage 4 changes status only between 15 min windows (1 day at x1,000)', () => {
+    const statusWindowS = minToS(15); // as in mock.ts
+    const sim = createMockSim(plantConfig);
+    sim.dispatch({ type: 'setSpeed', speed: 1_000 });
+    const changes: LogEntry[] = [];
+    for (let frame = 0; frame < dayToS(1) / 100; frame++) {
+      const beforeS = sim.snapshot().timeS;
+      sim.step(FRAME_S);
+      const fresh = sim.snapshot().log.filter((entry) => entry.timeS > beforeS && /UHT holding tube/.test(entry.message));
+      changes.push(...fresh.reverse());
+    }
+    expect(changes.map((entry) => entry.kind)).toContain('warn');
+    for (let i = 1; i < changes.length; i++) {
+      const gapS = changes[i].timeS - changes[i - 1].timeS;
+      if (gapS < statusWindowS) expect.fail(`stage 4 changed at ${changes[i - 1].timeS} and again ${gapS} s later`);
+    }
+  });
+
+  it('keeps the log newest first after a speed change moves the steps off the shift grid', () => {
+    const sim = createMockSim(plantConfig);
+    sim.dispatch({ type: 'setSpeed', speed: 1_000 });
+    sim.step(1 / 60); // 16 steps of 1 s
+    sim.dispatch({ type: 'setSpeed', speed: 10_000 });
+    for (let frame = 0; frame < 3_000; frame++) {
+      sim.step(1 / 60);
+      expectNewestFirst(sim.snapshot().log, `frame ${frame}`);
+    }
+    expectWellFormed(sim.snapshot());
   });
 
   it('is deterministic: the same inputs give identical snapshots', () => {

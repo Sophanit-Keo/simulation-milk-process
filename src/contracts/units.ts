@@ -1,5 +1,5 @@
 /**
- * Units rule (decision R8 in plan/DECISIONS.md).
+ * Units rule (decision D6 in plan/DECISIONS.md, from review note R8).
  *
  * Every quantity is a plain `number` whose name ends in its unit, and unit
  * conversions happen only in this file. Suffixes:

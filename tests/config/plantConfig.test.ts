@@ -1,5 +1,5 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { checkPlantConfig, dayToS, SPEEDS, sToH, type PlantConfig } from '../../src/contracts';
+import { checkPlantConfig, dayToS, hToS, SPEEDS, sToH, type PlantConfig } from '../../src/contracts';
 import plantJson from '../../src/data/plant.json';
 import { divertLimitC, holdTimeS, tubeVolumeL } from '../../src/sim/formulas';
 import { expectWithin } from '../helpers/expectWithin';
@@ -34,6 +34,11 @@ describe('numbers that follow from plant.json', () => {
   it('a batch, one filler for 8 h, is 60,000 packs and 16 samples (R1, H27, H29)', () => {
     expect(config.fillers.ratePacksPerH * sToH(config.quality.batchS)).toBe(60_000);
     expect(config.quality.batchS / config.quality.sampleEveryS).toBe(16);
+  });
+
+  it('shifts, and with them batches, start at 06:00 on day 1 and every 8 h after: 06:00, 14:00 and 22:00 (D1)', () => {
+    expect(config.quality.firstShiftStartS).toBe(hToS(6));
+    expect(3 * config.quality.batchS).toBe(dayToS(1));
   });
 
   it('the UHT plant makes 1,000 L/h more than the fillers draw (H31)', () => {
@@ -120,6 +125,19 @@ describe('checkPlantConfig catches a broken copy', () => {
     ['clock.baseStepS', (copy: PlantConfig) => (copy.clock.baseStepS = 0)],
   ])('a zero %s, which the model divides by or steps with', (path, change) => {
     expect(problemsWith(change).join('\n')).toContain(`${path} must be greater than 0`);
+  });
+
+  it.each([
+    ['a batch shorter than the fast step', (copy: PlantConfig) => (copy.quality.batchS = 5), 'quality.batchS must be at least clock.fastStepS'],
+    ['a 1e-12 s batch', (copy: PlantConfig) => (copy.quality.batchS = 1e-12), 'quality.batchS must be at least clock.fastStepS'],
+    [
+      '1e-12 s clock steps',
+      (copy: PlantConfig) => Object.assign(copy.clock, { baseStepS: 1e-12, fastStepS: 1e-12 }),
+      'clock.baseStepS must be at least 0.01 s',
+    ],
+    ['a start time of 1e17 s', (copy: PlantConfig) => (copy.clock.startTimeS = 1e17), 'clock.startTimeS must be at most 36500 days'],
+  ])('%s, which would hang the sim or make "next event" crawl', (_label, change, problem) => {
+    expect(problemsWith(change)).toContain(problem);
   });
 
   it('a value that is not finite', () => {

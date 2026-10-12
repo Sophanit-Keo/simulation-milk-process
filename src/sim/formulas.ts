@@ -1,6 +1,6 @@
-// The core formulas of plan 06, as pure functions. Names carry their units (R8);
-// the only unit conversion here goes through units.ts.
-import { lphToLps } from '../contracts';
+// The core formulas of plan 06, as pure functions. Names carry their units (D6);
+// every unit conversion here goes through units.ts.
+import { lphToLps, sToMin } from '../contracts';
 
 /** Share of cream to mix back into skim milk to reach the target fat. */
 export function creamShareFrac(targetFatPct: number, skimFatPct: number, creamFatPct: number): number {
@@ -21,7 +21,7 @@ export function holdTimeS(tubeVolumeL: number, flowLph: number): number {
 
 /** Sterilizing effect in minutes at 121.1 °C (z = 10 °C). */
 export function f0Min(tempC: number, holdS: number): number {
-  return (holdS / 60) * 10 ** ((tempC - 121.1) / 10);
+  return sToMin(holdS) * 10 ** ((tempC - 121.1) / 10);
 }
 
 /** Bacteriological effect B*; at least 1 means the product is commercially sterile. */

@@ -1,4 +1,5 @@
 import { isSpeed } from './stages';
+import { dayToS } from './units';
 
 /**
  * Shape of src/data/plant.json, the default settings (plan 06 and plan/DECISIONS.md).
@@ -116,6 +117,8 @@ export interface PlantConfig {
   quality: {
     /** One batch is one filler for this long (R1). */
     batchS: number;
+    /** A shift, and with it a batch, starts here and every batchS before and after it (D1: 06:00, 14:00, 22:00). */
+    firstShiftStartS: number;
     sampleEveryS: number;
     samplesAfterStop: number;
     incubationTempC: number;
@@ -153,6 +156,11 @@ const POSITIVE_KEYS = [
   'warehouse.truckEveryS',
 ] as const;
 
+// Floors and ceilings that keep the clock workable. "Next event" ignores the per-frame step cap, so a
+// tiny step means millions of steps per jump, and far out in time a step stops moving the clock at all.
+const MIN_BASE_STEP_S = 0.01;
+const MAX_START_DAYS = 36_500;
+
 const INTEGER_KEYS = [
   'seed',
   'fillers.count',
@@ -188,9 +196,13 @@ export function checkPlantConfig(config: PlantConfig): string[] {
     if (!(typeof value === 'number' && value > 0)) fail(`${path} must be greater than 0`);
   }
 
-  const { clock, product, standardization: std, asepticTank: tank, fillers, uht } = config;
+  const { clock, product, standardization: std, asepticTank: tank, fillers, uht, quality } = config;
   if (!isSpeed(clock.defaultSpeed)) fail('clock.defaultSpeed must be one of the speed presets');
   if (clock.fastStepS < clock.baseStepS) fail('clock.fastStepS must be at least clock.baseStepS');
+  if (clock.baseStepS < MIN_BASE_STEP_S) fail(`clock.baseStepS must be at least ${MIN_BASE_STEP_S} s`);
+  if (clock.startTimeS > dayToS(MAX_START_DAYS)) fail(`clock.startTimeS must be at most ${MAX_START_DAYS} days`);
+  // At most one shift change per step; a batch that rounds away to nothing would never stop changing shifts.
+  if (quality.batchS < clock.fastStepS) fail('quality.batchS must be at least clock.fastStepS');
   if (!(std.skimFatPct < product.fatPct && product.fatPct < std.creamFatPct)) fail('product fat must lie between skim and cream fat');
   if (std.rawMilkFatPct < product.fatPct) fail('raw-milk fat must be at least the product fat, or there is no cream to remove');
   if (!(0 < tank.resumeBelowFrac && tank.resumeBelowFrac < tank.throttleAboveFrac && tank.throttleAboveFrac <= 1)) {

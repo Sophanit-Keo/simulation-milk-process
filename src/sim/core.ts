@@ -2,7 +2,6 @@
 // the live set points and every command. They differ only in the stage values.
 import {
   CONTRACT_VERSION,
-  hToS,
   isSpeed,
   type Command,
   type Kpis,
@@ -16,9 +15,6 @@ import {
 import { Clock, type StepHandler } from './clock';
 import { EventQueue, type QueuedEvent } from './eventQueue';
 import { createLog, formatDayTime } from './log';
-
-/** Shifts, and with them batches, change at 06:00, 14:00 and 22:00 (sim assumption, as in the preview). */
-export const FIRST_SHIFT_START_S = hToS(6);
 
 export type Setpoints = Record<SetpointKey, number>;
 
@@ -47,9 +43,12 @@ export interface SimCore {
 export function createCore(config: PlantConfig, options: CoreOptions = {}): SimCore {
   const { defaultSpeed, ...clockSteps } = config.clock;
   if (!isSpeed(defaultSpeed)) throw new RangeError(`clock.defaultSpeed must be one of the speed presets, got ${defaultSpeed}`);
-  const { batchS } = config.quality;
-  // A zero batch length would schedule shift changes at the same instant forever.
-  if (!(batchS > 0 && Number.isFinite(batchS))) throw new RangeError(`quality.batchS must be positive, got ${batchS}`);
+  const { batchS, firstShiftStartS } = config.quality;
+  // A batch shorter than a step would run several shift changes in one step, and a tiny one would keep
+  // scheduling them at the same instant forever.
+  if (!(batchS >= clockSteps.fastStepS && Number.isFinite(batchS))) {
+    throw new RangeError(`quality.batchS must be at least clock.fastStepS (${clockSteps.fastStepS} s), got ${batchS}`);
+  }
 
   const clock = new Clock({ ...clockSteps, speed: defaultSpeed });
   const queue = new EventQueue();
@@ -62,10 +61,14 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
 
   function runEvent(event: QueuedEvent): void {
     switch (event.type) {
-      case 'shiftChange':
+      case 'shiftChange': {
         log.add(event.timeS, 'info', 'Shift change: each filler starts a new batch');
-        queue.schedule(event.timeS + batchS, 'shiftChange');
+        const nextS = event.timeS + batchS;
+        // Far out in time a batch can round away to nothing; the change would then be due again at once, forever.
+        if (!(nextS > event.timeS)) throw new RangeError(`A ${batchS} s batch does not move past ${event.timeS} s`);
+        queue.schedule(nextS, 'shiftChange');
         return;
+      }
       default:
         log.add(event.timeS, 'warn', `Unknown event "${event.type}" skipped`);
     }
@@ -125,9 +128,10 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
     }
   }
 
-  // The first shift change strictly after the start, on the 06:00 / 14:00 / 22:00 grid.
-  const shiftsSinceFirst = Math.floor((clock.timeS - FIRST_SHIFT_START_S) / batchS) + 1;
-  queue.schedule(FIRST_SHIFT_START_S + shiftsSinceFirst * batchS, 'shiftChange');
+  // The first shift change strictly after the start, on the grid firstShiftStartS + n × batchS
+  // (D1: 06:00, 14:00 and 22:00).
+  const shiftsSinceFirst = Math.floor((clock.timeS - firstShiftStartS) / batchS) + 1;
+  queue.schedule(firstShiftStartS + shiftsSinceFirst * batchS, 'shiftChange');
   log.add(clock.timeS, 'info', `Plant opens: ${formatDayTime(clock.timeS)}`);
 
   return {
@@ -137,7 +141,9 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
     setpoints,
     log: (timeS, kind, message) => log.add(timeS, kind, message),
     step: (realDtS) => {
-      clock.advance(realDtS, onStep);
+      // No step crosses a queued event, so each event runs at exactly its own time and the log stays in
+      // time order, even after a speed change has moved the steps off the shift grid.
+      clock.advance(realDtS, onStep, () => queue.peek()?.timeS);
     },
     dispatch,
     snapshot: (stages, kpis) => ({
