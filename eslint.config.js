@@ -13,7 +13,7 @@ const HEADLESS_IMPORTS = {
 };
 
 export default defineConfig(
-  { ignores: ['dist', 'node_modules', '.cache', 'playwright-report', 'test-results', 'uht-plant-preview.html'] },
+  { ignores: ['dist', 'node_modules', '.cache', '.claude', 'playwright-report', 'test-results', 'uht-plant-preview.html'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {
