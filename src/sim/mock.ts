@@ -17,7 +17,7 @@ import {
   type StageId,
   type Status,
 } from '../contracts';
-import { createCore, FIRST_SHIFT_START_S } from './core';
+import { createCore } from './core';
 import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, oeeFrac, tubeVolumeL } from './formulas';
 import { createRng, mulberry32 } from './rng';
 import { staticPlant, toStages, type StageValues } from './staticPlant';
@@ -27,6 +27,8 @@ const STATUS_WINDOW_S = minToS(15);
 /** Share of status windows that turn amber or red. */
 const WARN_FRAC = 0.08;
 const BAD_FRAC = 0.03;
+/** An amber UHT stage's lowest noisy reading stays at least this far above the divert limit. */
+const WARN_ABOVE_LIMIT_C = 0.05;
 
 const STAGE_NAMES: Record<StageId, string> = {
   1: 'Standardization',
@@ -105,8 +107,10 @@ export function createMockSim(config: PlantConfig): Sim {
     const flowLph = uht.capacityLph * (tankHigh ? tank.throttledFlowFrac : 1);
     const holdS = holdTimeS(tubeL, flowLph);
     const setpointC = core.setpoints.uhtSetpointC;
-    // Amber runs just above the divert limit; red falls to the fault temperature.
-    const baseTempC = { idle: setpointC, ok: setpointC, warn: setpointC - 0.5, bad: uht.faultTempC }[statuses[4]];
+    // Amber runs low but keeps its lowest noisy reading above the divert limit (139.5 ± 0.3 °C would dip
+    // under 139.22 °C at full flow and flicker red); red falls to the fault temperature.
+    const warnTempC = Math.max(setpointC - 0.5, divertLimitC(holdS) + uht.displayNoiseC + WARN_ABOVE_LIMIT_C);
+    const baseTempC = { idle: setpointC, ok: setpointC, warn: warnTempC, bad: uht.faultTempC }[statuses[4]];
     const tempC = baseTempC + uht.displayNoiseC * wave(timeS, 37, 7);
     const bStarNow = bStar(tempC, holdS);
     if (bStarNow < 1) statuses[4] = 'bad';
@@ -127,7 +131,7 @@ export function createMockSim(config: PlantConfig): Sim {
     const elapsedS = timeS - config.clock.startTimeS;
     const packsMade = Math.floor(sToH(elapsedS) * fillers.count * core.setpoints.fillerRatePacksPerH * 0.95);
     const traysMade = Math.floor(packsMade / packaging.packsPerTray);
-    const shiftIndex = (t: number) => Math.floor((t - FIRST_SHIFT_START_S) / quality.batchS);
+    const shiftIndex = (t: number) => Math.floor((t - quality.firstShiftStartS) / quality.batchS);
     const closedBatches = fillers.count * (shiftIndex(timeS) - shiftIndex(config.clock.startTimeS));
     const batchesPerHold = fillers.count * Math.ceil(dayToS(quality.incubationDays) / quality.batchS);
     const pastHold = Math.max(0, closedBatches - batchesPerHold);

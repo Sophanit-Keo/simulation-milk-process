@@ -197,6 +197,87 @@ describe('Clock: advance', () => {
   });
 });
 
+describe('Clock: advance with a next boundary', () => {
+  it('cuts the step that would cross the boundary short, lands on it exactly, and keeps the rest pending', () => {
+    const clock = makeClock({ speed: 10 });
+    const { calls, onStep } = recorder();
+    expect(clock.advance(0.5, onStep, () => 2.5)).toBe(5); // 5 s pending
+    expect(calls).toEqual([
+      [1, 1],
+      [1, 2],
+      [0.5, 2.5],
+      [1, 3.5],
+      [1, 4.5],
+    ]);
+    // 0.5 s is still pending, so no sim time was lost: 0.5 + 0.625 makes one more step.
+    expect(clock.advance(0.0625, onStep, () => undefined)).toBe(1);
+    expect(clock.timeS).toBe(5.5);
+  });
+
+  it('reads the boundary again before every step, so an event queued by a step is not crossed either', () => {
+    const clock = makeClock({ speed: 10 });
+    let boundaryS: number | undefined = 1.5;
+    const { calls, onStep } = recorder();
+    const queueing = (dtS: number, timeS: number) => {
+      onStep(dtS, timeS);
+      // Like an event handler: running the 1.5 s event queues one at 1.75 s.
+      if (timeS === 1.5) boundaryS = 1.75;
+      else if (timeS === 1.75) boundaryS = undefined;
+    };
+    expect(clock.advance(0.25, queueing, () => boundaryS)).toBe(3); // 2.5 s pending
+    expect(clock.advance(0.125, queueing, () => boundaryS)).toBe(2); // 0.75 + 1.25 s pending
+    expect(calls).toEqual([
+      [1, 1],
+      [0.5, 1.5],
+      [0.25, 1.75],
+      [1, 2.75],
+      [1, 3.75],
+    ]);
+  });
+
+  it.each([
+    ['exactly one step ahead', 1],
+    ['at the current time', 0],
+    ['behind the clock', -5],
+    ['missing', undefined],
+  ])('takes a whole step when the boundary is %s', (_label, boundaryS) => {
+    const clock = makeClock();
+    const { calls, onStep } = recorder();
+    expect(clock.advance(1, onStep, () => boundaryS)).toBe(1);
+    expect(calls).toEqual([[1, 1]]);
+  });
+
+  it('with the shipped settings lands on the 14:00 shift change from off the 10 s grid at x10,000', () => {
+    const clock = new Clock({ ...plantConfig.clock, startTimeS: 21_616, speed: 10_000 });
+    const { calls, onStep } = recorder();
+    const nextShiftS = () => (clock.timeS < 50_400 ? 50_400 : 79_200);
+    for (let frame = 0; frame < 30; frame++) clock.advance(0.1, onStep, nextShiftS);
+    expect(calls).toContainEqual([4, 50_400]);
+    expect(calls.filter(([, timeS]) => timeS > 50_400).every(([dtS]) => dtS === 10)).toBe(true);
+    // 30 frames of 1,000 s; the 4 s step left 6 s of the last frame pending.
+    expect(clock.timeS).toBe(21_616 + 30 * 1_000 - 6);
+  });
+});
+
+describe('Clock: a step too small to move the time', () => {
+  it.each([
+    ['1 s steps at 1e17 s', { startTimeS: 1e17 }],
+    ['1e-12 s steps at 06:00', { startTimeS: 21_600, baseStepS: 1e-12, fastStepS: 1e-12 }],
+  ])('advance throws a RangeError for %s, without calling onStep', (_label, overrides) => {
+    const clock = makeClock(overrides);
+    const { calls, onStep } = recorder();
+    expect(() => clock.advance(1, onStep)).toThrow(RangeError);
+    expect(calls).toEqual([]);
+  });
+
+  it.each([
+    ['1 s steps at 1e17 s', { startTimeS: 1e17 }, 1e17 + 1_024],
+    ['1e-12 s steps at 06:00', { startTimeS: 21_600, baseStepS: 1e-12, fastStepS: 1e-12 }, 21_601],
+  ])('jumpTo throws a RangeError for %s instead of looping forever', (_label, overrides, targetS) => {
+    expect(() => makeClock(overrides).jumpTo(targetS, () => {})).toThrow(RangeError);
+  });
+});
+
 describe('Clock: setSpeed', () => {
   it('changes the speed', () => {
     const clock = makeClock();
@@ -204,6 +285,23 @@ describe('Clock: setSpeed', () => {
       clock.setSpeed(speed);
       expect(clock.speed).toBe(speed);
     }
+  });
+
+  it('drops time saved up under 10 s steps when the steps become 1 s, so x10,000 to x1 does not jump 9 s', () => {
+    const clock = makeClock({ speed: 10_000 });
+    const { calls, onStep } = recorder();
+    expect(clock.advance(2 ** -10, onStep)).toBe(0); // 9.77 s pending, under one 10 s step
+    clock.setSpeed(1);
+    expect(clock.advance(0.5, onStep)).toBe(0); // only the new 0.5 s is pending
+    expect(clock.advance(0.5, onStep)).toBe(1);
+    expect(calls).toEqual([[1, 1]]);
+  });
+
+  it('keeps pending time when the step size stays the same (x1 to x10, both 1 s steps)', () => {
+    const clock = makeClock({ speed: 1 });
+    expect(clock.advance(0.5, () => {})).toBe(0);
+    clock.setSpeed(10);
+    expect(clock.advance(0.0625, () => {})).toBe(1); // 0.5 + 0.625
   });
 
   it.each([0, 7, 2, 5_000, -10, 100.5, Number.NaN])('throws a RangeError for %s and keeps the old speed', (speed) => {

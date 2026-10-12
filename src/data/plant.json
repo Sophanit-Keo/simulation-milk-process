@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "seed": 81006,
   "clock": {
     "startTimeS": 21600,
@@ -79,6 +79,7 @@
   },
   "quality": {
     "batchS": 28800,
+    "firstShiftStartS": 21600,
     "sampleEveryS": 1800,
     "samplesAfterStop": 2,
     "incubationTempC": 55,
