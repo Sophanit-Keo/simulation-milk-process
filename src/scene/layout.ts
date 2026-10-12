@@ -1,4 +1,4 @@
-import type { StageId } from '../contracts';
+import type { StageId, ZoneId } from '../contracts';
 
 /**
  * The plant's floor layout, ported from the preview (uht-plant-preview.html: ZONES, the apron,
@@ -26,7 +26,7 @@ export interface RectM {
 /** CSS custom properties for floor tints; `ui` ports them from the preview with the light and dark themes. */
 export type ZoneColorVar = '--zone-proc' | '--zone-pack' | '--zone-quar' | '--zone-ware' | '--apron';
 
-export type ZoneId = 'silo' | 'process' | 'aseptic' | 'filling' | 'packaging' | 'quarantine' | 'warehouse';
+export type { ZoneId } from '../contracts';
 
 export interface Zone {
   id: ZoneId;

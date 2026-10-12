@@ -1,4 +1,4 @@
-import type { Command, Hud, Snapshot } from '../contracts';
+import type { Command, Hud, Snapshot, StageInfo, ViewBus } from '../contracts';
 import { formatSimTime, formatSpeed } from './format';
 
 /**
@@ -6,7 +6,12 @@ import { formatSimTime, formatSpeed } from './format';
  * Phase 2 adds pause, the speed presets and next event, which send commands
  * through dispatch; the bar, rail, panel and KPI strip follow.
  */
-export function createHud(root: HTMLElement, _dispatch: (command: Command) => void): Hud {
+export function createHud(
+  root: HTMLElement,
+  _dispatch: (command: Command) => void,
+  _bus: ViewBus,
+  _stages: readonly StageInfo[],
+): Hud {
   const bar = root.querySelector<HTMLElement>('#bar');
   if (!bar) throw new Error('createHud needs a #bar element inside the app root (see index.html)');
 

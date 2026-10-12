@@ -5,6 +5,8 @@ import {
   isSpeed,
   type Command,
   type Kpis,
+  type LinePoint,
+  type LinePointId,
   type LogKind,
   type PlantConfig,
   type SetpointKey,
@@ -37,7 +39,7 @@ export interface SimCore {
   step(realDtS: number): void;
   dispatch(command: Command): void;
   /** Wraps the caller's stages and KPIs with the clock, queue and log state. */
-  snapshot(stages: Record<StageId, StageSnapshot>, kpis: Kpis): Snapshot;
+  snapshot(stages: Record<StageId, StageSnapshot>, kpis: Kpis, line: Record<LinePointId, LinePoint>): Snapshot;
 }
 
 export function createCore(config: PlantConfig, options: CoreOptions = {}): SimCore {
@@ -146,13 +148,14 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       clock.advance(realDtS, onStep, () => queue.peek()?.timeS);
     },
     dispatch,
-    snapshot: (stages, kpis) => ({
+    snapshot: (stages, kpis, line) => ({
       version: CONTRACT_VERSION,
       timeS: clock.timeS,
       speed: clock.speed,
       paused: clock.paused,
       nextEventS: queue.peek()?.timeS ?? null,
       stages,
+      line,
       kpis,
       log: log.entries(),
     }),

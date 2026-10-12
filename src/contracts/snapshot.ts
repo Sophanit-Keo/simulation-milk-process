@@ -1,10 +1,17 @@
-import type { Speed, StageId, Status } from './stages';
+import type { LinePointId, Speed, StageId, Status } from './stages';
 
 /**
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
  * v0 week 1, v1 at G1, v2 at week 6, v3 at G2. After G2, fields may only be added.
  */
-export const CONTRACT_VERSION = 0;
+export const CONTRACT_VERSION = 1;
+
+/** Milk at one measuring point of the liquid line (contracts v1). */
+export interface LinePoint {
+  tempC: number;
+  /** Flow through this point; 0 when nothing passes (e.g. the divert line in production). */
+  flowLph: number;
+}
 
 export interface StageSnapshot {
   id: StageId;
@@ -53,6 +60,8 @@ export interface Snapshot {
   /** Sim time of the next queued event, or null if the queue is empty. */
   nextEventS: number | null;
   stages: Record<StageId, StageSnapshot>;
+  /** Temperature and flow at each point of the liquid line, for pipe colours and flow (contracts v1). */
+  line: Record<LinePointId, LinePoint>;
   kpis: Kpis;
   /** Newest first, capped in length by the sim. */
   log: readonly LogEntry[];

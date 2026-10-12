@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import type { World } from '../contracts';
+import type { ViewBus, World } from '../contracts';
 import { FLOOR, OVERVIEW, PLANT_BOUNDS, PLANT_HEIGHT_M, overviewDistanceM, type RectM } from './layout';
 import { readSceneColor, watchTheme } from './theme';
 
@@ -27,7 +27,7 @@ const SHADOW_RADIUS = 3;
  * The 3D view: renderer, camera, orbit controls, one shadow-casting light and the floor.
  * Phase 1 draws an empty floor; the snapshot starts to drive the scene in phase 2.
  */
-export function createWorld(host: HTMLElement): World {
+export function createWorld(host: HTMLElement, _bus: ViewBus): World {
   // Make the WebGL 2 context here rather than in WebGLRenderer, which logs an error and throws
   // when it can't (three.js needs WebGL 2 since r163). Without it the rest of the app still runs.
   const canvas = document.createElement('canvas');
