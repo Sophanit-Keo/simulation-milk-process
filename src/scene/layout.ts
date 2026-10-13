@@ -1,4 +1,4 @@
-import type { StageId, ZoneId } from '../contracts';
+import { ZONE_NAMES, type StageId, type ZoneId } from '../contracts';
 
 /**
  * The plant's floor layout, ported from the preview (uht-plant-preview.html: ZONES, the apron,
@@ -37,13 +37,13 @@ export interface Zone {
 
 /** The seven zones in a U (plan 05): milk runs left to right along the top row, pallets come back along the bottom. */
 export const ZONES: readonly Zone[] = [
-  { id: 'silo', label: 'Silo yard & mixing', stages: [1], colorVar: '--zone-proc', rect: { xMinM: -63, xMaxM: -38, zMinM: -23, zMaxM: -5 } },
-  { id: 'process', label: 'UHT process hall', stages: [2, 3, 4, 5], colorVar: '--zone-proc', rect: { xMinM: -35, xMaxM: -6, zMinM: -23, zMaxM: -5 } },
-  { id: 'aseptic', label: 'Aseptic tank', stages: [6], colorVar: '--zone-proc', rect: { xMinM: -3, xMaxM: 11, zMinM: -23, zMaxM: -5 } },
-  { id: 'filling', label: 'Filling hall', stages: [7], colorVar: '--zone-pack', rect: { xMinM: 14, xMaxM: 37, zMinM: -23, zMaxM: -5 } },
-  { id: 'packaging', label: 'Packaging hall', stages: [8], colorVar: '--zone-pack', rect: { xMinM: 14, xMaxM: 37, zMinM: 2, zMaxM: 19 } },
-  { id: 'quarantine', label: 'Quarantine & QA lab', stages: [9], colorVar: '--zone-quar', rect: { xMinM: -11, xMaxM: 11, zMinM: 2, zMaxM: 19 } },
-  { id: 'warehouse', label: 'Warehouse & dispatch', stages: [10], colorVar: '--zone-ware', rect: { xMinM: -63, xMaxM: -14, zMinM: 2, zMaxM: 19 } },
+  { id: 'silo', label: ZONE_NAMES.silo, stages: [1], colorVar: '--zone-proc', rect: { xMinM: -63, xMaxM: -38, zMinM: -23, zMaxM: -5 } },
+  { id: 'process', label: ZONE_NAMES.process, stages: [2, 3, 4, 5], colorVar: '--zone-proc', rect: { xMinM: -35, xMaxM: -6, zMinM: -23, zMaxM: -5 } },
+  { id: 'aseptic', label: ZONE_NAMES.aseptic, stages: [6], colorVar: '--zone-proc', rect: { xMinM: -3, xMaxM: 11, zMinM: -23, zMaxM: -5 } },
+  { id: 'filling', label: ZONE_NAMES.filling, stages: [7], colorVar: '--zone-pack', rect: { xMinM: 14, xMaxM: 37, zMinM: -23, zMaxM: -5 } },
+  { id: 'packaging', label: ZONE_NAMES.packaging, stages: [8], colorVar: '--zone-pack', rect: { xMinM: 14, xMaxM: 37, zMinM: 2, zMaxM: 19 } },
+  { id: 'quarantine', label: ZONE_NAMES.quarantine, stages: [9], colorVar: '--zone-quar', rect: { xMinM: -11, xMaxM: 11, zMinM: 2, zMaxM: 19 } },
+  { id: 'warehouse', label: ZONE_NAMES.warehouse, stages: [10], colorVar: '--zone-ware', rect: { xMinM: -63, xMaxM: -14, zMinM: 2, zMaxM: 19 } },
 ];
 
 /** Truck yard in front of the warehouse's dock doors. */

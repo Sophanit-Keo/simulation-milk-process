@@ -1,4 +1,4 @@
-import type { Snapshot, StageId, StageInfo, Status, ZoneId } from '../contracts';
+import { ZONE_NAMES, type Snapshot, type StageId, type StageInfo, type Status } from '../contracts';
 import { el, setText, STATUS_TEXT } from './dom';
 import { formatValue } from './format';
 
@@ -9,17 +9,6 @@ export interface StagePanel {
   update(snapshot: Snapshot): void;
   dispose(): void;
 }
-
-/** Zone names as the floor plan has them (plan 05; the 3D view labels the zones the same way). */
-const ZONE_NAMES: Readonly<Record<ZoneId, string>> = {
-  silo: 'Silo yard & mixing',
-  process: 'UHT process hall',
-  aseptic: 'Aseptic tank',
-  filling: 'Filling hall',
-  packaging: 'Packaging hall',
-  quarantine: 'Quarantine & QA lab',
-  warehouse: 'Warehouse & dispatch',
-};
 
 const EMPTY_TITLE = 'Select a stage';
 const EMPTY_HINT = 'Pick a stage from the list, or click a machine in the 3D view, to see what it does and its live values.';

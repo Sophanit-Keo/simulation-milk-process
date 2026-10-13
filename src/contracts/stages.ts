@@ -18,6 +18,17 @@ export type ZoneId = 'silo' | 'process' | 'aseptic' | 'filling' | 'packaging' | 
 
 export const ZONE_IDS: readonly ZoneId[] = ['silo', 'process', 'aseptic', 'filling', 'packaging', 'quarantine', 'warehouse'];
 
+/** Zone names as the floor plan has them (plan 05). The 3D zone labels and the info panel both show these. */
+export const ZONE_NAMES: Readonly<Record<ZoneId, string>> = {
+  silo: 'Silo yard & mixing',
+  process: 'UHT process hall',
+  aseptic: 'Aseptic tank',
+  filling: 'Filling hall',
+  packaging: 'Packaging hall',
+  quarantine: 'Quarantine & QA lab',
+  warehouse: 'Warehouse & dispatch',
+};
+
 /**
  * Measuring points along the liquid line (plan 02, "Chart values as text"), in flow order.
  * The 3D view colours each pipe from the point it leaves; phase 3 makes the values live.
