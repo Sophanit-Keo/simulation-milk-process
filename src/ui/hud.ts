@@ -15,11 +15,13 @@ const TEXT_TAKERS = 'input, select, textarea, [contenteditable]:not([contentedit
  *
  * The bar's buttons and keys send Commands through `dispatch`. Stage selection runs only
  * through the view bus: a rail click emits selectStage, and the rail and the panel follow every
- * selectStage on the bus, whether it came from the rail or from a click in the 3D view.
+ * selectStage on the bus, whether it came from the rail or from a click in the 3D view, and
+ * every overview event, which clears the selection.
  *
  * Keys, anywhere on the page: Space pauses and resumes (unless focus is on a button or a form
- * control, which use Space themselves); 1–5 pick the speeds ×1 to ×10,000; arrows move along
- * the rail while it has focus.
+ * control, which use Space themselves); 1–5 pick the speeds ×1 to ×10,000; Escape goes back to
+ * the whole plant (the overview event, like the rail's "Whole plant"); arrows move along the
+ * rail while it has focus.
  */
 export function createHud(root: HTMLElement, dispatch: (command: Command) => void, bus: ViewBus, stages: readonly StageInfo[]): Hud {
   const part = (selector: string): HTMLElement => {
@@ -44,10 +46,19 @@ export function createHud(root: HTMLElement, dispatch: (command: Command) => voi
   let lastSnapshot: Snapshot | null = null;
 
   const stopListening = bus.on((event) => {
-    if (event.type !== 'selectStage') return;
-    rail.select(event.stage);
-    panel.show(event.stage, lastSnapshot);
+    if (event.type === 'selectStage') {
+      rail.select(event.stage);
+      panel.show(event.stage, lastSnapshot);
+    } else if (event.type === 'overview') {
+      rail.clear();
+      panel.clear();
+    }
   });
+
+  // index.html's "Whole plant" link in the rail head, as in the preview.
+  railRoot
+    .querySelector('[data-testid="overview"]')
+    ?.addEventListener('click', () => bus.emit({ type: 'overview' }), { signal });
 
   const doc = root.ownerDocument;
   doc.addEventListener(
@@ -55,6 +66,10 @@ export function createHud(root: HTMLElement, dispatch: (command: Command) => voi
     (event) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
       const target = event.target instanceof Element ? event.target : null;
+      if (event.key === 'Escape') {
+        if (!target?.closest(TEXT_TAKERS)) bus.emit({ type: 'overview' });
+        return;
+      }
       if (event.key === ' ') {
         if (target?.closest(SPACE_TAKERS)) return;
         event.preventDefault(); // no page scroll on narrow screens

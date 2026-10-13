@@ -5,6 +5,8 @@ import { formatValue } from './format';
 export interface StagePanel {
   /** Shows a stage's name, description and value rows, filled from the snapshot if there is one yet. */
   show(stage: StageId, snapshot: Snapshot | null): void;
+  /** Back to "Select a stage" and the how-to, as before the first selection (the whole plant). */
+  clear(): void;
   /** Refreshes the shown stage's status and live values. */
   update(snapshot: Snapshot): void;
   dispose(): void;
@@ -18,6 +20,7 @@ const HOW_TO: readonly (readonly (string | { key: string })[])[] = [
   [{ key: 'Space' }, ' pauses and resumes the clock.'],
   [{ key: '1' }, '–', { key: '5' }, ' set the speed, ×1 to ×10,000.'],
   [{ key: '↑' }, ' ', { key: '↓' }, ' move along the stage list.'],
+  [{ key: 'Esc' }, ' or Whole plant goes back to the overview.'],
   ['Drag to orbit, scroll to zoom, click a machine to select it.'],
 ];
 
@@ -72,8 +75,13 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
   showEmpty();
 
   function showEmpty(): void {
+    shown = null;
+    shownStatus = null;
+    title.textContent = EMPTY_TITLE;
+    description.textContent = EMPTY_HINT;
     for (const node of [number, subtitle, chip, live]) node.hidden = true;
     howTo.hidden = false;
+    panel.scrollTop = 0;
   }
 
   function update(snapshot: Snapshot): void {
@@ -124,6 +132,7 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
       panel.scrollTop = 0;
       if (snapshot) update(snapshot);
     },
+    clear: showEmpty,
     update,
     dispose() {
       panel.replaceChildren(...original);

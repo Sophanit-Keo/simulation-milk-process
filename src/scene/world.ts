@@ -38,6 +38,7 @@ const SHADOW_RADIUS = 3;
  * The 3D view: renderer, camera, orbit controls, one shadow-casting light, the floor and zones, the
  * equipment modules with their labels and lamps, the pipes, picking and the camera's fly-to.
  * Both a rail click and a 3D click arrive here as selectStage on the bus; the camera flies to that stage.
+ * An overview event (the rail's "Whole plant") flies it back to the whole plant.
  */
 export function createWorld(host: HTMLElement, bus: ViewBus): World {
   // Make the WebGL 2 context here rather than in WebGLRenderer, which logs an error and throws
@@ -134,10 +135,16 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
 
   // The scene reacts to every selection, its own clicks included: the rail and the view stay in step.
   const stopListening = bus.on((event) => {
-    if (event.type !== 'selectStage') return;
-    cameraTaken = true;
-    labels.select(event.stage);
-    flight.flyTo(event.stage);
+    if (event.type === 'selectStage') {
+      cameraTaken = true;
+      labels.select(event.stage);
+      flight.flyTo(event.stage);
+    } else if (event.type === 'overview') {
+      labels.select(null);
+      flight.flyHome(overviewPosition(), overviewTarget);
+      // As in the preview, the overview refits the window again until the viewer takes the camera.
+      cameraTaken = false;
+    }
   });
 
   const applyTheme = (): void => {
@@ -152,9 +159,12 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
   const stopWatchingTheme = watchTheme(applyTheme);
 
   const viewSize = new THREE.Vector2();
-  const frameOverview = (): void => {
+  const overviewPosition = (): THREE.Vector3 => {
     const viewHalfWidthPerM = camera.getViewSize(1, viewSize).x / 2;
-    camera.position.copy(overviewTarget).addScaledVector(overviewDirection, overviewDistanceM(viewHalfWidthPerM));
+    return overviewTarget.clone().addScaledVector(overviewDirection, overviewDistanceM(viewHalfWidthPerM));
+  };
+  const frameOverview = (): void => {
+    camera.position.copy(overviewPosition());
     controls.target.copy(overviewTarget);
     controls.update();
   };
@@ -173,7 +183,10 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
     labelRenderer.setSize(widthPx, heightPx);
     camera.aspect = widthPx / heightPx;
     camera.updateProjectionMatrix();
-    if (!cameraTaken) frameOverview();
+    if (!cameraTaken) {
+      flight.cancel(); // a fly home aimed at the old window shape: jump to the new fit instead
+      frameOverview();
+    }
     render(); // resizing clears the canvas; draw now rather than show a blank frame
   };
   // The host's last content size, kept for a change of pixel ratio alone (below).

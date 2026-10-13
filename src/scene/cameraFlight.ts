@@ -21,6 +21,8 @@ const RING_PULSE_RAD_PER_S = 3;
 export interface CameraFlight {
   /** Flies to the stage's stop (jumps with reduced motion) and rings it; a repeat flies again. */
   flyTo(stage: StageId): void;
+  /** Flies back to the whole-plant view and hides the ring; it lands on no stage. */
+  flyHome(toPosition: THREE.Vector3, toTarget: THREE.Vector3): void;
   /** Stops a fly where it is, because the viewer took the camera. */
   cancel(): void;
   /** Every frame, before the orbit controls update. */
@@ -33,7 +35,8 @@ export interface CameraFlight {
 }
 
 interface Fly {
-  stage: StageId;
+  /** null for a fly home to the overview. */
+  stage: StageId | null;
   fromPosition: THREE.Vector3;
   fromTarget: THREE.Vector3;
   toPosition: THREE.Vector3;
@@ -63,11 +66,32 @@ export function createCameraFlight(
   let focusStage: StageId | null = null;
   let clockS = 0;
 
-  const land = (stage: StageId): void => {
+  const land = (stage: StageId | null): void => {
     fly = null;
     focusStage = stage;
     delete host.dataset.flying;
-    host.dataset.focusStage = String(stage);
+    if (stage !== null) host.dataset.focusStage = String(stage);
+  };
+
+  const start = (stage: StageId | null, toPosition: THREE.Vector3, toTarget: THREE.Vector3): void => {
+    focusStage = null;
+    delete host.dataset.focusStage;
+    if (reducedMotion.matches) {
+      camera.position.copy(toPosition);
+      controls.target.copy(toTarget);
+      controls.update();
+      land(stage);
+      return;
+    }
+    fly = {
+      stage,
+      fromPosition: camera.position.clone(),
+      fromTarget: controls.target.clone(),
+      toPosition,
+      toTarget,
+      elapsedS: 0,
+    };
+    host.dataset.flying = 'true';
   };
 
   const applyTheme = (): void => {
@@ -83,25 +107,11 @@ export function createCameraFlight(
       ring.position.set(view.focusM[0], RING_Y_M, view.focusM[2]);
       ring.scale.set(view.ringRadiusM, view.ringRadiusM, 1);
       ring.visible = true;
-
-      focusStage = null;
-      delete host.dataset.focusStage;
-      if (reducedMotion.matches) {
-        camera.position.copy(toPosition);
-        controls.target.copy(toTarget);
-        controls.update();
-        land(stage);
-        return;
-      }
-      fly = {
-        stage,
-        fromPosition: camera.position.clone(),
-        fromTarget: controls.target.clone(),
-        toPosition,
-        toTarget,
-        elapsedS: 0,
-      };
-      host.dataset.flying = 'true';
+      start(stage, toPosition, toTarget);
+    },
+    flyHome(toPosition, toTarget) {
+      ring.visible = false;
+      start(null, toPosition.clone(), toTarget.clone());
     },
     cancel() {
       if (!fly) return;

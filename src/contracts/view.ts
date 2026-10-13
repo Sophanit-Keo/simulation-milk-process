@@ -3,6 +3,8 @@ import type { StageId } from './stages';
 /** UI ↔ 3D view. View events never reach the sim. */
 export type ViewEvent =
   | { type: 'selectStage'; stage: StageId }
+  /** Back to the whole plant: no stage selected, the camera at the overview (the preview's "Whole plant"). */
+  | { type: 'overview' }
   | { type: 'selectBatch'; batchId: number }
   | { type: 'tour'; on: boolean };
 

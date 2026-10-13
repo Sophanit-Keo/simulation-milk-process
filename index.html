@@ -20,7 +20,10 @@
 
   <!-- The HUD renders one button per stage from src/data/stages.json, with live lamps. -->
   <nav id="rail" class="rail card" aria-labelledby="rail-title">
-    <h2 class="eyebrow" id="rail-title">Stages</h2>
+    <div class="rail-head">
+      <h2 class="eyebrow" id="rail-title">Stages</h2>
+      <button class="link" type="button" data-testid="overview" title="Back to the whole plant (Esc)">Whole plant</button>
+    </div>
     <ol class="stages"></ol>
   </nav>
 

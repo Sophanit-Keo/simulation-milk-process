@@ -4,6 +4,8 @@ import { createLamp, el, setLamp } from './dom';
 export interface StageRail {
   /** Marks the selected stage (aria-current) and makes it the rail's tab stop. */
   select(stage: StageId): void;
+  /** No stage selected (the whole plant): no aria-current; the last stage stays the tab stop. */
+  clear(): void;
   /** Lamps from the snapshot's stage statuses. */
   update(snapshot: Snapshot): void;
   dispose(): void;
@@ -113,6 +115,11 @@ export function createStageRail(
         setTabStop(stage);
       }
       revealInRail(button, [list, rail]);
+    },
+    clear() {
+      if (selected === null) return;
+      buttons.get(selected)?.removeAttribute('aria-current');
+      selected = null;
     },
     update(snapshot) {
       for (const [id, lamp] of lamps) {
