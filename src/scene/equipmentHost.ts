@@ -1,9 +1,10 @@
-// Builds every equipment module into the scene (phase 2 skeleton). The scene core extends this
-// with theme-aware materials, picking, labels and status lamps.
+// Builds every equipment module into the scene and owns the materials they share. world.ts adds
+// picking, labels and status lamps around the machines (equipmentLabels.ts, picking.ts).
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { Snapshot } from '../contracts';
-import { EQUIPMENT_FACTORIES, type Equipment, type EquipmentContext, type MaterialName } from './equipment';
+import { EQUIPMENT_FACTORIES, type Equipment, type EquipmentContext, type EquipmentFactory, type MaterialName } from './equipment';
+import { readSceneColor, type SceneColorVar } from './theme';
 
 const MATERIAL_SETTINGS: Record<MaterialName, THREE.MeshStandardMaterialParameters> = {
   steel: { color: 0xb4c0c8, metalness: 0.55, roughness: 0.35 },
@@ -19,17 +20,38 @@ const MATERIAL_SETTINGS: Record<MaterialName, THREE.MeshStandardMaterialParamete
   gauge: { color: 0xf5f5f0, roughness: 0.4 },
 };
 
+/**
+ * Materials whose colour follows the theme, as in the preview's applyTheme: stainless steel is darker in
+ * the dark theme so it doesn't glare against the dark floor. The rest keep one colour in both themes.
+ */
+const THEMED_MATERIALS: Partial<Record<MaterialName, SceneColorVar>> = {
+  steel: '--steel',
+  steelDark: '--steel-dark',
+};
+
 export interface EquipmentHost {
   readonly equipment: readonly Equipment[];
   readonly materials: Readonly<Record<MaterialName, THREE.MeshStandardMaterial>>;
+  /** Re-reads the theme colours into the shared materials. */
+  applyTheme(): void;
   update(snapshot: Snapshot, realDtS: number): void;
   dispose(): void;
 }
 
-export function createEquipmentHost(scene: THREE.Scene): EquipmentHost {
+export function createEquipmentHost(
+  scene: THREE.Scene,
+  factories: readonly EquipmentFactory[] = EQUIPMENT_FACTORIES,
+): EquipmentHost {
   const materials = Object.fromEntries(
     Object.entries(MATERIAL_SETTINGS).map(([name, settings]) => [name, new THREE.MeshStandardMaterial(settings)]),
   ) as Record<MaterialName, THREE.MeshStandardMaterial>;
+
+  const applyTheme = (): void => {
+    for (const [name, colorVar] of Object.entries(THEMED_MATERIALS) as [MaterialName, SceneColorVar][]) {
+      materials[name].color.set(readSceneColor(colorVar));
+    }
+  };
+  applyTheme();
 
   // One load per file; every caller gets its own clone of the loaded scene.
   const loader = new GLTFLoader();
@@ -44,14 +66,40 @@ export function createEquipmentHost(scene: THREE.Scene): EquipmentHost {
   };
 
   const ctx: EquipmentContext = { materials, loadModel };
-  const equipment = EQUIPMENT_FACTORIES.flatMap((make) => make(ctx));
-  for (const item of equipment) scene.add(item.object);
+  // A module that throws while building is reported and left out, so the rest of the plant still shows.
+  const equipment = factories.flatMap((make) => {
+    try {
+      return make(ctx);
+    } catch (error) {
+      console.error('An equipment module failed to build:', error);
+      return [];
+    }
+  });
+  const ids = new Set<string>();
+  for (const item of equipment) {
+    // Labels, picking and the debug hook key on the id, so a repeat would make two machines one.
+    if (ids.has(item.id)) console.warn(`Two machines share the equipment id "${item.id}"`);
+    ids.add(item.id);
+    scene.add(item.object);
+  }
+
+  // A machine whose update throws is reported once and left still, so one module's bug can't stop the frame loop.
+  const failed = new Set<Equipment>();
 
   return {
     equipment,
     materials,
+    applyTheme,
     update(snapshot, realDtS) {
-      for (const item of equipment) item.update(snapshot, realDtS);
+      for (const item of equipment) {
+        if (failed.has(item)) continue;
+        try {
+          item.update(snapshot, realDtS);
+        } catch (error) {
+          failed.add(item);
+          console.error(`Equipment "${item.id}" stopped animating:`, error);
+        }
+      }
     },
     dispose() {
       for (const item of equipment) {
