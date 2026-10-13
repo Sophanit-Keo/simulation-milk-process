@@ -7,24 +7,6 @@
     "description": "A separator splits warm milk into skim and cream, and in-line control remixes just enough cream to hit 3.5% fat.",
     "values": [
       {
-        "key": "siloTempC",
-        "label": "Silo",
-        "unit": "°C",
-        "decimals": 1
-      },
-      {
-        "key": "separatorTempC",
-        "label": "Separator",
-        "unit": "°C",
-        "decimals": 1
-      },
-      {
-        "key": "feedTankTempC",
-        "label": "UHT feed tank",
-        "unit": "°C",
-        "decimals": 1
-      },
-      {
         "key": "rawMilkFatPct",
         "label": "Raw-milk fat",
         "unit": "%",
@@ -38,15 +20,33 @@
       },
       {
         "key": "creamShareFrac",
-        "label": "Cream share",
+        "label": "Cream remixed",
         "unit": "%",
-        "decimals": 2,
+        "decimals": 1,
         "scale": 100
+      },
+      {
+        "key": "siloTempC",
+        "label": "Raw-milk silo",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "separatorTempC",
+        "label": "Separator",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "feedTankTempC",
+        "label": "Mixing tank (UHT feed)",
+        "unit": "°C",
+        "decimals": 0
       }
     ],
     "tourCaption": [
-      "Raw milk waits cold in the silos, then a separator splits it into skim and cream.",
-      "Just enough cream goes back in to make 3.5% milk."
+      "Raw milk waits cold in the silos; a separator splits skim from cream.",
+      "Just enough cream goes back in to make milk with 3.5% fat."
     ]
   },
   {
@@ -60,18 +60,18 @@
         "key": "preheatTempC",
         "label": "Preheater outlet",
         "unit": "°C",
-        "decimals": 1
+        "decimals": 0
       },
       {
         "key": "deaeratorTempC",
         "label": "Deaerator",
         "unit": "°C",
-        "decimals": 1
+        "decimals": 0
       }
     ],
     "tourCaption": [
-      "The milk is preheated to about 80 °C.",
-      "A vacuum vessel then boils off the air, which would foul the heaters."
+      "Plate heat exchangers warm the cold milk from 4 °C to about 80 °C.",
+      "Under vacuum it boils briefly, and the air leaves with the vapour."
     ]
   },
   {
@@ -79,17 +79,17 @@
     "name": "Homogenization",
     "shortName": "Homogenization",
     "zone": "process",
-    "description": "A high-pressure piston pump forces milk through a narrow gap, so fat globules shrink below 1 µm and no cream layer forms.",
+    "description": "A high-pressure piston pump forces milk through a gap of about 0.1 mm, so fat globules shrink below 1 µm and no cream layer forms.",
     "values": [
       {
         "key": "stage1Bar",
-        "label": "Stage 1",
+        "label": "First stage",
         "unit": "bar",
         "decimals": 0
       },
       {
         "key": "stage2Bar",
-        "label": "Stage 2",
+        "label": "Second stage",
         "unit": "bar",
         "decimals": 0
       },
@@ -97,17 +97,17 @@
         "key": "inletTempC",
         "label": "Inlet",
         "unit": "°C",
-        "decimals": 1
+        "decimals": 0
       },
       {
         "key": "outletTempC",
         "label": "Outlet",
         "unit": "°C",
-        "decimals": 1
+        "decimals": 0
       }
     ],
     "tourCaption": [
-      "Three pistons push the milk through a gap at 200 bar.",
+      "Three pistons force the milk through a narrow gap at 200 bar.",
       "The fat globules shrink, so no cream layer forms on the shelf."
     ]
   },
@@ -116,11 +116,11 @@
     "name": "UHT Treatment",
     "shortName": "UHT",
     "zone": "process",
-    "description": "Steam heats the milk to about 140 °C, a holding tube keeps it there for about 4 s, and a drop below the divert limit sends it to reject.",
+    "description": "Steam heats the milk to about 140 °C, a holding tube keeps it there for about 4 s, and any drop below the divert limit (B* < 1) sends it to the reject tank.",
     "values": [
       {
         "key": "tempC",
-        "label": "Holding tube",
+        "label": "Holding-tube outlet",
         "unit": "°C",
         "decimals": 1
       },
@@ -131,22 +131,10 @@
         "decimals": 1
       },
       {
-        "key": "flowLph",
-        "label": "Flow",
-        "unit": "L/h",
-        "decimals": 0
-      },
-      {
-        "key": "holdS",
-        "label": "Hold",
-        "unit": "s",
+        "key": "divertLimitC",
+        "label": "Divert limit",
+        "unit": "°C",
         "decimals": 1
-      },
-      {
-        "key": "f0Min",
-        "label": "F0",
-        "unit": "min",
-        "decimals": 2
       },
       {
         "key": "bStar",
@@ -155,15 +143,27 @@
         "decimals": 2
       },
       {
-        "key": "divertLimitC",
-        "label": "Divert limit",
-        "unit": "°C",
+        "key": "f0Min",
+        "label": "F0",
+        "unit": "min",
         "decimals": 2
+      },
+      {
+        "key": "holdS",
+        "label": "Holding time",
+        "unit": "s",
+        "decimals": 1
+      },
+      {
+        "key": "flowLph",
+        "label": "Flow",
+        "unit": "L/h",
+        "decimals": 0
       }
     ],
     "tourCaption": [
-      "Steam heats the milk to 140 °C for about 4 seconds.",
-      "If it runs too cool, the valve sends it to the reject tank."
+      "Steam heats the milk to 140 °C, and a coiled tube holds it for 4 s.",
+      "If it runs too cool, a valve diverts it to the reject tank."
     ]
   },
   {
@@ -171,24 +171,24 @@
     "name": "Flash Cooling",
     "shortName": "Flash cooling",
     "zone": "process",
-    "description": "A vacuum vessel drops the milk from about 140 °C to about 80 °C almost at once, then a cooler takes it to 20 °C.",
+    "description": "A vacuum vessel drops the milk from about 140 °C to about 80 °C almost at once and boils off the water the steam added; a cooler then takes it to 20 °C.",
     "values": [
       {
         "key": "flashTempC",
         "label": "Flash vessel",
         "unit": "°C",
-        "decimals": 1
+        "decimals": 0
       },
       {
         "key": "coolerTempC",
         "label": "Cooler outlet",
         "unit": "°C",
-        "decimals": 1
+        "decimals": 0
       }
     ],
     "tourCaption": [
-      "In the flash vessel the milk falls back to about 80 °C at once.",
-      "A tubular cooler then brings it down to 20 °C."
+      "In a vacuum vessel the milk flashes back to about 80 °C at once.",
+      "The water the steam added boils off; a cooler takes it to 20 °C."
     ]
   },
   {
@@ -196,7 +196,7 @@
     "name": "Aseptic Storage (Buffer)",
     "shortName": "Aseptic tank",
     "zone": "aseptic",
-    "description": "A sterile tank sits between the UHT plant and the fillers, so either side can stop without stopping the other.",
+    "description": "A sterile tank sits between the UHT plant and the fillers, so either side can stop or slow down without stopping the other.",
     "values": [
       {
         "key": "levelPct",
@@ -218,13 +218,13 @@
       },
       {
         "key": "tempC",
-        "label": "Temperature",
+        "label": "Milk temperature",
         "unit": "°C",
-        "decimals": 1
+        "decimals": 0
       }
     ],
     "tourCaption": [
-      "The sterile tank is the buffer between liquid and packs.",
+      "A sterile tank buffers the milk between the UHT plant and the fillers.",
       "Either side can stop for a while without stopping the other."
     ]
   },
@@ -233,7 +233,7 @@
     "name": "Aseptic Packaging",
     "shortName": "Filling",
     "zone": "filling",
-    "description": "The fillers sterilize the carton material, form it into a tube, fill it with sterile milk and seal each pack below the liquid level.",
+    "description": "The fillers sterilize the carton material, form it into a tube, fill it with sterile milk and seal each pack below the liquid level, so no air or germs get in.",
     "values": [
       {
         "key": "fillerCount",
@@ -251,7 +251,7 @@
         "key": "tempC",
         "label": "Milk temperature",
         "unit": "°C",
-        "decimals": 1
+        "decimals": 0
       }
     ],
     "tourCaption": [
@@ -264,7 +264,7 @@
     "name": "Secondary Packaging & Palletization",
     "shortName": "Packaging",
     "zone": "packaging",
-    "description": "Conveyors group packs into shrink-wrapped trays, and a palletizer stacks the trays into labelled pallets.",
+    "description": "Conveyors group packs into shrink-wrapped trays, and a palletizer stacks the trays into labelled pallets, the unit tracked from here on.",
     "values": [
       {
         "key": "packsPerTray",
@@ -299,7 +299,7 @@
     "values": [
       {
         "key": "incubationTempC",
-        "label": "Incubation",
+        "label": "Incubation temperature",
         "unit": "°C",
         "decimals": 0
       },
@@ -317,8 +317,8 @@
       }
     ],
     "tourCaption": [
-      "Every batch waits here while its samples incubate for 7 days.",
-      "Only batches that pass are released for sale."
+      "Each batch waits here while its samples incubate 7 days at 55 °C.",
+      "Only batches whose samples pass are released for sale."
     ]
   },
   {
@@ -326,11 +326,11 @@
     "name": "Warehousing & Ambient Distribution",
     "shortName": "Warehouse",
     "zone": "warehouse",
-    "description": "Released pallets are stored and shipped at room temperature, oldest best-before date first.",
+    "description": "Released pallets are stored and shipped at room temperature with no cold chain, earliest best-before date first.",
     "values": [
       {
         "key": "tempC",
-        "label": "Warehouse",
+        "label": "Temperature",
         "unit": "°C",
         "decimals": 0
       },
@@ -343,7 +343,7 @@
     ],
     "tourCaption": [
       "Released pallets wait in the racks at room temperature.",
-      "Trucks of 22 pallets leave every 100 minutes."
+      "A truck takes 22 pallets every 100 minutes, first to expire first."
     ]
   }
 ]
