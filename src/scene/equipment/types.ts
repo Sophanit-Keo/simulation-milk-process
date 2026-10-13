@@ -15,7 +15,9 @@ export type MaterialName =
   | 'concrete' // plinths and kerbs
   | 'wood' // pallets
   | 'carton' // packs and trays
-  | 'rack'; // warehouse racking
+  | 'rack' // warehouse racking
+  | 'paint' // painted drives, pumps and frames (the preview's blue-grey)
+  | 'gauge'; // gauge faces and dials
 
 export interface EquipmentContext {
   readonly materials: Readonly<Record<MaterialName, Material>>;

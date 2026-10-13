@@ -15,6 +15,8 @@ const MATERIAL_SETTINGS: Record<MaterialName, THREE.MeshStandardMaterialParamete
   wood: { color: 0xb08a5a, roughness: 0.85 },
   carton: { color: 0xf7f7f2, roughness: 0.7 },
   rack: { color: 0xd28a2c, metalness: 0.3, roughness: 0.6 },
+  paint: { color: 0x4f7896, metalness: 0.25, roughness: 0.55 },
+  gauge: { color: 0xf5f5f0, roughness: 0.4 },
 };
 
 export interface EquipmentHost {
