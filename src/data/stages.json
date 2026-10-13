@@ -20,7 +20,7 @@
       },
       {
         "key": "creamShareFrac",
-        "label": "Cream remixed",
+        "label": "Cream in product",
         "unit": "%",
         "decimals": 1,
         "scale": 100
@@ -70,8 +70,8 @@
       }
     ],
     "tourCaption": [
-      "Plate heat exchangers warm the cold milk from 4 °C to about 80 °C.",
-      "Under vacuum it boils briefly, and the air leaves with the vapour."
+      "A plate heat exchanger warms the cold milk from 4 °C to about 80 °C.",
+      "In a vacuum vessel it boils briefly, and a pump draws off the air."
     ]
   },
   {
@@ -330,7 +330,7 @@
     "values": [
       {
         "key": "tempC",
-        "label": "Temperature",
+        "label": "Storage temperature",
         "unit": "°C",
         "decimals": 0
       },
@@ -343,7 +343,7 @@
     ],
     "tourCaption": [
       "Released pallets wait in the racks at room temperature.",
-      "A truck takes 22 pallets every 100 minutes, first to expire first."
+      "A truck takes 22 pallets every 100 min, earliest best-before first."
     ]
   }
 ]

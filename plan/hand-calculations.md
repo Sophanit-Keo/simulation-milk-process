@@ -107,7 +107,7 @@ Run the model with seed 81006 and compare. These are for phases 3 and 4; the lon
 
 ## Line points
 
-The temperature and flow at each measuring point of the liquid line (`Snapshot.line`, contracts v1), in flow order, for the static plant of phase 2: every stage at its `plant.json` set point, the UHT plant at full flow, both fillers running and no divert. The 3D view colours each pipe from these temperatures, blue at 4 °C through yellow to red at 140 °C ([plan 08](08-user-interface.md#colour-rules)). The static-plant test can check every row now; phase 3 checks them again against the stage 1–6 models at steady state. A point's flow is the milk leaving it, so the `separator` row is the standardized milk after the cream is remixed.
+The temperature and flow at each measuring point of the liquid line (`Snapshot.line`, contracts v1), in flow order, for the static plant of phase 2: every stage at its `plant.json` set point, the UHT plant at full flow, both fillers running and no divert. The 3D view colours each pipe from these temperatures, blue at 4 °C through yellow to red at 140 °C ([plan 08](08-user-interface.md#colour-rules)). The static-plant test can check every row now; phase 3 checks them again against the stage 1–6 models at steady state. A point's flow is the milk leaving it, so the `separator` row is the standardized milk after the cream is remixed. Where the milk is heated or cooled between two points, as across the plates or along the cooler passes, the pipe's colour ramps linearly from one to the next (`src/scene/pipes.ts`); only the points themselves are expected values.
 
 | # | Point (`LinePointId`) | Temperature | Flow | Tolerance | Source |
 |---|---|---|---|---|---|
