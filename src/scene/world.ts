@@ -1,9 +1,17 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import type { ViewBus, World } from '../contracts';
+import { createCameraFlight } from './cameraFlight';
+import { debugRequested, installDebugHook, type DebugHook } from './debugHook';
 import { createEquipmentHost } from './equipmentHost';
+import { createEquipmentLabels } from './equipmentLabels';
+import './labels.css';
 import { FLOOR, OVERVIEW, PLANT_BOUNDS, PLANT_HEIGHT_M, overviewDistanceM, type RectM } from './layout';
+import { createPicker, type PickTarget } from './picking';
+import { createPipes } from './pipes';
 import { readSceneColor, watchTheme } from './theme';
+import { createZones } from './zones';
 
 const FOV_DEG = 40;
 const NEAR_M = 0.5;
@@ -16,6 +24,8 @@ const MIN_DISTANCE_M = 5;
 const MAX_DISTANCE_M = 320;
 /** Used only when the host has no height of its own yet, so the view still shows. */
 const FALLBACK_ASPECT = 16 / 9;
+/** Machine labels refresh their values at the HUD's rate (plan 07: 4 times a second). */
+const LABEL_REFRESH_S = 0.25;
 
 /** The preview's sun: high and from the dock side, so shadows fall short and back toward the milk row. */
 const SUN_DIRECTION = new THREE.Vector3(40, 80, 44).normalize();
@@ -25,10 +35,11 @@ const SHADOW_MAP_PX = 2048;
 const SHADOW_RADIUS = 3;
 
 /**
- * The 3D view: renderer, camera, orbit controls, one shadow-casting light and the floor.
- * Phase 1 draws an empty floor; the snapshot starts to drive the scene in phase 2.
+ * The 3D view: renderer, camera, orbit controls, one shadow-casting light, the floor and zones, the
+ * equipment modules with their labels and lamps, the pipes, picking and the camera's fly-to.
+ * Both a rail click and a 3D click arrive here as selectStage on the bus; the camera flies to that stage.
  */
-export function createWorld(host: HTMLElement, _bus: ViewBus): World {
+export function createWorld(host: HTMLElement, bus: ViewBus): World {
   // Make the WebGL 2 context here rather than in WebGLRenderer, which logs an error and throws
   // when it can't (three.js needs WebGL 2 since r163). Without it the rest of the app still runs.
   const canvas = document.createElement('canvas');
@@ -50,6 +61,13 @@ export function createWorld(host: HTMLElement, _bus: ViewBus): World {
   canvas.style.height = '0px';
   host.append(canvas);
 
+  // Labels live in their own scene graph, so the label renderer walks a few dozen labels per frame,
+  // not every mesh in the plant. Their positions are world positions.
+  const labelRenderer = new CSS2DRenderer();
+  labelRenderer.domElement.className = 'scene-labels';
+  host.append(labelRenderer.domElement);
+  const labelScene = new THREE.Scene();
+
   const scene = new THREE.Scene();
   const background = new THREE.Color();
   scene.background = background;
@@ -70,10 +88,8 @@ export function createWorld(host: HTMLElement, _bus: ViewBus): World {
   const plant = centreOf(PLANT_BOUNDS);
   controls.cursor.set(plant.xM, 0, plant.zM);
   controls.maxTargetRadius = Math.max(PLANT_BOUNDS.xMaxM - PLANT_BOUNDS.xMinM, PLANT_BOUNDS.zMaxM - PLANT_BOUNDS.zMinM) / 2;
-  let userMoved = false;
-  controls.addEventListener('start', () => {
-    userMoved = true;
-  });
+  // Like the preview, the overview refits the window until the viewer takes the camera or picks a stage.
+  let cameraTaken = false;
 
   const sky = new THREE.HemisphereLight(0xffffff, 0x9aa7b2, 1.3);
   const sun = new THREE.DirectionalLight(0xffffff, 1.9);
@@ -88,16 +104,49 @@ export function createWorld(host: HTMLElement, _bus: ViewBus): World {
   const floorMaterial = new THREE.MeshStandardMaterial({ roughness: 0.95 });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR.xMaxM - FLOOR.xMinM, FLOOR.zMaxM - FLOOR.zMinM), floorMaterial);
   const floorCentre = centreOf(FLOOR);
+  floor.name = 'floor';
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(floorCentre.xM, 0, floorCentre.zM);
   floor.receiveShadow = true;
   scene.add(floor);
 
+  const zones = createZones(scene, labelScene);
   const equipmentHost = createEquipmentHost(scene);
+  const pipes = createPipes(scene, equipmentHost.materials.steel);
+  const labels = createEquipmentLabels(equipmentHost.equipment, labelScene);
+  const flight = createCameraFlight(scene, camera, controls, host);
+
+  const takeCamera = (): void => {
+    cameraTaken = true;
+    flight.cancel();
+  };
+  const pickTargets: PickTarget[] = [
+    ...equipmentHost.equipment.map(({ object, stage }) => ({ object, stage })),
+    ...pipes.pickTargets,
+  ];
+  const picker = createPicker({
+    canvas,
+    camera,
+    targets: pickTargets,
+    onPick: (stage) => bus.emit({ type: 'selectStage', stage }),
+    onTakeCamera: takeCamera,
+  });
+
+  // The scene reacts to every selection, its own clicks included: the rail and the view stay in step.
+  const stopListening = bus.on((event) => {
+    if (event.type !== 'selectStage') return;
+    cameraTaken = true;
+    labels.select(event.stage);
+    flight.flyTo(event.stage);
+  });
 
   const applyTheme = (): void => {
     background.set(readSceneColor('--scene-bg'));
     floorMaterial.color.set(readSceneColor('--floor'));
+    zones.applyTheme();
+    equipmentHost.applyTheme();
+    pipes.applyTheme();
+    flight.applyTheme();
   };
   applyTheme();
   const stopWatchingTheme = watchTheme(applyTheme);
@@ -111,16 +160,21 @@ export function createWorld(host: HTMLElement, _bus: ViewBus): World {
   };
   frameOverview();
 
+  const render = (): void => {
+    renderer.render(scene, camera);
+    labelRenderer.render(labelScene, camera);
+  };
+
   const resize = (widthPx: number, contentHeightPx: number): void => {
     if (widthPx <= 0) return;
     const heightPx = contentHeightPx > 0 ? contentHeightPx : Math.round(widthPx / FALLBACK_ASPECT);
     renderer.setPixelRatio(pixelRatio());
     renderer.setSize(widthPx, heightPx);
+    labelRenderer.setSize(widthPx, heightPx);
     camera.aspect = widthPx / heightPx;
     camera.updateProjectionMatrix();
-    // Like the preview: the overview refits the window until the viewer takes the camera.
-    if (!userMoved) frameOverview();
-    renderer.render(scene, camera); // resizing clears the canvas; draw now rather than show a blank frame
+    if (!cameraTaken) frameOverview();
+    render(); // resizing clears the canvas; draw now rather than show a blank frame
   };
   // The host's last content size, kept for a change of pixel ratio alone (below).
   let hostWidthPx = 0;
@@ -148,24 +202,54 @@ export function createWorld(host: HTMLElement, _bus: ViewBus): World {
   };
   watchRatio();
 
+  const debug: DebugHook | null = debugRequested()
+    ? installDebugHook({
+        stageScreenPoint: (stage) => picker.stageScreenPoint(stage),
+        focusStage: () => flight.focusStage,
+        info: () => renderer.info.render,
+        equipmentIds: () => equipmentHost.equipment.map((item) => item.id),
+      })
+    : null;
+
+  let sinceLabelsS = LABEL_REFRESH_S;
   return {
     update(snapshot, realDtS) {
+      picker.update();
+      flight.update(realDtS); // before the controls, which then apply their limits and damping
       controls.update(realDtS);
       equipmentHost.update(snapshot, realDtS);
+      // Paused means the plant's time stands still: the milk stops flowing with it.
+      pipes.update(snapshot.line, realDtS, !snapshot.paused);
+      sinceLabelsS += realDtS;
+      if (sinceLabelsS >= LABEL_REFRESH_S) {
+        sinceLabelsS = 0;
+        labels.refresh(snapshot);
+      }
+      labels.updateDetail(camera.position);
+      zones.updateLabels(camera.position.distanceTo(controls.target));
     },
     render() {
-      renderer.render(scene, camera);
+      render();
+      debug?.frame(performance.now());
     },
     dispose() {
+      debug?.dispose();
+      stopListening();
       resizeObserver.disconnect();
       ratioQuery?.removeEventListener('change', onRatioChange);
       stopWatchingTheme();
+      picker.dispose();
+      labels.dispose();
+      zones.dispose();
+      flight.dispose();
+      pipes.dispose();
       equipmentHost.dispose();
       controls.dispose();
       disposeScene(scene);
       renderer.dispose();
       renderer.forceContextLoss(); // free the GPU context now, not at garbage collection (Vite hot reloads)
       canvas.remove();
+      labelRenderer.domElement.remove();
     },
   };
 }

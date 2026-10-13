@@ -2,15 +2,14 @@ import type { StageId, ZoneId } from '../contracts';
 
 /**
  * The plant's floor layout, ported from the preview (uht-plant-preview.html: ZONES, the apron,
- * FOCUS, CAMOFF, BADGE, RING_R and the overview camera) so phase 2 can build on it.
- * Phase 1 uses it only to size the floor, aim the camera and fit the shadow.
+ * FOCUS, CAMOFF, BADGE, RING_R and the overview camera). It sizes the floor, aims the camera and
+ * fits the shadow (world.ts), lays the zone slabs (zones.ts) and holds the camera stops (cameraFlight.ts).
  *
  * Positions are three.js world units, 1 unit = 1 m, hence the `M` suffix (units rule R8).
  * Axes: x runs along the milk flow, silos at -x and fillers at +x; y is up; z runs from the
  * milk row (-z, top of the floor plan) to the pallet row and the truck docks (+z, bottom).
  *
- * Not ported yet: machine positions and pipe routes (preview, "pipes: colour follows milk
- * temperature"). They depend on where each machine stands, so they move with the equipment in phase 2.
+ * Machine positions live with each machine (equipment/), and the pipe routes that join them in pipes.ts.
  */
 
 export type PointM = readonly [xM: number, yM: number, zM: number];
