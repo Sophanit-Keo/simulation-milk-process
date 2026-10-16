@@ -31,8 +31,8 @@ flowchart LR
 - [x] **Top row (milk):** the liquid line runs left to right along z = −14, from the silos at x −59 to the aseptic tank at x 4 and on to the fillers at x 20.
 - [x] **East turn:** the two pack conveyors leave the fillers eastward, turn south at x 34 and x 32, and cross the aisle between the rows (z −5 to 2) into the packaging hall.
 - [x] **Bottom row (pallets):** trays and pallets run right to left (−x), from the palletizer at x 28 through quarantine (x −11 to 11) into the warehouse (x −63 to −14).
-- [x] **Out:** trucks dock at the warehouse's south wall (z 19) and leave south across the apron (x −63 to −14, z 19 to 33). Raw-milk tankers arrive at the silo yard (zone text only; no asset row, so not needed at G1).
-- [x] **Zones:** all seven floor areas are tinted and labelled with their name and stage numbers at their north-west corner, as in the preview (`ZONES` in `src/scene/layout.ts`).
+- [x] **Out:** trucks dock at the warehouse's south wall (z 19) and leave south across the apron (x −63 to −14, z 19 to 38; the preview's apron ends at z 33, but our 16.5 m truck reaches z 36.1). Raw-milk tankers arrive at the silo yard (zone text only; no asset row, so not needed at G1).
+- [x] **Zones:** all seven floor areas are tinted and labelled with their name and stage numbers just outside their near (+z) edge, so the machines and their lamps never cover a name in the whole-plant view; the preview put them at the north-west corner (`ZONES` in `src/scene/layout.ts`, `zoneLabelPlacement` in `src/scene/zones.ts`).
 
 ## 1 · Silo yard & mixing (stage 1)
 
@@ -105,7 +105,7 @@ Zone x −11 to 11, z 2 to 19. **Flow:** pallets enter from the east (the pallet
 
 ## 7 · Warehouse & dispatch (stage 10)
 
-Zone x −63 to −14, z 2 to 19; apron x −63 to −14, z 19 to 33. **Flow:** released pallets arrive from the east, go into the racks, and leave south through the dock doors onto trucks.
+Zone x −63 to −14, z 2 to 19; apron x −63 to −14, z 19 to 38. **Flow:** released pallets arrive from the east, go into the racks, and leave south through the dock doors onto trucks.
 
 | Item | Priority | Where in the preview (m) | At G1 |
 |---|---|---|---|
@@ -150,7 +150,7 @@ Each rail button and each 3D click must fly the camera to the stage's stop (`STA
 
 ## Layout review
 
-The merged plant at commit `5673218` (scene-core, scene-packs and ui merged), run as above on 2026-10-13 by `process`. **Result: the U, the flow directions, the zones and the camera stops match the floor plan, and every Must item stands except the 1 L carton and the tray tokens.** Defects are listed at the end with the lane that owns the fix.
+The merged plant at commit `5673218` (scene-core, scene-packs and ui merged), run as above on 2026-10-13 by `process`. **Result: the U, the flow directions, the zones and the camera stops match the floor plan, and every Must item stands except the 1 L carton and the tray tokens.** Defects are listed at the end with the lane that owns the fix. **Update, merge `c4af915`:** the G1 defects 1, 2, 3, 7 and 9 are fixed (rows below); the rest belong to phases 3–5.
 
 ### Zones, flow and selection
 
@@ -185,16 +185,16 @@ The merged plant at commit `5673218` (scene-core, scene-packs and ui merged), ru
 | Aseptic tank | Must | `aseptic-tank` | Yes | Three legs, sterile-air filter, milk level at 50% |
 | Aseptic fillers (2) | Must, hero | `filler-a`, `filler-b` | Yes | `reel` and `jaws` nodes move while each filler runs |
 | Conveyors, accumulation table | Must | `pack-conveyors`, `accumulation-table`, `tray-conveyor`, `pallet-conveyor` | Yes | Kit pieces ([D12](../DECISIONS.md#d12-conveyor-models)). The accumulation table stands on both pack lines at the south end of the filling hall (x 31.3 to 34.7, z −8.5 to −5.5), stage 7 |
-| 1 L carton | Must | — | **No** | No cartons on the outfeed belts. The `carton` material is used only for the filler reels and the pallet loads |
-| Tray | Must | — | **No** | No trays on the tray conveyor |
-| Pallet | Must | `palletizer` (pallet with a part-built load), `racks` (sample stock) | Yes | |
+| 1 L carton | Must | `pack-conveyors` (`cartons` InstancedMesh) | Yes (fixed) | 104 static cartons, 60 on line A from s 0 and 44 on line B from s 0.29, every 0.58 m, printed with `carton.png`; line B empties while filler B is stopped |
+| Tray | Must | `tray-conveyor` (`trays` InstancedMesh) | Yes (fixed) | 8 static trays every 0.84 m on the tray line, printed with `tray.png` |
+| Pallet | Must | `palletizer` (pallet with a part-built load), `racks` (stock from the KPI) | Yes | Printed with `pallet.png` |
 | Tray-shrink tunnel | Should | `tray-shrink-tunnel` | Yes | Labelled "Tray packer & shrink tunnel" |
 | Palletizer robot | Should, hero | `palletizer` | Yes | Its moving node is named `arm`, while the phase 2 plan and assets/README.md name the palletizer's nodes `arm_*` |
 | Stretch wrapper | Could | `stretch-wrapper` | Yes | |
 | Quarantine zone, QA lab | Must | `quarantine`, `qa-lab` | Yes | Amber outline at the preview's position with dashed lanes between the 4 rows of batch places; the lab has three incubators with lamps |
-| Racks | Should | `racks` | Yes | 4 rows × 16 bays × 3 levels, two pallet places per bay and level: 384 places. A fixed sample of about 55% is filled |
+| Racks | Should | `racks` | Yes | 4 rows × 16 bays × 3 levels, two pallet places per bay and level: 384 places. The loads follow `kpis.palletsInStock` (empty on the static plant) |
 | Loading docks | Should | `docks` | Yes | Three doors with bumpers and apron guide lines |
-| Trucks | Should | `truck` | Yes | Grey box (no `vehicles/truck.glb` yet), 16.5 m long at the middle door |
+| Trucks | Should | `truck` | Yes | `vehicles/truck.glb` (own work, see assets/LICENSES.md), 16.5 m long at the middle door |
 | Forklifts | Should | `forklift-1`, `forklift-2` | Yes | Grey boxes in the aisles at (−30, 10.6) and (−42.5, 17.95) |
 | Pipes | Must | `pipe-*` meshes (not equipment) | Yes | Temperatures from `snapshot.line`, as in [Pipes](#pipes-all-zones); the homogenizer outlet run starts at 81.75 °C |
 
@@ -221,15 +221,15 @@ Each value matches its hand calculation (H1, H6, H7, H11–H13, H26, H29) or its
 
 | # | What | Owner | For |
 |---|---|---|---|
-| 1 | The 1 L carton and the tray, Must items, are missing. Static tokens are enough at G1: cartons along both outfeeds (0.58 m apart in the preview) and trays on the tray conveyor (0.84 m apart), from the brand-free meshes the phase 2 plan asks of `assets` | `scene-packs`, with `assets` for the meshes | G1 |
+| 1 | **Fixed** (scene-g1, `09520da`). ~~The 1 L carton and the tray, Must items, are missing.~~ Static tokens are enough at G1: cartons along both outfeeds (0.58 m apart in the preview) and trays on the tray conveyor (0.84 m apart), from the brand-free meshes the phase 2 plan asks of `assets` | `scene-packs`, with `assets` for the meshes | G1 |
 | 2 | ~~No way back to the whole-plant view once a stage is selected~~ **Fixed:** the view bus has an `overview` event; **Whole plant** above the rail and Esc emit it, the rail and panel clear and the camera flies back (the preview's O key is left out) | `lead` (view event), `ui`, `scene-core` | G1 review comfort; the guided tour (phase 5) also needs it |
-| 3 | The racks show a fixed sample of about 210 pallets while the KPI strip reads 0 pallets in stock. Show the racks empty until the snapshot carries stock, or take the count from `kpis.palletsInStock` | `scene-packs` | G1 (low) |
+| 3 | **Fixed** (`09520da`): the rack loads follow the stock KPI. ~~The racks show a fixed sample of about 210 pallets while the KPI strip reads 0 pallets in stock. Show the racks empty until the snapshot carries stock, or take the count from `kpis.palletsInStock`~~ | `scene-packs` | G1 (low) |
 | 4 | Rack scale: 384 pallet places cannot hold the stock. [D11](../DECISIONS.md#d11-opening-state) opens with 634 pallets and stock grows by about 33 a day ([H43](../hand-calculations.md#counts-and-rates)); the preview drew one block per 10 pallets (192 blocks, 1,920 pallets) | `scene-packs` | Phase 4 |
 | 5 | Quarantine scale: the preview's grid (2.0 m blocks at 2.55 m, 4 rows from x −9.6) fits 7 columns, 28 blocks, inside the outline, but [D1](../DECISIONS.md#d1-batch-size) keeps up to 44 batches in the zone (42 on hold and 2 being filled, [H49](../hand-calculations.md#counts-and-rates)). Four rows of 11 blocks 1.2 m wide at a 1.6 m pitch fit the outline and keep the 4 marked lanes | `scene-packs` | Phase 4 ([R9](../REVIEW.md#r9-quarantine-scale)) |
 | 6 | The flow-diversion valve has no green/red light (see Items) | `scene-core` (liquid line) | Phase 3 |
-| 7 | The docked truck (16.5 m from its tail at z 19.6) reaches z 36.1, 3 m past the apron's south edge at z 33 | `scene-core` (apron) or `scene-packs` | Low |
+| 7 | **Fixed** (`09520da`): the apron runs to z 38. ~~The docked truck (16.5 m from its tail at z 19.6) reaches z 36.1, 3 m past the apron's south edge at z 33~~ | `scene-core` (apron) or `scene-packs` | Low |
 | 8 | The palletizer's node is `arm`, not `arm_*`; agree the names with the palletizer's hero spec before phase 5 | `scene-packs`, `assets` | Phase 5 |
-| 9 | Zone labels sit under the machines: in the whole-plant view silo B hides the start of "Silo yard & mixing", and the racks hide part of "Warehouse & dispatch" | `scene-core` | Low |
+| 9 | **Fixed** (`09520da`): the names hang outside each zone's near edge, clear of machines and lamps. ~~Zone labels sit under the machines: in the whole-plant view silo B hides the start of "Silo yard & mixing", and the racks hide part of "Warehouse & dispatch"~~ | `scene-core` | Low |
 
 ---
 

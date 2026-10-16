@@ -37,49 +37,49 @@ It prints one JSON object with the machine (CPU, cores, load average), the WebGL
 
 ## Results
 
-Measured on 16 October 2026 on the merged phase 2 plant at `1700d82` (all lanes but qa and scene-g1 merged, vehicles and token textures included). 33 machines, a production build served by `vite preview`, in headless Chromium 141.0.7390.37.
+Measured on 16 October 2026 on the merged phase 2 plant at `c4af915` (every lane merged, including the scene-g1 fixes: carton and tray tokens, rack loads from the stock KPI, the longer apron). 33 machines, a production build served by `vite preview`, in headless Chromium 141.0.7390.37. The first baseline, at `1700d82` before the scene-g1 fixes, read 179 draw calls and 104,810 triangles at the overview: the tokens add 2 draw calls and about 1,300 triangles, and the now empty racks (0 pallets in stock on the static plant) save 3 draw calls and about 7,500 triangles.
 
-The machine: a Linux 6.18 x64 VM, `nproc` 4, CPU `Intel(R) Xeon(R) Processor @ 2.10GHz` (from `/proc/cpuinfo`), 16 GB RAM, no GPU, Node 22.22.0. No other browser ran during the measurement. The load average of about 3.5 is the measurement's own SwiftShader threads.
+The machine: a Linux 6.18 x64 VM, `nproc` 4, CPU `Intel(R) Xeon(R) Processor @ 2.10GHz` (from `/proc/cpuinfo`), 16 GB RAM, no GPU, Node 22.22.0. No other browser ran during the measurement. The load average of about 3.5 to 4 is the measurement's own SwiftShader threads.
 
 ### Draw calls and triangles
 
-These are the same on any GPU. Two runs at 1440 × 900 gave identical counts.
+These are the same on any GPU.
 
 | Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
 |---|---:|---:|---:|---:|
-| **Overview** | **179** | **104,810** | **179** | **104,810** |
-| 1 Standardization | 86 | 65,648 | 86 | 65,648 |
-| 2 Preheating | 84 | 65,592 | 84 | 65,592 |
-| 3 Homogenization | 86 | 65,460 | 86 | 65,460 |
-| 4 UHT | 90 | 69,496 | 91 | 69,552 |
-| 5 Flash cooling | 84 | 67,480 | 84 | 67,480 |
-| 6 Aseptic tank | 74 | 58,640 | 74 | 58,640 |
-| 7 Filling | 88 | 62,124 | 89 | 62,352 |
-| 8 Packaging | 93 | 68,650 | 94 | 68,818 |
-| 9 Quarantine & QA | 109 | 86,420 | 116 | 90,208 |
-| 10 Warehouse | 121 | 78,928 | 125 | 83,656 |
+| **Overview** | **178** | **98,558** | **178** | **98,558** |
+| 1 Standardization | 83 | 58,052 | 83 | 58,052 |
+| 2 Preheating | 81 | 57,996 | 81 | 57,996 |
+| 3 Homogenization | 83 | 57,864 | 83 | 57,864 |
+| 4 UHT | 89 | 66,964 | 90 | 67,020 |
+| 5 Flash cooling | 83 | 64,948 | 83 | 64,948 |
+| 6 Aseptic tank | 73 | 56,108 | 73 | 56,108 |
+| 7 Filling | 88 | 60,840 | 89 | 61,068 |
+| 8 Packaging | 94 | 67,462 | 95 | 67,630 |
+| 9 Quarantine & QA | 108 | 82,604 | 114 | 83,860 |
+| 10 Warehouse | 118 | 71,332 | 122 | 76,060 |
 
-The overview uses 179 draw calls, about half the budget of 350. Each stage stop draws fewer, because the camera's frustum leaves most of the plant out. 1280 × 720 is the browser tests' viewport; its wider view takes in a little more at some stops.
+The overview uses 178 draw calls, about half the budget of 350. Each stage stop draws fewer, because the camera's frustum leaves most of the plant out. 1280 × 720 is the browser tests' viewport; its wider view takes in a little more at some stops. With stock in the racks (`?mock`, about 300 pallets) the overview reads about 181 draw calls and 110,000 triangles.
 
-The table shows the settled scene. In the first frames the overview reads about 176 to 180 draw calls and 76,000 to 83,000 triangles, depending on how many pieces have loaded by then; the Kenney conveyor pieces and the vehicles then replace their grey boxes and the counts settle at 179 and 104,810 within about a second.
+The table shows the settled scene. In the first frames the overview reads about 179 draw calls and 76,710 triangles; the Kenney conveyor pieces and the vehicles then replace their grey boxes and the counts settle within about a second.
 
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.
 
-| Camera | fps, 1440 × 900 (two runs) | fps, 1280 × 720 |
+| Camera | fps, 1440 × 900 | fps, 1280 × 720 |
 |---|---:|---:|
-| Overview | 5.9, 6.3 | 6.7 |
-| 1 Standardization | 8.3, 8.2 | 10.0 |
-| 2 Preheating | 8.8, 8.5 | 10.2 |
-| 3 Homogenization | 8.5, 8.1 | 9.9 |
-| 4 UHT | 7.6, 7.6 | 9.7 |
-| 5 Flash cooling | 8.2, 8.2 | 10.1 |
-| 6 Aseptic tank | 9.6, 8.5 | 12.2 |
-| 7 Filling | 6.9, 6.7 | 9.0 |
-| 8 Packaging | 5.5, 6.0 | 8.1 |
-| 9 Quarantine & QA | 7.0, 8.0 | 8.8 |
-| 10 Warehouse | 5.1, 5.0 | 6.6 |
+| Overview | 7.4 | 7.7 |
+| 1 Standardization | 9.4 | 12.3 |
+| 2 Preheating | 10.2 | 12.4 |
+| 3 Homogenization | 9.3 | 12.9 |
+| 4 UHT | 8.8 | 11.3 |
+| 5 Flash cooling | 9.7 | 12.3 |
+| 6 Aseptic tank | 11.5 | 14.8 |
+| 7 Filling | 8 | 11 |
+| 8 Packaging | 6.5 | 9.1 |
+| 9 Quarantine & QA | 9.2 | 11.3 |
+| 10 Warehouse | 7 | 8.7 |
 
 Software GL draws every pixel on the CPU, so the frame rate follows the pixel count and whatever else the machine is doing more than the draw calls. Two pages rendering at once, as in a parallel Playwright run, roughly halve each other's frame rate on this machine, so `playwright.config.ts` runs the browser tests one page at a time.
 
@@ -92,4 +92,4 @@ G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the develop
 3. Without the script: open the app with `?debug` in a normal Chrome window at the laptop's usual size, wait a few seconds, run `__scene.fps()` in the console at the overview, then click stages 8 and 10 on the rail and run it again at each.
 4. Record in this file: the laptop model, the GPU, the browser and its version, the screen's size, scaling and refresh rate, the window size, and the fps at the overview and at each stop. On a 60 Hz screen, 60 fps is the ceiling, so 59 to 60 is a pass.
 
-If the laptop falls short, look first at the shadow map (2048 px with a soft radius, in `src/scene/world.ts`) and at the pixel ratio, which is capped at 2. Draw calls are not the problem at 179.
+If the laptop falls short, look first at the shadow map (2048 px with a soft radius, in `src/scene/world.ts`) and at the pixel ratio, which is capped at 2. Draw calls are not the problem at 178.
