@@ -34,6 +34,8 @@ Build every zone, machine and pipe as simple shapes, make a stage click fly the 
 
 ## Gate G1 checklist
 
+The zone-by-zone check of the merged plant, item by item, and its layout review are in the [G1 checklist](g1-checklist.md).
+
 - [ ] All seven zones and every Must item exist as grey boxes, and the pipes are coloured by temperature.
 - [ ] A rail click and a 3D click select the same stage, the camera flies there, and the panel shows that stage's text.
 - [ ] The top bar drives the sim clock: pause, ×1 to ×10,000, next event.
