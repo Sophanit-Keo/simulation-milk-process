@@ -7,7 +7,7 @@ import type { Snapshot, StageId, Status } from '../contracts';
 import type { Equipment } from './equipment';
 
 /** Closer than this a label shows its name and value; further away only its lamp (the preview's compact badges). */
-const FULL_LABEL_WITHIN_M = 60;
+export const FULL_LABEL_WITHIN_M = 60;
 
 export interface EquipmentLabels {
   /** Values and lamps from the snapshot; about 4 times a second is enough (plan 07, HUD rate). */

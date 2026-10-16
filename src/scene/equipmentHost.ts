@@ -65,7 +65,23 @@ export function createEquipmentHost(
     return load.then((model) => model.clone(true));
   };
 
-  const ctx: EquipmentContext = { materials, loadModel };
+  // One load per file too, but every caller shares the one texture: the token prints are drawn by a
+  // few instanced meshes, and one GPU copy of each image is all they need.
+  const textureLoader = new THREE.TextureLoader();
+  const textures = new Map<string, Promise<THREE.Texture>>();
+  const loadTexture = (path: string): Promise<THREE.Texture> => {
+    let load = textures.get(path);
+    if (!load) {
+      load = textureLoader.loadAsync(`${import.meta.env.BASE_URL}textures/${path}`).then((texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace; // the prints are colour images, baked in sRGB
+        return texture;
+      });
+      textures.set(path, load);
+    }
+    return load;
+  };
+
+  const ctx: EquipmentContext = { materials, loadModel, loadTexture };
   // A module that throws while building is reported and left out, so the rest of the plant still shows.
   const equipment = factories.flatMap((make) => {
     try {
@@ -107,6 +123,7 @@ export function createEquipmentHost(
         item.object.removeFromParent();
       }
       for (const material of Object.values(materials)) material.dispose();
+      for (const load of textures.values()) load.then((texture) => texture.dispose(), () => {});
     },
   };
 }
