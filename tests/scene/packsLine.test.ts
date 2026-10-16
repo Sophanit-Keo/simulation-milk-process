@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { STAGE_IDS, type Snapshot, type StageId } from '../../src/contracts';
 import * as at from '../../src/scene/equipment/packs/layout';
+import { CARTON_SIZE_M, TRAY_SIZE_M, cartonPlaces, trayPlaces } from '../../src/scene/equipment/packs/tokens';
 import type { VehicleSizeM } from '../../src/scene/equipment/packs/vehicles';
-import { packsLine } from '../../src/scene/equipment/packsLine';
+import { packsLine, rackLoadsShown } from '../../src/scene/equipment/packsLine';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
@@ -42,6 +43,28 @@ function makeContext(models: Record<string, () => THREE.Object3D> = {}, shared: 
         cache.set(path, model);
       }
       return Promise.resolve(model.clone(true));
+    },
+  };
+}
+
+/**
+ * The same host with the token prints: like the host, one texture per file that every caller shares.
+ * `missing` files reject, as a 404 would.
+ */
+function withPrints(ctx: Context, missing: readonly string[] = []): Context & { textures: Map<string, THREE.Texture> } {
+  const textures = new Map<string, THREE.Texture>();
+  return {
+    ...ctx,
+    textures,
+    loadTexture(path) {
+      if (missing.includes(path)) return Promise.reject(new Error(`no texture ${path} in unit tests`));
+      let texture = textures.get(path);
+      if (!texture) {
+        texture = new THREE.Texture();
+        texture.name = path;
+        textures.set(path, texture);
+      }
+      return Promise.resolve(texture);
     },
   };
 }
@@ -113,9 +136,13 @@ interface LinePoint {
   dir: [number, number];
 }
 
+/** The token meshes: the cartons and trays that stand on the belts, not part of the belts' surface. */
+const TOKEN_MESHES = new Set(['cartons', 'trays']);
+
 /**
  * What a pack or tray at this point would rest on: the highest of a few rays straight down within
- * 0.1 m along the line, so a ray falling between two rollers doesn't count as a gap. Which fixture, at what height.
+ * 0.1 m along the line, so a ray falling between two rollers doesn't count as a gap. Which fixture, at
+ * what height. The rays pass through the tokens already standing there.
  */
 function surfaceBelow(machines: Equipment[], { xM, zM, dir }: LinePoint): { id: string; yM: number } | null {
   const scene = new THREE.Scene();
@@ -124,7 +151,8 @@ function surfaceBelow(machines: Equipment[], { xM, zM, dir }: LinePoint): { id: 
   let best: THREE.Intersection | undefined;
   for (const offM of [-0.1, -0.05, 0, 0.05, 0.1]) {
     const from = new THREE.Vector3(xM + dir[0] * offM, 20, zM + dir[1] * offM);
-    const hit = new THREE.Raycaster(from, new THREE.Vector3(0, -1, 0)).intersectObject(scene, true)[0];
+    const hits = new THREE.Raycaster(from, new THREE.Vector3(0, -1, 0)).intersectObject(scene, true);
+    const hit = hits.find((h) => !TOKEN_MESHES.has(h.object.name));
     if (hit && (!best || hit.point.y > best.point.y)) best = hit;
   }
   for (const machine of machines) scene.remove(machine.object);
@@ -211,23 +239,69 @@ describe('packsLine', () => {
     expect(drawCalls(machines)).toBeLessThanOrEqual(DRAW_CALL_BUDGET);
   });
 
-  it('instances the racks and a static sample of pallet loads in them', () => {
+  it('instances the racks, with a pallet and its load ready in every place', () => {
     const { machines } = build();
     const racks = byId(machines, 'racks');
     const uprights = node(racks, 'uprights') as THREE.InstancedMesh;
     expect(uprights).toBeInstanceOf(THREE.InstancedMesh);
     expect(uprights.count).toBe((at.RACK_BAYS + 1) * at.RACK_Z_M.length * 2);
     expect(node(racks, 'beams')).toBeInstanceOf(THREE.InstancedMesh);
+    const places = at.rackSlots().length;
+    expect(places).toBe(384);
+    for (const name of ['loads', 'pallets']) {
+      const mesh = node(racks, name) as THREE.InstancedMesh;
+      expect(mesh, name).toBeInstanceOf(THREE.InstancedMesh);
+      expect(mesh.instanceMatrix.count, name).toBe(places); // room for a full warehouse
+    }
+  });
+
+  it('fills the racks with the snapshot’s stock, empty on the static plant and capped at the places', () => {
+    const { machines } = build();
+    const racks = byId(machines, 'racks');
     const loads = node(racks, 'loads') as THREE.InstancedMesh;
     const pallets = node(racks, 'pallets') as THREE.InstancedMesh;
     const places = at.rackSlots().length;
-    for (const mesh of [loads, pallets]) {
-      expect(mesh).toBeInstanceOf(THREE.InstancedMesh);
-      expect(mesh.instanceMatrix.count).toBe(places); // room for a full warehouse in phase 4
-      expect(mesh.count).toBeGreaterThan(places / 4);
-      expect(mesh.count).toBeLessThan(places);
-    }
-    expect(loads.count).toBe(pallets.count);
+    const shown = (): number[] => [loads.count, pallets.count];
+
+    // Before the first snapshot and on the static plant (0 pallets in stock), the racks stand empty
+    // and draw nothing.
+    expect(shown()).toEqual([0, 0]);
+    expect(loads.visible || pallets.visible).toBe(false);
+    const snapshot = staticSnapshot();
+    expect(snapshot.kpis.palletsInStock).toBe(0);
+    racks.update(snapshot, 0.016);
+    expect(shown()).toEqual([0, 0]);
+
+    const withStock = (palletsInStock: number): Snapshot => ({ ...snapshot, kpis: { ...snapshot.kpis, palletsInStock } });
+    racks.update(withStock(213), 0.016);
+    expect(shown()).toEqual([213, 213]);
+    expect(loads.visible && pallets.visible).toBe(true);
+    // The bounds are refitted, so culling and picking see every pallet shown, the last one included.
+    const last = new THREE.Matrix4();
+    loads.getMatrixAt(212, last);
+    const lastAtM = new THREE.Vector3().setFromMatrixPosition(last);
+    expect(loads.boundingSphere?.containsPoint(lastAtM)).toBe(true);
+    expect(loads.boundingBox?.containsPoint(lastAtM)).toBe(true);
+    // The first pallets fill the floor level, the order phase 4 fills them in.
+    const first = new THREE.Matrix4();
+    pallets.getMatrixAt(0, first);
+    expect(new THREE.Vector3().setFromMatrixPosition(first).y).toBeCloseTo(at.RACK_PALLET.heightM / 2, 6);
+
+    racks.update(withStock(5_000), 0.016); // more stock than places: every place full
+    expect(shown()).toEqual([places, places]);
+    racks.update(withStock(12.6), 0.016);
+    expect(shown()).toEqual([13, 13]);
+    racks.update(withStock(0), 0.016);
+    expect(shown()).toEqual([0, 0]);
+    expect(loads.visible).toBe(false);
+  });
+
+  it('counts the pallets to show from the stock KPI', () => {
+    expect(rackLoadsShown(0, 384)).toBe(0);
+    expect(rackLoadsShown(210, 384)).toBe(210);
+    expect(rackLoadsShown(634, 384)).toBe(384);
+    expect(rackLoadsShown(-3, 384)).toBe(0);
+    expect(rackLoadsShown(undefined, 384)).toBe(0);
   });
 
   it('builds the conveyors as grey boxes first and keeps them when the kit cannot load', async () => {
@@ -290,6 +364,161 @@ describe('packsLine', () => {
         }
       }
     }
+  });
+
+  it('stands the cartons and trays on the belts, one instanced draw each, picked as their conveyor', async () => {
+    for (const ctx of [makeContext(), makeContext(kitModels)]) {
+      const { machines } = build(ctx);
+      await settle();
+      const cartons = cartonPlaces();
+      const tokens: [string, string, StageId, THREE.InstancedMesh, { atM: readonly number[]; headingRad: number }[], readonly number[]][] = [
+        ['cartons', 'pack-conveyors', 7, node(byId(machines, 'pack-conveyors'), 'cartons') as THREE.InstancedMesh, [...cartons.a, ...cartons.b], CARTON_SIZE_M],
+        ['trays', 'tray-conveyor', 8, node(byId(machines, 'tray-conveyor'), 'trays') as THREE.InstancedMesh, trayPlaces(), TRAY_SIZE_M],
+      ];
+      for (const [name, ownerId, stage, mesh, places, sizeM] of tokens) {
+        expect(mesh, name).toBeInstanceOf(THREE.InstancedMesh);
+        expect(mesh.count, name).toBe(places.length);
+        // Too small for the plant-wide shadow map: no shadow-pass draw.
+        expect(mesh.castShadow, name).toBe(false);
+        // A click on a token finds its conveyor, so it selects that conveyor's stage.
+        let owner: THREE.Object3D | null = mesh;
+        while (owner && owner.userData.equipmentId === undefined) owner = owner.parent;
+        expect(owner?.userData, name).toEqual({ equipmentId: ownerId, stage });
+
+        const fixture = byId(machines, ownerId).object;
+        fixture.updateMatrixWorld(true);
+        const world = new THREE.Matrix4();
+        const position = new THREE.Vector3();
+        const rotation = new THREE.Quaternion();
+        const scale = new THREE.Vector3();
+        places.forEach((place, i) => {
+          mesh.getMatrixAt(i, world);
+          world.premultiply(mesh.matrixWorld).decompose(position, rotation, scale);
+          const where = `${name} ${i}`;
+          expect(position.x, where).toBeCloseTo(place.atM[0] as number, 6);
+          expect(position.z, where).toBeCloseTo(place.atM[2] as number, 6);
+          // Standing on the belt: the bottom face at belt height.
+          expect(position.y - (sizeM[1] as number) / 2, where).toBeCloseTo(at.BELT_M, 6);
+          expect([scale.x, scale.y, scale.z], where).toEqual(sizeM.map((v) => expect.closeTo(v, 6)));
+          // Its length runs along the line.
+          const lengthDir = new THREE.Vector3(1, 0, 0).applyQuaternion(rotation);
+          expect(lengthDir.x, where).toBeCloseTo(Math.cos(place.headingRad), 6);
+          expect(lengthDir.z, where).toBeCloseTo(-Math.sin(place.headingRad), 6);
+          // A click from above finds this token, and whatever it hits first (the token, or the filler's
+          // outfeed hood or the palletizer's gripper over it) selects the token's stage.
+          const hits = new THREE.Raycaster(new THREE.Vector3(position.x, 20, position.z), new THREE.Vector3(0, -1, 0)).intersectObjects(
+            machines.map((m) => m.object),
+            true,
+          );
+          expect(hits.find((hit) => hit.object === mesh)?.instanceId, where).toBe(i);
+          let first: THREE.Object3D | null = hits[0]?.object ?? null;
+          while (first && first.userData.stage === undefined) first = first.parent;
+          expect(first?.userData.stage, where).toBe(stage);
+        });
+      }
+    }
+  });
+
+  it('empties line B while filler B stands, and both lines while no filler runs', () => {
+    const { machines } = build();
+    const conveyors = byId(machines, 'pack-conveyors');
+    const mesh = node(conveyors, 'cartons') as THREE.InstancedMesh;
+    const { a, b } = cartonPlaces();
+    const snapshot = staticSnapshot();
+    conveyors.update(snapshot, 0.016);
+    expect(mesh.count).toBe(a.length + b.length);
+
+    const oneDown = structuredClone(snapshot);
+    oneDown.line.filler.flowLph /= 2;
+    conveyors.update(oneDown, 0.016);
+    expect(mesh.count).toBe(a.length);
+    // The copies left are line A's: every one stands on filler A's line (z −17.5, then x 34).
+    for (let i = 0; i < mesh.count; i++) {
+      const matrix = new THREE.Matrix4();
+      mesh.getMatrixAt(i, matrix);
+      const local = new THREE.Vector3().setFromMatrixPosition(matrix).add(conveyors.object.position);
+      expect(Math.abs(local.z - at.FILLER_Z_M.a) < 1e-6 || Math.abs(local.x - 34) < 1e-6, `carton ${i}`).toBe(true);
+    }
+
+    oneDown.line.filler.flowLph = 0;
+    conveyors.update(oneDown, 0.016);
+    expect(mesh.count).toBe(0);
+    expect(mesh.visible).toBe(false);
+    conveyors.update(snapshot, 0.016);
+    expect(mesh.count).toBe(a.length + b.length);
+    expect(mesh.visible).toBe(true);
+  });
+
+  it('prints the cartons, trays and pallets once the textures load, with no extra draw', async () => {
+    const ctx = withPrints(makeContext());
+    const { machines } = build(ctx);
+    const cartons = node(byId(machines, 'pack-conveyors'), 'cartons') as THREE.Mesh;
+    const trays = node(byId(machines, 'tray-conveyor'), 'trays') as THREE.Mesh;
+    const rackPallets = node(byId(machines, 'racks'), 'pallets') as THREE.Mesh;
+    const palletizerPallet = node(byId(machines, 'palletizer'), 'palletizer-wood') as THREE.Mesh;
+    // The plain look first: the shared carton and wood materials.
+    expect(cartons.material).toBe(ctx.materials.carton);
+    expect(trays.material).toBe(ctx.materials.carton);
+    expect(rackPallets.material).toBe(ctx.materials.wood);
+    const callsBefore = drawCalls(machines);
+
+    await settle();
+    const printed: [THREE.Mesh, string][] = [
+      [cartons, 'carton.png'],
+      [trays, 'tray.png'],
+      [rackPallets, 'pallet.png'],
+      [palletizerPallet, 'pallet.png'],
+    ];
+    for (const [mesh, file] of printed) {
+      const material = mesh.material as THREE.MeshStandardMaterial;
+      expect(material, `${mesh.name} ${file}`).toBeInstanceOf(THREE.MeshStandardMaterial);
+      expect(material.map, `${mesh.name} ${file}`).toBe(ctx.textures.get(file));
+      // The colours are baked into the print: white, so nothing tints them a second time.
+      expect(material.color.getHex(), `${mesh.name} ${file}`).toBe(0xffffff);
+    }
+    // One material per print, shared by every mesh that shows it.
+    expect(rackPallets.material).toBe(palletizerPallet.material);
+    expect(drawCalls(machines)).toBe(callsBefore);
+  });
+
+  it('keeps the plain carton and wood look when a print is missing or the host loads no textures', async () => {
+    const missingTray = withPrints(makeContext(), ['tray.png']);
+    const one = build(missingTray);
+    await settle();
+    expect(node(byId(one.machines, 'tray-conveyor'), 'trays')).toHaveProperty('material', missingTray.materials.carton);
+    expect((node(byId(one.machines, 'pack-conveyors'), 'cartons') as THREE.Mesh).material).not.toBe(missingTray.materials.carton);
+
+    const none = build(); // an older host, without loadTexture
+    await settle();
+    expect(node(byId(none.machines, 'pack-conveyors'), 'cartons')).toHaveProperty('material', none.ctx.materials.carton);
+    expect(node(byId(none.machines, 'racks'), 'pallets')).toHaveProperty('material', none.ctx.materials.wood);
+  });
+
+  it('disposes the print materials with the line, never the host’s textures', async () => {
+    const ctx = withPrints(makeContext());
+    const { machines } = build(ctx);
+    await settle();
+    const printedMeshes = [
+      node(byId(machines, 'pack-conveyors'), 'cartons'),
+      node(byId(machines, 'tray-conveyor'), 'trays'),
+      node(byId(machines, 'racks'), 'pallets'),
+    ] as THREE.Mesh[];
+    const prints = new Set(printedMeshes.map((mesh) => mesh.material as THREE.Material));
+    expect(prints.size).toBe(3);
+    const disposed = new Set<object>();
+    for (const item of [...prints, ...ctx.textures.values()]) item.addEventListener('dispose', () => disposed.add(item));
+    for (const machine of machines) machine.dispose();
+    for (const material of prints) expect(disposed.has(material), material.name).toBe(true);
+    for (const texture of ctx.textures.values()) expect(disposed.has(texture), texture.name).toBe(false);
+  });
+
+  it('makes no print for a line disposed before its textures arrive', async () => {
+    const ctx = withPrints(makeContext());
+    const { machines } = build(ctx);
+    const cartons = node(byId(machines, 'pack-conveyors'), 'cartons') as THREE.Mesh;
+    for (const machine of machines) machine.dispose();
+    await settle();
+    expect(cartons.material).toBe(ctx.materials.carton);
   });
 
   it('keeps the grey vehicles when their models are missing, and fits the models when they load', async () => {

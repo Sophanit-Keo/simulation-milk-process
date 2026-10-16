@@ -15,7 +15,7 @@
   pointer-events: none;
 }
 
-/* zone names in each zone's far corner (preview .zone-label) */
+/* zone names just in front of each zone's near edge (preview .zone-label; placed in zones.ts) */
 .zone-label {
   padding: 2px 0;
   font: 600 12.5px/1 var(--font-label);

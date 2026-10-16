@@ -3,16 +3,18 @@
 // uht-plant-preview.html ("stage 7" to "stage 10" blocks) at the preview's positions and sizes, so the
 // product pipes scene-core draws reach the fillers. The accumulation table, quarantine floor markings,
 // pallet rollers and dock details are not in the preview; packs/layout.ts says where they stand.
-// Nothing carries packs, trays or pallets yet: phase 4 moves them along the paths in packs/layout.ts.
+// Cartons and trays stand still on the belts (packs/tokens.ts) and the racks hold the snapshot's stock:
+// phase 4 moves the tokens along the paths in packs/layout.ts.
 import * as THREE from 'three';
 import type { Snapshot, StageId, Status } from '../../contracts';
 import plantJson from '../../data/plant.json';
 import type { PointM } from '../layout';
 import { FixtureBuilder, type BuiltFixture, type InstanceM } from './packs/builder';
 import { beltPlacements, createKitLoader, greyBelt, greyRollers, repeatPlacements, swapInKit, type KitLoader, type Placement } from './packs/conveyors';
-import { createKit, type Kit } from './packs/kit';
+import { createKit, type Kit, type PrintName } from './packs/kit';
 import * as at from './packs/layout';
 import { fillerFlowLph, kpiValue, labelValue, stageStatus, stageValue } from './packs/readings';
+import { CARTON_SIZE_M, TRAY_SIZE_M, cartonPlaces, tokenInstances, trayPlaces } from './packs/tokens';
 import { fitVehicle, greyForklift, greyTruck, type VehicleSizeM } from './packs/vehicles';
 import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
 
@@ -34,9 +36,6 @@ const STACK_HEIGHT_M = 0.7;
 
 /** Lamp colours: the light theme's --ok, --warn, --bad and --steel-dark (plan 08). */
 const LAMP_COLORS: Record<Status, number> = { ok: 0x1f8f57, warn: 0xc88a00, bad: 0xc63a2b, idle: 0x76858f };
-
-/** Warehouse pallet places filled in the static sample, until phase 4 shows the real stock. */
-const SAMPLE_FILL_FRAC = 0.55;
 
 /** Stages 7–10, packs to trucks: one Equipment per machine or fixture. */
 export const packsLine: EquipmentFactory = (ctx) => {
@@ -120,6 +119,32 @@ const isWorking = (snapshot: Snapshot, stage: StageId): boolean => {
   return status === 'ok' || status === 'warn';
 };
 
+/**
+ * Shows the first `count` copies of an instanced mesh. Its bounds are refitted, so culling and picking
+ * see the copies shown, and with none shown it is skipped altogether (no draw, no shadow draw).
+ */
+function showCopies(mesh: THREE.InstancedMesh, count: number): void {
+  if (mesh.count === count) return;
+  mesh.count = count;
+  mesh.visible = count > 0;
+  mesh.computeBoundingSphere();
+  mesh.computeBoundingBox();
+}
+
+/**
+ * Draws the meshes with a token print (public/textures) once it has loaded. Until then, or for good if
+ * it can't load, they keep their plain material: the shared 'carton' or 'wood' look.
+ */
+function printOn(kit: Kit, name: PrintName, meshes: readonly THREE.Mesh[], life: Lifetime): void {
+  kit.print(name).then(
+    (material) => {
+      if (!life.isAlive()) return;
+      for (const mesh of meshes) mesh.material = material;
+    },
+    () => {}, // no print: the plain material stays
+  );
+}
+
 /** Builds the fixture with its grey-box conveyor layer, then swaps in the kit pieces when they load. */
 function kitConveyor(b: FixtureBuilder, greyLayer: THREE.Object3D, placements: Placement[], loader: KitLoader): { fixture: BuiltFixture; life: Lifetime } {
   const fixture = b.build();
@@ -202,7 +227,13 @@ function packConveyors(kit: Kit, loader: KitLoader): Equipment {
     middle: 'conveyor-long-sides-part-middle',
     corner: 'conveyor-corner',
   });
+  // The 1 L cartons on both outfeeds, line A's first, in one draw. They are part of this fixture, so a
+  // click on one selects stage 7. Too small for the plant-wide shadow map (a carton's shadow would be a
+  // few texels, blurred away), so they only receive shadows and cost no shadow-pass draw.
+  const cartons = cartonPlaces();
+  const cartonMesh = b.instanced('cartons', 'box', 'carton', tokenInstances([...cartons.a, ...cartons.b], CARTON_SIZE_M));
   const { fixture, life } = kitConveyor(b, greyLayer, placements, loader);
+  printOn(kit, 'carton', [cartonMesh], life);
   return machine(
     fixture,
     {
@@ -211,6 +242,12 @@ function packConveyors(kit: Kit, loader: KitLoader): Equipment {
       label: 'Pack conveyors',
       labelAnchorM: [28, 1.6, -17.5],
       labelText: (s) => labelValue(kpiValue(s, 'packsPerH'), 0, 'packs/h'),
+      update(s) {
+        // A stopped filler sends no packs, so its line stands empty. Filler B is the one that stops
+        // first (runningFillers), and its cartons are the last copies, so the count drops them.
+        const running = runningFillers(s);
+        showCopies(cartonMesh, running >= 2 ? cartons.a.length + cartons.b.length : running === 1 ? cartons.a.length : 0);
+      },
     },
     life,
   );
@@ -254,7 +291,11 @@ function trayConveyor(kit: Kit, loader: KitLoader): Equipment {
   const greyLayer = b.layer('grey-box');
   greyRollers(b, greyLayer, at.TRAY_ROLLER_PATHS, at.TRAY_ROLLER_WIDTH_M, at.BELT_M, 0.05);
   const placements = repeatPlacements(at.TRAY_ROLLER_PATHS, at.TRAY_ROLLER_WIDTH_M, at.BELT_M, 'conveyor-bars-high');
+  // The trays on the rollers, in one draw, part of this fixture so a click on one selects stage 8.
+  // No shadow, as for the cartons: a tray's would be a soft smudge of a few texels.
+  const trayMesh = b.instanced('trays', 'box', 'carton', tokenInstances(trayPlaces(), TRAY_SIZE_M));
   const { fixture, life } = kitConveyor(b, greyLayer, placements, loader);
+  printOn(kit, 'tray', [trayMesh], life);
   return machine(
     fixture,
     {
@@ -299,18 +340,27 @@ function palletizer(kit: Kit): Equipment {
   const placeRad = armRadToward(at.PLACE_M) + 2 * Math.PI;
   arm.rotation.y = pickRad;
   let swingRad = 0;
-  return machine(b.build(), {
-    id: 'palletizer',
-    stage: 8,
-    label: 'Palletizer',
-    labelAnchorM: [xM, 3.0, zM],
-    labelText: (s) => labelValue(stageValue(s, 8, 'traysPerPallet'), 0, 'trays/pallet'),
-    update(s, realDtS) {
-      if (!isWorking(s, 8)) return;
-      swingRad = (swingRad + ARM_RAD_PER_S * motionDtS(s, realDtS)) % (2 * Math.PI);
-      arm.rotation.y = pickRad + (placeRad - pickRad) * (0.5 - 0.5 * Math.cos(swingRad));
+  const fixture = b.build();
+  const life = lifetime();
+  // The pallet is the fixture's only wooden part, so its merged mesh is the pallet alone.
+  const pallet = fixture.object.getObjectByName('palletizer-wood');
+  if (pallet instanceof THREE.Mesh) printOn(kit, 'pallet', [pallet], life);
+  return machine(
+    fixture,
+    {
+      id: 'palletizer',
+      stage: 8,
+      label: 'Palletizer',
+      labelAnchorM: [xM, 3.0, zM],
+      labelText: (s) => labelValue(stageValue(s, 8, 'traysPerPallet'), 0, 'trays/pallet'),
+      update(s, realDtS) {
+        if (!isWorking(s, 8)) return;
+        swingRad = (swingRad + ARM_RAD_PER_S * motionDtS(s, realDtS)) % (2 * Math.PI);
+        arm.rotation.y = pickRad + (placeRad - pickRad) * (0.5 - 0.5 * Math.cos(swingRad));
+      },
     },
-  });
+    life,
+  );
 }
 
 function stretchWrapper(kit: Kit): Equipment {
@@ -418,7 +468,9 @@ function qaLab(kit: Kit): Equipment {
       id: 'qa-lab',
       stage: 9,
       label: 'QA lab',
-      labelAnchorM: [xM, heightM + 0.5, zM],
+      // Over the lab's front, toward the incubators whose temperature it shows. From the overview its
+      // lamp then stays clear of the aseptic tank's zone name in the aisle beyond (zones.ts).
+      labelAnchorM: [xM, heightM + 0.5, frontZM - 0.4],
       labelText: (s) => labelValue(stageValue(s, 9, 'incubationTempC'), 0, '°C'),
       update: (s) => show(stageStatus(s, 9) ?? 'idle'),
     },
@@ -427,12 +479,6 @@ function qaLab(kit: Kit): Equipment {
 }
 
 /* stage 10: racks, docks, forklifts, truck */
-
-/** A fixed pseudo-random share of places, the same on every load, so the static sample doesn't flicker. */
-function sampleFilled(index: number): boolean {
-  const hash = Math.imul(index + 1, 2654435761) >>> 0;
-  return hash / 2 ** 32 < SAMPLE_FILL_FRAC;
-}
 
 function racks(kit: Kit): Equipment {
   const midXM = at.RACK_X0_M + (at.RACK_BAYS * at.RACK_BAY_M) / 2;
@@ -451,25 +497,52 @@ function racks(kit: Kit): Equipment {
   b.instanced('uprights', 'box', 'steelDark', uprights, { castShadow: true });
   b.instanced('beams', 'box', 'rack', beams, { castShadow: true });
 
-  // A static sample of stock; phase 4 sets the counts from the snapshot. Room for every place.
+  // A pallet and its load in every place, in fill order; the counts show the snapshot's stock.
   const slots = at.rackSlots();
-  const filled = slots.filter((_, i) => sampleFilled(i));
   const p = at.RACK_PALLET;
-  const pallets = filled.map((s): InstanceM => ({ atM: [s.xM, s.yM + p.heightM / 2, s.zM], sizeM: [p.widthM, p.heightM, p.depthM] }));
-  const loads = filled.map((s): InstanceM => ({
+  const pallets = slots.map((s): InstanceM => ({ atM: [s.xM, s.yM + p.heightM / 2, s.zM], sizeM: [p.widthM, p.heightM, p.depthM] }));
+  const loads = slots.map((s): InstanceM => ({
     atM: [s.xM, s.yM + p.heightM + p.loadHeightM / 2, s.zM],
     sizeM: [p.widthM - 0.04, p.loadHeightM, p.depthM - 0.08],
   }));
-  b.instanced('pallets', 'box', 'wood', pallets, { capacity: slots.length });
-  b.instanced('loads', 'box', 'carton', loads, { capacity: slots.length, castShadow: true });
+  const palletMesh = b.instanced('pallets', 'box', 'wood', pallets);
+  const loadMesh = b.instanced('loads', 'box', 'carton', loads, { castShadow: true });
+  const fixture = b.build();
+  const life = lifetime();
+  printOn(kit, 'pallet', [palletMesh], life);
 
-  return machine(b.build(), {
-    id: 'racks',
-    stage: 10,
-    label: 'Racks',
-    labelAnchorM: [midXM, at.RACK_HEIGHT_M + 0.4, zMidM],
-    labelText: (s) => labelValue(stageValue(s, 10, 'palletsPerTruck'), 0, 'per truck'),
-  });
+  // Empty until the first snapshot says otherwise; the static plant has no stock yet (KPI 0).
+  showCopies(palletMesh, 0);
+  showCopies(loadMesh, 0);
+  const showStock = (s: Snapshot): void => {
+    // showCopies does nothing while the count stands: stock changes a few times a day, not every frame.
+    const stock = rackLoadsShown(kpiValue(s, 'palletsInStock'), slots.length);
+    showCopies(palletMesh, stock);
+    showCopies(loadMesh, stock);
+  };
+
+  return machine(
+    fixture,
+    {
+      id: 'racks',
+      stage: 10,
+      label: 'Racks',
+      labelAnchorM: [midXM, at.RACK_HEIGHT_M + 0.4, zMidM],
+      labelText: (s) => labelValue(stageValue(s, 10, 'palletsPerTruck'), 0, 'per truck'),
+      update: showStock,
+    },
+    life,
+  );
+}
+
+/**
+ * How many pallet places show a pallet: the snapshot's stock, one place per pallet, up to the places
+ * there are, and none without a stock figure. The racks hold 384, fewer than the plant keeps (D11 opens
+ * with 634 pallets); how the racks show the rest is phase 4's (g1-checklist, defect 4).
+ */
+export function rackLoadsShown(palletsInStock: number | undefined, places: number): number {
+  if (palletsInStock === undefined) return 0;
+  return Math.min(Math.max(Math.round(palletsInStock), 0), places);
 }
 
 function docks(kit: Kit): Equipment {

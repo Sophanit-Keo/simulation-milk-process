@@ -1,7 +1,7 @@
 // The contract between world.ts (scene core) and the equipment modules (one per half of the line),
 // so they can be built in parallel. Machines stand where the preview puts them, so the pipe routes
 // in pipes.ts meet them (uht-plant-preview.html is the reference for every position).
-import type { Material, Object3D } from 'three';
+import type { Material, Object3D, Texture } from 'three';
 import type { Snapshot, StageId } from '../../contracts';
 import type { PointM } from '../layout';
 
@@ -26,6 +26,12 @@ export interface EquipmentContext {
    * Returns a fresh clone each call. Rejects if the file is missing, so callers keep their grey box.
    */
   loadModel(path: string): Promise<Object3D>;
+  /**
+   * Loads an image from public/textures (e.g. 'carton.png') as a colour texture (sRGB), base-URL aware
+   * and cached: every caller gets the same Texture, which the host owns, so equipment never disposes it.
+   * Rejects if the file is missing, so callers keep their plain material. Optional: an older host has none.
+   */
+  loadTexture?(path: string): Promise<Texture>;
 }
 
 /** One machine or fixture in the plant, tagged with its stage for picking and status. */

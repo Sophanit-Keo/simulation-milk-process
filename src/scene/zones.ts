@@ -1,10 +1,10 @@
 // The seven zone floors and the truck apron (preview: "floor and zones"): tinted slabs a few
-// centimetres above the floor, a thin outline round each zone and a label in its far corner.
+// centimetres above the floor, a thin outline round each zone and its name just in front of it.
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { StageId } from '../contracts';
-import { APRON, ZONES, type RectM } from './layout';
+import { APRON, ZONES, type PointM, type RectM, type Zone } from './layout';
 import { readSceneColor } from './theme';
 
 /** Slab thickness: enough to read as a floor marking from a low camera, too little to trip over. */
@@ -13,8 +13,10 @@ const SLAB_HEIGHT_M = 0.04;
 const APRON_HEIGHT_M = 0.03;
 /** Outlines sit just above the slabs so they never z-fight with them. */
 const OUTLINE_Y_M = 0.06;
-/** The label's corner, inset from the zone's top-left (far) corner. */
+/** The name lines up with the zone's end, this far in. */
 const LABEL_INSET_M = 0.6;
+/** Gap between the zone's near edge and the top of its name. */
+const LABEL_GAP_M = 0.5;
 /** Beyond this camera distance the zone labels hide (preview: 170 m), so they don't crowd a far view. */
 const LABEL_HIDE_BEYOND_M = 170;
 
@@ -30,6 +32,27 @@ export function stageRangeText(stages: readonly StageId[]): string {
   const first = stages[0];
   const last = stages[stages.length - 1];
   return first === last ? String(first) : `${first}–${last}`;
+}
+
+/**
+ * Where a zone's name goes: its anchor on the floor and the point of the text that sits on it (CSS2DObject
+ * `center`, (0, 0) for the top-left corner).
+ *
+ * The preview writes each name inside the zone's far (north-west) corner. Seen from the overview, which
+ * looks from the docks (+z), that corner lies behind the zone's machines: the silos and the racks rise in
+ * front of it on screen, and muted text over grey steel or stacked loads doesn't read. Every machine's
+ * label also stands above the machine, so its lamp lands on that far corner too, and CSS2DRenderer draws
+ * nearer labels on top, so the lamps cover the names. In front of the near (+z) edge nothing stands
+ * between the name and the camera, and the lamps are drawn further up the screen: the name hangs just
+ * below that edge, in the aisle for the top row and on the floor or the apron for the bottom row.
+ */
+export function zoneLabelPlacement(zone: Zone): { anchorM: PointM; center: readonly [x: number, y: number] } {
+  const { rect } = zone;
+  const right = zone.labelAlign === 'right';
+  return {
+    anchorM: [right ? rect.xMaxM - LABEL_INSET_M : rect.xMinM + LABEL_INSET_M, OUTLINE_Y_M, rect.zMaxM + LABEL_GAP_M],
+    center: [right ? 1 : 0, 0],
+  };
 }
 
 export function createZones(scene: THREE.Scene, labelRoot: THREE.Object3D): Zones {
@@ -71,8 +94,9 @@ export function createZones(scene: THREE.Scene, labelRoot: THREE.Object3D): Zone
     stages.textContent = stageRangeText(zone.stages);
     element.append(stages);
     const label = new CSS2DObject(element);
-    label.position.set(zone.rect.xMinM + LABEL_INSET_M, OUTLINE_Y_M, zone.rect.zMinM + LABEL_INSET_M);
-    label.center.set(0, 0); // top-left corner of the text at the zone's far-left corner
+    const { anchorM, center } = zoneLabelPlacement(zone);
+    label.position.set(...anchorM);
+    label.center.set(...center);
     labelRoot.add(label);
     return label;
   });
