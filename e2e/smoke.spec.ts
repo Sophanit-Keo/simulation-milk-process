@@ -1,53 +1,35 @@
-import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { clockTimeS, waitForClock, waitForClockToMove } from './helpers';
 
 /** How long the frame loop runs before a page is judged error-free, so errors thrown per frame show up. */
 const SETTLE_MS = 1_500;
 
-/** Starts collecting console errors and uncaught page errors; read the array at the end of the test. */
-function collectErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (message) => {
-    if (message.type() !== 'error') return;
-    // The text of a failed load names no URL; the location does.
-    const { url } = message.location();
-    errors.push(`console.error: ${message.text()}${url ? ` (${url})` : ''}`);
-  });
-  page.on('pageerror', (error) => errors.push(`uncaught: ${error.message}`));
-  return errors;
-}
+// The fixtures fail every test on a console error or warning, a page error, a failed request or a
+// third-party request; these tests also look for them explicitly, once the page has run a while.
 
-/** The top-bar clock's sim time, or NaN while it is missing or not a number. */
-async function clockTimeS(page: Page): Promise<number> {
-  const value = await page.locator('[data-testid="sim-clock"]').getAttribute('data-time-s', { timeout: 1_000 }).catch(() => null);
-  return value === null || value.trim() === '' ? Number.NaN : Number(value);
-}
-
-test('the page loads with a 3D canvas, no errors and no third-party requests', async ({ page, thirdPartyRequests }) => {
-  const errors = collectErrors(page);
+test('the page loads with a 3D canvas, no errors and no third-party requests', async ({ page, thirdPartyRequests, pageProblems }) => {
   await page.goto('/');
   await expect(page.locator('#viewport canvas')).toBeVisible();
+  await waitForClock(page);
+  // A window for errors thrown per frame to show up, not a wait for a condition.
   await page.waitForTimeout(SETTLE_MS);
-  // First, so a blocked request fails with its URL rather than as the console error it also causes.
+  // First, so a blocked request fails with its URL rather than as the failed request it also causes.
   expect(thirdPartyRequests, 'requests to another origin').toEqual([]);
-  expect(errors).toEqual([]);
+  expect(pageProblems).toEqual([]);
 });
 
 test('the sim clock ticks', async ({ page }) => {
   await page.goto('/');
-  await expect(page.locator('[data-testid="sim-clock"]')).toBeAttached();
-  await expect.poll(() => clockTimeS(page), { message: 'data-time-s is a number' }).toBeGreaterThanOrEqual(0);
-  const firstS = await clockTimeS(page);
-  await expect
-    .poll(() => clockTimeS(page), { message: 'data-time-s increases', timeout: 3_000 })
-    .toBeGreaterThan(firstS);
+  const firstS = await waitForClock(page);
+  expect(await waitForClockToMove(page, firstS), 'data-time-s increases').toBeGreaterThan(firstS);
+  expect(await clockTimeS(page)).toBeGreaterThan(firstS);
 });
 
-test('the mock snapshot (/?mock) loads with no errors and no third-party requests', async ({ page, thirdPartyRequests }) => {
-  const errors = collectErrors(page);
+test('the mock snapshot (/?mock) loads with no errors and no third-party requests', async ({ page, thirdPartyRequests, pageProblems }) => {
   await page.goto('/?mock');
-  await expect(page.locator('#app')).toBeAttached();
+  await expect(page.locator('#viewport canvas')).toBeVisible();
+  await waitForClock(page);
   await page.waitForTimeout(SETTLE_MS);
   expect(thirdPartyRequests, 'requests to another origin').toEqual([]);
-  expect(errors).toEqual([]);
+  expect(pageProblems).toEqual([]);
 });
