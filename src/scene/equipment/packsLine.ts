@@ -35,7 +35,7 @@ const FILLER_COUNT = plantJson.fillers.count;
 const STACK_HEIGHT_M = 0.7;
 
 /** Lamp colours: the light theme's --ok, --warn, --bad and --steel-dark (plan 08). */
-const LAMP_COLORS: Record<Status, number> = { ok: 0x1f8f57, warn: 0xc88a00, bad: 0xc63a2b, idle: 0x76858f };
+const LAMP_COLORS: Record<Status, number> = { ok: 0x1f8f57, warn: 0xa87400, bad: 0xc63a2b, idle: 0x76858f };
 
 /** Stages 7–10, packs to trucks: one Equipment per machine or fixture. */
 export const packsLine: EquipmentFactory = (ctx) => {

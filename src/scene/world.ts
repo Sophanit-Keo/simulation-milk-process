@@ -219,6 +219,8 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
     ? installDebugHook({
         stageScreenPoint: (stage) => picker.stageScreenPoint(stage),
         focusStage: () => flight.focusStage,
+        cameraTargetM: () => controls.target.toArray(),
+        cameraPositionM: () => camera.position.toArray(),
         info: () => renderer.info.render,
         equipmentIds: () => equipmentHost.equipment.map((item) => item.id),
       })

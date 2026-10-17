@@ -15,13 +15,16 @@
   pointer-events: none;
 }
 
-/* zone names just in front of each zone's near edge (preview .zone-label; placed in zones.ts) */
+/*
+ * zone names just in front of each zone's near edge (preview .zone-label; placed in zones.ts). Ink, not
+ * the preview's muted grey: they stand on the bare floor and apron, where muted text falls below WCAG AA.
+ */
 .zone-label {
   padding: 2px 0;
   font: 600 12.5px/1 var(--font-label);
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--ink);
   white-space: nowrap;
 }
 .zone-label em {

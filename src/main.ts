@@ -1,5 +1,5 @@
 import './styles/app.css';
-import { checkPlantConfig, createViewBus, parseStages, type Command, type PlantConfig } from './contracts';
+import { checkPlantConfig, createViewBus, msToS, parseStages, type Command, type PlantConfig } from './contracts';
 import plantJson from './data/plant.json';
 import stagesJson from './data/stages.json';
 import { createWorld } from './scene/world';
@@ -36,7 +36,9 @@ let sinceHudS = HUD_INTERVAL_S;
 
 // The frame loop from plan 07, "Every frame".
 function frame(nowMs: number): void {
-  const realDtS = Math.min(Math.max(0, (nowMs - lastMs) / 1000), config.clock.maxFrameS);
+  const elapsedS = Math.max(0, msToS(nowMs - lastMs));
+  // The sim and the camera count no frame as longer than maxFrameS, so a stall doesn't make the plant jump.
+  const realDtS = Math.min(elapsedS, config.clock.maxFrameS);
   lastMs = nowMs;
 
   for (const command of pending.splice(0)) sim.dispatch(command); // 1. UI input → commands
@@ -44,7 +46,8 @@ function frame(nowMs: number): void {
   const snapshot = sim.snapshot(); // 3. one plain-object snapshot
   world.update(snapshot, realDtS); // 4. 3D scene from the snapshot
 
-  sinceHudS += realDtS; // 5. HUD and charts, throttled
+  // 5. HUD and charts, throttled on real time, not the clamped frame time: slow frames don't slow them down.
+  sinceHudS += elapsedS;
   if (sinceHudS >= HUD_INTERVAL_S) {
     hud.update(snapshot);
     sinceHudS = 0;

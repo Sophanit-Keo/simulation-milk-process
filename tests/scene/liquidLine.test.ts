@@ -250,21 +250,25 @@ describe('liquidLine', () => {
     expect(tank.labelText(snapshot)).toBe('0 L');
   });
 
-  it('disposes its own geometry and materials, never the shared materials', () => {
+  it('disposes its own geometry, materials and instance buffers, never the shared materials', () => {
     const { ctx, machines } = build();
     let sharedDisposed = 0;
     for (const material of Object.values(ctx.materials)) material.addEventListener('dispose', () => sharedDisposed++);
     const geometries = new Set<THREE.BufferGeometry>();
     const own = new Set<THREE.Material>();
+    const instanced = new Set<THREE.InstancedMesh>();
     const shared = new Set<THREE.Material>(Object.values(ctx.materials));
     for (const machine of machines) {
       for (const mesh of meshesOf(machine.object)) {
         geometries.add(mesh.geometry);
         for (const material of [mesh.material].flat()) if (!shared.has(material)) own.add(material);
+        if (mesh instanceof THREE.InstancedMesh) instanced.add(mesh);
       }
     }
+    expect(instanced.size, 'the heat exchanger’s plates are instanced').toBeGreaterThan(0);
     const disposed = new Set<THREE.EventDispatcher<object>>();
     for (const item of [...geometries, ...own]) item.addEventListener('dispose', () => disposed.add(item));
+    for (const mesh of instanced) mesh.addEventListener('dispose', () => disposed.add(mesh));
 
     machines.slice(0, -1).forEach((machine) => machine.dispose());
     // The unit shapes and own materials stay while one machine still uses them.
@@ -274,5 +278,7 @@ describe('liquidLine', () => {
 
     expect(sharedDisposed).toBe(0);
     for (const item of [...geometries, ...own]) expect(disposed.has(item)).toBe(true);
+    // An instanced mesh's dispose() frees its instance matrices on the GPU.
+    for (const mesh of instanced) expect(disposed.has(mesh), mesh.name).toBe(true);
   });
 });
