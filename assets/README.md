@@ -21,7 +21,7 @@ How 3D models and textures get into the plant: where files go, the rules every m
 |---|---|---|---|
 | Kenney Factory Kit pieces | 12 GLBs in `public/models/kenney/` + `Textures/colormap.png` | 253 KB | CC0. Six are placed as conveyors and rollers (stages 7–8); six are spares. [LICENSES.md](LICENSES.md) lists each. |
 | Truck and forklift | `public/models/vehicles/truck.glb`, `forklift.glb` | 139 KB + 78 KB | Own work (no CC0 kit has them, see [Vehicles](#vehicles)). They replace the grey boxes at the docks. |
-| Token textures | `public/textures/carton.png`, `tray.png`, `pallet.png` | 8, 19, 35 KB | Own work, brand-free. Not applied yet: the tokens move in phase 4. See [Token textures](#token-textures). |
+| Token textures | `public/textures/carton.png`, `tray.png`, `pallet.png` | 8, 19, 35 KB | Own work, brand-free. Printed on the static tokens since G1: the cartons on both pack lines, the trays on the tray line, and the pallets at the palletizer and in the racks. Phase 4 moves the same tokens. See [Token textures](#token-textures). |
 | Hero specs | [`hero-specs.md`](hero-specs.md) | | Separator, homogenizer, aseptic filler, palletizer. The models follow in phases 3–5. |
 
 Vite copies `public/` to the build as it is. Load files through the base URL, so the same code works in dev and on Vercel (`/`) and on GitHub Pages (`/simulation-milk-process/`):
@@ -163,7 +163,7 @@ For every model we make, including any the developer models by hand:
 
 The scene's `fitVehicle()` (`src/scene/equipment/packs/vehicles.ts`) scales a model's bounding box into 16.5 × 4.0 × 2.55 m and 3.5 × 2.2 × 1.2 m, turning a model that is longer in x than in z to face +z. Built at exactly those sizes and facing +z, both load at scale 1, unturned. A test (`make-vehicles.test.mjs`) keeps it that way. The colours are brand-free: the preview's blue cab and white trailer, a safety-yellow forklift.
 
-In the app (vite build and vite preview, 1440 × 900, SwiftShader), the models add 4 draw calls and about 7,000 triangles (both passes) over the grey boxes they replace: 179 draw calls and 104,810 triangles at the overview against 175 and 97,842 without them, with no console errors.
+In the app (vite build and vite preview, 1440 × 900, SwiftShader), the models add 4 draw calls and about 7,000 triangles (both passes) over the grey boxes they replace: 179 draw calls and 104,810 triangles at the overview against 175 and 97,842 without them, with no console errors. Those figures predate the scene's G1 fixes (the first perf baseline, at `1700d82`, read the same 179 and 104,810). The tokens and the now empty racks have changed the overview since: [the perf baseline](../tests/perf/baseline.md#draw-calls-and-triangles) has the current 178 draw calls and 98,558 triangles.
 
 To change them, edit `make-vehicles.mjs`, run it, then `npm run test:assets` and `node assets/scripts/glb-load-check.mjs public/models/vehicles/*.glb --port 5507 --shots <dir>`.
 
@@ -175,10 +175,11 @@ To change them, edit `make-vehicles.mjs`, run it, then `npm run test:assets` and
 | `tray.png` | 256 × 256 | A shrink-wrapped tray from the side: four packs over a corrugated cardboard base, under clear film with two glossy streaks and creases |
 | `pallet.png` | 256 × 256 | The top deck of a wooden pallet: five boards with grain, the gaps between them and nail heads |
 
-How to use them (phase 4, `scene`):
+How the scene uses them (since G1):
 
-- Load with `TextureLoader` from `` `${import.meta.env.BASE_URL}textures/carton.png` `` and set `colorSpace = THREE.SRGBColorSpace`.
-- The colours are baked in, so draw them with a white material (`color: 0xffffff`); the shared `carton` or `wood` colours would tint them a second time.
+- `src/scene/equipmentHost.ts` (`loadTexture`) loads each file once with `TextureLoader` from `` `${import.meta.env.BASE_URL}textures/<name>.png` `` and sets `colorSpace = THREE.SRGBColorSpace`. Every caller shares that one texture.
+- The colours are baked in, so `print()` in `src/scene/equipment/packs/kit.ts` draws them with a white material (`color: 0xffffff`), one per print; the shared `carton` or `wood` colours would tint them a second time.
+- `printOn()` in `src/scene/equipment/packsLine.ts` gives that material to the cartons (`pack-conveyors`), the trays (`tray-conveyor`), the pallet at the palletizer and the rack pallets (`racks`) once the image has loaded. Until then, or if the file is missing, they keep the plain `carton` or `wood` material. `src/scene/equipment/packs/tokens.ts` places the cartons and trays; phase 4 moves the same tokens, so it needs no second texture load or material.
 - `BoxGeometry`'s UVs put the whole image on every face. That is right for the carton's front and back (95 × 195 mm, the image's 1:2), squeezes it on the narrow sides and the top, and is fine at token size. The tray and pallet prints read on every face.
 - To change one, edit its SVG in `make-textures.mjs` and run it.
 
