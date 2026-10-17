@@ -15,7 +15,7 @@ The stage rail and the info panel stay in sync: clicking a machine in 3D selects
 - Top bar: day and time, pause, speed (×1, ×10, ×100, ×1,000, ×10,000), jump to next event, scenario menu.
 - Left rail: stages 1–10, each with a status lamp; a click flies the camera there.
 - Right panel: what the machine does (from the stage research), live values, a small trend chart, and sliders for set points that make sense (UHT temperature, filler speed).
-- Bottom strip: the KPIs listed under [Simulation model](06-simulation-model.md#kpis-on-screen).
+- Bottom strip: the KPIs listed under [Simulation model](06-simulation-model.md#kpis-on-screen). The eight cards of the wireframe hold the headline values; the rest sit as a smaller line inside the matching card (for example trays and pallets made under packs per hour).
 - In the scene: a floating label with one key value per machine; pipes coloured by temperature with a legend; click a pallet to see its SSCC, batch and status.
 
 ## Modes
