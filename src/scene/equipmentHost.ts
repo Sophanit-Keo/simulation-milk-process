@@ -53,13 +53,25 @@ export function createEquipmentHost(
   };
   applyTheme();
 
-  // One load per file; every caller gets its own clone of the loaded scene.
+  // What the loads have brought in, freed in dispose() before it returns: world.ts disposes the renderer
+  // straight after, and a free left waiting on a promise would no longer reach the GPU. A load that
+  // arrives after dispose() is freed on arrival.
+  const loadedModels = new Set<THREE.Object3D>();
+  const loadedTextures = new Set<THREE.Texture>();
+  let disposed = false;
+
+  // One load per file; every caller gets its own clone of the loaded scene, which shares the file's
+  // geometries, materials and textures. The host owns those and frees them.
   const loader = new GLTFLoader();
   const loads = new Map<string, Promise<THREE.Object3D>>();
   const loadModel = (path: string): Promise<THREE.Object3D> => {
     let load = loads.get(path);
     if (!load) {
-      load = loader.loadAsync(`${import.meta.env.BASE_URL}models/${path}`).then((gltf) => gltf.scene);
+      load = loader.loadAsync(`${import.meta.env.BASE_URL}models/${path}`).then((gltf) => {
+        if (disposed) disposeModel(gltf.scene);
+        else loadedModels.add(gltf.scene);
+        return gltf.scene;
+      });
       loads.set(path, load);
     }
     return load.then((model) => model.clone(true));
@@ -74,6 +86,8 @@ export function createEquipmentHost(
     if (!load) {
       load = textureLoader.loadAsync(`${import.meta.env.BASE_URL}textures/${path}`).then((texture) => {
         texture.colorSpace = THREE.SRGBColorSpace; // the prints are colour images, baked in sRGB
+        if (disposed) texture.dispose();
+        else loadedTextures.add(texture);
         return texture;
       });
       textures.set(path, load);
@@ -118,12 +132,28 @@ export function createEquipmentHost(
       }
     },
     dispose() {
+      disposed = true;
       for (const item of equipment) {
         item.dispose();
         item.object.removeFromParent();
       }
       for (const material of Object.values(materials)) material.dispose();
-      for (const load of textures.values()) load.then((texture) => texture.dispose(), () => {});
+      for (const model of loadedModels) disposeModel(model);
+      for (const texture of loadedTextures) texture.dispose();
+      loadedModels.clear();
+      loadedTextures.clear();
     },
   };
+}
+
+/** Frees a loaded model's geometries, its materials and the textures they use. */
+function disposeModel(model: THREE.Object3D): void {
+  model.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    child.geometry.dispose();
+    for (const material of [child.material].flat()) {
+      for (const value of Object.values(material)) if (value instanceof THREE.Texture) value.dispose();
+      material.dispose();
+    }
+  });
 }

@@ -41,6 +41,7 @@ export class MachineBuilder {
   readonly root = new THREE.Group();
   private readonly buckets = new Map<string, Bucket>();
   private readonly owned: THREE.BufferGeometry[] = [];
+  private readonly ownedInstanced: THREE.InstancedMesh[] = [];
   private readonly parentKeys = new Map<THREE.Object3D, number>();
 
   constructor(
@@ -114,10 +115,11 @@ export class MachineBuilder {
     mesh.castShadow = castShadow;
     mesh.receiveShadow = true;
     this.root.add(mesh);
+    this.ownedInstanced.push(mesh);
     return mesh;
   }
 
-  /** Merges the static parts and returns the machine, with a dispose() for the geometry it made. */
+  /** Merges the static parts and returns the machine, with a dispose() for the geometry and instance buffers it made. */
   build(): { object: THREE.Group; dispose: () => void } {
     for (const bucket of this.buckets.values()) {
       const merged = mergeGeometries(bucket.geometries, false);
@@ -135,11 +137,14 @@ export class MachineBuilder {
     this.buckets.clear();
     const release = this.kit.hold();
     const owned = this.owned;
+    const ownedInstanced = this.ownedInstanced;
     return {
       object: this.root,
       dispose: () => {
         for (const geometry of owned) geometry.dispose();
+        for (const mesh of ownedInstanced) mesh.dispose(); // its instance matrices; the shape is the kit's
         owned.length = 0;
+        ownedInstanced.length = 0;
         release();
       },
     };

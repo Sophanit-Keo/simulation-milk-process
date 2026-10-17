@@ -673,17 +673,21 @@ describe('packsLine', () => {
     expect(arm.rotation.y).toBe(held);
   });
 
-  it('lights the incubator lamps by the QA stage status', () => {
+  it('lights the incubator lamps by the QA stage status, in the lamp colours of the light theme', () => {
+    // src/styles/tokens.css's light --ok, --warn and --bad, so the 3D lamps match the HUD's.
+    const LAMP_HEX = { ok: 0x1f8f57, warn: 0xa87400, bad: 0xc63a2b };
     const { machines } = build();
     const lab = byId(machines, 'qa-lab');
     const lamps = node(lab, 'lamps') as THREE.InstancedMesh;
     const material = lamps.material as THREE.MeshStandardMaterial;
     const snapshot = staticSnapshot();
-    lab.update(snapshot, 0.016);
-    const ok = material.emissive.getHex();
-    snapshot.stages[9].status = 'bad';
-    lab.update(snapshot, 0.016);
-    expect(material.emissive.getHex()).not.toBe(ok);
+    for (const status of ['ok', 'warn', 'bad'] as const) {
+      snapshot.stages[9].status = status;
+      lab.update(snapshot, 0.016);
+      expect(material.color.getHex(), status).toBe(LAMP_HEX[status]);
+      expect(material.emissive.getHex(), status).toBe(LAMP_HEX[status]);
+      expect(material.emissiveIntensity, status).toBeGreaterThan(0);
+    }
     snapshot.stages[9].status = 'idle';
     lab.update(snapshot, 0.016);
     expect(material.emissiveIntensity).toBe(0);

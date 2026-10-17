@@ -1,6 +1,7 @@
-// The truck and forklifts (Should items): grey boxes now, and the assets lane's CC0 models in their place
-// when public/models/vehicles/ has them. Each vehicle is built facing +z around its own footprint centre,
-// then turned and placed as a whole, so phase 4 can drive it by moving its root.
+// The truck and forklifts (Should items): grey boxes, and the assets lane's own-work models in their place
+// when public/models/vehicles/ has them (made by assets/scripts/make-vehicles.mjs; see assets/LICENSES.md).
+// Each vehicle is built facing +z around its own footprint centre, then turned and placed as a whole, so
+// phase 4 can drive it by moving its root.
 import * as THREE from 'three';
 import type { FixtureBuilder } from './builder';
 
