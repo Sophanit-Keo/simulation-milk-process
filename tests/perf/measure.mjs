@@ -25,12 +25,12 @@
 
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
-import { arch, availableParallelism, cpus, platform, release, totalmem } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { machine } from './machine.mjs';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const DEFAULT_PORT = 5505; // the qa lane's port
@@ -140,20 +140,6 @@ async function startPreview(port) {
       throw new Error(`vite preview did not answer on port ${port} within ${SERVER_START_MS / 1000} s:\n${output.trim()}`);
     }
   }
-}
-
-/** The machine as far as Node sees it; the GPU comes from the browser. */
-function machine() {
-  const cores = cpus();
-  return {
-    platform: `${platform()} ${release()} ${arch()}`,
-    cpu: cores[0]?.model.trim() ?? 'unknown',
-    cores: availableParallelism(),
-    memoryGb: Math.round(totalmem() / 2 ** 30),
-    node: process.version,
-    // Other work on the machine slows software GL; the load average says how busy it was.
-    loadAverage: readFileSync('/proc/loadavg', 'utf8').split(' ').slice(0, 3).map(Number),
-  };
 }
 
 /** The WebGL renderer the page gets, from a context of its own (the app's is not exposed). */
