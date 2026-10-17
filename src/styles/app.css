@@ -484,9 +484,9 @@ kbd {
   text-align: center;
 }
 
-/* KPI strip. Column widths follow the widest text a card holds, so nothing is cut short down to
-   the 1101 px of the one-row layout: sterility has two numbers ("F0 5.17 · B* 1.19"); UHT flow,
-   packs and stock have the long secondary lines ("10,178 pallets made", "1.6 days of cover"). */
+/* KPI strip. Each column's share follows the widest text its card holds at the longest values a run
+   reaches by phase 4 ("F0 99.99 · B* 9.99", "999,999 L diverted", "9,999,999 trays made", "99.9 days
+   of cover"), so nothing is cut short down to the 1101 px of the one-row layout. */
 .kpis {
   grid-area: kpis;
   min-width: 0;
@@ -495,8 +495,8 @@ kbd {
   margin: 0;
   display: grid;
   grid-template-columns:
-    minmax(0, 1.2fr) minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1.2fr)
-    minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    minmax(0, 1.25fr) minmax(0, 1.9fr) minmax(0, 1fr) minmax(0, 1.4fr)
+    minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.05fr);
   gap: 8px;
 }
 .kpi {
@@ -541,7 +541,9 @@ kbd {
   font-size: 12px;
   color: var(--muted);
 }
-/* Secondary values, one per line, so a card with two never needs a wider column. */
+/* Secondary values. A card with two holds them in one .k-pair: a line each, so its column needs no more
+   width, until 1260 px, where the strip has room for both on one line ("0 released · 0 blocked"). The
+   strip is then a line shorter, and the 3D view gets that height back. */
 .k-s {
   margin: 0;
   font-size: 12.5px;
@@ -551,6 +553,25 @@ kbd {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.k-pair > * {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 1260px) {
+  /* The packs and hold columns widen for their pairs ("9,999,999 trays made · 99,999 pallets made"). */
+  .kpi-grid {
+    grid-template-columns:
+      minmax(0, 1.25fr) minmax(0, 1.9fr) minmax(0, 1fr) minmax(0, 2.55fr)
+      minmax(0, 0.85fr) minmax(0, 1.65fr) minmax(0, 1.2fr) minmax(0, 1.05fr);
+  }
+  .k-pair > * {
+    display: inline;
+  }
+  .k-pair > * + *::before {
+    content: ' · ';
+  }
 }
 
 /* Below 1100 px the screen stops being one screen: the page scrolls and the

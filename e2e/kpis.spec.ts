@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test';
+import type { Kpis } from '../src/contracts';
+import { formatKpi, kpiSubText, type KpiText } from '../src/ui/format';
 import { expect, test } from './fixtures';
 import { STATIC_KPIS, formatted, waitForClock } from './helpers';
 
@@ -75,18 +77,61 @@ const STATIC_SUB_TEXTS: Record<KpiSub, string> = {
 };
 
 /**
- * Widths where the strip once cut a value short, and the edges of its three layouts (app.css), with a
- * height. From 1101 px up the page is one screen, so it must not scroll there either.
+ * The longest values a run reaches by phase 4, which the strip must show whole: F0 with two digits (the
+ * UHT throttled to half rate gives "F0 10.64"), and the totals of a long run. The static plant's values
+ * are much shorter ("0 trays made"), so the width test writes these into the strip as well.
+ */
+const LONG_KPIS: Kpis = {
+  uhtFlowLph: 16_000,
+  f0Min: 99.99,
+  bStar: 9.99,
+  divertedL: 999_999,
+  tankLevelPct: 100,
+  packsPerH: 15_000,
+  oeePct: 100,
+  traysMade: 9_999_999,
+  palletsMade: 99_999,
+  batchesOnHold: 999,
+  batchesReleased: 999,
+  batchesBlocked: 999,
+  palletsInStock: 9_999,
+  daysOfCover: 99.9,
+  orderFillPct: 100,
+  trucksShipped: 9_999,
+};
+
+/** LONG_KPIS as the strip writes them: each slot's text runs (formatKpi), each secondary value's text. */
+interface StripTexts {
+  values: Record<string, KpiText>;
+  subs: Record<string, string>;
+}
+const LONG_TEXTS: StripTexts = {
+  values: Object.fromEntries(KPI_SLOTS.map((slot) => [slot, formatKpi(slot, LONG_KPIS)])),
+  subs: Object.fromEntries(Object.keys(KPI_SUBS).map((sub) => [sub, kpiSubText(sub as KpiSub, LONG_KPIS)])),
+};
+
+/**
+ * Widths where the strip once cut a value short (the sterility card at 1101–1119 px with two-digit F0, the
+ * packs card up to 1145 px with a million trays), and the edges of its layouts (app.css), with a height.
+ * From 1101 px up the page is one screen, so it must not scroll there either.
  */
 const STRIP_SIZES = [
   [721, 900],
   [768, 1024],
   [1100, 900],
   [1101, 720],
-  [1120, 720],
+  [1110, 720],
+  [1119, 720],
+  [1145, 720],
+  [1259, 720],
+  [1260, 720],
   [1280, 720],
+  [1366, 768],
   [1440, 900],
 ] as const;
+
+/** From this width (app.css) the strip has room for a card's two secondary values on one line. */
+const SUBS_ON_ONE_LINE_FROM_PX = 1260;
 
 /** Each slot's [data-kpi-value] and each secondary value in its card: how many there are, and the text. */
 async function kpiTexts(page: Page): Promise<Record<string, { count: number; text: string | null }>> {
@@ -105,14 +150,64 @@ async function kpiTexts(page: Page): Promise<Record<string, { count: number; tex
   );
 }
 
-/** Every name, value and secondary value in the strip that its box cuts short, with the fonts in. */
-async function cutKpiTexts(page: Page): Promise<string[]> {
-  return page.evaluate(async () => {
-    await document.fonts.ready;
-    return [...document.querySelectorAll('#kpis .k-l, #kpis [data-kpi-value], #kpis [data-kpi-sub]')]
-      .filter((node) => node.scrollWidth > node.clientWidth)
-      .map((node) => `${node.closest('[data-kpi]')?.getAttribute('data-kpi')}: "${node.textContent}" ${node.scrollWidth} > ${node.clientWidth} px`);
-  });
+/** The faces the strip's text uses (app.css): names and their units, values, secondary values. */
+const STRIP_FONTS = ['600 12.5px "Barlow Condensed"', '500 12.5px "Barlow Condensed"', '500 19px "IBM Plex Mono"', '400 12.5px Barlow'];
+
+/** What the strip shows at one size: the texts its box cuts short, and how many secondary lines each card has. */
+interface StripFit {
+  cut: string[];
+  subLines: Record<string, number>;
+}
+
+/**
+ * Reads the strip, with its fonts loaded, as it is and with `texts` written into it. The texts go in, are
+ * measured and come out again in one synchronous run, so no HUD update can overwrite them in between.
+ */
+async function stripFit(page: Page, texts: StripTexts): Promise<{ fontsIn: boolean; shown: StripFit; long: StripFit }> {
+  return page.evaluate(async ({ values, subs, fonts }) => {
+    // Loaded even where no text on screen uses a face yet, so no width is measured in a fallback font.
+    await Promise.all(fonts.map((font) => document.fonts.load(font)));
+    const fontsIn = fonts.every((font) => document.fonts.check(font));
+    const textWidthPx = (node: Element): number => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      return range.getBoundingClientRect().width;
+    };
+    const measure = (): StripFit => {
+      // scrollWidth and clientWidth are whole pixels and miss a cut of under a pixel, which still draws the
+      // ellipsis; the text's own width against its box's does not. (Less than 1/64 px is layout rounding.)
+      const cut = [...document.querySelectorAll('#kpis .k-l, #kpis .k-v, #kpis .k-s, #kpis .k-s > *')]
+        .map((node) => ({ node, textPx: textWidthPx(node), boxPx: node.getBoundingClientRect().width }))
+        .filter(({ node, textPx, boxPx }) => node.scrollWidth > node.clientWidth || textPx - boxPx > 0.01)
+        .map(({ node, textPx, boxPx }) => `${node.closest('[data-kpi]')?.getAttribute('data-kpi')}: "${node.textContent}" ${textPx.toFixed(2)} > ${boxPx.toFixed(2)} px`);
+      const subLines: Record<string, number> = {};
+      for (const card of document.querySelectorAll('#kpis [data-kpi]')) {
+        subLines[card.getAttribute('data-kpi') ?? '?'] = [...card.querySelectorAll('.k-s')].reduce(
+          (lines, line) => lines + Math.round(line.getBoundingClientRect().height / parseFloat(getComputedStyle(line).lineHeight)),
+          0,
+        );
+      }
+      return { cut, subLines };
+    };
+    const shown = measure();
+    const kept: [Element, Node[]][] = [];
+    for (const [slot, runs] of Object.entries(values)) {
+      const node = document.querySelector(`#kpis [data-kpi="${slot}"] [data-kpi-value]`);
+      if (!node) continue;
+      kept.push([node, [...node.childNodes]]);
+      // As kpiStrip.ts writes them: units and names in <small>.
+      node.replaceChildren(...runs.map((run) => (run.small ? Object.assign(document.createElement('small'), { textContent: run.text }) : run.text)));
+    }
+    for (const [sub, text] of Object.entries(subs)) {
+      const node = document.querySelector(`#kpis [data-kpi-sub="${sub}"]`);
+      if (!node) continue;
+      kept.push([node, [...node.childNodes]]);
+      node.textContent = text;
+    }
+    const long = measure();
+    for (const [node, children] of kept) node.replaceChildren(...children);
+    return { fontsIn, shown, long };
+  }, { ...texts, fonts: STRIP_FONTS });
 }
 
 /** data-status of every lamp on screen (the rail's, the run state's in the bar), with where it sits. */
@@ -146,8 +241,9 @@ for (const path of ['/', '/?mock']) {
         if (path === '/') expect(text, `secondary value ${sub} on the static plant`).toBe(STATIC_SUB_TEXTS[sub]);
       }
     }).toPass({ timeout: 10_000 });
-    // Contracts v1 has one OEE for the plant; the card says where OEE per filler went.
-    await expect(page.locator('#kpis [data-kpi="oee"]')).toHaveAttribute('title', /OEE per filler arrives with the fillers in phase 4/);
+    // Contracts v1 has one OEE, the whole plant's, and the card says so on screen, not in a tooltip.
+    await expect(page.locator('#kpis [data-kpi="oee"] .k-s')).toHaveText('whole plant');
+    await expect(page.locator('#kpis [data-kpi="oee"] .k-s')).toBeVisible();
 
     await expect(async () => {
       const lamps = await visibleLamps(page);
@@ -162,19 +258,32 @@ for (const path of ['/', '/?mock']) {
   });
 }
 
-test('the KPI strip cuts no value short from tablet to desktop widths, and one screen still fits', async ({ page }) => {
+test('the KPI strip cuts no value short from tablet to desktop widths, even the longest, and one screen still fits', async ({ page }) => {
   await page.goto('/');
   await waitForClock(page);
-  // The static plant's values in place, so the widths measured are theirs.
+  // The static plant's values in place, so the first widths measured are theirs.
   await expect(page.locator('#kpis [data-kpi="sterility"] [data-kpi-value]')).toHaveText(STATIC_TEXTS.sterility);
-  for (const [width, height] of STRIP_SIZES) {
-    await page.setViewportSize({ width, height });
-    expect(await cutKpiTexts(page), `KPI texts cut short at ${width} px`).toEqual([]);
-    const scrolls = await page.evaluate(() => ({
-      across: document.documentElement.scrollWidth > window.innerWidth,
-      down: document.documentElement.scrollHeight > window.innerHeight,
-    }));
-    expect(scrolls.across, `the page scrolls sideways at ${width} × ${height}`).toBe(false);
-    if (width > 1100) expect(scrolls.down, `the one-screen layout scrolls at ${width} × ${height}`).toBe(false);
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const [width, height] of STRIP_SIZES) {
+      const size = `${width} × ${height} (${colorScheme})`;
+      await page.setViewportSize({ width, height });
+      const { fontsIn, shown, long } = await stripFit(page, LONG_TEXTS);
+      expect(fontsIn, `the strip's fonts are loaded at ${size}`).toBe(true);
+      expect(shown.cut, `KPI texts cut short at ${size}`).toEqual([]);
+      expect(long.cut, `the longest KPI texts cut short at ${size}`).toEqual([]);
+      if (width >= SUBS_ON_ONE_LINE_FROM_PX) {
+        // So the strip is one secondary line tall, and the 3D view keeps the rest.
+        for (const [slot, lines] of Object.entries(long.subLines)) {
+          expect(lines, `secondary lines in the ${slot} card at ${size}`).toBeLessThanOrEqual(1);
+        }
+      }
+      const scrolls = await page.evaluate(() => ({
+        across: document.documentElement.scrollWidth > window.innerWidth,
+        down: document.documentElement.scrollHeight > window.innerHeight,
+      }));
+      expect(scrolls.across, `the page scrolls sideways at ${size}`).toBe(false);
+      if (width > 1100) expect(scrolls.down, `the one-screen layout scrolls at ${size}`).toBe(false);
+    }
   }
 });
