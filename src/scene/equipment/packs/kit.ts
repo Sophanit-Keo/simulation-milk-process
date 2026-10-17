@@ -9,13 +9,14 @@ export type Shape = 'box' | 'cyl' | 'cylLo' | 'sphere';
 /**
  * The shared materials plus two the shared set lacks: the preview's light machine panels (filler
  * cabinets, QA lab, trailer) and amber floor markings (quarantine border, truck guide lines).
- * Both keep fixed colours, as in the preview, which doesn't theme them either.
+ * Both keep fixed colours. The panels match the preview; the markings keep the preview's light-theme
+ * hatch colour in both themes, where the preview switched it with the theme.
  */
 export type PacksMaterial = MaterialName | 'panel' | 'marking';
 
 const OWN_MATERIALS: Record<Exclude<PacksMaterial, MaterialName>, THREE.MeshStandardMaterialParameters> = {
   panel: { color: 0xe3e8ec, metalness: 0.15, roughness: 0.45 },
-  // The preview's hatch colour (its --warn, #c88a00); the light --warn is darker since the G1 lamp-contrast fix.
+  // The preview's light hatch colour (its light --warn, #c88a00); the light --warn is darker since the G1 lamp-contrast fix.
   marking: { color: 0xc88a00, roughness: 0.8 },
 };
 

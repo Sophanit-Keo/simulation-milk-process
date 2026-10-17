@@ -277,6 +277,16 @@ test('the KPI strip cuts no value short from tablet to desktop widths, even the 
         for (const [slot, lines] of Object.entries(long.subLines)) {
           expect(lines, `secondary lines in the ${slot} card at ${size}`).toBeLessThanOrEqual(1);
         }
+        // On one line the pair's two values need the separator app.css draws between them.
+        const separators = await page.$$eval('#kpis .k-pair > * + *', (spans) =>
+          spans.map((span) => getComputedStyle(span, '::before').content),
+        );
+        expect(separators, `separators between paired values at ${size}`).toEqual(['" · "', '" · "']);
+      } else if (width > 1100) {
+        // Below the breakpoint the pairs must stack: the long pairs need about 1,220 px on one line, so a
+        // breakpoint moved lower than SUBS_ON_ONE_LINE_FROM_PX would cut them (and B*) short again.
+        expect(long.subLines.packs, `secondary lines in the packs card at ${size}`).toBe(2);
+        expect(long.subLines.hold, `secondary lines in the hold card at ${size}`).toBe(2);
       }
       const scrolls = await page.evaluate(() => ({
         across: document.documentElement.scrollWidth > window.innerWidth,
