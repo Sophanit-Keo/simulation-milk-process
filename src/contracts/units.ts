@@ -5,6 +5,7 @@
  * conversions happen only in this file. Suffixes:
  *
  *   S, Min, H, Days    seconds, minutes, hours, days (sim time)
+ *   Ms                 milliseconds (browser timestamps: performance.now, requestAnimationFrame)
  *   L, Lph, Lps        litres, litres per hour, litres per second
  *   C, Bar, Kw         degrees Celsius, bar, kilowatts
  *   Pct, Frac          percent (0–100), fraction (0–1)
@@ -18,6 +19,7 @@
 export const SECONDS_PER_MINUTE = 60;
 export const SECONDS_PER_HOUR = 3_600;
 export const SECONDS_PER_DAY = 86_400;
+export const MS_PER_SECOND = 1_000;
 
 export const minToS = (min: number): number => min * SECONDS_PER_MINUTE;
 export const hToS = (h: number): number => h * SECONDS_PER_HOUR;
@@ -25,6 +27,7 @@ export const dayToS = (day: number): number => day * SECONDS_PER_DAY;
 export const sToMin = (s: number): number => s / SECONDS_PER_MINUTE;
 export const sToH = (s: number): number => s / SECONDS_PER_HOUR;
 export const sToDay = (s: number): number => s / SECONDS_PER_DAY;
+export const msToS = (ms: number): number => ms / MS_PER_SECOND;
 
 export const lphToLps = (flowLph: number): number => flowLph / SECONDS_PER_HOUR;
 export const lpsToLph = (flowLps: number): number => flowLps * SECONDS_PER_HOUR;

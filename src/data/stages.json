@@ -1,0 +1,349 @@
+[
+  {
+    "id": 1,
+    "name": "Standardization & Formulation",
+    "shortName": "Standardization",
+    "zone": "silo",
+    "description": "A separator splits warm milk into skim and cream, and in-line control remixes just enough cream to hit 3.5% fat.",
+    "values": [
+      {
+        "key": "rawMilkFatPct",
+        "label": "Raw-milk fat",
+        "unit": "%",
+        "decimals": 2
+      },
+      {
+        "key": "productFatPct",
+        "label": "Product fat",
+        "unit": "%",
+        "decimals": 2
+      },
+      {
+        "key": "creamShareFrac",
+        "label": "Cream in product",
+        "unit": "%",
+        "decimals": 1,
+        "scale": 100
+      },
+      {
+        "key": "siloTempC",
+        "label": "Raw-milk silo",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "separatorTempC",
+        "label": "Separator",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "feedTankTempC",
+        "label": "Mixing tank (UHT feed)",
+        "unit": "°C",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Raw milk waits cold in the silos; a separator splits skim from cream.",
+      "Just enough cream goes back in to make milk with 3.5% fat."
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Preheating & Deaeration",
+    "shortName": "Preheating",
+    "zone": "process",
+    "description": "Heat exchangers warm the cold feed to about 80 °C, then a vacuum vessel strips out the air.",
+    "values": [
+      {
+        "key": "preheatTempC",
+        "label": "Preheater outlet",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "deaeratorTempC",
+        "label": "Deaerator",
+        "unit": "°C",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "A plate heat exchanger warms the cold milk from 4 °C to about 80 °C.",
+      "In a vacuum vessel it boils briefly, and a pump draws off the air."
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Homogenization",
+    "shortName": "Homogenization",
+    "zone": "process",
+    "description": "A high-pressure piston pump forces milk through a gap of about 0.1 mm, so fat globules shrink below 1 µm and no cream layer forms.",
+    "values": [
+      {
+        "key": "stage1Bar",
+        "label": "First stage",
+        "unit": "bar",
+        "decimals": 0
+      },
+      {
+        "key": "stage2Bar",
+        "label": "Second stage",
+        "unit": "bar",
+        "decimals": 0
+      },
+      {
+        "key": "inletTempC",
+        "label": "Inlet",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "outletTempC",
+        "label": "Outlet",
+        "unit": "°C",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Three pistons force the milk through a narrow gap at 200 bar.",
+      "The fat globules shrink, so no cream layer forms on the shelf."
+    ]
+  },
+  {
+    "id": 4,
+    "name": "UHT Treatment",
+    "shortName": "UHT",
+    "zone": "process",
+    "description": "Steam heats the milk to about 140 °C, a holding tube keeps it there for about 4 s, and any drop below the divert limit (B* < 1) sends it to the reject tank.",
+    "values": [
+      {
+        "key": "tempC",
+        "label": "Holding-tube outlet",
+        "unit": "°C",
+        "decimals": 1
+      },
+      {
+        "key": "setpointC",
+        "label": "Set point",
+        "unit": "°C",
+        "decimals": 1
+      },
+      {
+        "key": "divertLimitC",
+        "label": "Divert limit",
+        "unit": "°C",
+        "decimals": 1
+      },
+      {
+        "key": "bStar",
+        "label": "B*",
+        "unit": "",
+        "decimals": 2
+      },
+      {
+        "key": "f0Min",
+        "label": "F0",
+        "unit": "min",
+        "decimals": 2
+      },
+      {
+        "key": "holdS",
+        "label": "Holding time",
+        "unit": "s",
+        "decimals": 1
+      },
+      {
+        "key": "flowLph",
+        "label": "Flow",
+        "unit": "L/h",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Steam heats the milk to 140 °C, and a coiled tube holds it for 4 s.",
+      "If it runs too cool, a valve diverts it to the reject tank."
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Flash Cooling",
+    "shortName": "Flash cooling",
+    "zone": "process",
+    "description": "A vacuum vessel drops the milk from about 140 °C to about 80 °C almost at once and boils off the water the steam added; a cooler then takes it to 20 °C.",
+    "values": [
+      {
+        "key": "flashTempC",
+        "label": "Flash vessel",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "coolerTempC",
+        "label": "Cooler outlet",
+        "unit": "°C",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "In a vacuum vessel the milk flashes back to about 80 °C at once.",
+      "The water the steam added boils off; a cooler takes it to 20 °C."
+    ]
+  },
+  {
+    "id": 6,
+    "name": "Aseptic Storage (Buffer)",
+    "shortName": "Aseptic tank",
+    "zone": "aseptic",
+    "description": "A sterile tank sits between the UHT plant and the fillers, so either side can stop or slow down without stopping the other.",
+    "values": [
+      {
+        "key": "levelPct",
+        "label": "Level",
+        "unit": "%",
+        "decimals": 0
+      },
+      {
+        "key": "levelL",
+        "label": "Contents",
+        "unit": "L",
+        "decimals": 0
+      },
+      {
+        "key": "capacityL",
+        "label": "Capacity",
+        "unit": "L",
+        "decimals": 0
+      },
+      {
+        "key": "tempC",
+        "label": "Milk temperature",
+        "unit": "°C",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "A sterile tank buffers the milk between the UHT plant and the fillers.",
+      "Either side can stop for a while without stopping the other."
+    ]
+  },
+  {
+    "id": 7,
+    "name": "Aseptic Packaging",
+    "shortName": "Filling",
+    "zone": "filling",
+    "description": "The fillers sterilize the carton material, form it into a tube, fill it with sterile milk and seal each pack below the liquid level, so no air or germs get in.",
+    "values": [
+      {
+        "key": "fillerCount",
+        "label": "Fillers",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "ratePacksPerH",
+        "label": "Rate per filler",
+        "unit": "packs/h",
+        "decimals": 0
+      },
+      {
+        "key": "tempC",
+        "label": "Milk temperature",
+        "unit": "°C",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Two fillers form, fill and seal 1-litre cartons in a sterile zone.",
+      "From here on, milk is counted in packs."
+    ]
+  },
+  {
+    "id": 8,
+    "name": "Secondary Packaging & Palletization",
+    "shortName": "Packaging",
+    "zone": "packaging",
+    "description": "Conveyors group packs into shrink-wrapped trays, and a palletizer stacks the trays into labelled pallets, the unit tracked from here on.",
+    "values": [
+      {
+        "key": "packsPerTray",
+        "label": "Packs per tray",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "traysPerPallet",
+        "label": "Trays per pallet",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "packsPerPallet",
+        "label": "Packs per pallet",
+        "unit": "",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Packs are grouped into trays of 12 and shrink-wrapped.",
+      "A robot stacks 84 trays on each labelled pallet."
+    ]
+  },
+  {
+    "id": 9,
+    "name": "Quarantine & QA Testing",
+    "shortName": "Quarantine & QA",
+    "zone": "quarantine",
+    "description": "Every batch stays on hold until its sample packs pass incubation, so a pallet can be finished but not yet sellable.",
+    "values": [
+      {
+        "key": "incubationTempC",
+        "label": "Incubation temperature",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "incubationDays",
+        "label": "Incubation time",
+        "unit": "days",
+        "decimals": 0
+      },
+      {
+        "key": "samplesPerBatch",
+        "label": "Samples per batch",
+        "unit": "",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Each batch waits here while its samples incubate 7 days at 55 °C.",
+      "Only batches whose samples pass are released for sale."
+    ]
+  },
+  {
+    "id": 10,
+    "name": "Warehousing & Ambient Distribution",
+    "shortName": "Warehouse",
+    "zone": "warehouse",
+    "description": "Released pallets are stored and shipped at room temperature with no cold chain, earliest best-before date first.",
+    "values": [
+      {
+        "key": "tempC",
+        "label": "Storage temperature",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "palletsPerTruck",
+        "label": "Pallets per truck",
+        "unit": "",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Released pallets wait in the racks at room temperature.",
+      "A truck takes 22 pallets every 100 min, earliest best-before first."
+    ]
+  }
+]

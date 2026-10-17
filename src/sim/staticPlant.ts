@@ -1,7 +1,17 @@
 // The plant at rest at its set points: every stage value follows from plant.json
 // and the live set points through the plan 06 formulas. Phase 2 shows this; the
 // stage models of phases 3 and 4 replace it stage by stage.
-import { fracToPct, STAGE_IDS, type Kpis, type PlantConfig, type StageId, type StageSnapshot, type Status } from '../contracts';
+import {
+  fracToPct,
+  STAGE_IDS,
+  type Kpis,
+  type LinePoint,
+  type LinePointId,
+  type PlantConfig,
+  type StageId,
+  type StageSnapshot,
+  type Status,
+} from '../contracts';
 import type { Setpoints } from './core';
 import { bStar, creamShareFrac, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, tubeVolumeL } from './formulas';
 
@@ -60,6 +70,8 @@ export function staticPlant(config: PlantConfig, setpoints: Readonly<Setpoints>)
     },
     4: {
       setpointC,
+      // Measured at the holding-tube outlet; the static plant sits exactly on its set point.
+      tempC: setpointC,
       flowLph,
       holdS,
       f0Min: f0Min(setpointC, holdS),
@@ -92,6 +104,39 @@ export function staticPlant(config: PlantConfig, setpoints: Readonly<Setpoints>)
   };
   return { values, kpis };
 }
+
+/** Flows that set the line points: through the UHT plant, to the reject tank, and drawn by the fillers. */
+export interface LineFlows {
+  uhtLph: number;
+  divertLph: number;
+  fillerLph: number;
+}
+
+/** The liquid line's measuring points (contracts v1), read off the stage values in flow order. */
+export function linePoints(values: StageValues, flows: LineFlows): Record<LinePointId, LinePoint> {
+  const point = (tempC: number, flowLph: number): LinePoint => ({ tempC, flowLph });
+  const { uhtLph, divertLph, fillerLph } = flows;
+  // What the divert valve doesn't send to the reject tank goes on to the flash vessel.
+  const productLph = Math.max(0, uhtLph - divertLph);
+  return {
+    silo: point(values[1].siloTempC, uhtLph),
+    separator: point(values[1].separatorTempC, uhtLph),
+    feedTank: point(values[1].feedTankTempC, uhtLph),
+    preheater: point(values[2].preheatTempC, uhtLph),
+    deaerator: point(values[2].deaeratorTempC, uhtLph),
+    homogenizer: point(values[3].outletTempC, uhtLph),
+    holdingTube: point(values[4].tempC, uhtLph),
+    divert: point(values[4].tempC, divertLph),
+    flashVessel: point(values[5].flashTempC, productLph),
+    cooler: point(values[5].coolerTempC, productLph),
+    asepticTank: point(values[6].tempC, fillerLph),
+    filler: point(values[7].tempC, fillerLph),
+  };
+}
+
+/** Litres per hour the running fillers draw from the aseptic tank. */
+export const fillerDrawLph = (config: PlantConfig, runningFillers: number, ratePacksPerH: number): number =>
+  runningFillers * ratePacksPerH * config.product.packVolumeL;
 
 export function toStages(values: StageValues, statusOf: (id: StageId) => Status = () => 'ok'): Record<StageId, StageSnapshot> {
   const stages = {} as Record<StageId, StageSnapshot>;

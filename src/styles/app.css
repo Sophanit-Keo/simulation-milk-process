@@ -1,6 +1,8 @@
 /*
  * One-screen layout (plan 08), ported from uht-plant-preview.html:
  * top bar for time, stage rail | 3D view | info panel, KPI strip along the bottom.
+ * Every number that changes while the sim runs uses tabular figures and sits in a box
+ * that doesn't take its width from it, so nothing moves when a value changes.
  */
 @import './fonts.css';
 @import './tokens.css';
@@ -78,17 +80,49 @@ button {
   background: transparent;
   box-shadow: inset 0 0 0 2px var(--muted);
 }
-.lamp[data-s='ok'] {
+.lamp[data-status='ok'] {
   background: var(--ok);
   box-shadow: none;
 }
-.lamp[data-s='warn'] {
+.lamp[data-status='warn'] {
   background: var(--warn);
   box-shadow: none;
 }
-.lamp[data-s='bad'] {
+.lamp[data-status='bad'] {
   background: var(--bad);
   box-shadow: none;
+}
+
+/* buttons, as in the preview's bar */
+.btn {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 14px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.btn[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+/* The caret says it opens a menu, as the preview's Scenarios summary did. */
+.btn-menu::after {
+  content: '▾';
+  margin-left: 6px;
+  font-size: 12px;
 }
 
 /* top bar */
@@ -154,10 +188,26 @@ button {
   width: 8px;
   height: 8px;
 }
-.run .speed {
-  font: 500 13px/1 var(--font-data);
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
+/* Both words share one grid cell, so the chip is always as wide as the longer one. */
+.run-state {
+  display: inline-grid;
+}
+.run-state > * {
+  grid-area: 1 / 1;
+}
+.run[data-state='running'] .when-paused,
+.run[data-state='paused'] .when-running {
+  visibility: hidden;
+}
+
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+/* Wide enough that the bar keeps its shape when the toggle is pressed. */
+.btn-pause {
+  min-width: 66px;
 }
 
 /* stage rail */
@@ -170,8 +220,28 @@ button {
   gap: 6px;
   padding: 10px;
 }
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 0 4px;
+}
 .rail .eyebrow {
-  padding: 4px 4px 0;
+  padding: 4px 0 0;
+}
+/* A text button, as the preview's "Whole plant". */
+.link {
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--accent);
+  font: 600 14px/1 var(--font-ui);
+  cursor: pointer;
+}
+.link:hover {
+  text-decoration: underline;
 }
 
 .stages {
@@ -183,10 +253,12 @@ button {
   gap: 2px;
 }
 
-/* Written for any element, so phase 2 can swap the static rows for buttons. */
+/* The lamp comes last in the DOM, so a screen reader reads "1 Standardization, Running";
+   the grid draws it first. */
 .stage {
   display: grid;
   grid-template-columns: 10px 20px minmax(0, 1fr);
+  grid-template-areas: 'lamp n name';
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -197,24 +269,33 @@ button {
   text-align: left;
   font-size: 14.5px;
   line-height: 1.2;
-}
-button.stage {
   cursor: pointer;
 }
-button.stage:hover {
+.stage:hover {
   background: var(--surface);
 }
 .stage[aria-current='true'] {
   background: var(--accent-soft);
   border-color: var(--accent);
 }
+.stage .lamp {
+  grid-area: lamp;
+}
 .stage .n {
+  grid-area: n;
   font: 500 13px/1 var(--font-data);
   color: var(--muted);
   text-align: right;
 }
-.stage .short {
-  display: none;
+.stage .name {
+  grid-area: name;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stage[aria-current='true'] .n {
+  color: var(--accent);
 }
 
 /* 3D view. #viewport fills the view absolutely, so the canvas inside it gets the
@@ -235,6 +316,61 @@ button.stage:hover {
   touch-action: none;
 }
 
+/* Notes over the 3D view; clicks pass through them to the machines underneath. */
+.overlay {
+  position: absolute;
+  z-index: 2;
+  bottom: 10px;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.overlay-hint {
+  left: 10px;
+}
+.overlay-legend {
+  right: 10px;
+}
+.swatch {
+  display: inline-block;
+  width: 16px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.swatch.t4 {
+  background: var(--t4);
+}
+.swatch.t20 {
+  background: var(--t20);
+}
+.swatch.t60 {
+  background: var(--t60);
+}
+.swatch.t80 {
+  background: var(--t80);
+}
+.swatch.t140 {
+  background: var(--t140);
+}
+/* Where the view gets narrow, the legend matters more than the mouse hint. */
+@media (max-width: 1360px) and (min-width: 1101px) {
+  .overlay-hint {
+    display: none;
+  }
+}
+
 /* info panel */
 .panel {
   grid-area: panel;
@@ -242,8 +378,26 @@ button.stage:hover {
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   padding: 14px;
+}
+.p-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.p-no {
+  min-width: 30px;
+  font: 700 30px/1 var(--font-label);
+  color: var(--accent);
+}
+.p-titles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
 }
 .panel h2 {
   margin: 0;
@@ -251,14 +405,88 @@ button.stage:hover {
   letter-spacing: 0.02em;
   text-wrap: balance;
 }
-.panel .hint {
+.p-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font: 600 12.5px/1 var(--font-ui);
+}
+.chip .lamp {
+  width: 8px;
+  height: 8px;
+}
+.p-what {
   margin: 0;
   font-size: 14.5px;
-  color: var(--muted);
   max-width: 62ch;
 }
+.p-live {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.vals {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 14px;
+}
+/* Label left, value right. The value column grows from the right edge, so the labels never move. */
+.val {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+}
+.val dt {
+  color: var(--muted);
+}
+.val dd {
+  margin: 0;
+  font: 500 13.5px/1.35 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.how {
+  margin: 0;
+  padding: 10px 0 0 18px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 12px/1.4 var(--font-data);
+  text-align: center;
+}
 
-/* KPI strip */
+/* KPI strip. Each column's share follows the widest text its card holds at the longest values a run
+   reaches by phase 4 ("F0 99.99 · B* 9.99", "999,999 L diverted", "9,999,999 trays made", "99.9 days
+   of cover"), so nothing is cut short down to the 1101 px of the one-row layout. */
 .kpis {
   grid-area: kpis;
   min-width: 0;
@@ -266,7 +494,9 @@ button.stage:hover {
 .kpi-grid {
   margin: 0;
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns:
+    minmax(0, 1.25fr) minmax(0, 1.9fr) minmax(0, 1fr) minmax(0, 1.4fr)
+    minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.05fr);
   gap: 8px;
 }
 .kpi {
@@ -274,7 +504,7 @@ button.stage:hover {
   flex-direction: column;
   gap: 3px;
   min-width: 0;
-  padding: 8px 12px;
+  padding: 8px 10px;
 }
 .kpi[data-s='warn'] {
   border-color: var(--warn);
@@ -290,25 +520,58 @@ button.stage:hover {
   text-transform: uppercase;
   color: var(--muted);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* Units keep their case: L/h, not L/H. */
-.k-l .unit,
-.k-l sub {
+/* Units keep their case and read lighter than the name: "On hold batches". */
+.k-l .unit {
+  font-weight: 500;
+  letter-spacing: 0.02em;
   text-transform: none;
-}
-.k-l sub {
-  font-size: 0.8em;
-  line-height: 0;
 }
 .k-v {
   margin: 0;
   font: 500 19px/1.15 var(--font-data);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .k-v small {
   font-size: 12px;
   color: var(--muted);
+}
+/* Secondary values. A card with two holds them in one .k-pair: a line each, so its column needs no more
+   width, until 1260 px, where the strip has room for both on one line ("0 released · 0 blocked"). The
+   strip is then a line shorter, and the 3D view gets that height back. */
+.k-s {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.k-pair > * {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 1260px) {
+  /* The packs and hold columns widen for their pairs ("9,999,999 trays made · 99,999 pallets made"). */
+  .kpi-grid {
+    grid-template-columns:
+      minmax(0, 1.25fr) minmax(0, 1.9fr) minmax(0, 1fr) minmax(0, 2.55fr)
+      minmax(0, 0.85fr) minmax(0, 1.65fr) minmax(0, 1.2fr) minmax(0, 1.05fr);
+  }
+  .k-pair > * {
+    display: inline;
+  }
+  .k-pair > * + *::before {
+    content: ' · ';
+  }
 }
 
 /* Below 1100 px the screen stops being one screen: the page scrolls and the
@@ -329,8 +592,9 @@ button.stage:hover {
     height: 62vh;
     min-height: 360px;
   }
+  /* Sterility sits in the second column, so that one is wider. */
   .kpi-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -343,26 +607,38 @@ button.stage:hover {
     height: 58vh;
     min-height: 320px;
   }
+  .overlay-hint {
+    display: none;
+  }
+  /* The padding leaves room for the focus ring, which the scrolling list would clip. */
   .stages {
     flex-direction: row;
     overflow-x: auto;
-    padding-bottom: 4px;
+    padding: 4px 4px 8px;
+  }
+  /* Full-width buttons in a row that scrolls: without flex: none the names would shrink to nothing. */
+  .stages > li {
+    flex: none;
   }
   .stage {
     grid-template-columns: 10px auto auto;
     width: auto;
-    white-space: nowrap;
-  }
-  .stage .full {
-    display: none;
-  }
-  .stage .short {
-    display: inline;
   }
   .kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  /* Full width, so B* still shows on a phone; UHT flow too, so no gap opens beside it. */
+  .kpi[data-kpi='uht'],
+  .kpi[data-kpi='sterility'] {
+    grid-column: span 2;
+  }
   .brand h1 {
     font-size: 19px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto;
   }
 }

@@ -6,13 +6,23 @@ How 3D models and textures get into the plant: where files go, the rules every m
 
 | Path | What | In git |
 |---|---|---|
-| `public/models/` | GLBs the app loads, one per model: `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb`, ... | Yes |
-| `public/models/kenney/` | Kit pieces, unmodified, plus the `Textures/colormap.png` they point to | Yes, from phase 2 |
-| `public/textures/` | Textures that code applies: carton print, belt, floor decals | Yes |
-| `assets/source/` | Blender sources (`.blend`) for our own models, under 20 MB each | Yes |
-| `assets/specs/` | Hero model specs, one per hero (phase 2) | Yes |
-| `assets/scripts/` | `glb-stats.mjs`, `glb-load-check.mjs` and their tests | Yes |
+| `public/models/` | GLBs the app loads, one per model: `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` (phase 5) | Yes |
+| `public/models/kenney/` | Kit pieces, unmodified, plus the `Textures/colormap.png` they point to and the kit's `License.txt` | Yes, from phase 2 |
+| `public/models/vehicles/` | `truck.glb`, `forklift.glb`: our own, made by `assets/scripts/make-vehicles.mjs` | Yes, from phase 2 |
+| `public/textures/` | Textures that code applies: `carton.png`, `tray.png`, `pallet.png`, made by `assets/scripts/make-textures.mjs` | Yes, from phase 2 |
+| `assets/source/` | Blender sources (`.blend`) for our own models, under 20 MB each | Yes, from phase 3 |
+| [`assets/hero-specs.md`](hero-specs.md) | Specs for the four hero models: size, origin, named moving nodes, budgets | Yes |
+| `assets/scripts/` | The GLB checks, the vehicle and texture generators, and their tests | Yes |
 | [`assets/LICENSES.md`](LICENSES.md) | One row for every file in `public/models/` and `public/textures/` | Yes |
+
+## What is committed now (phase 2)
+
+| What | Files | Size | Status |
+|---|---|---|---|
+| Kenney Factory Kit pieces | 12 GLBs in `public/models/kenney/` + `Textures/colormap.png` | 253 KB | CC0. Six are placed as conveyors and rollers (stages 7–8); six are spares. [LICENSES.md](LICENSES.md) lists each. |
+| Truck and forklift | `public/models/vehicles/truck.glb`, `forklift.glb` | 139 KB + 78 KB | Own work (no CC0 kit has them, see [Vehicles](#vehicles)). They replace the grey boxes at the docks. |
+| Token textures | `public/textures/carton.png`, `tray.png`, `pallet.png` | 8, 19, 35 KB | Own work, brand-free. Printed on the static tokens since G1: the cartons on both pack lines, the trays on the tray line, and the pallets at the palletizer and in the racks. Phase 4 moves the same tokens. See [Token textures](#token-textures). |
+| Hero specs | [`hero-specs.md`](hero-specs.md) | | Separator, homogenizer, aseptic filler, palletizer. The models follow in phases 3–5. |
 
 Vite copies `public/` to the build as it is. Load files through the base URL, so the same code works in dev and on Vercel (`/`) and on GitHub Pages (`/simulation-milk-process/`):
 
@@ -89,11 +99,13 @@ For every model we make, including any the developer models by hand:
 |---|---|
 | `node assets/scripts/glb-stats.mjs <file.glb> [--max-triangles N] [--json]` | Parses the GLB header and JSON chunk, then prints the node tree, meshes and primitives, triangles per mesh and in total, world bounds in metres, materials, textures, and the sizes of embedded images (PNG, JPEG, WebP, KTX2). It warns about the rules above that it can check from the file. Exit 1 if over `--max-triangles`, 2 for an unreadable file. It treats the file as untrusted data: it only parses it, never opens the URIs it names, and escapes its strings before printing them. It has no dependencies. |
 | `node assets/scripts/glb-load-check.mjs <file.glb>... [--port 5186] [--shots <dir>]` | Loads each GLB with GLTFLoader at the pinned three.js in Playwright's Chromium and renders it once. Fails on a load error, a 404 (a missing texture, say) or any console error. It serves only three.js and each model's own folder, on 127.0.0.1:5186, and stops when done. Needs `npm ci`. |
-| `node --test assets/scripts/glb-stats.test.mjs` | Tests for `glb-stats` on GLBs built in memory, including broken and hostile ones. Runs in `npm run check` and CI as `npm run test:assets`. |
+| `node assets/scripts/make-vehicles.mjs [--out <dir>]` | Builds the truck and the forklift from boxes and cylinders with three.js and writes them with GLTFExporter to `public/models/vehicles/`. Same bytes on every run. |
+| `node assets/scripts/make-textures.mjs [--out <dir>]` | Draws the carton, tray and pallet prints as SVG and renders them to PNG in Playwright's Chromium, into `public/textures/`. The page loads nothing from the network. Same bytes on every run with the pinned Playwright. |
+| `npm run test:assets` | Runs every `assets/scripts/*.test.mjs` with Node's test runner, also in `npm run check` and CI: `glb-stats` on GLBs built in memory (including broken and hostile ones), `glb-load-check`'s server, URL filter and command line, the vehicles (size, facing, nodes, budget, and that the committed files match the script) and the textures (size and budget). |
 
 ## Kenney kits: phase-1 check (2026-10-12)
 
-**Result: the kit loads with GLTFLoader at three.js 0.186.1 (r186).** No kit files are committed in phase 1. Phase 2 copies the pieces it needs.
+**Result: the kit loads with GLTFLoader at three.js 0.186.1 (r186).** No kit files were committed in phase 1. Phase 2 committed 12 Factory Kit pieces to `public/models/kenney/` ([LICENSES.md](LICENSES.md) lists them and where each is used).
 
 | | Conveyor Kit 2.0 | Factory Kit 3.0 |
 |---|---|---|
@@ -136,6 +148,41 @@ For every model we make, including any the developer models by hand:
 - **Moving belt.** One palette texture with nearest filtering colours the whole piece, so scrolling its UVs would shift every colour. Lay a thin plane with its own belt texture on the belt and scroll that, or let the moving cartons show the motion.
 - **Texture copies.** Each GLB load makes its own copy of `colormap.png`, about 1.4 MB of GPU memory each. Turn on `THREE.Cache` or give all kit pieces one shared material, and instance repeated pieces.
 
-## Hero model specs (phase 2)
+## Vehicles
 
-Phase 2 writes `assets/specs/<name>.md` for the separator, homogenizer, aseptic filler and palletizer. Each spec gives the outer dimensions (matching the grey boxes), the named moving nodes with their pivots, axes and ranges, and the triangle budget, so the phase-5 swap needs no code change.
+**No CC0 kit has an articulated truck or a forklift** (checked 2026-10-13). Kenney's [Car Kit 3.1](https://kenney.nl/assets/car-kit) has toy-proportioned cars and a rigid box truck (1.50 × 1.30 × 2.95 m) that the scene's fit would shrink to a 5 m van at a dock built for a 16.5 m truck, and no forklift; none of Kenney's other 3D kits (City Kit Industrial, Roads, Mini Market, Toy Car Kit and the rest of kenney.nl's 3D list) has either vehicle. The CC0 candidates elsewhere were a semi-trailer on OpenGameArt that exists only as a `.blend` (no Blender here to convert it) and a PSX-style forklift on itch.io whose texture is traced from a photo. So both vehicles are our own, built by `make-vehicles.mjs`, which avoids any licence or brand question and fits the scene exactly.
+
+| | `truck.glb` | `forklift.glb` |
+|---|---|---|
+| Native size (x × y × z) | 2.55 × 4.00 × 16.50 m | 1.20 × 2.20 × 3.50 m |
+| Facing | Cab at +z, trailer tail at −z | Forks at +z, counterweight at −z |
+| Origin | Footprint centre, on the floor | Footprint centre, on the floor |
+| Triangles, draw calls | 2,040; 3 meshes (`body_paint`, `body_matte`, `body_glass`) | 1,076; 4 meshes (`body_paint`, `body_matte`, `mast_inner`, `forks`) |
+| Materials | 3, no textures: painted and matte parts take vertex colours (`COLOR_0`), plus glass | 2, no textures |
+| Moving nodes | None: phase 4 drives the whole truck | `forks` (carriage and forks; origin at the forks' underside, (0, 0.03, 0.75)) and `mast_inner` (origin at its foot, (0, 0.10, 0.64)), both children of the root. To lift a pallet by `liftM` (0 to 3.3 m; the top rack beam is at 3.21 m) add `liftM` to `forks.position.y` and `liftM / 2` to `mast_inner.position.y` (a 2:1 chain), which keeps the inner mast 0.45 m inside the outer one at full lift |
+
+The scene's `fitVehicle()` (`src/scene/equipment/packs/vehicles.ts`) scales a model's bounding box into 16.5 × 4.0 × 2.55 m and 3.5 × 2.2 × 1.2 m, turning a model that is longer in x than in z to face +z. Built at exactly those sizes and facing +z, both load at scale 1, unturned. A test (`make-vehicles.test.mjs`) keeps it that way. The colours are brand-free: the preview's blue cab and white trailer, a safety-yellow forklift.
+
+In the app (vite build and vite preview, 1440 × 900, SwiftShader), the models add 4 draw calls and about 7,000 triangles (both passes) over the grey boxes they replace: 179 draw calls and 104,810 triangles at the overview against 175 and 97,842 without them, with no console errors. Those figures predate the scene's G1 fixes (the first perf baseline, at `1700d82`, read the same 179 and 104,810). The tokens and the now empty racks have changed the overview since: [the perf baseline](../tests/perf/baseline.md#draw-calls-and-triangles) has the current 178 draw calls and 98,558 triangles.
+
+To change them, edit `make-vehicles.mjs`, run it, then `npm run test:assets` and `node assets/scripts/glb-load-check.mjs public/models/vehicles/*.glb --port 5507 --shots <dir>`.
+
+## Token textures
+
+| File | Size | What it shows |
+|---|---|---|
+| `carton.png` | 128 × 256 | The front face of a 1 L brick (95 × 195 mm): white, an invented round milk-drop logo and the made-up name "SIM DAIRY", "UHT MILK", "1 L", a blue wave band with "LONG LIFE · 3.5% FAT" and "DEMO PACK · NOT FOR SALE" |
+| `tray.png` | 256 × 256 | A shrink-wrapped tray from the side: four packs over a corrugated cardboard base, under clear film with two glossy streaks and creases |
+| `pallet.png` | 256 × 256 | The top deck of a wooden pallet: five boards with grain, the gaps between them and nail heads |
+
+How the scene uses them (since G1):
+
+- `src/scene/equipmentHost.ts` (`loadTexture`) loads each file once with `TextureLoader` from `` `${import.meta.env.BASE_URL}textures/<name>.png` `` and sets `colorSpace = THREE.SRGBColorSpace`. Every caller shares that one texture.
+- The colours are baked in, so `print()` in `src/scene/equipment/packs/kit.ts` draws them with a white material (`color: 0xffffff`), one per print; the shared `carton` or `wood` colours would tint them a second time.
+- `printOn()` in `src/scene/equipment/packsLine.ts` gives that material to the cartons (`pack-conveyors`), the trays (`tray-conveyor`), the pallet at the palletizer and the rack pallets (`racks`) once the image has loaded. Until then, or if the file is missing, they keep the plain `carton` or `wood` material. `src/scene/equipment/packs/tokens.ts` places the cartons and trays; phase 4 moves the same tokens, so it needs no second texture load or material.
+- `BoxGeometry`'s UVs put the whole image on every face. That is right for the carton's front and back (95 × 195 mm, the image's 1:2), squeezes it on the narrow sides and the top, and is fine at token size. The tray and pallet prints read on every face.
+- To change one, edit its SVG in `make-textures.mjs` and run it.
+
+## Hero model specs
+
+[`hero-specs.md`](hero-specs.md) specifies the separator, homogenizer, aseptic filler and palletizer: outer dimensions measured from the merged grey boxes, the machine origin each model is built round, the named moving nodes (`bowl`, `piston_1` to `piston_3`, `reel`, `jaws`, `arm` with `arm_lift`, `arm_wrist`, `arm_clamp_1` and `arm_clamp_2`) with their rest positions, axes, ranges and the code that drives them, nozzle points for the pipes, budgets and the export checklist, so the phase-5 swap needs no code change.

@@ -8,7 +8,8 @@
 <title>UHT Milk Plant Simulation</title>
 </head>
 <body>
-<!-- One screen (plan 08). main.ts needs #app and #viewport; the HUD fills #bar. -->
+<!-- One screen (plan 08). main.ts needs #app and #viewport; the HUD (src/ui/hud.ts) fills #bar,
+     #rail and #panel and writes the KPI values into the [data-kpi-value] and [data-kpi-sub] elements of #kpis. -->
 <div id="app" class="app">
   <header id="bar" class="bar card" aria-label="Simulation time and controls">
     <div class="brand">
@@ -17,43 +18,51 @@
     </div>
   </header>
 
-  <!-- Phase 1: a static list. Phase 2 renders it from data with live lamps and fly-to. -->
+  <!-- The HUD renders one button per stage from src/data/stages.json, with live lamps. -->
   <nav id="rail" class="rail card" aria-labelledby="rail-title">
-    <h2 class="eyebrow" id="rail-title">Stages</h2>
-    <ol class="stages">
-      <li class="stage" data-stage="1"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">1</span><span><span class="full">Standardization &amp; Formulation</span><span class="short">Standardize</span></span></li>
-      <li class="stage" data-stage="2"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">2</span><span><span class="full">Preheating &amp; Deaeration</span><span class="short">Preheat</span></span></li>
-      <li class="stage" data-stage="3"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">3</span><span><span class="full">Homogenization</span><span class="short">Homogenize</span></span></li>
-      <li class="stage" data-stage="4"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">4</span><span><span class="full">UHT Treatment</span><span class="short">UHT</span></span></li>
-      <li class="stage" data-stage="5"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">5</span><span><span class="full">Flash Cooling</span><span class="short">Flash cool</span></span></li>
-      <li class="stage" data-stage="6"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">6</span><span><span class="full">Aseptic Storage (Buffer)</span><span class="short">Aseptic tank</span></span></li>
-      <li class="stage" data-stage="7"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">7</span><span><span class="full">Aseptic Packaging</span><span class="short">Filling</span></span></li>
-      <li class="stage" data-stage="8"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">8</span><span><span class="full">Secondary Packaging &amp; Palletization</span><span class="short">Packing</span></span></li>
-      <li class="stage" data-stage="9"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">9</span><span><span class="full">Quarantine &amp; QA Testing</span><span class="short">Quarantine</span></span></li>
-      <li class="stage" data-stage="10"><span class="lamp" data-s="idle" role="img" aria-label="Idle"></span><span class="n">10</span><span><span class="full">Warehousing &amp; Ambient Distribution</span><span class="short">Warehouse</span></span></li>
-    </ol>
+    <div class="rail-head">
+      <h2 class="eyebrow" id="rail-title">Stages</h2>
+      <button class="link" type="button" data-testid="overview" title="Back to the whole plant (Esc)">Whole plant</button>
+    </div>
+    <ol class="stages"></ol>
   </nav>
 
   <main class="view card" aria-label="3D view of the plant">
     <div id="viewport"></div>
+    <!-- Overlays let clicks through to the 3D view (pointer-events: none in app.css). -->
+    <p class="overlay overlay-hint">Drag to orbit · scroll to zoom · click a machine</p>
+    <div class="overlay overlay-legend" role="img" aria-label="Pipe colour shows milk temperature: blue 4 °C, teal 20 °C, amber 60 °C, orange 80 °C, red 140 °C">
+      <span><i class="swatch t4"></i>4 °C</span>
+      <span><i class="swatch t20"></i>20 °C</span>
+      <span><i class="swatch t60"></i>60 °C</span>
+      <span><i class="swatch t80"></i>80 °C</span>
+      <span><i class="swatch t140"></i>140 °C</span>
+    </div>
   </main>
 
+  <!-- What shows before the HUD starts; the HUD replaces it with the same empty state. -->
   <aside id="panel" class="panel card" aria-label="Selected stage">
-    <h2>Select a stage</h2>
-    <p class="hint">What the machine does, its live values and its set points show here.</p>
+    <div class="p-head">
+      <div class="p-titles"><h2>Select a stage</h2></div>
+    </div>
+    <p class="p-what">Pick a stage from the list, or click a machine in the 3D view, to see what it does and its live values.</p>
   </aside>
 
-  <!-- A labelled region, not <footer>: at the top level a footer is the page's contentinfo landmark. -->
+  <!-- A labelled region, not <footer>: at the top level a footer is the page's contentinfo landmark.
+       The eight cards of the plan 08 wireframe; the other KPIs of plan 06 are the small [data-kpi-sub]
+       values in the card they belong with, so every KPI of the snapshot is on screen. A card with two
+       holds them in a .k-pair, on one line where the strip has room (app.css). Contracts v1 has one
+       OEE, the whole plant's, and the card says so; OEE per filler comes with the fillers in phase 4. -->
   <section id="kpis" class="kpis" aria-label="Plant KPIs">
     <dl class="kpi-grid">
-      <div class="kpi card" data-kpi="uht"><dt class="k-l">UHT <span class="unit">L/h</span></dt><dd class="k-v">—</dd></div>
-      <div class="kpi card" data-kpi="sterility"><dt class="k-l">F<sub>0</sub> · B*</dt><dd class="k-v">—</dd></div>
-      <div class="kpi card" data-kpi="tank"><dt class="k-l">Tank</dt><dd class="k-v">—</dd></div>
-      <div class="kpi card" data-kpi="packs"><dt class="k-l">Packs<span class="unit">/h</span></dt><dd class="k-v">—</dd></div>
-      <div class="kpi card" data-kpi="oee"><dt class="k-l">OEE</dt><dd class="k-v">—</dd></div>
-      <div class="kpi card" data-kpi="hold"><dt class="k-l">On hold</dt><dd class="k-v">—</dd></div>
-      <div class="kpi card" data-kpi="stock"><dt class="k-l">Stock</dt><dd class="k-v">—</dd></div>
-      <div class="kpi card" data-kpi="trucks"><dt class="k-l">Trucks</dt><dd class="k-v">—</dd></div>
+      <div class="kpi card" data-kpi="uht"><dt class="k-l">UHT flow</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="diverted">—</dd></div>
+      <div class="kpi card" data-kpi="sterility"><dt class="k-l">Sterility</dt><dd class="k-v" data-kpi-value>—</dd></div>
+      <div class="kpi card" data-kpi="tank"><dt class="k-l">Aseptic tank</dt><dd class="k-v" data-kpi-value>—</dd></div>
+      <div class="kpi card" data-kpi="packs"><dt class="k-l">Packs</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s k-pair"><span data-kpi-sub="trays">—</span><span data-kpi-sub="pallets">—</span></dd></div>
+      <div class="kpi card" data-kpi="oee"><dt class="k-l">OEE</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s">whole plant</dd></div>
+      <div class="kpi card" data-kpi="hold"><dt class="k-l">On hold <span class="unit">batches</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s k-pair"><span data-kpi-sub="released">—</span><span data-kpi-sub="blocked">—</span></dd></div>
+      <div class="kpi card" data-kpi="stock"><dt class="k-l">Stock <span class="unit">pallets</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="cover">—</dd></div>
+      <div class="kpi card" data-kpi="trucks"><dt class="k-l">Trucks <span class="unit">shipped</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="fill">—</dd></div>
     </dl>
   </section>
 </div>

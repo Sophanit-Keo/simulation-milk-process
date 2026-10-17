@@ -1,0 +1,56 @@
+// The contract between world.ts (scene core) and the equipment modules (one per half of the line),
+// so they can be built in parallel. Machines stand where the preview puts them, so the pipe routes
+// in pipes.ts meet them (uht-plant-preview.html is the reference for every position).
+import type { Material, Object3D, Texture } from 'three';
+import type { Snapshot, StageId } from '../../contracts';
+import type { PointM } from '../layout';
+
+/** Shared, theme-aware materials. world.ts owns and re-colours them; equipment never disposes them. */
+export type MaterialName =
+  | 'steel' // stainless vessels and frames
+  | 'steelDark' // motors, legs, gauges, conveyor frames
+  | 'milk' // visible milk surfaces and level indicators
+  | 'glass' // sight glasses and the filler's aseptic zone (transparent)
+  | 'rubber' // belts, hoses, seals
+  | 'concrete' // plinths and kerbs
+  | 'wood' // pallets
+  | 'carton' // packs and trays
+  | 'rack' // warehouse racking
+  | 'paint' // painted drives, pumps and frames (the preview's blue-grey)
+  | 'gauge'; // gauge faces and dials
+
+export interface EquipmentContext {
+  readonly materials: Readonly<Record<MaterialName, Material>>;
+  /**
+   * Loads a GLB from public/models (e.g. 'kenney/conveyor-sides.glb'), base-URL aware and cached.
+   * Returns a fresh clone each call. Rejects if the file is missing, so callers keep their grey box.
+   */
+  loadModel(path: string): Promise<Object3D>;
+  /**
+   * Loads an image from public/textures (e.g. 'carton.png') as a colour texture (sRGB), base-URL aware
+   * and cached: every caller gets the same Texture, which the host owns, so equipment never disposes it.
+   * Rejects if the file is missing, so callers keep their plain material. Optional: an older host has none.
+   */
+  loadTexture?(path: string): Promise<Texture>;
+}
+
+/** One machine or fixture in the plant, tagged with its stage for picking and status. */
+export interface Equipment {
+  /** Unique, kebab-case, e.g. 'separator', 'filler-a'. */
+  readonly id: string;
+  readonly stage: StageId;
+  /** Shown in the floating label, e.g. 'Separator'. */
+  readonly label: string;
+  /** Added to the scene by world.ts. A click on any mesh inside selects `stage`. */
+  readonly object: Object3D;
+  /** World position of the floating label and the status lamp, just above the machine. */
+  readonly labelAnchorM: PointM;
+  /** One key value for the label, e.g. '200 bar'; '' for none. Called a few times a second. */
+  labelText(snapshot: Snapshot): string;
+  /** Per-frame animation from the snapshot; grey boxes may do nothing yet. */
+  update(snapshot: Snapshot, realDtS: number): void;
+  /** Disposes the module's own geometries and materials (never the shared ones). */
+  dispose(): void;
+}
+
+export type EquipmentFactory = (ctx: EquipmentContext) => Equipment[];

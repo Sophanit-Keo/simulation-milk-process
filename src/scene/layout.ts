@@ -1,16 +1,15 @@
-import type { StageId } from '../contracts';
+import { ZONE_NAMES, type StageId, type ZoneId } from '../contracts';
 
 /**
  * The plant's floor layout, ported from the preview (uht-plant-preview.html: ZONES, the apron,
- * FOCUS, CAMOFF, BADGE, RING_R and the overview camera) so phase 2 can build on it.
- * Phase 1 uses it only to size the floor, aim the camera and fit the shadow.
+ * FOCUS, CAMOFF, BADGE, RING_R and the overview camera). It sizes the floor, aims the camera and
+ * fits the shadow (world.ts), lays the zone slabs (zones.ts) and holds the camera stops (cameraFlight.ts).
  *
  * Positions are three.js world units, 1 unit = 1 m, hence the `M` suffix (units rule R8).
  * Axes: x runs along the milk flow, silos at -x and fillers at +x; y is up; z runs from the
  * milk row (-z, top of the floor plan) to the pallet row and the truck docks (+z, bottom).
  *
- * Not ported yet: machine positions and pipe routes (preview, "pipes: colour follows milk
- * temperature"). They depend on where each machine stands, so they move with the equipment in phase 2.
+ * Machine positions live with each machine (equipment/), and the pipe routes that join them in pipes.ts.
  */
 
 export type PointM = readonly [xM: number, yM: number, zM: number];
@@ -26,7 +25,7 @@ export interface RectM {
 /** CSS custom properties for floor tints; `ui` ports them from the preview with the light and dark themes. */
 export type ZoneColorVar = '--zone-proc' | '--zone-pack' | '--zone-quar' | '--zone-ware' | '--apron';
 
-export type ZoneId = 'silo' | 'process' | 'aseptic' | 'filling' | 'packaging' | 'quarantine' | 'warehouse';
+export type { ZoneId } from '../contracts';
 
 export interface Zone {
   id: ZoneId;
@@ -34,23 +33,32 @@ export interface Zone {
   stages: readonly StageId[];
   colorVar: ZoneColorVar;
   rect: RectM;
+  /**
+   * Which end of the zone's near (+z) edge its name lines up with (zones.ts puts the name just outside
+   * that edge). Left, unless something stands in front of the zone there: the warehouse's docked truck.
+   */
+  labelAlign: 'left' | 'right';
 }
 
 /** The seven zones in a U (plan 05): milk runs left to right along the top row, pallets come back along the bottom. */
 export const ZONES: readonly Zone[] = [
-  { id: 'silo', label: 'Silo yard & mixing', stages: [1], colorVar: '--zone-proc', rect: { xMinM: -63, xMaxM: -38, zMinM: -23, zMaxM: -5 } },
-  { id: 'process', label: 'UHT process hall', stages: [2, 3, 4, 5], colorVar: '--zone-proc', rect: { xMinM: -35, xMaxM: -6, zMinM: -23, zMaxM: -5 } },
-  { id: 'aseptic', label: 'Aseptic tank', stages: [6], colorVar: '--zone-proc', rect: { xMinM: -3, xMaxM: 11, zMinM: -23, zMaxM: -5 } },
-  { id: 'filling', label: 'Filling hall', stages: [7], colorVar: '--zone-pack', rect: { xMinM: 14, xMaxM: 37, zMinM: -23, zMaxM: -5 } },
-  { id: 'packaging', label: 'Packaging hall', stages: [8], colorVar: '--zone-pack', rect: { xMinM: 14, xMaxM: 37, zMinM: 2, zMaxM: 19 } },
-  { id: 'quarantine', label: 'Quarantine & QA lab', stages: [9], colorVar: '--zone-quar', rect: { xMinM: -11, xMaxM: 11, zMinM: 2, zMaxM: 19 } },
-  { id: 'warehouse', label: 'Warehouse & dispatch', stages: [10], colorVar: '--zone-ware', rect: { xMinM: -63, xMaxM: -14, zMinM: 2, zMaxM: 19 } },
+  { id: 'silo', label: ZONE_NAMES.silo, stages: [1], colorVar: '--zone-proc', rect: { xMinM: -63, xMaxM: -38, zMinM: -23, zMaxM: -5 }, labelAlign: 'left' },
+  { id: 'process', label: ZONE_NAMES.process, stages: [2, 3, 4, 5], colorVar: '--zone-proc', rect: { xMinM: -35, xMaxM: -6, zMinM: -23, zMaxM: -5 }, labelAlign: 'left' },
+  { id: 'aseptic', label: ZONE_NAMES.aseptic, stages: [6], colorVar: '--zone-proc', rect: { xMinM: -3, xMaxM: 11, zMinM: -23, zMaxM: -5 }, labelAlign: 'left' },
+  { id: 'filling', label: ZONE_NAMES.filling, stages: [7], colorVar: '--zone-pack', rect: { xMinM: 14, xMaxM: 37, zMinM: -23, zMaxM: -5 }, labelAlign: 'left' },
+  { id: 'packaging', label: ZONE_NAMES.packaging, stages: [8], colorVar: '--zone-pack', rect: { xMinM: 14, xMaxM: 37, zMinM: 2, zMaxM: 19 }, labelAlign: 'left' },
+  { id: 'quarantine', label: ZONE_NAMES.quarantine, stages: [9], colorVar: '--zone-quar', rect: { xMinM: -11, xMaxM: 11, zMinM: 2, zMaxM: 19 }, labelAlign: 'left' },
+  { id: 'warehouse', label: ZONE_NAMES.warehouse, stages: [10], colorVar: '--zone-ware', rect: { xMinM: -63, xMaxM: -14, zMinM: 2, zMaxM: 19 }, labelAlign: 'right' },
 ];
 
-/** Truck yard in front of the warehouse's dock doors. */
+/**
+ * Truck yard in front of the warehouse's dock doors. Deeper than the preview's 14 m, whose 12 m truck fit
+ * it: a docked 16.5 m articulated truck (packs/layout.ts, TRUCK_SIZE_M) reaches z 36.1, and the yard
+ * leaves about 2 m clear round its cab.
+ */
 export const APRON: { colorVar: ZoneColorVar; rect: RectM } = {
   colorVar: '--apron',
-  rect: { xMinM: -63, xMaxM: -14, zMinM: 19, zMaxM: 33 },
+  rect: { xMinM: -63, xMaxM: -14, zMinM: 19, zMaxM: 38 },
 };
 
 /** Where the camera and the labels go for each stage. One table, so the guided tour can reuse it (phase 2, "Watch for"). */
@@ -104,8 +112,9 @@ export const FLOOR: RectM = padRect(PLANT_BOUNDS, FLOOR_MARGIN_M);
 export const PLANT_HEIGHT_M = 12;
 
 /**
- * The whole-plant view (preview OV_TARGET, OV_DIR, overviewPos). The target sits near the
- * centre of PLANT_BOUNDS (-13, 5), 2 m toward the milk row where the tall machines stand.
+ * The whole-plant view (preview OV_TARGET, OV_DIR, overviewPos). The target is the preview's: near the
+ * centre of its zones and 14 m apron (-13, 5), 2 m toward the milk row where the tall machines stand.
+ * The deeper apron here only adds floor nearest the camera, which the view has room for.
  */
 export const OVERVIEW = {
   targetM: [-13, 0, 3] as PointM,

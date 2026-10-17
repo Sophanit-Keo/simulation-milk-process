@@ -105,6 +105,31 @@ Run the model with seed 81006 and compare. These are for phases 3 and 4; the lon
 | H62 | Temperature drop at full flow and at 50% | Trigger `uhtTempDrop` in each state | Divert both times; reject tank +800 L or +400 L; back in production after 113 min | exact | H24, H35, H36 |
 | H63 | Noise never diverts | 7 days at 140 °C, no faults | 0 diverts | exact | H21 |
 
+## Line points
+
+The temperature and flow at each measuring point of the liquid line (`Snapshot.line`, contracts v1), in flow order, for the static plant of phase 2: every stage at its `plant.json` set point, the UHT plant at full flow, both fillers running and no divert. The 3D view colours each pipe from these temperatures, blue at 4 °C through yellow to red at 140 °C ([plan 08](08-user-interface.md#colour-rules)). The static-plant test can check every row now; phase 3 checks them again against the stage 1–6 models at steady state. A point's flow is the milk leaving it, so the `separator` row is the standardized milk after the cream is remixed. Where the milk is heated or cooled between two points, as across the plates or along the cooler passes, the pipe's colour ramps linearly from one to the next (`src/scene/pipes.ts`); only the points themselves are expected values.
+
+| # | Point (`LinePointId`) | Temperature | Flow | Tolerance | Source |
+|---|---|---|---|---|---|
+| H64 | `silo`: raw milk to the separator | 4 °C | 16,000 L/h; *phase 3*: 16,222.22 L/h, the raw milk that 16,000 L/h of 3.5% milk needs (H3) | exact; ±0.01 in phase 3 | [Chart values](02-uht-line-at-a-glance.md#chart-values-as-text); `standardization.siloTempC`, `uht.capacityLph` |
+| H65 | `separator`: standardized milk to the mixing tank | 60 °C | 16,000 L/h; the 222.22 L/h of surplus cream (H4) leaves the line here | exact | Chart values; `standardization.separatorTempC` |
+| H66 | `feedTank`: the mixing tank, which feeds the UHT plant | 4 °C | 16,000 L/h | exact | Chart values; `standardization.feedTankTempC` |
+| H67 | `preheater` outlet | 80 °C | 16,000 L/h | exact | Chart values; `preheating.preheatTempC` |
+| H68 | `deaerator` | 80 − 4 = 76 °C | 16,000 L/h | exact | H6; [D9](DECISIONS.md#d9-other-open-values) |
+| H69 | `homogenizer` outlet | 76 + (200 + 30) ÷ 40 = 81.75 °C | 16,000 L/h | ±0.001 °C; flow exact | H7; [D5](DECISIONS.md#d5-homogenizer-outlet) |
+| H70 | `holdingTube` outlet | 140 °C | 16,000 L/h | exact | Chart values; [D4](DECISIONS.md#d4-divert-rule-and-display-noise); `uht.setpointC`, `uht.capacityLph` |
+| H71 | `divert`: the line to the reject tank | 140 °C (the holding-tube outlet) | 0 L/h | exact | No divert in the static plant; `linePoints` in `src/sim/staticPlant.ts` |
+| H72 | `flashVessel` outlet | 80 °C | 16,000 − 0 = 16,000 L/h | exact | Chart values; D5 (80 °C, not 81.75 °C); `flashCooling.flashTempC` |
+| H73 | `cooler` outlet | 20 °C | 16,000 L/h | exact | Chart values; `flashCooling.coolerTempC` |
+| H74 | `asepticTank` outlet to the fillers | 20 °C | 2 × 7,500 packs/h × 1 L = 15,000 L/h | exact | Chart values; H31; `asepticTank.tempC`, `fillers.count`, `fillers.ratePacksPerH`, `product.packVolumeL` |
+| H75 | `filler` | 20 °C | 15,000 L/h, both fillers together | exact | Chart values; `fillers.tempC`; H74 |
+
+How the flows move once phases 3 and 4 make them live, for the tests that follow:
+
+- **Throttled** (tank above 90%): every point from `silo` to `cooler` carries 8,000 L/h (`silo` 8,111.11 L/h), the hold doubles to 8 s (H10) and the temperatures stay as above.
+- **Divert:** `divert` carries the whole UHT flow and `flashVessel` and `cooler` carry 0, so the reject tank gains 800 L in 3 min at full flow (H35, H62).
+- **Fillers:** `asepticTank` and `filler` carry 7,500 L/h per running filler, and 0 while both are stopped or the tank is below 150 L.
+
 ## Checks against the plan and the review
 
 Every value in the review's [Checked and correct](REVIEW.md#checked-and-correct) list reproduces. The R4, R6 and R10 values agree up to rounding: B\* 2.37 (review: 2.4), F0 10.35 min (10.3), limit 136.06 °C (136.1), F0 5.81 min (5.8), margin 1.28 °C (1.3), and a blocked batch every 52 days (about 50). Five points needed a decision or a note:

@@ -9,14 +9,17 @@ export interface Sim {
   snapshot(): Snapshot;
 }
 
-/** Implemented by src/scene (createWorld). */
+/** Implemented by src/scene: createWorld(host, bus). Emits and reacts to selectStage on the bus. */
 export interface World {
   update(snapshot: Snapshot, realDtS: number): void;
   render(): void;
   dispose(): void;
 }
 
-/** Implemented by src/ui (createHud). Updated about 4 times a second (plan 07). */
+/**
+ * Implemented by src/ui: createHud(root, dispatch, bus, stages). Updated about 4 times a second (plan 07).
+ * Emits and reacts to selectStage on the bus; stages come from parseStages(src/data/stages.json).
+ */
 export interface Hud {
   update(snapshot: Snapshot): void;
   dispose(): void;

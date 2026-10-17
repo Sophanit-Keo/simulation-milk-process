@@ -12,6 +12,8 @@ import {
   sToH,
   STAGE_IDS,
   type Kpis,
+  type LinePoint,
+  type LinePointId,
   type PlantConfig,
   type Sim,
   type StageId,
@@ -20,7 +22,7 @@ import {
 import { createCore } from './core';
 import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, oeeFrac, tubeVolumeL } from './formulas';
 import { createRng, mulberry32 } from './rng';
-import { staticPlant, toStages, type StageValues } from './staticPlant';
+import { fillerDrawLph, linePoints, staticPlant, toStages, type StageValues } from './staticPlant';
 
 /** A stage keeps its random status this long before it may change. */
 const STATUS_WINDOW_S = minToS(15);
@@ -50,6 +52,7 @@ interface MockState {
   values: StageValues;
   kpis: Kpis;
   statuses: Record<StageId, Status>;
+  line: Record<LinePointId, LinePoint>;
 }
 
 export function createMockSim(config: PlantConfig): Sim {
@@ -114,7 +117,7 @@ export function createMockSim(config: PlantConfig): Sim {
     const tempC = baseTempC + uht.displayNoiseC * wave(timeS, 37, 7);
     const bStarNow = bStar(tempC, holdS);
     if (bStarNow < 1) statuses[4] = 'bad';
-    values[4] = { setpointC, flowLph, holdS, f0Min: f0Min(tempC, holdS), bStar: bStarNow, divertLimitC: divertLimitC(holdS) };
+    values[4] = { setpointC, tempC, flowLph, holdS, f0Min: f0Min(tempC, holdS), bStar: bStarNow, divertLimitC: divertLimitC(holdS) };
 
     values[5].flashTempC += 0.5 * wave(timeS, minToS(13), 8);
     values[5].coolerTempC += 0.4 * wave(timeS, minToS(31), 9);
@@ -158,7 +161,13 @@ export function createMockSim(config: PlantConfig): Sim {
       orderFillPct: Math.min(100, 97 + 4 * wave(timeS, dayToS(3), 2)),
       trucksShipped: Math.floor(elapsedS / warehouse.truckEveryS),
     };
-    return { values, kpis, statuses };
+    // A red stage 4 is diverting: the whole UHT flow goes to the reject tank, none on to the flash vessel.
+    const line = linePoints(values, {
+      uhtLph: flowLph,
+      divertLph: statuses[4] === 'bad' ? flowLph : 0,
+      fillerLph: fillerDrawLph(config, runningFillers, values[7].ratePacksPerH),
+    });
+    return { values, kpis, statuses, line };
   }
 
   let lastStatuses: Record<StageId, Status> | undefined;
@@ -184,8 +193,8 @@ export function createMockSim(config: PlantConfig): Sim {
     step: (realDtS) => core.step(realDtS),
     dispatch: (command) => core.dispatch(command),
     snapshot() {
-      const { values, kpis, statuses } = stateAt(core.timeS);
-      return core.snapshot(toStages(values, (id) => statuses[id]), kpis);
+      const { values, kpis, statuses, line } = stateAt(core.timeS);
+      return core.snapshot(toStages(values, (id) => statuses[id]), kpis, line);
     },
   };
 }

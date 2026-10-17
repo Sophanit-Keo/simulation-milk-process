@@ -1,0 +1,90 @@
+/*
+ * The 3D view's label layer (CSS2DRenderer, src/scene). Colours and fonts are the tokens in
+ * src/styles/tokens.css, so the labels follow the theme without any script.
+ * Labels never take the pointer: a click anywhere in the view reaches the canvas, which picks.
+ */
+
+.scene-labels {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.scene-labels * {
+  pointer-events: none;
+}
+
+/*
+ * zone names just in front of each zone's near edge (preview .zone-label; placed in zones.ts). Ink, not
+ * the preview's muted grey: they stand on the bare floor and apron, where muted text falls below WCAG AA.
+ */
+.zone-label {
+  padding: 2px 0;
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.zone-label em {
+  margin-left: 4px;
+  font: normal 500 12px/1 var(--font-data);
+  letter-spacing: 0;
+}
+
+/* one label per machine: lamp, name, live value (after the preview's .badge) */
+.equipment-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink);
+  font: 500 11.5px/1.1 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.equipment-name {
+  font: 600 12px/1 var(--font-label);
+  letter-spacing: 0.04em;
+}
+.equipment-value {
+  color: var(--muted);
+}
+.equipment-value:empty {
+  display: none;
+}
+.equipment-label.is-selected {
+  border-color: var(--accent);
+}
+/* far away: the lamp alone */
+.equipment-label.is-compact {
+  gap: 0;
+  padding: 2px;
+}
+.equipment-label.is-compact .equipment-name,
+.equipment-label.is-compact .equipment-value {
+  display: none;
+}
+
+/* status lamp (plan 08 colours): green running, amber hold or warning, red stopped, grey idle */
+.equipment-lamp {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--steel-dark);
+}
+.equipment-label[data-status='ok'] .equipment-lamp {
+  background: var(--ok);
+}
+.equipment-label[data-status='warn'] .equipment-lamp {
+  background: var(--warn);
+}
+.equipment-label[data-status='bad'] .equipment-lamp {
+  background: var(--bad);
+}

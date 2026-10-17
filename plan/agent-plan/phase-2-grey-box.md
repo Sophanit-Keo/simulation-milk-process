@@ -13,7 +13,7 @@ Build every zone, machine and pipe as simple shapes, make a stage click fly the 
 | Agent | Tasks | Hands off |
 |---|---|---|
 | `scene` | Lay out the seven zones in a U, porting the preview's zone layout, and add zone labels. Grey-box every Must item in the [asset list](../05-layout-and-3d-assets.md#3d-asset-list) as an `equipment/` class with `build()` and `update(snapshot)`, each tagged with its stage for picking. `pipes.ts`: `TubeGeometry` runs along curves, vertex-coloured blue → yellow → red from snapshot temperatures, with a flowing texture. Camera fly-to per stage (port the preview's camera stops), raycast picking that sends `selectStage`, and one CSS2D label per machine. | Clickable grey-box plant |
-| `ui` | Top bar: clock, pause, the five speed presets, next event, and an empty scenario menu, all sending `Command`s. Stage rail 1–10 with status lamps from the snapshot; a click sends `selectStage`. Info panel skeleton: name and description from `stages.json`, plus live values listed from the snapshot. KPI strip with every slot from [KPIs on screen](../06-simulation-model.md#kpis-on-screen). HUD updates throttled to 4 a second. | Full screen layout on mock data |
+| `ui` | Top bar: clock, pause, the five speed presets, next event, and an empty scenario menu, all sending `Command`s. Stage rail 1–10 with status lamps from the snapshot; a click sends `selectStage`. Info panel skeleton: name and description from `stages.json`, plus live values listed from the snapshot. KPI strip with every slot from [KPIs on screen](../06-simulation-model.md#kpis-on-screen): the [plan 08](../08-user-interface.md) wireframe's eight cards, with the other KPIs as smaller lines inside the matching card (litres diverted under UHT flow, trays and pallets made under packs, batches released and blocked under on hold, days of cover under stock, order fill under trucks); OEE per filler waits for the fillers in phase 4. HUD updates throttled to 4 a second. | Full screen layout on mock data |
 | `sim` | A static plant: `createSim` returns all 10 stages with values equal to the `plant.json` set points, status lamps, and a working clock and next-event jump. Agree the per-stage fields of contracts v1 with `scene` and `ui`. | Static snapshot that replaces the mock |
 | `process` | `src/data/stages.json`: name, zone, one-line description, the list of live values, and a first draft of the two-line tour caption for each stage, all from the [stage research](../03-stages-1-5-liquid-line.md). The set-point temperature on every pipe segment, from the [chart values](../02-uht-line-at-a-glance.md#chart-values-as-text) and the R7 decision. Review the grey-box plant against the [floor plan](../05-layout-and-3d-assets.md#zones-as-text): zone order, flow direction, no Must item missing. | `stages.json`, pipe temperatures, layout review |
 | `assets` | Kenney conveyors placed. Plain, brand-free carton, tray and pallet meshes with an invented logo texture. CC0 truck and forklift (Should). Hero model specs for the separator, homogenizer, filler and palletizer: outer dimensions that match the grey boxes, named moving nodes (`bowl`, `piston_1`–`piston_3`, `reel`, `jaws`, `arm_*`) and a polygon budget, so the swap in phase 5 needs no code changes. | Kit, token meshes, hero specs |
@@ -34,12 +34,16 @@ Build every zone, machine and pipe as simple shapes, make a stage click fly the 
 
 ## Gate G1 checklist
 
+The zone-by-zone check of the merged plant, item by item, and its layout review are in the [G1 checklist](g1-checklist.md).
+
 - [ ] All seven zones and every Must item exist as grey boxes, and the pipes are coloured by temperature.
 - [ ] A rail click and a 3D click select the same stage, the camera flies there, and the panel shows that stage's text.
 - [ ] The top bar drives the sim clock: pause, ×1 to ×10,000, next event.
 - [ ] 60 fps on the grey-box plant, with the draw-call count recorded.
 - [ ] CI and the browser smoke tests pass.
 - [ ] The developer signs G1.
+
+**Status after the G1 review (reviewed at `6784761` on 2026-10-16; its 19 findings fixed, checked again by independent skeptics and merged at `660a30d` on 2026-10-17):** the first three criteria are met on the merged plant: all seven zones and every Must item stand, with the pipes coloured by temperature; a rail click and a 3D click select the same stage, fly the camera there and show its text; and the top bar drives the clock ([layout review](g1-checklist.md#layout-review)). On `660a30d`, `npm run check` (591 unit tests and 33 asset tests), the build and all 38 browser tests pass locally; CI on GitHub cannot run until the account's billing lock is cleared. The draw calls are recorded (178 at the overview, [perf baseline](../../tests/perf/baseline.md#draw-calls-and-triangles)), but 60 fps stays open until it is measured on a real GPU ([To do on a real GPU](../../tests/perf/baseline.md#to-do-on-a-real-gpu)). The boxes above are left for the developer, who signs G1.
 
 ## Watch for
 

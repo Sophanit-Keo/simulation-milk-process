@@ -1,9 +1,9 @@
 import type { ZoneColorVar } from './layout';
 
 /**
- * Scene colours come from the CSS custom properties `ui` ports from the preview, so the 3D view
- * follows the light and dark themes. Until a property exists (or if it is empty) the preview's
- * light value stands in.
+ * Scene colours come from the CSS custom properties `ui` ports from the preview (src/styles/tokens.css),
+ * so the 3D view follows the light and dark themes. Until a property exists (or if it is empty) the
+ * preview's light value stands in.
  */
 const LIGHT_FALLBACKS = {
   '--scene-bg': '#dde5ea',
@@ -13,7 +13,18 @@ const LIGHT_FALLBACKS = {
   '--zone-quar': '#e5d4a8',
   '--zone-ware': '#c8d0d6',
   '--apron': '#b9c3ca',
-} as const satisfies Record<ZoneColorVar | '--scene-bg' | '--floor', string>;
+  // Shared equipment materials (equipmentHost.ts) and the zone outlines.
+  '--steel': '#b4c0c8',
+  '--steel-dark': '#76858f',
+  // The selection ring.
+  '--accent': '#1767b0',
+  // Pipe colour by milk temperature (plan 08), the stops of pipes.ts's ramp; the same in both themes.
+  '--t4': '#2b7bd0',
+  '--t20': '#2aa0c0',
+  '--t60': '#e3a21c',
+  '--t80': '#ea8027',
+  '--t140': '#d63b26',
+} as const satisfies Record<`--${string}`, string> & Record<ZoneColorVar | '--scene-bg' | '--floor', string>;
 
 export type SceneColorVar = keyof typeof LIGHT_FALLBACKS;
 

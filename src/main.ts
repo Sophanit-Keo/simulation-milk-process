@@ -1,6 +1,7 @@
 import './styles/app.css';
-import { checkPlantConfig, type Command, type PlantConfig } from './contracts';
+import { checkPlantConfig, createViewBus, msToS, parseStages, type Command, type PlantConfig } from './contracts';
 import plantJson from './data/plant.json';
+import stagesJson from './data/stages.json';
 import { createWorld } from './scene/world';
 import { createSim } from './sim';
 import { createMockSim } from './sim/mock';
@@ -12,6 +13,7 @@ const HUD_INTERVAL_S = 0.25;
 const config: PlantConfig = plantJson;
 const problems = checkPlantConfig(config);
 if (problems.length > 0) throw new Error(`src/data/plant.json is not usable:\n${problems.join('\n')}`);
+const stages = parseStages(stagesJson);
 
 const appRoot = document.querySelector<HTMLElement>('#app');
 const viewport = document.querySelector<HTMLElement>('#viewport');
@@ -24,15 +26,19 @@ const pending: Command[] = [];
 const dispatch = (command: Command): void => {
   pending.push(command);
 };
-const world = createWorld(viewport);
-const hud = createHud(appRoot, dispatch);
+// Rail clicks and 3D clicks both select a stage through this bus, so the panel and the camera agree.
+const bus = createViewBus();
+const world = createWorld(viewport, bus);
+const hud = createHud(appRoot, dispatch, bus, stages);
 
 let lastMs = performance.now();
 let sinceHudS = HUD_INTERVAL_S;
 
 // The frame loop from plan 07, "Every frame".
 function frame(nowMs: number): void {
-  const realDtS = Math.min(Math.max(0, (nowMs - lastMs) / 1000), config.clock.maxFrameS);
+  const elapsedS = Math.max(0, msToS(nowMs - lastMs));
+  // The sim and the camera count no frame as longer than maxFrameS, so a stall doesn't make the plant jump.
+  const realDtS = Math.min(elapsedS, config.clock.maxFrameS);
   lastMs = nowMs;
 
   for (const command of pending.splice(0)) sim.dispatch(command); // 1. UI input → commands
@@ -40,7 +46,8 @@ function frame(nowMs: number): void {
   const snapshot = sim.snapshot(); // 3. one plain-object snapshot
   world.update(snapshot, realDtS); // 4. 3D scene from the snapshot
 
-  sinceHudS += realDtS; // 5. HUD and charts, throttled
+  // 5. HUD and charts, throttled on real time, not the clamped frame time: slow frames don't slow them down.
+  sinceHudS += elapsedS;
   if (sinceHudS >= HUD_INTERVAL_S) {
     hud.update(snapshot);
     sinceHudS = 0;
