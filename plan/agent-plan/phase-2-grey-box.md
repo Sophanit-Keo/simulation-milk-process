@@ -43,6 +43,8 @@ The zone-by-zone check of the merged plant, item by item, and its layout review 
 - [ ] CI and the browser smoke tests pass.
 - [ ] The developer signs G1.
 
+**Status after the G1 review (2026-10-16, merged plant at `6784761`):** the first three criteria are met on the merged plant: all seven zones and every Must item stand, with the pipes coloured by temperature; a rail click and a 3D click select the same stage, fly the camera there and show its text; and the top bar drives the clock ([layout review](g1-checklist.md#layout-review)). `npm run check`, the build and the browser tests pass locally; CI on GitHub cannot run until the account's billing lock is cleared. The draw calls are recorded (178 at the overview, [perf baseline](../../tests/perf/baseline.md#draw-calls-and-triangles)), but 60 fps stays open until it is measured on a real GPU ([To do on a real GPU](../../tests/perf/baseline.md#to-do-on-a-real-gpu)). The boxes above are left for the developer, who signs G1.
+
 ## Watch for
 
 - **Polishing too early.** Grey boxes only. Should and Could models wait, and detail waits for phase 5.

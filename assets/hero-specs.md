@@ -28,7 +28,7 @@ Each machine is a group (its "root") at the machine origin in the tables below, 
 | | Per hero |
 |---|---|
 | Triangles | ≤ 30,000, counted as placed. Spend them where the stage camera looks: the moving parts and the +z face. |
-| Meshes, materials | ≤ 20 meshes, ≤ 8 materials. Each mesh × material is a draw call, in the shadow pass too, so merge every static part into one mesh per material. **Aim for ≤ 10 draw calls**; the grey boxes use 3–6. |
+| Meshes, materials | ≤ 20 meshes, ≤ 8 materials. Each mesh × material is a draw call, in the shadow pass too, so merge every static part into one mesh per material. **Aim for ≤ 10 draw calls**; the grey boxes have 3 to 8 meshes and make 5 (separator) to 12 (filler) draw calls, shadow pass included. |
 | Textures | Base colour ≤ 2048², ORM (baked AO, roughness, metalness) and normal ≤ 1024², one UV map. |
 | File | ≤ 2 MB after the phase-5 meshopt and KTX2 compression; uncompressed until then. |
 | Glass | Only where the spec says glass (the filler's aseptic zone, an optional separator hood window): one alpha-blended material. |
@@ -99,9 +99,9 @@ A roll-fed aseptic filler: cabinet, the glass aseptic zone with the paper tube a
 | `reel`: bar across it | box 1.20 × 0.10 × 0.36 | (0, 0, 0) in `reel` |
 | `jaws`: two jaw bars | box 0.34 × 0.10 × 0.08 each | (0, 0, ±0.18) in `jaws` |
 
-- **Bounds (filler A):** x −1.60 to +1.90, y 0 to 3.56, z −1.59 to +1.10, so **3.50 × 3.56 × 2.69 m** (filler B: z −1.10 to +1.59). Envelope (5%): 3.68 × 3.74 × 2.82 m.
+- **Bounds (filler A):** x −1.60 to +1.90, y 0 to 3.56, z −1.60 to +1.10 (the reel's bar reaches z −1.60), so **3.50 × 3.56 × 2.70 m** (filler B: z −1.10 to +1.60). Envelope (5%): 3.68 × 3.74 × 2.84 m.
 - **Label anchor:** (0, 4.00, 0). Keep the model below 3.95 m.
-- **Nozzles and belt:** product in at (−1.60, 0.55, 0) on the −x face; inside, the line rises to the top of the paper tube at (−0.30, 2.50, 0). Packs leave through an opening in the +x face under the hood, onto a belt whose surface is at y 0.86, 0.85 m wide and centred on z = 0.
+- **Nozzles and belt:** product in at (−1.60, 0.55, 0) on the −x face; inside, the line rises into the bottom of the paper tube at (−0.30, 2.50, 0) (the tube spans y 2.45 to 3.45). Packs leave through an opening in the +x face under the hood, onto a belt whose surface is at y 0.86, 0.85 m wide and centred on z = 0.
 
 | Node | Parent | Rest position (m) | Motion | Driven by |
 |---|---|---|---|---|
@@ -123,7 +123,7 @@ A column palletizer: a round base and column, a horizontal arm that swings on to
 | `arm`: lift rod | cylinder along y, radius 0.06, length 0.60 | (2.45, −0.35, 0) in `arm` |
 | `arm`: gripper | box 0.55 × 0.14 × 0.45 | (2.45, −0.70, 0) in `arm` |
 
-- **Bounds, arm at rest along +x:** x −0.55 to +2.725, y 0 to 2.45, z −0.55 to +0.55, so **3.28 × 2.45 × 1.10 m**. Swinging, the arm sweeps a disc of radius 2.73 m round the column between y 1.58 and 2.45. Envelope (5%): reach ≤ 2.86 m, height ≤ 2.57 m.
+- **Bounds, arm at rest along +x:** x −0.55 to +2.725, y 0 to 2.45, z −0.55 to +0.55, so **3.28 × 2.45 × 1.10 m**. Swinging, the arm sweeps a disc of radius 2.73 m round the column between y 1.58 and 2.45. Envelope (5%): reach ≤ 2.87 m, height ≤ 2.57 m.
 - **Reach:** the pick point is 2.53 m from the column and the place point 2.42 m, so keep the gripper's centre 2.45 m out along the arm.
 - **Label anchor:** (0, 3.00, 0). Keep the model below 2.95 m.
 - **Not part of the hero:** the pallet and the part-built `stack` of trays at the place point belong to the fixture as tokens. The model holds only base, column and arm.

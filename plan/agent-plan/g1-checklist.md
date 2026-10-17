@@ -164,7 +164,7 @@ The merged plant at commit `5673218` (scene-core, scene-packs and ui merged), ru
 | Rail click, stages 1–10 | Yes. Each lands (`data-focus-stage`), marks its rail button (`aria-current`) and shows the stage's text; every stop shows the items in [Camera stops](#camera-stops). The stage 1 stop shows the silos cut off at the frame's edge, as in the preview |
 | 3D click from the whole-plant view, stages 1–10 | Yes. A click at `stageScreenPoint(n)` selects stage n, the camera lands and the panel follows |
 | Console | No errors or warnings, no failed requests |
-| Draw calls at the whole-plant view | 176 calls and 75,994 triangles in the first frames, then 175 calls and 97,842 triangles once the Kenney pieces replace the grey-box conveyors (about 1 s). Under SwiftShader, the only GL here, 3–5 fps while other work shared the machine, so the 60 fps check needs a GPU |
+| Draw calls at the whole-plant view | At merge `c4af915`: about 179 calls and 76,710 triangles in the first frames, then 178 calls and 98,558 triangles once the Kenney pieces and the vehicles replace their grey boxes (about 1 s), at 1440 × 900 and 1280 × 720 alike. The [perf baseline](../../tests/perf/baseline.md#draw-calls-and-triangles) is the record, with every stage stop; at `5673218`, before the vehicles and the tokens, the overview read 175 calls and 97,842 triangles. SwiftShader, the only GL here, says nothing about 60 fps: that check needs a real GPU ([To do on a real GPU](../../tests/perf/baseline.md#to-do-on-a-real-gpu)) |
 
 ### Items
 
@@ -195,7 +195,7 @@ The merged plant at commit `5673218` (scene-core, scene-packs and ui merged), ru
 | Racks | Should | `racks` | Yes | 4 rows × 16 bays × 3 levels, two pallet places per bay and level: 384 places. The loads follow `kpis.palletsInStock` (empty on the static plant) |
 | Loading docks | Should | `docks` | Yes | Three doors with bumpers and apron guide lines |
 | Trucks | Should | `truck` | Yes | `vehicles/truck.glb` (own work, see assets/LICENSES.md), 16.5 m long at the middle door |
-| Forklifts | Should | `forklift-1`, `forklift-2` | Yes | Grey boxes in the aisles at (−30, 10.6) and (−42.5, 17.95) |
+| Forklifts | Should | `forklift-1`, `forklift-2` | Yes | `vehicles/forklift.glb` (own work, see assets/LICENSES.md) in the aisles at (−30, 10.6) and (−42.5, 17.95) |
 | Pipes | Must | `pipe-*` meshes (not equipment) | Yes | Temperatures from `snapshot.line`, as in [Pipes](#pipes-all-zones); the homogenizer outlet run starts at 81.75 °C |
 
 ### Info panel
