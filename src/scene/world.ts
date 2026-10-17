@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import type { ViewBus, World } from '../contracts';
+import { msToS, type ViewBus, type World } from '../contracts';
 import { createCameraFlight } from './cameraFlight';
 import { debugRequested, installDebugHook, type DebugHook } from './debugHook';
 import { createEquipmentHost } from './equipmentHost';
@@ -24,7 +24,10 @@ const MIN_DISTANCE_M = 5;
 const MAX_DISTANCE_M = 320;
 /** Used only when the host has no height of its own yet, so the view still shows. */
 const FALLBACK_ASPECT = 16 / 9;
-/** Machine labels refresh their values at the HUD's rate (plan 07: 4 times a second). */
+/**
+ * Machine labels refresh their values and lamps at the HUD's rate (plan 07: 4 times a second), on real
+ * time as main.ts counts the HUD's, so they keep up with the rail however slow the frames come.
+ */
 const LABEL_REFRESH_S = 0.25;
 
 /** The preview's sun: high and from the dock side, so shadows fall short and back toward the milk row. */
@@ -226,6 +229,7 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
       })
     : null;
 
+  let lastUpdateMs = performance.now();
   let sinceLabelsS = LABEL_REFRESH_S;
   return {
     update(snapshot, realDtS) {
@@ -235,7 +239,11 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
       equipmentHost.update(snapshot, realDtS);
       // Paused means the plant's time stands still: the milk stops flowing with it.
       pipes.update(snapshot.line, realDtS, !snapshot.paused);
-      sinceLabelsS += realDtS;
+      // The labels count real time, not realDtS, which counts no frame as longer than maxFrameS: right for the
+      // camera (a stall doesn't make it jump), but slow frames would leave the labels behind the rail.
+      const nowMs = performance.now();
+      sinceLabelsS += Math.max(0, msToS(nowMs - lastUpdateMs));
+      lastUpdateMs = nowMs;
       if (sinceLabelsS >= LABEL_REFRESH_S) {
         sinceLabelsS = 0;
         labels.refresh(snapshot);

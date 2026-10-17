@@ -15,7 +15,7 @@ export type PacksMaterial = MaterialName | 'panel' | 'marking';
 
 const OWN_MATERIALS: Record<Exclude<PacksMaterial, MaterialName>, THREE.MeshStandardMaterialParameters> = {
   panel: { color: 0xe3e8ec, metalness: 0.15, roughness: 0.45 },
-  // The light theme's --warn, the preview's hatch colour.
+  // The preview's hatch colour (its --warn, #c88a00); the light --warn is darker since the G1 lamp-contrast fix.
   marking: { color: 0xc88a00, roughness: 0.8 },
 };
 

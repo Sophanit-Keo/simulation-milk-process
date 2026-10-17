@@ -54,7 +54,11 @@ const FIVE_STAGE_TIMEOUT_MS = 240_000;
 /** Two halves of the line, so a run of stage selections stays well inside one test's time. */
 const HALVES = [STAGES.slice(0, 5), STAGES.slice(5)];
 
-/** Next-event jumps (a shift each) the mock gets to turn a stage amber or red; with plant.json's seed it needs two at most. */
+/**
+ * Next-event jumps (a shift each) the mock gets to change a stage's status from the one it had at the pause
+ * and leave a stage amber or red. With plant.json's seed it needs two: the first shift turns every stage
+ * green, the second turns one red.
+ */
 const MAX_JUMPS = 6;
 
 /** Each stage's status as the rail and the 3D view show it, and the panel's status chip. */
@@ -90,6 +94,29 @@ async function stageLamps(page: Page): Promise<StageLamps> {
 /** The first stage that shows amber or red, on its rail lamp or on a machine label. */
 function flaggedStage({ stages }: StageLamps): number | undefined {
   return STAGES.find(({ id }) => [stages[id].rail, ...stages[id].labels].some((status) => status === 'warn' || status === 'bad'))?.id;
+}
+
+/** Every stage's status as its rail lamp shows it, in stage order, e.g. "ok ok ok warn ok warn ok ok ok ok". */
+const railStatuses = ({ stages }: StageLamps): string => STAGES.map(({ id }) => stages[id].rail).join(' ');
+
+/**
+ * Waits until the rail and the machine labels in the 3D view, which read the snapshot each on their own,
+ * agree on every stage's status; returns the lamps as they agreed.
+ */
+async function expectLampsAgree(page: Page): Promise<StageLamps> {
+  const seen: { lamps: StageLamps | null } = { lamps: null };
+  await expect(async () => {
+    const lamps = await stageLamps(page);
+    seen.lamps = lamps;
+    for (const stage of STAGES) {
+      const { rail, labels } = lamps.stages[stage.id];
+      expect(labels.length, `stage ${stage.id} has machine labels`).toBeGreaterThan(0);
+      expect(new Set(labels).size, `the machine labels of stage ${stage.id} agree: ${labels.join(', ')}`).toBe(1);
+      expect(rail, `rail-stage-${stage.id} lamp shows the status its machine labels show`).toBe(labels[0]);
+    }
+  }).toPass({ timeout: 10_000 });
+  if (!seen.lamps) throw new Error('unreachable: the check above read the lamps');
+  return seen.lamps;
 }
 
 /** Drags the view with the right button: an OrbitControls pan, which no click handler takes for a pick. */
@@ -232,34 +259,30 @@ test.describe('the stage rail', () => {
     await page.getByTestId('pause').click();
     await expect(page.getByTestId('pause')).toHaveAttribute('aria-pressed', 'true');
     await afterHudUpdates(page);
+    const atPause = await expectLampsAgree(page);
 
-    // The mock turns a stage amber or red now and then (two at the start); jump shift by shift until one
-    // shows, so that the lamps are compared on something other than green.
-    let flagged = flaggedStage(await stageLamps(page));
-    for (let jump = 1; flagged === undefined && jump <= MAX_JUMPS; jump++) {
+    // The mock turns stages amber or red now and then. Jump shift by shift until some stage's status has
+    // changed since the pause, so a lamp that stops following the snapshot is caught, and a stage is amber
+    // or red, so the lamps are compared on something other than green. The rail and the 3D labels must
+    // agree after every jump.
+    let lamps = atPause;
+    let flagged = flaggedStage(lamps);
+    for (let jump = 1; flagged === undefined || railStatuses(lamps) === railStatuses(atPause); jump++) {
+      if (jump > MAX_JUMPS) {
+        throw new Error(`in ${MAX_JUMPS} jumps, no stage changed status from the pause's (${railStatuses(atPause)}) and left one amber or red`);
+      }
       const fromS = await clockTimeS(page);
       await page.getByTestId('next-event').click();
       await waitForClockToMove(page, fromS);
       await afterHudUpdates(page);
-      flagged = flaggedStage(await stageLamps(page));
+      lamps = await expectLampsAgree(page);
+      flagged = flaggedStage(lamps);
     }
-    if (flagged === undefined) throw new Error(`no stage turned amber or red, on the rail or in 3D, in ${MAX_JUMPS} jumps`);
-
-    // The rail and the machine labels in the 3D view read the snapshot each on their own: they must agree.
-    await expect(async () => {
-      const { stages } = await stageLamps(page);
-      for (const stage of STAGES) {
-        const { rail, labels } = stages[stage.id];
-        expect(labels.length, `stage ${stage.id} has machine labels`).toBeGreaterThan(0);
-        expect(new Set(labels).size, `the machine labels of stage ${stage.id} agree: ${labels.join(', ')}`).toBe(1);
-        expect(rail, `rail-stage-${stage.id} lamp shows the status its machine labels show`).toBe(labels[0]);
-      }
-    }).toPass({ timeout: 10_000 });
 
     // Selected, a stage's status chip in the panel says what its rail lamp says: the amber or red stage,
     // then one with another status, so the chip follows the selection.
-    const { stages } = await stageLamps(page);
-    const other = STAGES.find((stage) => stages[stage.id].labels[0] !== stages[flagged].labels[0]);
+    const { stages } = lamps;
+    const other = STAGES.find((stage) => stages[stage.id].rail !== stages[flagged].rail);
     for (const id of other ? [flagged, other.id] : [flagged]) {
       await railButton(page, id).click();
       await expectSelected(page, STAGES[id - 1]);
