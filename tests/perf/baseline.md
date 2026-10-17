@@ -37,7 +37,7 @@ It prints one JSON object with the machine (CPU, cores, load average; Windows ha
 
 ## Results
 
-Measured on 16 October 2026 on the merged phase 2 plant at `c4af915` (every lane merged, including the scene-g1 fixes: carton and tray tokens, rack loads from the stock KPI, the longer apron). 33 machines, a production build served by `vite preview`, in headless Chromium 141.0.7390.37. The first baseline, at `1700d82` before the scene-g1 fixes, read 179 draw calls and 104,810 triangles at the overview: the tokens add 2 draw calls and about 1,300 triangles, and the now empty racks (0 pallets in stock on the static plant) save 3 draw calls and about 7,500 triangles.
+Measured on 17 October 2026 on the merged phase 2 plant at `660a30d`, after the G1 review's fixes (33 machines, a production build served by `vite preview`, in headless Chromium 141.0.7390.37). Earlier baselines: at `1700d82`, before the carton and tray tokens and the empty racks, the overview read 179 draw calls and 104,810 triangles; at `c4af915` it read 178 and 98,558, as now. The review fixes changed only the stage stops: the KPI strip gained a line of secondary values (74 px tall at these sizes, 55 px before), so the 3D view is a little shorter and some stops take in a little more of the plant.
 
 The machine: a Linux 6.18 x64 VM, `nproc` 4, CPU `Intel(R) Xeon(R) Processor @ 2.10GHz` (from `/proc/cpuinfo`), 16 GB RAM, no GPU, Node 22.22.0. No other browser ran during the measurement. The load average of about 3.5 to 4 is the measurement's own SwiftShader threads.
 
@@ -49,15 +49,15 @@ These are the same on any GPU.
 |---|---:|---:|---:|---:|
 | **Overview** | **178** | **98,558** | **178** | **98,558** |
 | 1 Standardization | 83 | 58,052 | 83 | 58,052 |
-| 2 Preheating | 81 | 57,996 | 81 | 57,996 |
+| 2 Preheating | 81 | 57,996 | 83 | 58,064 |
 | 3 Homogenization | 83 | 57,864 | 83 | 57,864 |
-| 4 UHT | 89 | 66,964 | 90 | 67,020 |
+| 4 UHT | 90 | 67,020 | 90 | 67,020 |
 | 5 Flash cooling | 83 | 64,948 | 83 | 64,948 |
 | 6 Aseptic tank | 73 | 56,108 | 73 | 56,108 |
 | 7 Filling | 88 | 60,840 | 89 | 61,068 |
 | 8 Packaging | 94 | 67,462 | 95 | 67,630 |
-| 9 Quarantine & QA | 108 | 82,604 | 114 | 83,860 |
-| 10 Warehouse | 118 | 71,332 | 122 | 76,060 |
+| 9 Quarantine & QA | 112 | 83,680 | 115 | 83,872 |
+| 10 Warehouse | 119 | 71,856 | 126 | 77,260 |
 
 The overview uses 178 draw calls, about half the budget of 350. Each stage stop draws fewer, because the camera's frustum leaves most of the plant out. 1280 × 720 is the browser tests' viewport; its wider view takes in a little more at some stops. With stock in the racks (`?mock`, about 300 pallets) the overview reads about 181 draw calls and 110,000 triangles.
 
@@ -69,17 +69,17 @@ The table shows the settled scene. In the first frames the overview reads about 
 
 | Camera | fps, 1440 × 900 | fps, 1280 × 720 |
 |---|---:|---:|
-| Overview | 7.4 | 7.7 |
-| 1 Standardization | 9.4 | 12.3 |
-| 2 Preheating | 10.2 | 12.4 |
-| 3 Homogenization | 9.3 | 12.9 |
-| 4 UHT | 8.8 | 11.3 |
-| 5 Flash cooling | 9.7 | 12.3 |
-| 6 Aseptic tank | 11.5 | 14.8 |
-| 7 Filling | 8 | 11 |
-| 8 Packaging | 6.5 | 9.1 |
-| 9 Quarantine & QA | 9.2 | 11.3 |
-| 10 Warehouse | 7 | 8.7 |
+| Overview | 7.2 | 8 |
+| 1 Standardization | 9 | 11.3 |
+| 2 Preheating | 8.9 | 12.4 |
+| 3 Homogenization | 8.1 | 11.2 |
+| 4 UHT | 7.6 | 10.1 |
+| 5 Flash cooling | 7.4 | 10.4 |
+| 6 Aseptic tank | 9.9 | 13.1 |
+| 7 Filling | 7.4 | 9 |
+| 8 Packaging | 5.6 | 8 |
+| 9 Quarantine & QA | 8.7 | 9.6 |
+| 10 Warehouse | 5.9 | 8.5 |
 
 Software GL draws every pixel on the CPU, so the frame rate follows the pixel count and whatever else the machine is doing more than the draw calls. Two pages rendering at once, as in a parallel Playwright run, roughly halve each other's frame rate on this machine, so `playwright.config.ts` runs the browser tests one page at a time.
 
