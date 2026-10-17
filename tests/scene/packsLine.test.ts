@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { STAGE_IDS, type Snapshot, type StageId } from '../../src/contracts';
@@ -15,6 +16,22 @@ import { plantConfig } from '../helpers/plantConfig';
 const MAX_OWN_MATERIALS = 3;
 /** The lane's budget is about 150 draw calls for stages 7–10, shadow pass included. */
 const DRAW_CALL_BUDGET = 150;
+
+/** src/styles/tokens.css's light theme: the declarations of its first :root block. */
+const LIGHT_TOKENS = (() => {
+  const css = readFileSync(new URL('../../src/styles/tokens.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const start = css.indexOf(':root {');
+  if (start < 0) throw new Error('tokens.css has no :root block');
+  const block = css.slice(start, css.indexOf('}', start));
+  return new Map([...block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name, value.trim()]));
+})();
+
+/** A light-theme colour token as #rrggbb in lower case, as `'#' + color.getHexString()` writes it. */
+function lightToken(name: string): string {
+  const value = LIGHT_TOKENS.get(name);
+  if (!value || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error(`tokens.css's light ${name} is not a #rrggbb colour: ${value}`);
+  return value.toLowerCase();
+}
 
 /**
  * The shared set as contracts v1 has it. Should scene-core add a name, the context here simply lacks it,
@@ -674,8 +691,7 @@ describe('packsLine', () => {
   });
 
   it('lights the incubator lamps by the QA stage status, in the lamp colours of the light theme', () => {
-    // src/styles/tokens.css's light --ok, --warn and --bad, so the 3D lamps match the HUD's.
-    const LAMP_HEX = { ok: 0x1f8f57, warn: 0xa87400, bad: 0xc63a2b };
+    // tokens.css's light --ok, --warn and --bad, read from the file, so the 3D lamps match the HUD's.
     const { machines } = build();
     const lab = byId(machines, 'qa-lab');
     const lamps = node(lab, 'lamps') as THREE.InstancedMesh;
@@ -684,12 +700,14 @@ describe('packsLine', () => {
     for (const status of ['ok', 'warn', 'bad'] as const) {
       snapshot.stages[9].status = status;
       lab.update(snapshot, 0.016);
-      expect(material.color.getHex(), status).toBe(LAMP_HEX[status]);
-      expect(material.emissive.getHex(), status).toBe(LAMP_HEX[status]);
+      expect(`#${material.color.getHexString()}`, status).toBe(lightToken(`--${status}`));
+      expect(`#${material.emissive.getHexString()}`, status).toBe(lightToken(`--${status}`));
       expect(material.emissiveIntensity, status).toBeGreaterThan(0);
     }
+    // Idle, a lamp is dark: the light --steel-dark, unlit.
     snapshot.stages[9].status = 'idle';
     lab.update(snapshot, 0.016);
+    expect(`#${material.color.getHexString()}`, 'idle').toBe(lightToken('--steel-dark'));
     expect(material.emissiveIntensity).toBe(0);
   });
 

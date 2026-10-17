@@ -39,7 +39,7 @@ const FLY_FRAMES = Math.ceil(FLY_S / plantConfig.clock.maxFrameS);
 const FLY_FRAME_SLACK = 4;
 /** A fly may always take this long, however fast the frames: more than ten times its 1.2 s. */
 const FLY_FLOOR_MS = 15_000;
-/** The HUD updates 4 times a second of frame time (plan 07; HUD_INTERVAL_S in src/main.ts). */
+/** The HUD updates 4 times a second of real time (plan 07; HUD_INTERVAL_S in src/main.ts). */
 const HUD_INTERVAL_S = 0.25;
 /** Retry budget for reading a selection back once the camera has landed (the HUD redraws 4 times a second). */
 const SETTLE_MS = 10_000;
@@ -67,9 +67,11 @@ export async function waitForClockToMove(page: Page, fromS: number): Promise<num
 /**
  * Resolves once the frame loop has run long enough for the HUD to update at least once after any command
  * sent before the call, so what the HUD shows then comes from the sim's answer. main.ts runs the commands
- * at the start of the next frame and updates the HUD every 0.25 s of frame time, each frame counting at
- * most plant.json's maxFrameS; this counts frames the same way rather than waiting a fixed time, which
- * slow software-GL frames would outlast.
+ * at the start of the next frame and updates the HUD every 0.25 s of real time (the 3D view's machine
+ * labels likewise). This counts the time between frames, each frame counting at most plant.json's
+ * maxFrameS as the sim's steps do: that never runs ahead of real time, so the wait is a conservative bound
+ * (longer than needed on frames slower than maxFrameS). Counting frames rather than waiting a fixed time
+ * makes sure those frames have run: slow software-GL frames could outlast a fixed wait.
  */
 export async function afterHudUpdates(page: Page): Promise<void> {
   await page.evaluate(
