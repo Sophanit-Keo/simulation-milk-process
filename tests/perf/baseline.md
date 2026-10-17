@@ -31,7 +31,7 @@ What it does:
 3. It reads the overview: draw calls, triangles and `fps()` (an average over the last second, read once a second).
 4. It clicks each stage on the rail, waits for `#viewport[data-focus-stage]`, waits for the counts to hold still for a second, and reads the same numbers.
 
-It prints one JSON object with the machine (CPU, cores, load average), the WebGL renderer (`gl.software` is `true` on software GL), the counts of the first frames, the numbers per stop and any console errors or failed requests. The exit code is 0 if the overview is within the draw-call budget and the page logged no errors, 1 if not, and 2 if it could not measure.
+It prints one JSON object with the machine (CPU, cores, load average; Windows has no load average, so it reads `null` there), the WebGL renderer (`gl.software` is `true` on software GL), the counts of the first frames, the numbers per stop and any console errors or failed requests. The exit code is 0 if the overview is within the draw-call budget and the page logged no errors, 1 if not, and 2 if it could not measure.
 
 `renderer.info` counts every draw in a `render()` call, the shadow pass included, so each figure below is the whole frame. The CSS labels and the HUD add no draw calls.
 
