@@ -484,7 +484,9 @@ kbd {
   text-align: center;
 }
 
-/* KPI strip. Sterility holds two numbers ("F0 5.17 · B* 1.19"), so it gets a wider column. */
+/* KPI strip. Column widths follow the widest text a card holds, so nothing is cut short down to
+   the 1101 px of the one-row layout: sterility has two numbers ("F0 5.17 · B* 1.19"); UHT flow,
+   packs and stock have the long secondary lines ("10,178 pallets made", "1.6 days of cover"). */
 .kpis {
   grid-area: kpis;
   min-width: 0;
@@ -492,7 +494,9 @@ kbd {
 .kpi-grid {
   margin: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr) repeat(6, minmax(0, 1fr));
+  grid-template-columns:
+    minmax(0, 1.2fr) minmax(0, 1.7fr) minmax(0, 1fr) minmax(0, 1.2fr)
+    minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
   gap: 8px;
 }
 .kpi {
@@ -500,7 +504,7 @@ kbd {
   flex-direction: column;
   gap: 3px;
   min-width: 0;
-  padding: 8px 12px;
+  padding: 8px 10px;
 }
 .kpi[data-s='warn'] {
   border-color: var(--warn);
@@ -537,6 +541,17 @@ kbd {
   font-size: 12px;
   color: var(--muted);
 }
+/* Secondary values, one per line, so a card with two never needs a wider column. */
+.k-s {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Below 1100 px the screen stops being one screen: the page scrolls and the
    view gets a fixed share of the window height instead. */
@@ -556,8 +571,9 @@ kbd {
     height: 62vh;
     min-height: 360px;
   }
+  /* Sterility sits in the second column, so that one is wider. */
   .kpi-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -589,6 +605,11 @@ kbd {
   }
   .kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* Full width, so B* still shows on a phone; UHT flow too, so no gap opens beside it. */
+  .kpi[data-kpi='uht'],
+  .kpi[data-kpi='sterility'] {
+    grid-column: span 2;
   }
   .brand h1 {
     font-size: 19px;

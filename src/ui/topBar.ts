@@ -1,5 +1,5 @@
 import { SPEEDS, type Command, type Snapshot, type Speed } from '../contracts';
-import { el, setAttr, setText } from './dom';
+import { el, onPress, setAttr, setText } from './dom';
 import { formatSimTime, formatSpeed } from './format';
 
 /** The keyboard shortcut of each speed preset: 1 for ×1 up to 5 for ×10,000 (see hud.ts). */
@@ -146,22 +146,6 @@ export function createTopBar(bar: HTMLElement, dispatch: (command: Command) => v
       for (const node of [time, controls, nextEvent, scenarios]) node.remove();
     },
   };
-}
-
-/**
- * Runs `action` on a click. After a mouse click the button hands focus back to the page, so
- * Space then pauses (hud.ts) instead of pressing the same button again; a keyboard press
- * (detail 0) keeps focus where the user put it.
- */
-function onPress(node: HTMLButtonElement, action: () => void, signal: AbortSignal): void {
-  node.addEventListener(
-    'click',
-    (event) => {
-      action();
-      if (event.detail > 0) node.blur();
-    },
-    { signal },
-  );
 }
 
 function button(label: string, testId: string, title: string): HTMLButtonElement {

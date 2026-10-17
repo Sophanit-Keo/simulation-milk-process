@@ -22,9 +22,11 @@
   --accent-ink: #ffffff;
   --accent-soft: rgba(23, 103, 176, 0.11);
 
-  /* lamps (plan 08): green running, amber on hold or warning, red stopped or blocked */
+  /* lamps (plan 08): green running, amber on hold or warning, red stopped or blocked. Each keeps
+     3:1 against every background a lamp sits on (WCAG 1.4.11), so amber is darker than the preview's.
+     The 3D lamps (src/scene) use the same colours. */
   --ok: #1f8f57;
-  --warn: #c88a00;
+  --warn: #a87400;
   --bad: #c63a2b;
 
   /* 3D scene */

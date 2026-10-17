@@ -1,7 +1,17 @@
 import type { Page } from '@playwright/test';
 import { SPEEDS } from '../src/contracts';
 import { expect, test } from './fixtures';
-import { afterHudUpdates, clockAndNow, clockTimeS, plantConfig, railButton, simClock, waitForClock, waitForClockToMove } from './helpers';
+import {
+  afterHudUpdates,
+  clockAndNow,
+  clockTimeS,
+  plantConfig,
+  railButton,
+  simClock,
+  waitForClock,
+  waitForClockToMove,
+  wholePlantButton,
+} from './helpers';
 
 // The top bar drives the sim clock (phase-2 shared spec, gate G1): pause, the five speed presets, next
 // event, and a scenario menu that waits for phase 5; Space and the digits 1–5 do the same from the
@@ -118,7 +128,7 @@ for (const path of ['/', '/?mock']) {
       }
     });
 
-    test('Space pauses and resumes, but not while focus is on a button, which Space presses', async ({ page }) => {
+    test('Space pauses and resumes, also after a mouse click, but a button the keyboard focused takes Space', async ({ page }) => {
       await page.goto(path);
       const pause = page.getByTestId('pause');
       await waitForClock(page);
@@ -133,14 +143,42 @@ for (const path of ['/', '/?mock']) {
       // A mouse click hands focus back to the page, so Space then pauses rather than pressing the button again.
       await pause.click();
       await expect(pause).toHaveAttribute('aria-pressed', 'true');
+      await expect(pause, 'the click handed focus back to the page').not.toBeFocused();
       await page.keyboard.press('Space');
       await expect(pause, 'Space after a click on pause resumes').toHaveAttribute('aria-pressed', 'false');
+      // Pressing ×100 again would change nothing, so here only the hand-back makes Space pause.
+      await page.getByTestId('speed-100').click();
+      await page.keyboard.press('Space');
+      await expect(pause, 'Space after a click on ×100 pauses').toHaveAttribute('aria-pressed', 'true');
+
+      // A rail stage clicked with the mouse keeps focus, so the arrow keys go on from it, but Space still
+      // works the clock rather than selecting the stage again.
+      await railButton(page, 2).click();
+      await expect(railButton(page, 2)).toHaveAttribute('aria-current', 'true');
+      await page.keyboard.press('Space');
+      await expect(pause, 'Space after a click on a rail stage resumes').toHaveAttribute('aria-pressed', 'false');
+      await page.keyboard.press('ArrowDown');
+      await expect(railButton(page, 3), 'ArrowDown after a click on a rail stage selects the next').toHaveAttribute('aria-current', 'true');
+      // Back on stage 2 by keyboard, Space is the button's again: with the selection cleared (Escape), it selects stage 2.
+      await page.keyboard.press('ArrowUp');
+      await page.keyboard.press('Escape');
+      await expect(railButton(page, 2)).toBeFocused();
+      await expect(railButton(page, 2)).not.toHaveAttribute('aria-current');
+      await page.keyboard.press('Space');
+      await expect(railButton(page, 2), 'Space pressed the rail button the keyboard focused').toHaveAttribute('aria-current', 'true');
+      await expect(pause, 'and left the clock running').toHaveAttribute('aria-pressed', 'false');
+
+      // "Whole plant" clicked with the mouse hands focus back to the page, like the top bar.
+      await wholePlantButton(page).click();
+      await expect(railButton(page, 2)).not.toHaveAttribute('aria-current');
+      await page.keyboard.press('Space');
+      await expect(pause, 'Space after a click on Whole plant pauses').toHaveAttribute('aria-pressed', 'true');
 
       // With focus on a button (here a rail button, from the keyboard), Space presses that button and leaves the clock alone.
       await railButton(page, 2).focus();
       await page.keyboard.press('Space');
       await expect(railButton(page, 2), 'Space pressed the focused rail button').toHaveAttribute('aria-current', 'true');
-      await expect(pause, 'and did not pause').toHaveAttribute('aria-pressed', 'false');
+      await expect(pause, 'and did not resume').toHaveAttribute('aria-pressed', 'true');
     });
 
     test('the clock runs far faster at ×1,000 than at ×1', async ({ page }) => {

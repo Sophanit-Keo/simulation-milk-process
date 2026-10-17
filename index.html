@@ -9,7 +9,7 @@
 </head>
 <body>
 <!-- One screen (plan 08). main.ts needs #app and #viewport; the HUD (src/ui/hud.ts) fills #bar,
-     #rail and #panel and writes the KPI values into the [data-kpi-value] elements of #kpis. -->
+     #rail and #panel and writes the KPI values into the [data-kpi-value] and [data-kpi-sub] elements of #kpis. -->
 <div id="app" class="app">
   <header id="bar" class="bar card" aria-label="Simulation time and controls">
     <div class="brand">
@@ -48,17 +48,19 @@
     <p class="p-what">Pick a stage from the list, or click a machine in the 3D view, to see what it does and its live values.</p>
   </aside>
 
-  <!-- A labelled region, not <footer>: at the top level a footer is the page's contentinfo landmark. -->
+  <!-- A labelled region, not <footer>: at the top level a footer is the page's contentinfo landmark.
+       The eight cards of the plan 08 wireframe; the other KPIs of plan 06 are the small [data-kpi-sub]
+       lines in the card they belong with, so every KPI of the snapshot is on screen. -->
   <section id="kpis" class="kpis" aria-label="Plant KPIs">
     <dl class="kpi-grid">
-      <div class="kpi card" data-kpi="uht"><dt class="k-l">UHT flow</dt><dd class="k-v" data-kpi-value>—</dd></div>
+      <div class="kpi card" data-kpi="uht"><dt class="k-l">UHT flow</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="diverted">—</dd></div>
       <div class="kpi card" data-kpi="sterility"><dt class="k-l">Sterility</dt><dd class="k-v" data-kpi-value>—</dd></div>
       <div class="kpi card" data-kpi="tank"><dt class="k-l">Aseptic tank</dt><dd class="k-v" data-kpi-value>—</dd></div>
-      <div class="kpi card" data-kpi="packs"><dt class="k-l">Packs</dt><dd class="k-v" data-kpi-value>—</dd></div>
-      <div class="kpi card" data-kpi="oee"><dt class="k-l">OEE</dt><dd class="k-v" data-kpi-value>—</dd></div>
-      <div class="kpi card" data-kpi="hold"><dt class="k-l">On hold <span class="unit">batches</span></dt><dd class="k-v" data-kpi-value>—</dd></div>
-      <div class="kpi card" data-kpi="stock"><dt class="k-l">Stock <span class="unit">pallets</span></dt><dd class="k-v" data-kpi-value>—</dd></div>
-      <div class="kpi card" data-kpi="trucks"><dt class="k-l">Trucks <span class="unit">shipped</span></dt><dd class="k-v" data-kpi-value>—</dd></div>
+      <div class="kpi card" data-kpi="packs"><dt class="k-l">Packs</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="trays">—</dd><dd class="k-s" data-kpi-sub="pallets">—</dd></div>
+      <div class="kpi card" data-kpi="oee" title="OEE of the plant; OEE per filler arrives with the fillers in phase 4"><dt class="k-l">OEE</dt><dd class="k-v" data-kpi-value>—</dd></div>
+      <div class="kpi card" data-kpi="hold"><dt class="k-l">On hold <span class="unit">batches</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="released">—</dd><dd class="k-s" data-kpi-sub="blocked">—</dd></div>
+      <div class="kpi card" data-kpi="stock"><dt class="k-l">Stock <span class="unit">pallets</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="cover">—</dd></div>
+      <div class="kpi card" data-kpi="trucks"><dt class="k-l">Trucks <span class="unit">shipped</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="fill">—</dd></div>
     </dl>
   </section>
 </div>

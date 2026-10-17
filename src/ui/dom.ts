@@ -13,6 +13,22 @@ export function setText(node: Node, text: string): void {
   if (node.textContent !== text) node.textContent = text;
 }
 
+/**
+ * Runs `action` on a click. After a mouse click the button hands focus back to the page, so
+ * Space then pauses (hud.ts) instead of pressing the same button again; a keyboard press
+ * (detail 0) keeps focus where the user put it.
+ */
+export function onPress(node: HTMLButtonElement, action: () => void, signal: AbortSignal): void {
+  node.addEventListener(
+    'click',
+    (event) => {
+      action();
+      if (event.detail > 0) node.blur();
+    },
+    { signal },
+  );
+}
+
 /** Sets an attribute, or removes it for null; only touches the DOM on a change. */
 export function setAttr(node: Element, name: string, value: string | null): void {
   if (value === null) {
