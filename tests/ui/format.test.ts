@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { Kpis } from '../../src/contracts';
-import { formatKpi, formatNumber, formatSimTime, formatSpeed, formatValue, KPI_IDS, kpiText, withUnit } from '../../src/ui/format';
+import {
+  formatKpi,
+  formatNumber,
+  formatSimTime,
+  formatSpeed,
+  formatValue,
+  KPI_IDS,
+  KPI_SUB_IDS,
+  kpiSubText,
+  kpiText,
+  withUnit,
+} from '../../src/ui/format';
 
 describe('formatSimTime', () => {
   it.each([
@@ -152,5 +163,74 @@ describe('formatKpi (KPI strip)', () => {
   it('reads the zeros the model gives before it can produce a KPI', () => {
     const zero = Object.fromEntries(Object.keys(kpis).map((key) => [key, 0])) as unknown as Kpis;
     expect(KPI_IDS.map((id) => kpiText(id, zero))).toEqual(['0 L/h', 'F0 0.00 · B* 0.00', '0 %', '0 /h', '0 %', '0', '0', '0']);
+  });
+});
+
+describe('kpiSubText (secondary values of the KPI strip)', () => {
+  const kpis: Kpis = {
+    uhtFlowLph: 16_000,
+    f0Min: 5.17,
+    bStar: 1.19,
+    divertedL: 12_345.6,
+    tankLevelPct: 52,
+    packsPerH: 15_000,
+    oeePct: 85,
+    traysMade: 855_000,
+    palletsMade: 10_178,
+    batchesOnHold: 21,
+    batchesReleased: 1_234,
+    batchesBlocked: 2,
+    palletsInStock: 520,
+    daysOfCover: 1.64,
+    orderFillPct: 97.6,
+    trucksShipped: 3,
+  };
+
+  it.each([
+    ['diverted', '12,346 L diverted'],
+    ['trays', '855,000 trays made'],
+    ['pallets', '10,178 pallets made'],
+    ['released', '1,234 released'],
+    ['blocked', '2 blocked'],
+    ['cover', '1.6 days of cover'],
+    ['fill', 'order fill 98 %'],
+  ] as const)('%s reads "%s"', (id, text) => {
+    expect(kpiSubText(id, kpis)).toBe(text);
+  });
+
+  it('counts one tray and one pallet in the singular', () => {
+    expect(kpiSubText('trays', { ...kpis, traysMade: 1 })).toBe('1 tray made');
+    expect(kpiSubText('pallets', { ...kpis, palletsMade: 1 })).toBe('1 pallet made');
+  });
+
+  it('keeps the words but drops the unit when a value cannot be shown', () => {
+    expect(kpiSubText('diverted', { ...kpis, divertedL: Number.NaN })).toBe('— diverted');
+    expect(kpiSubText('cover', { ...kpis, daysOfCover: Number.POSITIVE_INFINITY })).toBe('— days of cover');
+    expect(kpiSubText('fill', { ...kpis, orderFillPct: Number.NaN })).toBe('order fill —');
+  });
+
+  it('puts every KPI of the snapshot on screen, in a card or in a secondary value', () => {
+    const strip = (values: Kpis): string[] => [
+      ...KPI_IDS.map((id) => kpiText(id, values)),
+      ...KPI_SUB_IDS.map((id) => kpiSubText(id, values)),
+    ];
+    const shown = strip(kpis);
+    for (const key of Object.keys(kpis) as (keyof Kpis)[]) {
+      expect(strip({ ...kpis, [key]: Number.NaN }), `${key} shows in the strip`).not.toEqual(shown);
+    }
+    expect(KPI_SUB_IDS).toEqual(['diverted', 'trays', 'pallets', 'released', 'blocked', 'cover', 'fill']);
+  });
+
+  it('reads the zeros the model gives before it can produce a KPI', () => {
+    const zero = Object.fromEntries(Object.keys(kpis).map((key) => [key, 0])) as unknown as Kpis;
+    expect(KPI_SUB_IDS.map((id) => kpiSubText(id, zero))).toEqual([
+      '0 L diverted',
+      '0 trays made',
+      '0 pallets made',
+      '0 released',
+      '0 blocked',
+      '0.0 days of cover',
+      'order fill 0 %',
+    ]);
   });
 });

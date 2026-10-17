@@ -8,6 +8,11 @@ export interface StageRail {
   clear(): void;
   /** Lamps from the snapshot's stage statuses. */
   update(snapshot: Snapshot): void;
+  /**
+   * True for the rail button a mouse click focused, until focus moves on. Space then pauses the
+   * clock (hud.ts), as after a click in the top bar, rather than pressing the stage again.
+   */
+  clickFocused(target: Element | null): boolean;
   dispose(): void;
 }
 
@@ -59,12 +64,27 @@ export function createStageRail(
 
   const order = stages.map((info) => info.id);
   let selected: StageId | null = null;
+  // Unlike the top bar's buttons, a rail button keeps focus after a mouse click, so the arrow keys
+  // go on from it; this remembers that the mouse, not the keyboard, put focus there.
+  let clicked: HTMLButtonElement | null = null;
 
   list.addEventListener(
     'click',
     (event) => {
       const stage = stageOf(event.target);
-      if (stage !== null) onPick(stage);
+      if (stage === null) return;
+      clicked = event.detail > 0 ? (buttons.get(stage) ?? null) : null;
+      onPick(stage);
+    },
+    { signal },
+  );
+
+  list.addEventListener(
+    'focusout',
+    (event) => {
+      // Still the document's focus: only the window lost it, and it comes back to the same button.
+      if (event.target === list.ownerDocument.activeElement) return;
+      clicked = null;
     },
     { signal },
   );
@@ -126,6 +146,9 @@ export function createStageRail(
         const status = snapshot.stages[id]?.status;
         if (status) setLamp(lamp, status);
       }
+    },
+    clickFocused(target) {
+      return target !== null && target === clicked;
     },
     dispose() {
       list.replaceChildren(...original);

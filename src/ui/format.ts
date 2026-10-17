@@ -111,3 +111,40 @@ export function kpiText(id: KpiId, kpis: Kpis): string {
     .map((run) => run.text)
     .join('');
 }
+
+/**
+ * The strip's secondary values (index.html, data-kpi-sub): the plan 06 KPIs that have no card of
+ * their own in the plan 08 wireframe, each a small line in the card it belongs with.
+ */
+export type KpiSubId = 'diverted' | 'trays' | 'pallets' | 'released' | 'blocked' | 'cover' | 'fill';
+
+export const KPI_SUB_IDS: readonly KpiSubId[] = ['diverted', 'trays', 'pallets', 'released', 'blocked', 'cover', 'fill'];
+
+/** A whole count and what it counts, singular for exactly 1: "1 tray", "1,234 trays". */
+function count(value: number, one: string, many: string): string {
+  const number = formatNumber(value);
+  return `${number} ${number === '1' ? one : many}`;
+}
+
+/**
+ * One secondary value as its line reads, e.g. "1.6 days of cover". Numbers follow the main values'
+ * rules; a value it can't show reads "—" and keeps its words but not its unit ("— diverted").
+ */
+export function kpiSubText(id: KpiSubId, kpis: Kpis): string {
+  switch (id) {
+    case 'diverted':
+      return `${withUnit(formatNumber(kpis.divertedL), 'L')} diverted`;
+    case 'trays':
+      return `${count(kpis.traysMade, 'tray', 'trays')} made`;
+    case 'pallets':
+      return `${count(kpis.palletsMade, 'pallet', 'pallets')} made`;
+    case 'released':
+      return `${formatNumber(kpis.batchesReleased)} released`;
+    case 'blocked':
+      return `${formatNumber(kpis.batchesBlocked)} blocked`;
+    case 'cover':
+      return `${formatNumber(kpis.daysOfCover, 1)} days of cover`;
+    case 'fill':
+      return `order fill ${withUnit(formatNumber(kpis.orderFillPct), '%')}`;
+  }
+}

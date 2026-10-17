@@ -1,10 +1,14 @@
 import { SPEEDS, type Command, type Hud, type Snapshot, type StageInfo, type ViewBus } from '../contracts';
+import { onPress } from './dom';
 import { createKpiStrip } from './kpiStrip';
 import { createStagePanel } from './stagePanel';
 import { createStageRail } from './stageRail';
 import { createTopBar, speedKey } from './topBar';
 
-/** Focus in one of these keeps Space for itself: it presses a button, types a space, opens a select. */
+/**
+ * Focus in one of these keeps Space for itself: it presses a button, types a space, opens a select.
+ * Not a rail button the mouse clicked (stageRail.ts): the other buttons hand focus back after a click.
+ */
 const SPACE_TAKERS = 'button, input, select, textarea, summary, [contenteditable]:not([contenteditable="false"])';
 /** Focus in one of these keeps digits for itself. */
 const TEXT_TAKERS = 'input, select, textarea, [contenteditable]:not([contenteditable="false"])';
@@ -18,10 +22,10 @@ const TEXT_TAKERS = 'input, select, textarea, [contenteditable]:not([contentedit
  * selectStage on the bus, whether it came from the rail or from a click in the 3D view, and
  * every overview event, which clears the selection.
  *
- * Keys, anywhere on the page: Space pauses and resumes (unless focus is on a button or a form
- * control, which use Space themselves); 1–5 pick the speeds ×1 to ×10,000; Escape goes back to
- * the whole plant (the overview event, like the rail's "Whole plant"); arrows move along the
- * rail while it has focus.
+ * Keys, anywhere on the page: Space pauses and resumes (unless the keyboard put focus on a button
+ * or a form control, which use Space themselves; after a mouse click Space stays the clock's);
+ * 1–5 pick the speeds ×1 to ×10,000; Escape goes back to the whole plant (the overview event,
+ * like the rail's "Whole plant"); arrows move along the rail while it has focus.
  */
 export function createHud(root: HTMLElement, dispatch: (command: Command) => void, bus: ViewBus, stages: readonly StageInfo[]): Hud {
   const part = (selector: string): HTMLElement => {
@@ -55,10 +59,10 @@ export function createHud(root: HTMLElement, dispatch: (command: Command) => voi
     }
   });
 
-  // index.html's "Whole plant" link in the rail head, as in the preview.
-  railRoot
-    .querySelector('[data-testid="overview"]')
-    ?.addEventListener('click', () => bus.emit({ type: 'overview' }), { signal });
+  // index.html's "Whole plant" link in the rail head, as in the preview. Like the top bar's
+  // buttons, it hands focus back to the page after a mouse click, so Space then pauses.
+  const overview = railRoot.querySelector<HTMLButtonElement>('button[data-testid="overview"]');
+  if (overview) onPress(overview, () => bus.emit({ type: 'overview' }), signal);
 
   const doc = root.ownerDocument;
   doc.addEventListener(
@@ -71,7 +75,7 @@ export function createHud(root: HTMLElement, dispatch: (command: Command) => voi
         return;
       }
       if (event.key === ' ') {
-        if (target?.closest(SPACE_TAKERS)) return;
+        if (target?.closest(SPACE_TAKERS) && !rail.clickFocused(target)) return;
         event.preventDefault(); // no page scroll on narrow screens
         if (!event.repeat) bar.togglePause(); // holding Space must not flicker the clock
         return;

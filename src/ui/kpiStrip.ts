@@ -1,6 +1,6 @@
 import type { Snapshot } from '../contracts';
-import { el, setAttr } from './dom';
-import { formatKpi, KPI_IDS, NO_VALUE, type KpiId } from './format';
+import { el, setAttr, setText } from './dom';
+import { formatKpi, KPI_IDS, KPI_SUB_IDS, kpiSubText, NO_VALUE, type KpiId, type KpiSubId } from './format';
 
 export interface KpiStrip {
   update(snapshot: Snapshot): void;
@@ -16,8 +16,9 @@ interface Slot {
 
 /**
  * The KPI strip: fills the [data-kpi-value] element of each [data-kpi] slot in index.html
- * from snapshot.kpis. A slot missing from the markup is skipped, not an error, so the
- * strip can lose or gain slots without code changes here.
+ * from snapshot.kpis, and each [data-kpi-sub] secondary value under it. A slot or value
+ * missing from the markup is skipped, not an error, so the strip can lose or gain them
+ * without code changes here.
  */
 export function createKpiStrip(root: HTMLElement): KpiStrip {
   const slots = new Map<KpiId, Slot>();
@@ -25,6 +26,11 @@ export function createKpiStrip(root: HTMLElement): KpiStrip {
     const card = root.querySelector<HTMLElement>(`[data-kpi="${id}"]`);
     const value = card?.querySelector<HTMLElement>('[data-kpi-value]');
     if (card && value) slots.set(id, { card, value, shown: '' });
+  }
+  const subs = new Map<KpiSubId, HTMLElement>();
+  for (const id of KPI_SUB_IDS) {
+    const node = root.querySelector<HTMLElement>(`[data-kpi-sub="${id}"]`);
+    if (node) subs.set(id, node);
   }
 
   return {
@@ -37,6 +43,7 @@ export function createKpiStrip(root: HTMLElement): KpiStrip {
         // Units and names in <small>, as in the preview; the element still reads "16,000 L/h".
         slot.value.replaceChildren(...runs.map((run) => (run.small ? el('small', '', run.text) : run.text)));
       }
+      for (const [id, node] of subs) setText(node, kpiSubText(id, snapshot.kpis));
       // Sterility is the one KPI with a hard limit in phase 2: B* below 1 means under-processed milk.
       // 0 means the model gives no B* yet, which is not a fault.
       const sterility = slots.get('sterility');
@@ -50,6 +57,7 @@ export function createKpiStrip(root: HTMLElement): KpiStrip {
         slot.value.replaceChildren(NO_VALUE);
         slot.card.removeAttribute('data-s');
       }
+      for (const node of subs.values()) node.textContent = NO_VALUE;
     },
   };
 }
