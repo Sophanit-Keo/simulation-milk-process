@@ -31,7 +31,7 @@ $$
 F_0 = \frac{t_{\text{hold}}}{60} \cdot 10^{(T - 121.1)/10} \qquad B^{*} = \frac{t_{\text{hold}}}{10.1} \cdot 10^{(T - 135)/10.5}
 $$
 
-At 140 °C for 4 s this gives F0 ≈ 5.2 min and B\* ≈ 1.19, inside the targets. Divert when B\* falls below 1, which for a 4 s hold means below about 139.2 °C.
+At 140 °C for 4 s this gives F0 ≈ 5.2 min and B\* ≈ 1.19, inside the targets. Divert when B\* at the holding-tube outlet falls below 1, which for a 4 s hold means below about 139.2 °C. A divert lasts 3 min, then an 80 min CIP and 30 min of sterilizing at 125 °C or more follow, so the UHT plant is out for 113 min ([H36](hand-calculations.md#counts-and-rates)).
 
 > **Decided:** keep the 140 °C set point and cap display noise at ±0.3 °C, so noise alone never crosses the 0.78 °C margin. See [D4](DECISIONS.md#d4-divert-rule-and-display-noise).
 >
@@ -50,6 +50,8 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | Setting | Default | Basis |
 |---|---|---|
 | Raw-milk fat | 4.0% | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Raw-milk silo | 100,000 L, starts 60% full | Silos hold 30,000–250,000 L ([Tanks](https://dairyprocessinghandbook.tetrapak.com/chapter/tanks)); size and start level are sim assumptions ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
+| Mixing tank | 10,000 L, starts 50% full | Batch tanks hold 250–10,000 kg ([Mixers](https://dairyprocessinghandbook.tetrapak.com/chapter/mixers)); start level is a sim assumption ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | UHT plant capacity | 16,000 L/h | Direct plants run 2,000–45,000 L/h ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
 | Fillers | 2 × 7,500 packs/h, 1 L | Below the 8,000/h maximum of the [A3/Flex](https://www.tetrapak.com/solutions/packaging/filling-machines/tetra-pak-a3flex) |
 | Filler time between failures | Random (exponential), mean 8 h of running | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
@@ -64,7 +66,7 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | Tank thresholds | UHT plant to 50% above 90% full, back to full flow below 60%; fillers stop below 150 L | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Cleaning | Full CIP 80 min; intermediate clean 30 min | CIP takes 70–90 min, AIC 30 min ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
 | Intermediate clean interval | Every 10 h of production | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
-| Full CIP trigger | Only after a divert, then 30 min sterilizing at 125 °C | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Full CIP trigger | Only after a divert (B\* < 1): 3 min divert, 80 min CIP, then 30 min sterilizing at 125 °C or more; 113 min out | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Batch | One filler for one 8-hour shift (60,000 packs, about 60 pallets); shifts start at 06:00, 14:00 and 22:00, the first on day 1 at 06:00 | Sim assumption ([D1](DECISIONS.md#d1-batch-size)) |
 | QA samples | 1 pack per filler every 30 min, plus 2 after each stop | Sim assumption |
 | Quarantine | 7 days at 55 °C (default) or 15 days at 30 °C | [Regulation 853/2004](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX), [D9](DECISIONS.md#d9-other-open-values) |
@@ -88,7 +90,7 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 
 | Scenario | Trigger | Plant reaction | What the viewer sees |
 |---|---|---|---|
-| UHT temperature drop | Steam supply dips, B\* < 1 | Divert to reject; flush, clean, re-sterilize 30 min at 125 °C or more; fillers drain the tank | Valve light turns red, reject tank fills, tank level falls |
+| UHT temperature drop | Steam supply dips, B\* < 1 at the holding-tube outlet | Divert to reject for 3 min, then CIP 80 min and sterilize 30 min at 125 °C or more (113 min out); fillers drain the tank | Valve light turns red, reject tank fills, tank level falls |
 | Filler breakdown | Random, from time between failures | Tank level rises; at high level the UHT plant drops to 50% | Filler lamp red, carton flow stops, level climbs |
 | Sterile-air filter failure | Manual trigger | Process deviation; tank contents put on hold | Tank lamp amber, batch marked for investigation |
 | Failed incubation | Sample fails (chance rises after a filter failure) | Batch blocked, pallets pulled for destruction | Pallet lamps in quarantine turn red |
