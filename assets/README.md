@@ -6,13 +6,14 @@ How 3D models and textures get into the plant: where files go, the rules every m
 
 | Path | What | In git |
 |---|---|---|
-| `public/models/` | GLBs the app loads, one per model: `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` (phase 5) | Yes |
+| `public/models/hero/` | The four hero models, `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb`: phase-3 block-outs made by `assets/scripts/make-heroes.mjs`, replaced by the final models in phase 5 | Yes, from phase 3 |
 | `public/models/kenney/` | Kit pieces, unmodified, plus the `Textures/colormap.png` they point to and the kit's `License.txt` | Yes, from phase 2 |
 | `public/models/vehicles/` | `truck.glb`, `forklift.glb`: our own, made by `assets/scripts/make-vehicles.mjs` | Yes, from phase 2 |
 | `public/textures/` | Textures that code applies: `carton.png`, `tray.png`, `pallet.png`, made by `assets/scripts/make-textures.mjs` | Yes, from phase 2 |
 | `assets/source/` | Blender sources (`.blend`) for our own models, under 20 MB each | Yes, from phase 3 |
 | [`assets/hero-specs.md`](hero-specs.md) | Specs for the four hero models: size, origin, named moving nodes, budgets | Yes |
-| `assets/scripts/` | The GLB checks, the vehicle and texture generators, and their tests | Yes |
+| `assets/scripts/` | The GLB checks, the vehicle, hero and texture generators, and their tests | Yes |
+| `assets/screenshots/` | Small fit-check screenshots of the heroes in the scene (each under 150 kB) | Yes, from phase 3 |
 | [`assets/LICENSES.md`](LICENSES.md) | One row for every file in `public/models/` and `public/textures/` | Yes |
 
 ## What is committed now (phase 2)
@@ -23,11 +24,12 @@ How 3D models and textures get into the plant: where files go, the rules every m
 | Truck and forklift | `public/models/vehicles/truck.glb`, `forklift.glb` | 139 KB + 78 KB | Own work (no CC0 kit has them, see [Vehicles](#vehicles)). They replace the grey boxes at the docks. |
 | Token textures | `public/textures/carton.png`, `tray.png`, `pallet.png` | 8, 19, 35 KB | Own work, brand-free. Printed on the static tokens since G1: the cartons on both pack lines, the trays on the tray line, and the pallets at the palletizer and in the racks. Phase 4 moves the same tokens. See [Token textures](#token-textures). |
 | Hero specs | [`hero-specs.md`](hero-specs.md) | | Separator, homogenizer, aseptic filler, palletizer. The models follow in phases 3–5. |
+| Hero block-outs (phase 3) | `public/models/hero/separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` | 123, 149, 80, 67 KB | Own work, plain grey, at the grey boxes' size with every moving node the scene drives. Not loaded by the scene yet: phase 5 swaps them in. See [hero-specs.md](hero-specs.md#phase-3-block-outs). |
 
 Vite copies `public/` to the build as it is. Load files through the base URL, so the same code works in dev and on Vercel (`/`) and on GitHub Pages (`/simulation-milk-process/`):
 
 ```ts
-const url = `${import.meta.env.BASE_URL}models/separator.glb`;
+const url = `${import.meta.env.BASE_URL}models/hero/separator.glb`;
 ```
 
 ## Rules for every model
@@ -35,7 +37,7 @@ const url = `${import.meta.env.BASE_URL}models/separator.glb`;
 - **GLB only.** Binary glTF 2.0 with its textures embedded. No `.gltf` + `.bin` pairs, FBX or OBJ in `public/`. The only exception is the Kenney kit, whose 60+ pieces share one external palette texture (see below).
 - **File names in kebab-case:** `separator.glb`, `aseptic-filler.glb`. Kit pieces keep Kenney's names, which are kebab-case already.
 - **Metres, Y up.** One unit is one metre. Blender's glTF exporter turns Blender's Z-up into Y-up (keep "+Y Up" ticked).
-- **Origin at the footprint centre, on the floor.** (0, 0, 0) is the centre of the model's footprint seen from above, and y = 0 is its lowest point. `scene` places every model by that point.
+- **Origin at the footprint centre, on the floor.** (0, 0, 0) is the centre of the model's footprint seen from above, and y = 0 is its lowest point. `scene` places every model by that point. The heroes are the exception: their origin is the machine origin their spec gives, so the footprint-centre warning from `glb-stats` is expected for them.
 - **Facing.** Product flows along +X: it enters on the −X side and leaves on +X, as on the Kenney conveyors. The operator side faces +Z, which is the side Blender's Front view shows (−Y in Blender).
 - **Named moving nodes.** Every part that moves is its own node, with the name from its hero spec: `bowl`, `piston_1` to `piston_3`, `reel`, `jaws`, `arm_*`. Each node's origin sits on its joint (the bowl on its spin axis, an arm segment on its hinge), and the spec gives the axis and range of motion. `scene` finds parts with `getObjectByName()`, so swapping a grey box for a hero model needs no code change.
 - **Names three.js keeps.** Use only `a-z`, `0-9` and `_`, keep every node name unique, and never reuse the scene's name. three.js' GLTFLoader (r186) drops `[ ] . : /`, turns spaces into `_` and adds `_1`, `_2` to a name already taken, so Blender's `piston.001` would load as `piston001`. `glb-stats` warns about this.
@@ -100,8 +102,9 @@ For every model we make, including any the developer models by hand:
 | `node assets/scripts/glb-stats.mjs <file.glb> [--max-triangles N] [--json]` | Parses the GLB header and JSON chunk, then prints the node tree, meshes and primitives, triangles per mesh and in total, world bounds in metres, materials, textures, and the sizes of embedded images (PNG, JPEG, WebP, KTX2). It warns about the rules above that it can check from the file. Exit 1 if over `--max-triangles`, 2 for an unreadable file. It treats the file as untrusted data: it only parses it, never opens the URIs it names, and escapes its strings before printing them. It has no dependencies. |
 | `node assets/scripts/glb-load-check.mjs <file.glb>... [--port 5186] [--shots <dir>]` | Loads each GLB with GLTFLoader at the pinned three.js in Playwright's Chromium and renders it once. Fails on a load error, a 404 (a missing texture, say) or any console error. It serves only three.js and each model's own folder, on 127.0.0.1:5186, and stops when done. Needs `npm ci`. |
 | `node assets/scripts/make-vehicles.mjs [--out <dir>]` | Builds the truck and the forklift from boxes and cylinders with three.js and writes them with GLTFExporter to `public/models/vehicles/`. Same bytes on every run. |
+| `node assets/scripts/make-heroes.mjs [--out <dir>]` | Builds the four hero block-outs the same way, round each machine origin from [hero-specs.md](hero-specs.md), and writes them to `public/models/hero/`. Same bytes on every run. |
 | `node assets/scripts/make-textures.mjs [--out <dir>]` | Draws the carton, tray and pallet prints as SVG and renders them to PNG in Playwright's Chromium, into `public/textures/`. The page loads nothing from the network. Same bytes on every run with the pinned Playwright. |
-| `npm run test:assets` | Runs every `assets/scripts/*.test.mjs` with Node's test runner, also in `npm run check` and CI: `glb-stats` on GLBs built in memory (including broken and hostile ones), `glb-load-check`'s server, URL filter and command line, the vehicles (size, facing, nodes, budget, and that the committed files match the script) and the textures (size and budget). |
+| `npm run test:assets` | Runs every `assets/scripts/*.test.mjs` with Node's test runner, also in `npm run check` and CI: `glb-stats` on GLBs built in memory (including broken and hostile ones), `glb-load-check`'s server, URL filter and command line, the vehicles (size, facing, nodes, budget, and that the committed files match the script), the hero block-outs (size and envelope, node names and rest positions, budget, nozzles, the moving parts seen from their stage camera and kept in their envelope through their travel, and the committed files byte for byte) and the textures (size and budget). |
 
 ## Kenney kits: phase-1 check (2026-10-12)
 
@@ -185,4 +188,4 @@ How the scene uses them (since G1):
 
 ## Hero model specs
 
-[`hero-specs.md`](hero-specs.md) specifies the separator, homogenizer, aseptic filler and palletizer: outer dimensions measured from the merged grey boxes, the machine origin each model is built round, the named moving nodes (`bowl`, `piston_1` to `piston_3`, `reel`, `jaws`, `arm` with `arm_lift`, `arm_wrist`, `arm_clamp_1` and `arm_clamp_2`) with their rest positions, axes, ranges and the code that drives them, nozzle points for the pipes, budgets and the export checklist, so the phase-5 swap needs no code change.
+[`hero-specs.md`](hero-specs.md) specifies the separator, homogenizer, aseptic filler and palletizer: outer dimensions measured from the merged grey boxes, the machine origin each model is built round, the named moving nodes (`bowl`, `piston_1` to `piston_3`, `reel`, `jaws`, `arm` with `arm_lift`, `arm_wrist`, `arm_clamp_1` and `arm_clamp_2`) with their rest positions, axes, ranges and the code that drives them, nozzle points for the pipes, budgets and the export checklist, so the phase-5 swap needs no code change. Its [Phase 3 block-outs](hero-specs.md#phase-3-block-outs) section lists the block-outs, the fit check in the scene and what `scene` needs for the swap. To change a block-out, edit `make-heroes.mjs`, run it, then `npm run test:assets` and `node assets/scripts/glb-load-check.mjs public/models/hero/*.glb --port 5507 --shots <dir>`.
