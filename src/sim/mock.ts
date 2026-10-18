@@ -14,6 +14,7 @@ import {
   type Kpis,
   type LinePoint,
   type LinePointId,
+  type LiquidSnapshot,
   type PlantConfig,
   type Sim,
   type StageId,
@@ -22,7 +23,7 @@ import {
 import { createCore } from './core';
 import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, oeeFrac, tubeVolumeL } from './formulas';
 import { createRng, mulberry32 } from './rng';
-import { fillerDrawLph, linePoints, staticPlant, toStages, type StageValues } from './staticPlant';
+import { fillerDrawLph, linePoints, staticLiquid, staticPlant, toStages, type StageValues } from './staticPlant';
 
 /** A stage keeps its random status this long before it may change. */
 const STATUS_WINDOW_S = minToS(15);
@@ -53,6 +54,7 @@ interface MockState {
   kpis: Kpis;
   statuses: Record<StageId, Status>;
   line: Record<LinePointId, LinePoint>;
+  liquid: LiquidSnapshot;
 }
 
 export function createMockSim(config: PlantConfig): Sim {
@@ -167,7 +169,16 @@ export function createMockSim(config: PlantConfig): Sim {
       divertLph: statuses[4] === 'bad' ? flowLph : 0,
       fillerLph: fillerDrawLph(config, runningFillers, values[7].ratePacksPerH),
     });
-    return { values, kpis, statuses, line };
+    // Contracts v2: a red stage 4 diverts, the high tank throttles, a red filler stage has one filler down.
+    const liquid = staticLiquid(config);
+    liquid.uhtMode = statuses[4] === 'bad' ? 'divert' : 'production';
+    liquid.throttled = tankHigh;
+    liquid.fillersRunning = runningFillers;
+    liquid.tanks.asepticTank.levelL = values[6].levelL;
+    liquid.tanks.rejectTank.levelL = Math.min(uht.rejectTankL, divertedL % uht.rejectTankL);
+    liquid.tanks.silo.levelL = config.standardization.siloCapacityL * (0.55 + 0.3 * wave(timeS, hToS(9), 3));
+    liquid.productionSinceCleanS = elapsedS % config.cleaning.aicEveryProductionS;
+    return { values, kpis, statuses, line, liquid };
   }
 
   let lastStatuses: Record<StageId, Status> | undefined;
@@ -193,8 +204,8 @@ export function createMockSim(config: PlantConfig): Sim {
     step: (realDtS) => core.step(realDtS),
     dispatch: (command) => core.dispatch(command),
     snapshot() {
-      const { values, kpis, statuses, line } = stateAt(core.timeS);
-      return core.snapshot(toStages(values, (id) => statuses[id]), kpis, line);
+      const { values, kpis, statuses, line, liquid } = stateAt(core.timeS);
+      return core.snapshot(toStages(values, (id) => statuses[id]), kpis, line, liquid);
     },
   };
 }

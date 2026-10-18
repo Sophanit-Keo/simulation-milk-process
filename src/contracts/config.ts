@@ -38,6 +38,12 @@ export interface PlantConfig {
     siloTempC: number;
     separatorTempC: number;
     feedTankTempC: number;
+    /** Raw-milk silo (sources: 30,000–250,000 L) and its level when the app opens (sim assumption, phase 3). */
+    siloCapacityL: number;
+    siloStartFrac: number;
+    /** Mixing tank after standardization, which feeds the UHT plant (sources: batch tanks up to 10,000 kg). */
+    mixTankCapacityL: number;
+    mixTankStartFrac: number;
   };
   /** Stage 2. */
   preheating: {
@@ -143,6 +149,9 @@ const POSITIVE_KEYS = [
   'homogenizer.barPerDegreeC',
   'uht.capacityLph',
   'uht.holdAtCapacityS',
+  'uht.rejectTankL',
+  'standardization.siloCapacityL',
+  'standardization.mixTankCapacityL',
   'asepticTank.capacityL',
   'fillers.count',
   'fillers.ratePacksPerH',
@@ -208,6 +217,7 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   if (!(0 < tank.resumeBelowFrac && tank.resumeBelowFrac < tank.throttleAboveFrac && tank.throttleAboveFrac <= 1)) {
     fail('aseptic tank needs 0 < resumeBelowFrac < throttleAboveFrac ≤ 1');
   }
+  if (std.siloStartFrac > 1 || std.mixTankStartFrac > 1) fail('silo and mixing-tank start fractions must lie in 0–1');
   if (tank.startFrac > 1 || tank.throttledFlowFrac <= 0 || tank.throttledFlowFrac > 1) fail('aseptic tank fractions must lie in 0–1');
   if (tank.fillersStopBelowL >= tank.capacityL) fail('fillersStopBelowL must be below the tank capacity');
   if (fillers.ratePacksPerH > fillers.maxRatePacksPerH) fail('filler rate exceeds the machine maximum');

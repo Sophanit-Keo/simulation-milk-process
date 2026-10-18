@@ -7,6 +7,7 @@ import {
   type Kpis,
   type LinePoint,
   type LinePointId,
+  type LiquidSnapshot,
   type PlantConfig,
   type StageId,
   type StageSnapshot,
@@ -131,6 +132,28 @@ export function linePoints(values: StageValues, flows: LineFlows): Record<LinePo
     cooler: point(values[5].coolerTempC, productLph),
     asepticTank: point(values[6].tempC, fillerLph),
     filler: point(values[7].tempC, fillerLph),
+  };
+}
+
+/** The liquid line at rest (contracts v2): producing at full flow, tanks at their opening levels, both fillers drawing. */
+export function staticLiquid(config: PlantConfig): LiquidSnapshot {
+  const { standardization: std, uht, asepticTank: tank, fillers } = config;
+  const tankLevel = (capacityL: number, frac: number) => ({ levelL: capacityL * frac, capacityL });
+  return {
+    uhtMode: 'production',
+    modeRemainingS: 0,
+    throttled: false,
+    fillersRunning: fillers.count,
+    fillersStarved: false,
+    headspaceBar: tank.maxHeadspaceBar,
+    productionSinceCleanS: 0,
+    divertCount: 0,
+    tanks: {
+      silo: tankLevel(std.siloCapacityL, std.siloStartFrac),
+      mixTank: tankLevel(std.mixTankCapacityL, std.mixTankStartFrac),
+      asepticTank: tankLevel(tank.capacityL, tank.startFrac),
+      rejectTank: tankLevel(uht.rejectTankL, 0),
+    },
   };
 }
 

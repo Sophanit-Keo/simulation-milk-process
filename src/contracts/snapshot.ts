@@ -4,7 +4,7 @@ import type { LinePointId, Speed, StageId, Status } from './stages';
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
  * v0 week 1, v1 at G1, v2 at week 6, v3 at G2. After G2, fields may only be added.
  */
-export const CONTRACT_VERSION = 1;
+export const CONTRACT_VERSION = 2;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -41,6 +41,50 @@ export interface Kpis {
   trucksShipped: number;
 }
 
+/**
+ * What the UHT plant is doing (contracts v2, phase 3). Stages 1–5 run as one line, so this is their mode too.
+ * After a divert the plant flushes and cleans (`cip`), then re-sterilizes before it makes product again;
+ * an intermediate clean (`aic`) runs every so many hours of production while the aseptic tank feeds the fillers.
+ */
+export type UhtMode = 'production' | 'divert' | 'cip' | 'sterilize' | 'aic';
+
+export const UHT_MODES: readonly UhtMode[] = ['production', 'divert', 'cip', 'sterilize', 'aic'];
+
+/** A tank's contents (contracts v2). The 3D view fills each tank to levelL ÷ capacityL. */
+export interface TankLevel {
+  levelL: number;
+  capacityL: number;
+}
+
+/**
+ * The liquid line, stages 1–6, as the 3D view and the panels need it beyond the per-stage values
+ * (contracts v2, phase 3). Flows and temperatures along the pipes stay in Snapshot.line.
+ */
+export interface LiquidSnapshot {
+  uhtMode: UhtMode;
+  /** Sim seconds left in the current divert, cip, sterilize or aic step; 0 in production. */
+  modeRemainingS: number;
+  /** True while the aseptic tank's high level holds the UHT plant at its throttled flow (hysteresis 90% / 60%). */
+  throttled: boolean;
+  /** Fillers drawing from the aseptic tank now (phase 3: a stub at the set filler rate, phase 4 the fillers). */
+  fillersRunning: number;
+  /** True while the aseptic tank is below its low limit and the fillers wait for product. */
+  fillersStarved: boolean;
+  /** Sterile-air pressure over the product in the aseptic tank. */
+  headspaceBar: number;
+  /** Production time since the last clean, toward the next intermediate clean. */
+  productionSinceCleanS: number;
+  /** Diverts since the plant opened. */
+  divertCount: number;
+  tanks: {
+    silo: TankLevel;
+    /** The mixing (feed) tank after standardization, which feeds the UHT plant. */
+    mixTank: TankLevel;
+    asepticTank: TankLevel;
+    rejectTank: TankLevel;
+  };
+}
+
 export type LogKind = 'info' | 'ok' | 'warn' | 'bad';
 
 export interface LogEntry {
@@ -62,6 +106,8 @@ export interface Snapshot {
   stages: Record<StageId, StageSnapshot>;
   /** Temperature and flow at each point of the liquid line, for pipe colours and flow (contracts v1). */
   line: Record<LinePointId, LinePoint>;
+  /** Stages 1–6 beyond their per-stage values: modes, tank levels and filler draw (contracts v2). */
+  liquid: LiquidSnapshot;
   kpis: Kpis;
   /** Newest first, capped in length by the sim. */
   log: readonly LogEntry[];

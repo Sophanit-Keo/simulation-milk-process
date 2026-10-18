@@ -2,7 +2,7 @@
 // and every command, over a plant held at its set points (staticPlant.ts).
 import type { PlantConfig, Sim } from '../contracts';
 import { createCore } from './core';
-import { fillerDrawLph, linePoints, staticPlant, toStages } from './staticPlant';
+import { fillerDrawLph, linePoints, staticLiquid, staticPlant, toStages } from './staticPlant';
 
 export function createSim(config: PlantConfig): Sim {
   const core = createCore(config);
@@ -17,7 +17,7 @@ export function createSim(config: PlantConfig): Sim {
         divertLph: 0,
         fillerLph: fillerDrawLph(config, config.fillers.count, values[7].ratePacksPerH),
       });
-      return core.snapshot(toStages(values), plant.kpis, line);
+      return core.snapshot(toStages(values), plant.kpis, line, staticLiquid(config));
     },
   };
 }

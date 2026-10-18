@@ -7,6 +7,7 @@ import {
   type Kpis,
   type LinePoint,
   type LinePointId,
+  type LiquidSnapshot,
   type LogKind,
   type PlantConfig,
   type SetpointKey,
@@ -38,8 +39,13 @@ export interface SimCore {
   log(timeS: number, kind: LogKind, message: string): void;
   step(realDtS: number): void;
   dispatch(command: Command): void;
-  /** Wraps the caller's stages and KPIs with the clock, queue and log state. */
-  snapshot(stages: Record<StageId, StageSnapshot>, kpis: Kpis, line: Record<LinePointId, LinePoint>): Snapshot;
+  /** Wraps the caller's stages, KPIs and liquid line with the clock, queue and log state. */
+  snapshot(
+    stages: Record<StageId, StageSnapshot>,
+    kpis: Kpis,
+    line: Record<LinePointId, LinePoint>,
+    liquid: LiquidSnapshot,
+  ): Snapshot;
 }
 
 export function createCore(config: PlantConfig, options: CoreOptions = {}): SimCore {
@@ -148,7 +154,7 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       clock.advance(realDtS, onStep, () => queue.peek()?.timeS);
     },
     dispatch,
-    snapshot: (stages, kpis, line) => ({
+    snapshot: (stages, kpis, line, liquid) => ({
       version: CONTRACT_VERSION,
       timeS: clock.timeS,
       speed: clock.speed,
@@ -156,6 +162,7 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       nextEventS: queue.peek()?.timeS ?? null,
       stages,
       line,
+      liquid,
       kpis,
       log: log.entries(),
     }),

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "seed": 81006,
   "clock": {
     "startTimeS": 21600,
@@ -21,7 +21,11 @@
     "creamFatPct": 40,
     "siloTempC": 4,
     "separatorTempC": 60,
-    "feedTankTempC": 4
+    "feedTankTempC": 4,
+    "siloCapacityL": 100000,
+    "siloStartFrac": 0.6,
+    "mixTankCapacityL": 10000,
+    "mixTankStartFrac": 0.5
   },
   "preheating": {
     "preheatTempC": 80,

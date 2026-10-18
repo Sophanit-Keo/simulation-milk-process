@@ -66,8 +66,8 @@ function expectLineMatchesStages(snap: Snapshot, where: string): void {
 }
 
 describe('contracts v1', () => {
-  it('CONTRACT_VERSION is 1', () => {
-    expect(CONTRACT_VERSION).toBe(1);
+  it('CONTRACT_VERSION is 2 (contracts v2, phase 3; v1 is a subset of it)', () => {
+    expect(CONTRACT_VERSION).toBe(2);
   });
 
   it('LINE_POINT_IDS lists the 12 measuring points once each, in flow order', () => {
@@ -87,8 +87,8 @@ describe('contracts v1', () => {
     ]);
   });
 
-  it.each(SIMS)('%s snapshots carry version 1', (_name, create) => {
-    expect(create(plantConfig).snapshot().version).toBe(1);
+  it.each(SIMS)('%s snapshots carry the contract version', (_name, create) => {
+    expect(create(plantConfig).snapshot().version).toBe(CONTRACT_VERSION);
   });
 });
 
