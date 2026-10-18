@@ -6,10 +6,10 @@ The numbers come from the merged grey boxes in `src/scene/equipment/liquidLine.t
 
 | Hero | File | Machine id(s) | Stage | Moving nodes the code drives today |
 |---|---|---|---|---|
-| Separator | `public/models/separator.glb` | `separator` | 1 | `bowl` |
-| Homogenizer | `public/models/homogenizer.glb` | `homogenizer` | 3 | `piston_1`, `piston_2`, `piston_3` |
-| Aseptic filler | `public/models/aseptic-filler.glb` | `filler-a`, `filler-b` | 7 | `reel`, `jaws` |
-| Palletizer | `public/models/palletizer.glb` | `palletizer` | 8 | `arm` (sub-joints `arm_lift`, `arm_wrist`, `arm_clamp_1`, `arm_clamp_2` for phase 4) |
+| Separator | `public/models/hero/separator.glb` | `separator` | 1 | `bowl` |
+| Homogenizer | `public/models/hero/homogenizer.glb` | `homogenizer` | 3 | `piston_1`, `piston_2`, `piston_3` |
+| Aseptic filler | `public/models/hero/aseptic-filler.glb` | `filler-a`, `filler-b` | 7 | `reel`, `jaws` |
+| Palletizer | `public/models/hero/palletizer.glb` | `palletizer` | 8 | `arm` (sub-joints `arm_lift`, `arm_wrist`, `arm_clamp_1`, `arm_clamp_2` for phase 4) |
 
 ## How the swap works, and what that requires
 
@@ -148,8 +148,8 @@ The Blender checklist in [README.md](README.md#export-checklist-blender) applies
 5. One UV map, AO baked into the ORM texture (README, "Baked ambient occlusion").
 6. Export to the file name in the first table; save the `.blend` in `assets/source/`.
 7. Check it:
-   - `node assets/scripts/glb-stats.mjs public/models/<name>.glb --max-triangles 30000`: within budget; the node tree shows the moving nodes with their names unchanged; the bounds match this spec within 5% (the footprint-centre warning is expected).
-   - `node assets/scripts/glb-load-check.mjs public/models/<name>.glb --port 5507 --shots <dir>`: `OK`, and the render looks right.
+   - `node assets/scripts/glb-stats.mjs public/models/hero/<name>.glb --max-triangles 30000`: within budget; the node tree shows the moving nodes with their names unchanged; the bounds match this spec within 5% (the footprint-centre warning is expected).
+   - `node assets/scripts/glb-load-check.mjs public/models/hero/<name>.glb --port 5507 --shots <dir>`: `OK`, and the render looks right.
 8. Add a row to [LICENSES.md](LICENSES.md) (own work).
 
 ## Schedule
@@ -157,6 +157,59 @@ The Blender checklist in [README.md](README.md#export-checklist-blender) applies
 | Phase | Hero work (`assets`) |
 |---|---|
 | 2 | This spec. |
-| 3 | Block-outs: the bounds, the named nodes at their rest positions, no detail. `scene` can test the swap with them. |
+| 3 | Block-outs: the bounds, the named nodes at their rest positions, no detail. `scene` can test the swap with them. Done: see [Phase 3 block-outs](#phase-3-block-outs). |
 | 4 | First-pass GLBs with materials. |
 | 5 | Final models, baked AO, compression; `scene` swaps them in. |
+
+## Phase 3 block-outs
+
+`assets/scripts/make-heroes.mjs` builds all four from boxes, cylinders and cones with three.js and writes them with GLTFExporter to `public/models/hero/`, the same way `make-vehicles.mjs` makes the truck and forklift (no Blender, no new packages, same bytes on every run). Each is built round its machine origin with +y up, product along +x and the operator side at +z. Static parts are merged into one mesh per material. Every moving node is one mesh of its own, named as in the tables above, at its rest position with no rotation and scale 1, and its geometry hangs so that the node's origin is on its joint. There are no textures: two vertex-coloured materials per model (`<model>_paint`, satin, and `<model>_matte`) in plain greys, plus `aseptic_filler_glass` (alpha-blended) for the aseptic zone. Nothing carries text or a brand mark.
+
+| File | Bounds, x / y / z (m) | Against the grey box | Triangles | Meshes (draw calls), materials | Nodes |
+|---|---|---|---|---|---|
+| `separator.glb`, 122.5 KB | −0.85…0.85 / 0…2.30 / −2.05…0.85 | Same | 1,944 | 3, 2 | `bowl` |
+| `homogenizer.glb`, 149.0 KB | −1.25…1.25 / 0…1.368 / −1.77…1.32 | z +0.145 m at the front, all at rest: the liquid end (z 1.06 to 1.32) that the design notes allow; 3.09 m deep, inside the envelope | 2,328 | 5, 2 | `piston_1`, `piston_2`, `piston_3` |
+| `aseptic-filler.glb`, 79.7 KB | −1.63…1.90 / 0…3.56 / −1.60…1.135 | x −0.03 m (the product-in flange, proud of the −x face) and z +0.035 m (the control panel on the +z face) | 1,116 | 7, 3 | `reel`, `jaws` > `jaw_1`, `jaw_2` |
+| `palletizer.glb`, 67.4 KB | −0.55…2.725 / 0…2.45 / −0.55…0.55 | Same | 964 | 7, 2 | `arm` > `arm_lift` > `arm_wrist` > `arm_clamp_1`, `arm_clamp_2` |
+
+Block-out notes, by model:
+
+- **Separator.** A frame hood (radius 0.72 m, up to y 1.38) hides the lower half of the bowl. Above it the bowl shows its lock ring, eight bolts, the top cone, the fin from the grey box, a dark stripe opposite the fin and an outlet stub, so a turn reads from the stage-1 camera. The two nozzles end in flanges at x ±0.85 m.
+- **Homogenizer.** The liquid end is kept low (y 0.66 to 0.94, valve covers to 0.98) so the stage-3 camera, about 30° above the floor, sees the three pistons across the gap between it and the crankcase (z 0.65 to 1.06). Each piston is 0.70 m long (z −0.40 to +0.30 from its node), with a dark collar that stays in that gap all stroke. At ±0.12 m its back end stays inside the crankcase and its front end inside the liquid end. The two gauges sit on the top cover at the spec's points.
+- **Aseptic filler.** The outfeed hood is open below and at the front: packs on the belt (y 0.86, 0.85 m wide) pass under it into a dark opening in the +x face. The paper tube, its forming ring and the jaws show through the glass. The reel has a hub, the grey box's bar and a splice mark on both faces, so its turn reads on filler B, the mirrored copy.
+- **Palletizer.** The arm is a turntable hub on the column axis, the boom, and a head that guides the lift rod. `arm_lift` is the rod (y −0.63 to +0.10 from the node, its top hidden in the head). `arm_wrist` is the gripper's rotary unit, frame and rails, and the clamps are plates on the gripper's z faces, open at rest. The arm reaches 2.734 m from the column axis, inside the 2.87 m allowed.
+
+`make-heroes.test.mjs` (part of `npm run test:assets`) checks each GLB: size within 5% of the grey box and inside the envelope, on the floor, under the label; every node at its rest position under the right parent with no rotation and scale 1; the budget, with the footprint-centre warning as the only one allowed and glass on the filler only; a flange about 0.24 m across at every nozzle; that the moving parts are visible from their stage camera; and that the parts stay on their joints and inside their envelopes through their travel (bowl turns, piston stroke, reel turns, jaws down and closed, filler B mirrored, the arm from pick to place, the lift lowered 1.2 m, the clamps closed). It also checks that a rerun gives the same bytes as the committed files.
+
+### Fit check in the scene (2026-10-18)
+
+How: a throwaway page (not committed) served by the Vite dev server built the liquid line and the packs line with the app's own `createEquipmentHost`, `liquidLine` and `packsLine`, at the app's layout positions. For each machine it loaded the hero GLB into the machine's root group (filler B with scale z −1), copied each grey node's driven value onto the hero node of the same name (the bowl's and arm's `rotation.y`, the pistons' `position.z`, the reel's `rotation.z`, the jaws' `position.y`), and rendered three views from the stage camera (`STAGE_VIEWS`) and from close by: the grey box, the hero in its place, and the hero with the grey box drawn over it as a red wireframe. Chromium with `--enable-unsafe-swiftshader`, three r186, no console errors.
+
+Result: every hero sits on its grey box. Bounds measured in the machine root's frame from the vertices (the palletizer's arm at rest, the pallet and stack left out):
+
+| Machine | Grey box (m) | Hero (m) |
+|---|---|---|
+| `separator` | −0.85…0.85 / 0…2.30 / −2.05…0.85 | the same |
+| `homogenizer` | −1.25…1.25 / 0…1.37 / −1.77…1.175 | −1.25…1.25 / 0…1.368 / −1.77…1.32 |
+| `filler-a` | −1.60…1.90 / 0…3.56 / −1.60…1.10 | −1.63…1.90 / 0…3.56 / −1.60…1.135 |
+| `filler-b` (mirrored) | −1.60…1.90 / 0…3.56 / −1.10…1.60 | −1.63…1.90 / 0…3.56 / −1.135…1.60 |
+| `palletizer` | −0.55…2.725 / 0…2.45 / −0.55…0.55 | the same |
+
+The nozzles meet the pipes, the outfeed hood meets the pack belt, filler B's reel faces the stage-7 camera, and with the grey arm's angle copied the hero arm lies on the grey one at the pick point. The first homogenizer had a liquid end up to y 1.05 with valve actuators on it, which hid the pistons from the stage-3 camera; it was lowered (above), and a test now checks the view.
+
+Screenshots (hero with the grey box as a red wireframe, from close by; and the homogenizer from its stage camera): [separator](screenshots/separator-fit.jpg), [homogenizer](screenshots/homogenizer-fit.jpg), [homogenizer, stage 3](screenshots/homogenizer-stage-3.png), [both fillers](screenshots/aseptic-filler-fit.jpg), [palletizer](screenshots/palletizer-fit.jpg).
+
+### What `scene` needs for the swap (phase 5)
+
+1. **Load and place.** `ctx.loadModel('hero/<file>')` into the machine's root group, as is: no offset, rotation or scale, except filler B, which takes `scale.z = -1`. The second filler should be a clone of the first load (`loadModel` already returns clones of one load).
+2. **Hide the grey parts and drop their node names.** With the grey box and the hero both in the root, `root.getObjectByName('bowl')` (and `piston_N`, `reel`, `jaws`, `arm`) finds the **grey** node first, because the grey children come first. Either remove the grey parts from the root or look the nodes up in the loaded scene (`hero.getObjectByName(...)`), then point the existing update code at those nodes. The update code then works unchanged: it writes only `bowl.rotation.y`, `piston_N.position.z`, `reel.rotation.z`, `jaws.position.y` and `arm.rotation.y`.
+3. **Picking and shadows.** Picking (`src/scene/picking.ts`) walks up from the mesh hit to the machine's object and skips hidden parts, so hero meshes inside the root select their stage with no change. GLTFLoader leaves `castShadow` off: set it on the hero's meshes (the static `body_*` meshes and the moving nodes; the filler's `body_glass` should not cast).
+4. **Glass.** `aseptic_filler_glass` loads as transparent with `depthWrite` off (glTF `BLEND`), like the scene's own `glass` material.
+5. **Materials and theme.** The heroes bring their own materials, so the theme does not re-colour them (the grey `steel` and `steelDark` darken in the dark theme). If they look too bright on the dark floor, phase 5 can swap `<model>_paint` for a themed material.
+6. **Draw calls.** The heroes make 3 (separator), 5 (homogenizer), 7 (each filler) and 7 (palletizer) draw calls per pass, against 5 to 12 for the grey boxes, shadow pass included.
+
+Not done in the block-outs, for phase 4 and 5:
+
+- `arm_lift`'s rod is 0.73 m long and its top is hidden in the boom's head, so it stays in the head only for the first 0.20 m of lift. Lowering the full 1.20 m needs a telescopic rod (a second node under `arm_lift`) or a longer rod above the boom, which would break the 2.57 m height limit.
+- `jaw_1` and `jaw_2`, and `arm_wrist` and the clamps, are in place but not driven yet.
+- No textures, UVs or baked AO yet (phase 4 and 5), and no `.blend` sources: the models come from the script.

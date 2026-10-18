@@ -61,17 +61,18 @@ function makeMaterials(prefix) {
 }
 
 /** [min, max] on one axis, in metres. */
-const span = (a, b) => [Math.min(a, b), Math.max(a, b)];
+export const span = (a, b) => [Math.min(a, b), Math.max(a, b)];
 /** The same x span on the left (side -1) or right (side +1) of the centre line. */
-const side = (s, inner, outer) => (s > 0 ? [inner, outer] : [-outer, -inner]);
+export const side = (s, inner, outer) => (s > 0 ? [inner, outer] : [-outer, -inner]);
 
 const _color = new THREE.Color();
 
 /**
  * Collects the parts of one rigid body by material, each part a small indexed geometry in the
  * body's own frame, and merges them into one mesh per material.
+ * make-heroes.mjs builds the hero models with it too.
  */
-class Parts {
+export class Parts {
   constructor() {
     this.byMaterial = new Map();
   }
@@ -303,7 +304,7 @@ export function buildForklift() {
 }
 
 /** The exported scene: glTF's scene takes `name`; its nodes must not repeat it (three would rename them). */
-function group(name, children) {
+export function group(name, children) {
   const scene = new THREE.Scene();
   scene.name = name;
   for (const child of children) scene.add(child);
