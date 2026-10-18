@@ -13,6 +13,12 @@ export function lineFlowLph(snapshot: Snapshot, point: LinePointId): number {
   return typeof flowLph === 'number' && Number.isFinite(flowLph) ? flowLph : 0;
 }
 
+/** Milk temperature at a measuring point of the line; undefined if the snapshot has none. */
+export function lineTempC(snapshot: Snapshot, point: LinePointId): number | undefined {
+  const tempC = snapshot.line?.[point]?.tempC;
+  return typeof tempC === 'number' && Number.isFinite(tempC) ? tempC : undefined;
+}
+
 const formats = new Map<number, Intl.NumberFormat>();
 
 /**

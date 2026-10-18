@@ -170,6 +170,10 @@ export interface SceneDebug {
   triangles(): number;
   fps(): number;
   equipmentIds(): string[];
+  /** What a machine shows now, e.g. { fillFrac } for a tank or { diverting, lamp, flagRad } for the divert valve (phase 3). */
+  equipmentState(id: string): Record<string, number | string | boolean> | null;
+  /** Whether the divert route is lit, and each line point's stripe offset in metres (phase 3). */
+  pipeState(): { divertLit: boolean; phaseM: Record<string, number> };
 }
 
 /** Calls one method of window.__scene in the page. */

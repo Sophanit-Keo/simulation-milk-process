@@ -48,6 +48,12 @@ const G1_EQUIPMENT_IDS = [
   'racks', 'docks', 'forklift-1', 'forklift-2', 'truck',
 ];
 
+/**
+ * How long the mock may take to divert at ×1,000. With plant.json's seed its first divert comes about 2.9 sim
+ * hours in: about 105 frames of at most 100 s each, under 30 s even at a few frames a second.
+ */
+const DIVERT_WAIT_MS = 90_000;
+
 /** Selecting a stage and flying there takes a few seconds per stage on software GL: a run of five gets more time. */
 const FIVE_STAGE_TIMEOUT_MS = 240_000;
 
@@ -403,5 +409,35 @@ test.describe('the ?debug scene hook', () => {
     await railButton(page, 6).click();
     await expectLanded(page, 6);
     expect(await sceneCall(page, 'focusStage')).toBe(6);
+  });
+
+  test('with ?mock: a divert flips the divert valve, turns its lamp red and lights the route to the reject tank', async ({ page }) => {
+    await page.goto('/?mock&debug');
+    await waitForScene(page);
+    await waitForClock(page);
+    // The mock diverts now and then. ×1,000 moves at most 100 s of sim time per frame (main.ts counts no
+    // frame as longer than 0.1 s), less than any divert lasts, so a check on every frame can't miss one.
+    await page.getByTestId('speed-1000').click();
+    // Pause in the frame that first shows the divert, from inside the page: a round trip from the test
+    // could take longer than the divert does.
+    await page.waitForFunction(
+      () => {
+        const scene = (window as unknown as { __scene: { equipmentState(id: string): { diverting?: boolean } | null } }).__scene;
+        if (scene.equipmentState('divert-valve')?.diverting !== true) return false;
+        document.querySelector<HTMLButtonElement>('[data-testid="pause"]')?.click();
+        return true;
+      },
+      undefined,
+      { polling: 'raf', timeout: DIVERT_WAIT_MS },
+    );
+    await expect(page.getByTestId('pause')).toHaveAttribute('aria-pressed', 'true');
+
+    // Paused in the divert: the snapshot holds still, and the valve settles on the reject tank's outlet.
+    const valve = await sceneCall(page, 'equipmentState', 'divert-valve');
+    expect(valve, 'the divert valve while the mock diverts').toMatchObject({ diverting: true, lamp: 'bad' });
+    expect((await sceneCall(page, 'pipeState')).divertLit, 'the divert route is lit').toBe(true);
+    await expect
+      .poll(async () => (await sceneCall(page, 'equipmentState', 'divert-valve'))?.flagRad, { message: 'the valve flag turns to the reject tank' })
+      .toBeCloseTo(-Math.PI / 2, 2);
   });
 });

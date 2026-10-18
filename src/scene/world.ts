@@ -4,10 +4,12 @@ import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { msToS, type ViewBus, type World } from '../contracts';
 import { createCameraFlight } from './cameraFlight';
 import { debugRequested, installDebugHook, type DebugHook } from './debugHook';
+import { uhtModeOf } from './equipment/liquid/visuals';
 import { createEquipmentHost } from './equipmentHost';
 import { createEquipmentLabels } from './equipmentLabels';
 import './labels.css';
 import { FLOOR, OVERVIEW, PLANT_BOUNDS, PLANT_HEIGHT_M, overviewDistanceM, type RectM } from './layout';
+import { motionDtS } from './motion';
 import { createPicker, type PickTarget } from './picking';
 import { createPipes } from './pipes';
 import { readSceneColor, watchTheme } from './theme';
@@ -226,6 +228,8 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
         cameraPositionM: () => camera.position.toArray(),
         info: () => renderer.info.render,
         equipmentIds: () => equipmentHost.equipment.map((item) => item.id),
+        equipmentState: (id) => equipmentHost.equipment.find((item) => item.id === id)?.debugState?.() ?? null,
+        pipeState: () => pipes.state(),
       })
     : null;
 
@@ -237,8 +241,8 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
       flight.update(realDtS); // before the controls, which then apply their limits and damping
       controls.update(realDtS);
       equipmentHost.update(snapshot, realDtS);
-      // Paused means the plant's time stands still: the milk stops flowing with it.
-      pipes.update(snapshot.line, realDtS, !snapshot.paused);
+      // Paused means the plant's time stands still: the milk stops flowing with it (motionDtS is 0).
+      pipes.update(snapshot.line, motionDtS(snapshot, realDtS), uhtModeOf(snapshot) === 'divert');
       // The labels count real time, not realDtS, which counts no frame as longer than maxFrameS: right for the
       // camera (a stall doesn't make it jump), but slow frames would leave the labels behind the rail.
       const nowMs = performance.now();

@@ -1,11 +1,13 @@
 // The liquid line's pipes (preview: "pipes: colour follows milk temperature"). Each run is one
 // TubeGeometry mesh along the preview's route, coloured per vertex from the temperatures in
-// snapshot.line, with a shared stripe texture that flows at the speed of the milk.
+// snapshot.line, with a shared stripe texture that flows at the speed of the milk. The divert route to
+// the reject tank lights up red while the plant diverts.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { degToRad, LINE_POINT_IDS, type LinePoint, type LinePointId, type StageId } from '../contracts';
 import type { PointM } from './layout';
-import { readSceneColor, type SceneColorVar } from './theme';
+import { advancePhase } from './motion';
+import { LAMP_GLOW_HEX, readSceneColor, type SceneColorVar } from './theme';
 
 /**
  * Where a route vertex takes its temperature from: one measuring point of the line, or part-way
@@ -43,6 +45,9 @@ export interface PipeRun {
 
 /** Part-way from one point's temperature to the next; the fractions reproduce the preview's in-between values. */
 const between = (from: LinePointId, to: LinePointId, frac: number): PipeTemp => ({ from, to, frac });
+
+/** The run from the divert valve to the reject tank, which lights up while the plant diverts. */
+export const DIVERT_RUN_ID = 'divert';
 
 const MAIN_RADIUS_M = 0.11;
 const HOLDING_TUBE_RADIUS_M = 0.09;
@@ -165,7 +170,7 @@ export const MILK_RUNS: readonly PipeRun[] = [
   },
   {
     // From the divert valve to the reject tank; it carries milk only while the plant diverts.
-    id: 'divert',
+    id: DIVERT_RUN_ID,
     paths: [
       {
         radiusM: MAIN_RADIUS_M,
@@ -259,6 +264,13 @@ const JOINT_HEIGHT_SEGMENTS = 8;
 const STRIPE_M = 0.7;
 /** A visual scale in real time, not a model number: 10,000 L/h moves the stripes 1 m/s. */
 const STRIPE_MPS_PER_LPH = 1e-4;
+/**
+ * The stripes move at most a quarter of a stripe and gap per frame: faster, on a slow frame at a high sim
+ * speed, they would seem to stand still or run backwards.
+ */
+const MAX_STRIPE_STEP_M = STRIPE_M / 4;
+/** How brightly the divert route glows, in the lamps' red, while the plant diverts. */
+const DIVERT_LIT_INTENSITY = 0.6;
 /** Slots in the phase table: one per line point, then one that never moves (joint balls). */
 const STILL_SLOT = LINE_POINT_IDS.length;
 const FLOW_SLOTS = LINE_POINT_IDS.length + 1;
@@ -269,8 +281,14 @@ const SLOT_OF = new Map<LinePointId, number>(LINE_POINT_IDS.map((id, i) => [id, 
 export interface Pipes {
   /** Meshes a click may hit, with the stage they select. */
   readonly pickTargets: readonly { object: THREE.Object3D; stage: StageId }[];
-  /** Colours and stripes from the snapshot's line points; stripes stand still while `flowing` is false. */
-  update(line: Readonly<Record<LinePointId, LinePoint>>, realDtS: number, flowing: boolean): void;
+  /**
+   * Colours and stripes from the snapshot's line points. Each point's stripes move at a speed proportional
+   * to its flow for `animationDtS` (motion.ts: 0 while paused, so they stand still); the divert route to
+   * the reject tank glows red while `diverting`.
+   */
+  update(line: Readonly<Record<LinePointId, LinePoint>>, animationDtS: number, diverting?: boolean): void;
+  /** For tests and the ?debug hook: whether the divert route is lit, and each line point's stripe offset. */
+  state(): { divertLit: boolean; phaseM: Record<LinePointId, number> };
   applyTheme(): void;
   dispose(): void;
 }
@@ -280,27 +298,39 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
   // One phase per line point. The vertex shader looks a vertex's phase up by its slot, so each part of
   // a run flows at its own point's speed, and all runs share one material and one texture.
   const phaseM = new Float32Array(FLOW_SLOTS);
-  const milkMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.2, map: flowTexture });
-  milkMaterial.name = 'milk-pipe';
-  milkMaterial.defines = { FLOW_SLOTS: String(FLOW_SLOTS) };
-  milkMaterial.customProgramCacheKey = () => 'milk-pipe-flow';
-  milkMaterial.onBeforeCompile = (shader) => {
-    shader.uniforms.flowPhaseM = { value: phaseM };
-    shader.uniforms.stripeM = { value: STRIPE_M };
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        '#include <common>',
-        '#include <common>\nattribute float arcM;\nattribute float flowSlot;\nuniform float flowPhaseM[ FLOW_SLOTS ];\nuniform float stripeM;',
-      )
-      .replace(
-        '#include <uv_vertex>',
-        '#include <uv_vertex>\n\tvMapUv = vec2( ( arcM - flowPhaseM[ int( flowSlot + 0.5 ) ] ) / stripeM, 0.5 );',
-      );
+  const makeMilkMaterial = (name: string): THREE.MeshStandardMaterial => {
+    const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.2, map: flowTexture });
+    material.name = name;
+    material.defines = { FLOW_SLOTS: String(FLOW_SLOTS) };
+    // One cache key, so both milk materials share one shader program; each has its own uniforms object,
+    // and both point at the same phase table.
+    material.customProgramCacheKey = () => 'milk-pipe-flow';
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.flowPhaseM = { value: phaseM };
+      shader.uniforms.stripeM = { value: STRIPE_M };
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          '#include <common>',
+          '#include <common>\nattribute float arcM;\nattribute float flowSlot;\nuniform float flowPhaseM[ FLOW_SLOTS ];\nuniform float stripeM;',
+        )
+        .replace(
+          '#include <uv_vertex>',
+          '#include <uv_vertex>\n\tvMapUv = vec2( ( arcM - flowPhaseM[ int( flowSlot + 0.5 ) ] ) / stripeM, 0.5 );',
+        );
+    };
+    return material;
   };
+  const milkMaterial = makeMilkMaterial('milk-pipe');
+  // The divert route has a material of its own, the same but for an emissive red it shows while diverting.
+  // It is its own mesh anyway, so this costs no draw call.
+  const divertMaterial = makeMilkMaterial('milk-pipe-divert');
+  divertMaterial.emissive.setHex(LAMP_GLOW_HEX.bad);
+  divertMaterial.emissiveIntensity = 0;
+  let divertLit = false;
 
   const runs = MILK_RUNS.map((run) => buildMilkRun(run));
   const meshes = runs.map(({ run, geometry }) => {
-    const mesh = new THREE.Mesh(geometry, milkMaterial);
+    const mesh = new THREE.Mesh(geometry, run.id === DIVERT_RUN_ID ? divertMaterial : milkMaterial);
     mesh.name = `pipe-${run.id}`;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -317,10 +347,19 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
   const stops = TEMP_STOPS.map(({ tempC }) => ({ tempC, color: new THREE.Color() }));
   const pointTempC = new Float32Array(LINE_POINT_IDS.length);
   const color = new THREE.Color();
+  /** Per line point: did its temperature change in this update? */
+  const tempChanged = new Uint8Array(LINE_POINT_IDS.length);
   let coloured = false;
 
-  const recolour = (): void => {
-    for (const { colors, tempIndex, tempWeight } of runs) {
+  const carriesChange = (points: Uint8Array): boolean => {
+    for (let i = 0; i < points.length; i++) if (tempChanged[points[i]] === 1) return true;
+    return false;
+  };
+
+  /** Recolours every run, or with `onlyChanged` just the runs that carry a point whose temperature changed. */
+  const recolour = (onlyChanged = false): void => {
+    for (const { colors, tempIndex, tempWeight, tempPoints } of runs) {
+      if (onlyChanged && !carriesChange(tempPoints)) continue;
       const array = colors.array as Float32Array;
       for (let v = 0; v < colors.count; v++) {
         let tempC = 0;
@@ -346,24 +385,39 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
       const stage = runs[i].run.stage;
       return stage === undefined ? [] : [{ object: mesh, stage }];
     }),
-    update(line, realDtS, flowing) {
-      // Recolour only when a temperature moved: the static plant never does, the live model a few times a second.
-      let changed = !coloured;
+    update(line, animationDtS, diverting = false) {
+      // Recolour only the runs whose temperatures moved: the static plant never does; the live model's
+      // display noise moves only the UHT section, so the silo and filler runs stay as they are.
+      let changed = false;
       for (let i = 0; i < LINE_POINT_IDS.length; i++) {
         const tempC = Math.fround(line[LINE_POINT_IDS[i]].tempC);
-        if (pointTempC[i] !== tempC) {
+        tempChanged[i] = pointTempC[i] !== tempC ? 1 : 0;
+        if (tempChanged[i] === 1) {
           pointTempC[i] = tempC;
           changed = true;
         }
       }
-      if (changed) recolour();
+      if (!coloured) recolour();
+      else if (changed) recolour(true);
 
-      if (!flowing) return;
-      for (let i = 0; i < LINE_POINT_IDS.length; i++) {
-        const speedMps = Math.max(0, line[LINE_POINT_IDS[i]].flowLph) * STRIPE_MPS_PER_LPH;
-        // Modulo one stripe: the texture repeats, and a small phase keeps the shader's float precision.
-        phaseM[i] = (phaseM[i] + speedMps * realDtS) % STRIPE_M;
+      if (diverting !== divertLit) {
+        divertLit = diverting;
+        divertMaterial.emissiveIntensity = diverting ? DIVERT_LIT_INTENSITY : 0;
       }
+
+      if (!(animationDtS > 0)) return;
+      for (let i = 0; i < LINE_POINT_IDS.length; i++) {
+        const flowLph = line[LINE_POINT_IDS[i]].flowLph;
+        const speedMps = Number.isFinite(flowLph) ? Math.max(0, flowLph) * STRIPE_MPS_PER_LPH : 0;
+        // Modulo one stripe: the texture repeats, and a small phase keeps the shader's float precision.
+        phaseM[i] = advancePhase(phaseM[i], speedMps * animationDtS, MAX_STRIPE_STEP_M, STRIPE_M);
+      }
+    },
+    state() {
+      return {
+        divertLit,
+        phaseM: Object.fromEntries(LINE_POINT_IDS.map((id, i) => [id, phaseM[i]])) as Record<LinePointId, number>,
+      };
     },
     applyTheme,
     dispose() {
@@ -372,6 +426,7 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
         mesh.geometry.dispose();
       }
       milkMaterial.dispose();
+      divertMaterial.dispose();
       flowTexture.dispose();
       // utilityMaterial is shared (equipmentHost) and disposed there.
     },
@@ -385,6 +440,8 @@ interface MilkRunGeometry {
   colors: THREE.BufferAttribute;
   tempIndex: Uint8Array;
   tempWeight: Float32Array;
+  /** The line points whose temperatures colour the run, each once. */
+  tempPoints: Uint8Array;
 }
 
 function buildMilkRun(run: PipeRun): MilkRunGeometry {
@@ -437,7 +494,8 @@ function buildMilkRun(run: PipeRun): MilkRunGeometry {
   geometry.setAttribute('color', colors);
   geometry.setAttribute('arcM', new THREE.Float32BufferAttribute(arcM, 1));
   geometry.setAttribute('flowSlot', new THREE.Float32BufferAttribute(flowSlot, 1));
-  return { run, geometry, colors, tempIndex: Uint8Array.from(tempIndex), tempWeight: Float32Array.from(tempWeight) };
+  const tempPoints = Uint8Array.from(new Set(tempIndex.filter((_, k) => tempWeight[k] !== 0)));
+  return { run, geometry, colors, tempIndex: Uint8Array.from(tempIndex), tempWeight: Float32Array.from(tempWeight), tempPoints };
 }
 
 function slotOf(id: LinePointId): number {
