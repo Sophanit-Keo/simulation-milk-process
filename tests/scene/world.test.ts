@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createViewBus, msToS, type World } from '../../src/contracts';
+import { createViewBus, msToS, type Snapshot, type World } from '../../src/contracts';
+import { MAX_MOTION_RATE } from '../../src/scene/motion';
 import { createWorld } from '../../src/scene/world';
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   flight: { update: vi.fn(), flyTo: vi.fn(), flyHome: vi.fn(), cancel: vi.fn(), applyTheme: vi.fn(), dispose: vi.fn(), focusStage: null },
   controlsUpdate: vi.fn(),
   labels: { refresh: vi.fn(), updateDetail: vi.fn(), select: vi.fn(), dispose: vi.fn() },
+  pipesUpdate: vi.fn(),
 }));
 
 vi.mock('three', async (importOriginal) => {
@@ -53,7 +55,9 @@ vi.mock('../../src/scene/equipmentLabels', () => ({ createEquipmentLabels: () =>
 vi.mock('../../src/scene/equipmentHost', () => ({
   createEquipmentHost: () => ({ equipment: [], materials: { steel: {} }, update() {}, applyTheme() {}, dispose() {} }),
 }));
-vi.mock('../../src/scene/pipes', () => ({ createPipes: () => ({ pickTargets: [], update() {}, applyTheme() {}, dispose() {} }) }));
+vi.mock('../../src/scene/pipes', () => ({
+  createPipes: () => ({ pickTargets: [], update: mocks.pipesUpdate, state: () => ({}), applyTheme() {}, dispose() {} }),
+}));
 vi.mock('../../src/scene/zones', () => ({ createZones: () => ({ updateLabels() {}, applyTheme() {}, dispose() {} }) }));
 vi.mock('../../src/scene/picking', () => ({ createPicker: () => ({ update() {}, dispose() {}, stageScreenPoint: () => null }) }));
 vi.mock('../../src/scene/theme', () => ({ readSceneColor: () => '#ffffff', watchTheme: () => () => {} }));
@@ -113,5 +117,19 @@ describe('the 3D view’s update', () => {
     expect(mocks.flight.update.mock.calls).toEqual(Array(9).fill([MAX_FRAME_S]));
     expect(mocks.controlsUpdate.mock.calls).toEqual(Array(9).fill([MAX_FRAME_S]));
     expect(mocks.labels.refresh, 'one label refresh per frame, as the HUD updates').toHaveBeenCalledTimes(9);
+  });
+
+  it('runs the pipes’ stripes on animation time (faster at high speed, still while paused) and lights the divert route while diverting', () => {
+    const at = (changes: Partial<Snapshot>, mode: Snapshot['liquid']['uhtMode'] = 'production'): unknown[] => {
+      mocks.pipesUpdate.mockClear();
+      world.update({ ...snapshot, ...changes, liquid: { ...snapshot.liquid, uhtMode: mode } }, 0.02);
+      return mocks.pipesUpdate.mock.calls[0];
+    };
+    expect(at({ speed: 1 })).toEqual([snapshot.line, 0.02, false]);
+    const [, fastDtS] = at({ speed: 10_000 });
+    expect(fastDtS).toBeCloseTo(0.02 * MAX_MOTION_RATE, 12);
+    expect(at({ speed: 10_000, paused: true })).toEqual([snapshot.line, 0, false]);
+    expect(at({ speed: 1 }, 'divert')).toEqual([snapshot.line, 0.02, true]);
+    expect(at({ speed: 1 }, 'cip')[2]).toBe(false);
   });
 });

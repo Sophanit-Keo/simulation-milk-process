@@ -63,6 +63,26 @@ The overview uses 178 draw calls, about half the budget of 350. Each stage stop 
 
 The table shows the settled scene. In the first frames the overview reads about 179 draw calls and 76,710 triangles; the Kenney conveyor pieces and the vehicles then replace their grey boxes and the counts settle within about a second.
 
+### Phase 3: the live liquid line
+
+Re-measured on 18 October 2026 on the `scene` lane's phase 3 work (stages 1–6 live from the snapshot), same machine, browser and method, on the static plant (no `?mock`). The live line adds 10 draw calls at the overview: a milk bar on each of the three level gauges (two silos, the mixing tank), the deaerator's sight glass and its instanced bubbles, two gauge needles on the homogenizer, the instanced steam puffs and vapour plume, and the divert valve's lamp. None of them casts a shadow. The heat exchanger's glow and the lit divert route change materials only, not draw calls. The bubbles, puffs and plume are hidden, and drawn by nobody, while their stream is off (no flow, or not producing).
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **188** | **105,046** | **188** | **105,046** |
+| 1 Standardization | 89 | 64,108 | 89 | 64,108 |
+| 2 Preheating | 85 | 64,036 | 87 | 64,104 |
+| 3 Homogenization | 89 | 63,928 | 89 | 63,928 |
+| 4 UHT | 95 | 73,368 | 96 | 73,380 |
+| 5 Flash cooling | 87 | 71,284 | 87 | 71,284 |
+| 6 Aseptic tank | 76 | 62,092 | 76 | 62,092 |
+| 7 Filling | 91 | 66,824 | 92 | 67,052 |
+| 8 Packaging | 97 | 73,446 | 98 | 73,614 |
+| 9 Quarantine & QA | 117 | 89,688 | 121 | 89,936 |
+| 10 Warehouse | 128 | 77,992 | 136 | 83,748 |
+
+The frame rates of this run are left out: other lanes' browsers shared the machine (load average about 18), so they say nothing about the scene. The software-GL figures below are still those of phase 2.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.

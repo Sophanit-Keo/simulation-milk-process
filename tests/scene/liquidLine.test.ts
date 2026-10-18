@@ -1,15 +1,20 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { STAGE_IDS, type Snapshot, type StageId } from '../../src/contracts';
+import { GAUGE_FULL_SCALE_BAR, needleAngleRad, VAPOUR_FULL_LPH } from '../../src/scene/equipment/liquid/visuals';
 import { liquidLine } from '../../src/scene/equipment/liquidLine';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
+import { LAMP_GLOW_HEX } from '../../src/scene/theme';
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
 
 // The liquid line's grey boxes (stages 1–6), checked without WebGL: three.js objects work in Node.
 
-/** The module may add paint and gauge faces on top of the shared set, one material each. */
-const MAX_OWN_MATERIALS = 2;
+/**
+ * The module's own materials: paint and gauge faces (only while the host's shared set lacks them, as it
+ * does here), see-through steam, the divert valve's lamp and the plate heat exchanger's glowing steel.
+ */
+const MAX_OWN_MATERIALS = 5;
 /** The lane's budget is about 120 draw calls for stages 1–6, shadow pass included. */
 const DRAW_CALL_BUDGET = 120;
 
@@ -97,7 +102,7 @@ describe('liquidLine', () => {
     for (const name of ['piston_1', 'piston_2', 'piston_3']) expect(node(byId(machines, 'homogenizer'), name)).toBeInstanceOf(THREE.Mesh);
   });
 
-  it('uses the shared materials, adding at most two of its own', () => {
+  it('uses the shared materials, adding at most five of its own', () => {
     const { ctx, machines } = build();
     const shared = new Set<THREE.Material>(Object.values(ctx.materials));
     const own = new Set<THREE.Material>();
@@ -206,48 +211,245 @@ describe('liquidLine', () => {
     expect(pistons.map((p) => p.position.z)).toEqual(zs);
   });
 
-  it('fills the aseptic tank to the snapshot level', () => {
+  it('fills each tank from contracts v2’s liquid.tanks: inside the see-through ones, on a level gauge on the opaque ones', () => {
     const { machines } = build();
-    const tank = byId(machines, 'aseptic-tank');
-    const milk = node(tank, 'milk');
-    const at = (levelPct: number): number => {
-      const snapshot = staticSnapshot();
-      snapshot.stages[6].values.levelPct = levelPct;
-      tank.update(snapshot, 0.016);
-      return milk.scale.y;
-    };
-    const quarter = at(25);
-    const threeQuarters = at(75);
-    expect(threeQuarters).toBeCloseTo(3 * quarter, 6);
-    expect(at(100)).toBeGreaterThan(threeQuarters);
-    expect(at(0)).toBeGreaterThan(0); // an empty tank keeps a sliver, never a zero scale
+    const cases: [id: string, tank: keyof Snapshot['liquid']['tanks']][] = [
+      ['silo-a', 'silo'],
+      ['silo-b', 'silo'],
+      ['mixing-tank', 'mixTank'],
+      ['reject-tank', 'rejectTank'],
+      ['aseptic-tank', 'asepticTank'],
+    ];
+    for (const [id, tank] of cases) {
+      const machine = byId(machines, id);
+      const milk = node(machine, 'milk');
+      const at = (fillFrac: number): number => {
+        const snapshot = staticSnapshot();
+        const { capacityL } = snapshot.liquid.tanks[tank];
+        snapshot.liquid.tanks[tank].levelL = fillFrac * capacityL;
+        machine.update(snapshot, 0.016);
+        expect(machine.debugState?.().fillFrac, `${id} at ${fillFrac}`).toBeCloseTo(fillFrac, 9);
+        return milk.scale.y;
+      };
+      const quarter = at(0.25);
+      const threeQuarters = at(0.75);
+      expect(threeQuarters, id).toBeCloseTo(3 * quarter, 6);
+      expect(at(1), id).toBeGreaterThan(threeQuarters);
+      // The bar stands on the tank's floor: its bottom stays put as it rises.
+      const bottomAtFull = milk.position.y - milk.scale.y / 2;
+      at(0.5);
+      expect(milk.position.y - milk.scale.y / 2, id).toBeCloseTo(bottomAtFull, 9);
+      expect(at(0), id).toBeGreaterThan(0); // an empty tank keeps a sliver, never a zero scale
+    }
   });
 
-  it('collects diverted milk in the reject tank and flips the valve', () => {
+  it('opens on plant.json’s tank levels on the static plant', () => {
     const { machines } = build();
-    const tank = byId(machines, 'reject-tank');
+    const snapshot = staticSnapshot();
+    const fill = (id: string): unknown => {
+      const machine = byId(machines, id);
+      machine.update(snapshot, 0.016);
+      return machine.debugState?.().fillFrac;
+    };
+    expect(fill('silo-a')).toBeCloseTo(plantConfig.standardization.siloStartFrac, 9);
+    expect(fill('mixing-tank')).toBeCloseTo(plantConfig.standardization.mixTankStartFrac, 9);
+    expect(fill('aseptic-tank')).toBeCloseTo(plantConfig.asepticTank.startFrac, 9);
+    expect(fill('reject-tank')).toBe(0);
+  });
+
+  it('fills the aseptic tank from stage 6’s levelPct when the snapshot has no liquid part, and holds a missing level', () => {
+    const { machines } = build();
+    const tank = byId(machines, 'aseptic-tank');
+    const older = staticSnapshot() as Partial<Snapshot>;
+    delete older.liquid;
+    (older as Snapshot).stages[6].values.levelPct = 30;
+    tank.update(older as Snapshot, 0.016);
+    expect(tank.debugState?.().fillFrac).toBeCloseTo(0.3, 9);
+    const reject = byId(machines, 'reject-tank');
+    const snapshot = staticSnapshot();
+    snapshot.liquid.tanks.rejectTank.levelL = 1_500;
+    reject.update(snapshot, 0.016);
+    reject.update(older as Snapshot, 0.016);
+    expect(reject.debugState?.().fillFrac).toBeCloseTo(0.25, 9);
+  });
+
+  it('labels the reject tank with its contents', () => {
+    const { machines } = build();
+    const snapshot = staticSnapshot();
+    snapshot.liquid.tanks.rejectTank.levelL = 1_000;
+    expect(byId(machines, 'reject-tank').labelText(snapshot)).toBe('1,000 L');
+  });
+
+  it.each(['separator', 'mixing-tank'])('turns the %s with the flow through the separator, and stands it still at no flow', (id) => {
+    const { machines } = build();
+    const machine = byId(machines, id);
+    const angle = (): number => machine.debugState?.().angleRad as number;
+    const flowing = staticSnapshot();
+    machine.update(flowing, 0.05);
+    const first = angle();
+    machine.update(flowing, 0.05);
+    expect(angle()).not.toBe(first);
+    // No flow: it spins down and comes to rest, then stays put.
+    const still = structuredClone(flowing);
+    still.line.separator.flowLph = 0;
+    for (let i = 0; i < 200; i++) machine.update(still, 0.05);
+    expect(machine.debugState?.().spinRadPerS).toBe(0);
+    const rest = angle();
+    machine.update(still, 0.05);
+    expect(angle()).toBe(rest);
+    // Flowing again, it spins up.
+    for (let i = 0; i < 5; i++) machine.update(flowing, 0.05);
+    expect(angle()).not.toBe(rest);
+  });
+
+  it('spins faster at a higher sim speed, but never more than a set step per frame', () => {
+    const turnIn = (speed: Snapshot['speed'], dtS: number): number => {
+      const { machines } = build();
+      const separator = byId(machines, 'separator');
+      separator.update({ ...staticSnapshot(), speed }, dtS);
+      return separator.debugState?.().angleRad as number;
+    };
+    expect(turnIn(1_000, 0.016)).toBeCloseTo(2.5 * turnIn(1, 0.016), 9);
+    // ×10,000 on a slow frame (main.ts's 0.1 s cap) would be 1.2 rad: capped under half a facet of the bowl.
+    expect(turnIn(10_000, 0.1)).toBeLessThan((2 * Math.PI) / 8 / 2);
+  });
+
+  it('glows the plate heat exchanger with the preheater temperature, on a copy of the themed steel', () => {
+    const { ctx, machines } = build();
+    const exchanger = byId(machines, 'plate-heat-exchanger');
+    const plates = node(exchanger, 'plates') as THREE.InstancedMesh;
+    const glow = plates.material as THREE.MeshStandardMaterial;
+    expect(glow).not.toBe(ctx.materials.steel);
+    const at = (tempC: number): number => {
+      const snapshot = staticSnapshot();
+      snapshot.line.preheater.tempC = tempC;
+      exchanger.update(snapshot, 0.016);
+      return glow.emissiveIntensity;
+    };
+    expect(at(4)).toBe(0);
+    const half = at(55);
+    expect(half).toBeGreaterThan(0);
+    expect(at(80)).toBeCloseTo(2 * half, 9);
+    expect(exchanger.debugState?.().glowFrac).toBe(1);
+    // A theme change re-colours the shared steel; the glowing plates follow it on the next frame.
+    (ctx.materials.steel as THREE.MeshStandardMaterial).color.set('#123456');
+    at(80);
+    expect(glow.color.getHexString()).toBe('123456');
+  });
+
+  it('bubbles in the deaerator’s sight glass while milk flows, and hides them at no flow', () => {
+    const { machines } = build();
+    const deaerator = byId(machines, 'deaerator');
+    const bubbles = node(deaerator, 'bubbles') as THREE.InstancedMesh;
+    const snapshot = staticSnapshot();
+    deaerator.update(snapshot, 0.05);
+    const phase = deaerator.debugState?.().phase;
+    deaerator.update(snapshot, 0.05);
+    expect(bubbles.visible).toBe(true);
+    expect(deaerator.debugState?.().phase).not.toBe(phase);
+    const still = structuredClone(snapshot);
+    still.line.deaerator.flowLph = 0;
+    deaerator.update(still, 0.05);
+    expect(bubbles.visible).toBe(false);
+    const stopped = deaerator.debugState?.().phase;
+    deaerator.update(still, 0.05);
+    expect(deaerator.debugState?.().phase).toBe(stopped);
+  });
+
+  it('sets the homogenizer’s two gauge needles from stage1Bar and stage2Bar', () => {
+    const { machines } = build();
+    const homogenizer = byId(machines, 'homogenizer');
+    const [needle1, needle2] = ['needle_1', 'needle_2'].map((name) => node(homogenizer, name));
+    const snapshot = staticSnapshot();
+    homogenizer.update(snapshot, 0.016);
+    expect(needle1.rotation.y).toBeCloseTo(needleAngleRad(200, GAUGE_FULL_SCALE_BAR.stage1), 9);
+    expect(needle2.rotation.y).toBeCloseTo(needleAngleRad(30, GAUGE_FULL_SCALE_BAR.stage2), 9);
+    // A pressure loss drops the stage 1 needle, even while paused; stage 2 stays.
+    const lost = structuredClone(snapshot);
+    lost.paused = true;
+    lost.stages[3].values.stage1Bar = 100;
+    homogenizer.update(lost, 0.016);
+    expect(needle1.rotation.y).toBeCloseTo(needleAngleRad(100, GAUGE_FULL_SCALE_BAR.stage1), 9);
+    expect(needle1.rotation.y).toBeGreaterThan(needleAngleRad(200, GAUGE_FULL_SCALE_BAR.stage1));
+    expect(needle2.rotation.y).toBeCloseTo(needleAngleRad(30, GAUGE_FULL_SCALE_BAR.stage2), 9);
+    // A missing value leaves the needle where it was.
+    delete lost.stages[3].values.stage1Bar;
+    homogenizer.update(lost, 0.016);
+    expect(needle1.rotation.y).toBeCloseTo(needleAngleRad(100, GAUGE_FULL_SCALE_BAR.stage1), 9);
+  });
+
+  it('puffs steam at the injector while producing, and none in a divert or a clean', () => {
+    const { machines } = build();
+    const injector = byId(machines, 'steam-injector');
+    const steam = node(injector, 'steam') as THREE.InstancedMesh;
+    const snapshot = staticSnapshot();
+    injector.update(snapshot, 0.05);
+    expect(steam.visible).toBe(true);
+    expect(injector.debugState?.().steamFrac).toBe(1);
+    // Paused, the puffs hold still.
+    const phase = injector.debugState?.().phase;
+    injector.update({ ...snapshot, paused: true }, 0.05);
+    expect(injector.debugState?.().phase).toBe(phase);
+    for (const mode of ['divert', 'cip', 'sterilize', 'aic'] as const) {
+      const other = structuredClone(snapshot);
+      other.liquid.uhtMode = mode;
+      injector.update(other, 0.05);
+      expect(steam.visible, mode).toBe(false);
+    }
+  });
+
+  it('sizes the flash vessel’s vapour from waterRemovedLph, or the flow without it', () => {
+    const { machines } = build();
+    const vessel = byId(machines, 'flash-vessel');
+    const vapour = node(vessel, 'vapour') as THREE.InstancedMesh;
+    const snapshot = staticSnapshot();
+    snapshot.stages[5].values.waterRemovedLph = VAPOUR_FULL_LPH / 2;
+    vessel.update(snapshot, 0.05);
+    expect(vessel.debugState?.().vapourFrac).toBeCloseTo(0.5, 9);
+    expect(vapour.visible).toBe(true);
+    delete snapshot.stages[5].values.waterRemovedLph;
+    vessel.update(snapshot, 0.05);
+    expect(vessel.debugState?.().vapourFrac).toBe(1);
+    snapshot.line.flashVessel.flowLph = 0;
+    vessel.update(snapshot, 0.05);
+    expect(vapour.visible).toBe(false);
+  });
+
+  it('flips the divert valve and lights its lamp red while diverting, amber while cleaning, green in production', () => {
+    const { machines } = build();
     const valve = byId(machines, 'divert-valve');
     const flag = node(valve, 'flag');
-    const snapshot = staticSnapshot();
-    tank.update(snapshot, 0.016);
-    const diverting = structuredClone(snapshot);
-    diverting.line.divert.flowLph = 16_000;
-    diverting.timeS += 225; // 16,000 L/h for 225 s is 1,000 L
-    tank.update(diverting, 0.016);
-    expect(tank.labelText(diverting)).toBe('1,000 L');
-    expect(valve.labelText(diverting)).toBe('diverting');
+    const lamp = node(valve, 'lamp') as THREE.Mesh;
+    const lampHex = (): number => (lamp.material as THREE.MeshStandardMaterial).emissive.getHex();
+    const inMode = (mode: Snapshot['liquid']['uhtMode']): Snapshot => {
+      const snapshot = staticSnapshot();
+      snapshot.liquid.uhtMode = mode;
+      return snapshot;
+    };
+    valve.update(inMode('production'), 0.016);
+    expect(lampHex()).toBe(LAMP_GLOW_HEX.ok);
+    expect(valve.labelText(inMode('production'))).toBe('forward');
+
+    // Paused or not, the flip and the lamp follow the mode.
+    const diverting = { ...inMode('divert'), paused: true };
     for (let i = 0; i < 60; i++) valve.update(diverting, 0.05);
     expect(flag.rotation.y).toBeCloseTo(-Math.PI / 2, 2);
-    // Back to forward flow: the valve flips back, and the tank empties at a full tank per re-sterilization.
-    for (let i = 0; i < 60; i++) valve.update(snapshot, 0.05);
-    expect(flag.rotation.y).toBeCloseTo(0, 2);
-    const { rejectTankL, sterilizeS } = plantConfig.uht;
-    const drainS = (500 / rejectTankL) * sterilizeS;
-    tank.update({ ...snapshot, timeS: diverting.timeS + drainS }, 0.016);
-    expect(tank.labelText(snapshot)).toBe('500 L');
-    // A sim that starts again (time runs backwards) starts with an empty tank.
-    tank.update({ ...snapshot, timeS: 0 }, 0.016);
-    expect(tank.labelText(snapshot)).toBe('0 L');
+    expect(lampHex()).toBe(LAMP_GLOW_HEX.bad);
+    expect(valve.debugState?.()).toMatchObject({ diverting: true, lamp: 'bad' });
+    expect(valve.labelText(diverting)).toBe('diverting');
+
+    for (const mode of ['cip', 'sterilize', 'aic'] as const) {
+      for (let i = 0; i < 60; i++) valve.update(inMode(mode), 0.05);
+      expect(flag.rotation.y, mode).toBeCloseTo(0, 2);
+      expect(lampHex(), mode).toBe(LAMP_GLOW_HEX.warn);
+      expect(valve.debugState?.(), mode).toMatchObject({ diverting: false, lamp: 'warn' });
+    }
+    expect(valve.labelText(inMode('cip'))).toBe('cleaning');
+    expect(valve.labelText(inMode('sterilize'))).toBe('sterilizing');
+    expect(valve.labelText(inMode('aic'))).toBe('intermediate clean');
+
+    valve.update(inMode('production'), 0.016);
+    expect(lampHex()).toBe(LAMP_GLOW_HEX.ok);
   });
 
   it('disposes its own geometry, materials and instance buffers, never the shared materials', () => {
@@ -271,8 +473,9 @@ describe('liquidLine', () => {
     for (const mesh of instanced) mesh.addEventListener('dispose', () => disposed.add(mesh));
 
     machines.slice(0, -1).forEach((machine) => machine.dispose());
-    // The unit shapes and own materials stay while one machine still uses them.
-    expect([...own].some((material) => disposed.has(material))).toBe(false);
+    // The unit shapes and the kit's materials stay while one machine still uses them. The heat exchanger's
+    // glowing plates are its alone, and go with it.
+    expect([...own].some((material) => material.name !== 'plate-glow' && disposed.has(material))).toBe(false);
     machines.at(-1)?.dispose();
     machines.forEach((machine) => machine.dispose()); // a second dispose() is harmless
 
