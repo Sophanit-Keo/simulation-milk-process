@@ -43,6 +43,8 @@ Each new snapshot field follows the same path: `sim` lists it in its hand-off no
 - [ ] `process` signs off the acceptance runs.
 - [ ] 60 fps still holds.
 
+**Status (`process`, week 4):** the acceptance runs and their expected numbers are written ([H76–H96](../hand-calculations.md#phase-3-acceptance-runs)), with how to run each one; sign-off waits for `sim`'s model. The "About this model" text is in `src/data/about.md`, the stage 4 divert and "your stage order" wordings are fixed, and [D13](../DECISIONS.md#d13-phase-3-liquid-line-defaults) lists the new liquid-line keys, with the keys `sim` adds still to complete. One catch for the divert check: with ±0.3 °C of noise, only a set point of 138.9 °C or lower diverts on the first step whatever the noise; 139.0 °C can read 139.3 °C, which is above the 139.22 °C limit ([H88](../hand-calculations.md#phase-3-acceptance-runs)). Test 139 °C with the noise off.
+
 ## Watch for
 
 - **Random diverts.** At a 4 s hold, display noise above about ±0.78 °C crosses the 139.22 °C limit ([H13, H14](../hand-calculations.md#formulas)). [D4](../DECISIONS.md#d4-divert-rule-and-display-noise) caps it at ±0.3 °C with no normal-distribution tails, so noise alone never diverts ([R4](../REVIEW.md#r4-divert-rule)).

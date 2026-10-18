@@ -8,7 +8,7 @@ The 10 stages form one line with a single hand-off: at the aseptic tank, flowing
 
 *process flow · 10 stages, one hand-off*
 
-UHT is the critical control point: when the sterilizing effect drops, milk is diverted before it reaches the tank.
+UHT is the critical control point: when the sterilizing effect at the holding-tube outlet drops below B\* = 1, milk is diverted to a reject tank before it reaches the aseptic tank, and the plant is cleaned and re-sterilized before it makes product again (113 min in all, [H36](hand-calculations.md#counts-and-rates)).
 
 **3D preview:** [UHT Milk Plant Preview](https://claude.ai/artifact/8iJvem1sGHtitmtJDxUpY6) runs this flow in the browser with grey-box models, example data, speed controls and three fault scenarios. (Local copy: [uht-plant-preview.html](../uht-plant-preview.html).)
 

@@ -18,6 +18,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D10](#d10-formula-tests-in-phase-1) | Formula tests active from phase 1 | — | Proposed |
 | [D11](#d11-opening-state) | Open on day 8 with a week of history | — | Proposed (needs a contract change) |
 | [D12](#d12-conveyor-models) | Kenney Factory Kit for conveyors | — | Proposed |
+| [D13](#d13-phase-3-liquid-line-defaults) | Silo and mixing-tank sizes; the liquid-line keys `sim` adds in phase 3 | — | Proposed (list to complete) |
 
 ## D1. Batch size
 
@@ -42,7 +43,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | Filler time between failures | Random (exponential), mean 8 h, counted while the filler runs | `fillers.mtbfMeanS` = 28,800 | Sim assumption (preview) |
 | Filler repair time | 2 min fixed + random (exponential), mean 12 min; 14 min on average | `fillers.repairFixedS` = 120, `fillers.repairRandomMeanS` = 720 | Sim assumption (preview) |
 | Intermediate clean (AIC) interval | Every 10 h of production, 30 min each | `cleaning.aicEveryProductionS` = 36,000 | Sim assumption (preview); 30 min from the [handbook](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk) |
-| Full CIP trigger | Only after a divert: 80 min CIP, then 30 min sterilizing at 125 °C | `cleaning.cipAfterDivert` = true | Sim assumption (preview) |
+| Full CIP trigger | Only after a divert: 80 min CIP, then 30 min sterilizing at 125 °C or more; with the 3 min divert, 113 min out ([H36](hand-calculations.md#counts-and-rates)) | `cleaning.cipAfterDivert` = true, `cleaning.cipS` = 4,800, `uht.sterilizeS` = 1,800, `uht.sterilizeTempC` = 125 | Sim assumption (preview) |
 | Divert before cleaning | 3 min | `uht.divertBeforeCleaningS` = 180 | Sim assumption (preview) |
 | Tank thresholds | Throttle to 50% above 90% (18,000 L); full flow again below 60% (12,000 L); fillers stop below 150 L | `asepticTank.throttleAboveFrac` = 0.9, `asepticTank.resumeBelowFrac` = 0.6, `asepticTank.fillersStopBelowL` = 150 | Sim assumption (preview) |
 | Fault temperature | Falls to 135.5 °C (preview: 137.6 °C) | `uht.faultTempC` = 135.5 | Sim assumption; diverts at every flow |
@@ -76,6 +77,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 - **Why:** 140 °C is the value in the chart, the stage panels, the preview and every text. At 4 s the divert limit is 139.22 °C, a margin of 0.78 °C. With noise capped at ±0.3 °C the lowest reading is 139.7 °C, where B\* is 1.11, so noise alone never diverts. The displayed F0 then ranges from 4.83 to 5.55 min. It dips under the 5 min target whenever the reading is below 139.85 °C, so status colours should follow B\*, not F0.
 - **Alternative for the developer:** a 140.5 °C set point gives B\* ≈ 1.32, F0 ≈ 5.81 min and a 1.28 °C margin. With the same noise, F0 ranges from 5.42 to 6.22 min. The chart, stage panels and texts would then change from 140 °C to 140.5 °C.
 - **What it changes:** `uht.setpointC` 140, `uht.displayNoiseC` 0.3. Stage 4's first line ([Stage 4](03-stages-1-5-liquid-line.md#4-uht-treatment)) should read "any drop below the divert limit (B\* < 1)"; that file belongs to `lead`.
+- **Phase 3 note:** Stage 4 now reads "any drop below the divert limit (B\* < 1 at the holding-tube outlet)", and plans 02, 03, 06 and 10 give the whole sequence the same way: divert for 3 min, then an 80 min CIP and 30 min of sterilizing at 125 °C or more, 113 min out. Noise can still delay a divert when the set point is close to the limit: with ±0.3 °C, only a set point under 139.22 − 0.3 = 138.92 °C diverts on the first step whatever the noise (138.9 °C on the 0.1 °C slider). At 139.0 °C a reading can be as high as 139.3 °C, where B\* is 1.017, so that step does not divert ([H88](hand-calculations.md#phase-3-acceptance-runs)).
 
 ## D5. Homogenizer outlet
 
@@ -160,6 +162,38 @@ This log settles the numbers and rules that the plan left open or that the [revi
 - **Why:** kenney.nl no longer lists the Conveyor Kit (its page returns 404); it is still on itch.io. The Factory Kit is its successor: it holds every Conveyor Kit piece except the 12 tunnels, plus corners, T-junctions, slopes, lamps and floor markings. Both kits are CC0, and pieces from both loaded with GLTFLoader at three r186 in the phase-1 check. Details and the pieces to use are in [assets/README.md](../assets/README.md).
 - **What it changes:** the Conveyors row of the [3D asset list](05-layout-and-3d-assets.md#3d-asset-list) and [assets/LICENSES.md](../assets/LICENSES.md) once phase 2 commits the pieces.
 - **Phase 2 note:** twelve Factory Kit pieces and their `Textures/colormap.png` are in `public/models/kenney/`. The merged plant uses six: `conveyor-long-sides-part-end`, `conveyor-long-sides-part-middle` and `conveyor-corner` for the pack conveyors, `conveyor-bars-high` for the tray rollers, `conveyor-bars` for the pallet rollers, and one `conveyor-sides` stretched to 3.4 × 3.0 m as the accumulation table. The kit is toy scale (1.0 m wide, 0.4 m high), so each piece is scaled to the preview's routes (belt top 0.86 m, pack belts 0.85 m wide), and a grey-box conveyor stands until the pieces load. The kit has no tunnel, so the tray-shrink tunnel is a box; the Conveyor Kit's `cover-*` was not needed. The other six pieces (`conveyor-junction-t`, `conveyor-stripe-sides`, `robot-arm-a`, `scanner-high`, `warning-traffic`, `indicator-special-area`) are unused. [`assets/LICENSES.md`](../assets/LICENSES.md) lists the twelve committed pieces and where each is used.
+
+## D13. Phase 3 liquid-line defaults
+
+- **Status:** Proposed (the list of keys `sim` adds is still to be completed)
+- **Date:** 2026-10-18
+- **Review note:** none ([Phase 3](agent-plan/phase-3-liquid-line.md))
+- **Decision:** the stage 1 tank sizes and start levels below, which `lead` added to `plant.json` with contracts v2, plus the keys `sim` adds for the live stage 1–6 model this phase.
+
+| Setting | Default | `plant.json` key | Basis |
+|---|---|---|---|
+| Raw-milk silo | 100,000 L | `standardization.siloCapacityL` = 100,000 | Silos hold 30,000–250,000 L ([Tanks](https://dairyprocessinghandbook.tetrapak.com/chapter/tanks)); the value is a sim assumption |
+| Silo start level | 60% (60,000 L) | `standardization.siloStartFrac` = 0.6 | Sim assumption |
+| Mixing tank | 10,000 L | `standardization.mixTankCapacityL` = 10,000 | The top of the 250–10,000 kg batch-tank range ([Mixers](https://dairyprocessinghandbook.tetrapak.com/chapter/mixers)), litres treated as kilograms |
+| Mixing-tank start level | 50% (5,000 L) | `standardization.mixTankStartFrac` = 0.5 | Sim assumption, as for the aseptic tank ([D2](#d2-missing-defaults)) |
+
+- **Why:**
+  - **Silo.** At 16,000 L/h of 3.5% milk the separator draws 16,222.22 L/h of raw milk ([H3](hand-calculations.md#formulas)), about 389,000 L a day, so 60,000 L lasts 3.7 h and a full silo 6.2 h. Dairies take milk in from tankers through the day, so the model needs an intake rule, which `sim` adds below. 100,000 L lies well inside the sources' range and gives the 3D silo a visible level change between deliveries.
+  - **Mixing tank.** It sits between standardization and the UHT plant. Its inflow follows the UHT plant's draw, so at steady state its level stays where it started. At 50% it holds 5,000 L: 18.75 min of UHT feed, or room for 18.75 min of separator output while the UHT plant is stopped.
+  - **Rules the acceptance runs assume** ([Phase 3 acceptance runs](hand-calculations.md#phase-3-acceptance-runs)): the intermediate-clean count runs during production, throttled or not, and a full CIP restarts it, since the plant is clean afterwards. An aseptic tank that opens above 90% throttles the UHT plant on the first step. Litres sent to the reject tank count in the mass balance as they arrive, whatever later empties the tank.
+- **Keys `sim` adds in phase 3 (to complete in the next round).** Each needs its value, unit and source or "sim assumption" here, and a row in [default settings](06-simulation-model.md#default-settings). The phase-3 task card asks for:
+  - [ ] Raw-milk intake: how and when tankers refill the silo, so it never runs dry. *To complete.*
+  - [ ] Preheat lag (first-order time constant). *To complete.*
+  - [ ] Air content before and after the deaerator (% by volume). *To complete.*
+  - [ ] Heat recovered in the preheater: specific heat and recovery share, or the formula `sim` uses. *To complete.*
+  - [ ] Fat-globule size against stage 1 pressure, and the creaming-risk score. *To complete.*
+  - [ ] Homogenizer efficiency for the power draw (handbook example: 55.556 kW hydraulic, 68 kW drawn, about 82%, [H8](hand-calculations.md#formulas)). *To complete.*
+  - [ ] Steam injected and condenser load in stage 5. *To complete.*
+  - [ ] Headspace pressure in the aseptic tank (at most 3.0 bar, [D9](#d9-other-open-values)). *To complete.*
+  - [ ] Filler restart margin above the 150 L stop level. *To complete.*
+  - [ ] What empties the reject tank, and when. *To complete.*
+  - [ ] Mixing-tank level control while the UHT plant is stopped. *To complete.*
+- **What it changes:** the four `standardization` keys above, already in `plant.json` (`schemaVersion` 3), and the Raw-milk silo and Mixing tank rows in [default settings](06-simulation-model.md#default-settings). The keys `sim` adds go into both once this list is complete.
 
 ---
 

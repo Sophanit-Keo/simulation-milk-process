@@ -17,7 +17,7 @@ Use three.js with Vite and TypeScript, keep the simulation core free of 3D code,
 | Debug sliders | [lil-gui](https://lil-gui.georgealways.com/) | Floating panel to change set points live |
 | Live charts | [Chart.js](https://www.chartjs.org/) | Trend lines for temperature, tank level, OEE |
 | Tests | [Vitest](https://vitest.dev/) | Vite-native; tests for F0, mass balance and the event queue |
-| Hosting | GitHub Pages or Vercel | One link to share with your teacher |
+| Hosting | GitHub Pages or Vercel | One link to share with the course teacher |
 
 > **Review note:** TypeScript only catches L/h versus L/s with branded unit types. Pin the three.js version npm installs, and set Vite's `base` for GitHub Pages. See [R8](REVIEW.md#r8-units-in-typescript) and [R11](REVIEW.md#r11-versions-and-hosting).
 

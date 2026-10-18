@@ -74,6 +74,7 @@ The 90%/60% pair matters: with a single threshold, the UHT plant would flip betw
 
 - [Stage 4](03-stages-1-5-liquid-line.md#4-uht-treatment) opens with "any drop below the set point diverts the flow to reject". The model diverts when B\* < 1, which is about 139.2 °C, 0.8 °C *under* the 140 °C set point. Reword it to "any drop below the divert limit (B\* < 1)".
 - With only 0.8 °C of margin, any temperature noise added to make the display look alive will trigger random diverts. Keep noise under about ±0.3 °C, or raise the set point to 140.5 °C. That gives B\* ≈ 1.32 and F0 ≈ 5.8 min, still inside the 5–6 min target, with a margin of about 1.3 °C.
+- **Done (phase 3):** Stage 4 now reads "any drop below the divert limit (B\* < 1 at the holding-tube outlet)", and plans 02, 03, 06 and 10 describe the divert the same way: B\* < 1 at the holding-tube outlet, divert for 3 min, then an 80 min CIP and 30 min of sterilizing at 125 °C or more, 113 min out ([H36](hand-calculations.md#counts-and-rates)). [D4](DECISIONS.md#d4-divert-rule-and-display-noise) keeps 140 °C with noise capped at ±0.3 °C.
 
 ### R5. Plant-type mix
 
@@ -82,6 +83,7 @@ The 90%/60% pair matters: with a single threshold, the UHT plant would flip betw
 - The plan already flags the homogenizer. The course order puts it before UHT, as indirect plants do, while direct plants with flash cooling homogenize aseptically after the flash vessel ([Stage 3](03-stages-1-5-liquid-line.md#3-homogenization), [Stage 5](03-stages-1-5-liquid-line.md#5-flash-cooling)).
 - The 50% throttle at high tank level rests on a source line about indirect plants ("indirect plants can also run at 50–100% of capacity", [Stage 6](04-stages-6-10-tank-to-truck.md#6-aseptic-storage-buffer)). The modelled plant is direct, with steam injection and a flash vessel.
 - **Fix:** list both in the "About this model" panel planned under [Risks](10-risks-and-simplifications.md), or find a source for running a direct plant at reduced capacity. While there, change "your stage order" in Stage 3 to "the course's stage order", since other people will read the doc.
+- **Done (phase 3):** Stage 3 now says "the course's stage order", and the "About this model" text (`src/data/about.md`) lists both borrowings.
 
 ### R6. Holding time
 
