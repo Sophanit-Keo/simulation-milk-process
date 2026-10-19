@@ -137,9 +137,11 @@ test.describe('set-point sliders', () => {
     await page.mouse.up();
     await afterHudUpdates(page);
     await expect.poll(() => valueRow(page, 'setpointC')).toBe(`Set point ${held}`);
+    // The live sim diverts below the limit, so the drag may log a divert as well: count the set-point entries.
     const entries = await logEntries(page);
-    expect(entries.length - before, 'one log entry for the drag').toBe(1);
-    expect(entries[0]?.text).toBe(`UHT set point set to ${held}`);
+    const added = entries.slice(0, entries.length - before);
+    const setpointEntries = added.filter(({ text }) => text.startsWith('UHT set point set to'));
+    expect(setpointEntries.map(({ text }) => text), 'one set point sent for the drag').toEqual([`UHT set point set to ${held}`]);
     // After a mouse drag, focus goes back to the page, so Space pauses the clock again.
     await expect(slider).not.toBeFocused();
   });
