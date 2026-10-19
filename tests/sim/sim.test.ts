@@ -95,7 +95,7 @@ describe('createSim: snapshot', () => {
     expect(snap.paused).toBe(false);
   });
 
-  it('shows the static plant: all 10 stages ok', () => {
+  it('opens running at its set points: all 10 stages ok', () => {
     const snap = createSim(plantConfig).snapshot();
     for (const id of STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe('ok');
   });
@@ -156,9 +156,9 @@ describe('createSim: snapshot', () => {
   });
 });
 
-// Hand values from plan/hand-calculations.md, with the tolerance stated there. The static plant is the
-// plant at rest at plant.json's set points, so its values follow from the formulas alone.
-describe('createSim: the static plant matches the hand calculations', () => {
+// Hand values from plan/hand-calculations.md, with the tolerance stated there. The plant opens in steady
+// production at plant.json's set points, with no display noise yet, so its values follow from the formulas alone.
+describe('createSim: the plant as it opens matches the hand calculations', () => {
   const staticSnapshot = () => createSim(plantConfig).snapshot();
 
   it('stage 1 mixes back 8.636% cream for 3.5% milk (H1)', () => {
@@ -534,13 +534,13 @@ describe('createMockSim', () => {
     expect(seen.size).toBeGreaterThan(1);
   });
 
-  it('shows an occasional warn or bad status (3 days at x1,000, sampled every 100 s)', () => {
+  it('shows an occasional warn or bad status (3 days at x10,000, sampled every 100 s)', () => {
     const sim = createMockSim(plantConfig);
-    sim.dispatch({ type: 'setSpeed', speed: 1_000 });
+    sim.dispatch({ type: 'setSpeed', speed: 10_000 });
     let alarmed = 0;
     const frameCount = dayToS(3) / 100;
     for (let frame = 0; frame < frameCount; frame++) {
-      sim.step(FRAME_S);
+      sim.step(0.01); // 100 sim seconds in 10 s steps
       const { stages } = sim.snapshot();
       if (STAGE_IDS.some((id) => stages[id].status === 'warn' || stages[id].status === 'bad')) alarmed++;
     }

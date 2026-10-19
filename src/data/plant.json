@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "seed": 81006,
   "clock": {
     "startTimeS": 21600,
@@ -13,7 +13,8 @@
   "product": {
     "fatPct": 3.5,
     "packVolumeL": 1,
-    "shelfLifeDays": 182
+    "shelfLifeDays": 182,
+    "cpKjPerKgK": 3.9
   },
   "standardization": {
     "rawMilkFatPct": 4.0,
@@ -25,16 +26,31 @@
     "siloCapacityL": 100000,
     "siloStartFrac": 0.6,
     "mixTankCapacityL": 10000,
-    "mixTankStartFrac": 0.5
+    "mixTankStartFrac": 0.5,
+    "mixTankIdleFrac": 0.8,
+    "mixTankLagS": 600,
+    "tankerL": 25000,
+    "tankerUnloadLph": 30000,
+    "tankerBelowFrac": 0.4
   },
   "preheating": {
     "preheatTempC": 80,
-    "deaeratorDropC": 4
+    "deaeratorDropC": 4,
+    "lagS": 30,
+    "rawAirPct": 6,
+    "deaeratedAirPct": 0.5
   },
   "homogenizer": {
     "stage1Bar": 200,
     "stage2Bar": 30,
-    "barPerDegreeC": 40
+    "barPerDegreeC": 40,
+    "efficiencyFrac": 0.82,
+    "rawGlobuleUm": 3.5,
+    "globuleRefBar": 200,
+    "globuleRefUm": 0.8,
+    "globuleExponent": 0.6,
+    "creamingOkUm": 1.0,
+    "creamingFullUm": 2.0
   },
   "uht": {
     "capacityLph": 16000,
@@ -45,7 +61,9 @@
     "divertBeforeCleaningS": 180,
     "rejectTankL": 6000,
     "sterilizeTempC": 125,
-    "sterilizeS": 1800
+    "sterilizeS": 1800,
+    "bStarWarnBelow": 1.1,
+    "steamLatentKjPerKg": 2200
   },
   "flashCooling": {
     "flashTempC": 80,
@@ -59,13 +77,16 @@
     "throttledFlowFrac": 0.5,
     "fillersStopBelowL": 150,
     "maxHeadspaceBar": 3.0,
-    "tempC": 20
+    "tempC": 20,
+    "fillersRestartAboveL": 500,
+    "headspaceMinBar": 2.0
   },
   "cleaning": {
     "cipS": 4800,
     "aicS": 1800,
     "aicEveryProductionS": 36000,
-    "cipAfterDivert": true
+    "cipAfterDivert": true,
+    "cipTempC": 75
   },
   "fillers": {
     "count": 2,

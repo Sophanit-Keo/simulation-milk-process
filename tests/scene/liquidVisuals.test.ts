@@ -158,9 +158,14 @@ describe('steam and vapour', () => {
   });
 
   it('without waterRemovedLph, sizes the vapour from the flow reaching the flash vessel: none in a divert', () => {
-    expect(vapourFrac(inMode('production'))).toBe(1);
-    expect(vapourFrac(inMode('production', CAPACITY_LPH / 2))).toBe(0.5);
-    expect(vapourFrac(inMode('divert'))).toBe(0);
+    // The live sim fills the key; drop it to test the fallback for snapshots that lack it.
+    const withoutKey = (snapshot: Snapshot): Snapshot => {
+      delete snapshot.stages[5].values.waterRemovedLph;
+      return snapshot;
+    };
+    expect(vapourFrac(withoutKey(inMode('production')))).toBe(1);
+    expect(vapourFrac(withoutKey(inMode('production', CAPACITY_LPH / 2)))).toBe(0.5);
+    expect(vapourFrac(withoutKey(inMode('divert')))).toBe(0);
   });
 });
 

@@ -1,6 +1,6 @@
 // The plant at rest at its set points: every stage value follows from plant.json
-// and the live set points through the plan 06 formulas. Phase 2 shows this; the
-// stage models of phases 3 and 4 replace it stage by stage.
+// and the live set points through the plan 06 formulas. Phase 2 showed this; since
+// phase 3 the live model (liquidLine.ts) replaces stages 1–6, and phase 4 replaces 7–10.
 import {
   fracToPct,
   STAGE_IDS,
@@ -106,8 +106,13 @@ export function staticPlant(config: PlantConfig, setpoints: Readonly<Setpoints>)
   return { values, kpis };
 }
 
-/** Flows that set the line points: through the UHT plant, to the reject tank, and drawn by the fillers. */
+/**
+ * Flows that set the line points: raw milk from the silo, standardized milk into the mixing tank, through
+ * the UHT plant, to the reject tank, and drawn by the fillers. The surplus cream leaves at the separator.
+ */
 export interface LineFlows {
+  rawLph: number;
+  standardizedLph: number;
   uhtLph: number;
   divertLph: number;
   fillerLph: number;
@@ -116,12 +121,12 @@ export interface LineFlows {
 /** The liquid line's measuring points (contracts v1), read off the stage values in flow order. */
 export function linePoints(values: StageValues, flows: LineFlows): Record<LinePointId, LinePoint> {
   const point = (tempC: number, flowLph: number): LinePoint => ({ tempC, flowLph });
-  const { uhtLph, divertLph, fillerLph } = flows;
+  const { rawLph, standardizedLph, uhtLph, divertLph, fillerLph } = flows;
   // What the divert valve doesn't send to the reject tank goes on to the flash vessel.
   const productLph = Math.max(0, uhtLph - divertLph);
   return {
-    silo: point(values[1].siloTempC, uhtLph),
-    separator: point(values[1].separatorTempC, uhtLph),
+    silo: point(values[1].siloTempC, rawLph),
+    separator: point(values[1].separatorTempC, standardizedLph),
     feedTank: point(values[1].feedTankTempC, uhtLph),
     preheater: point(values[2].preheatTempC, uhtLph),
     deaerator: point(values[2].deaeratorTempC, uhtLph),

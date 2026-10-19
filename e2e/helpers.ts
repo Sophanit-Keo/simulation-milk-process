@@ -18,12 +18,25 @@ export const plantConfig = readJson('../src/data/plant.json') as PlantConfig;
 export const STAGES: readonly StageInfo[] = parseStages(readJson('../src/data/stages.json'));
 
 /**
- * Stage values and KPIs of the static plant (the app without ?mock). They follow from plant.json alone and
- * don't change with sim time, so the panel and the KPI strip must show exactly these, whenever a test looks.
+ * Stage values and KPIs of the plant as it opens (the app without ?mock). They follow from plant.json alone,
+ * and in steady production most don't change with sim time, so the panel and the KPI strip must show exactly
+ * these whenever a test looks; the few that move are listed in LIVE_TOLERANCES.
  */
 const staticSnapshot = createSim(plantConfig).snapshot();
 export const STATIC_VALUES = staticSnapshot.stages;
 export const STATIC_KPIS = staticSnapshot.kpis;
+
+/**
+ * Stage values that move with sim time even in steady production (phase 3's live line), and how far each
+ * may stray from its opening value within a test, in its own unit: the UHT reading carries up to ±0.3 °C of
+ * noise (D4), which moves F0 within 4.83–5.55 min and B* within 1.11–1.27 (H21, H22); the aseptic tank gains
+ * 1,000 L/h (H31), so about 170 L in the 10 sim minutes of a minute at ×10; the silo drains between tankers.
+ */
+export const LIVE_TOLERANCES: Readonly<Partial<Record<number, Readonly<Record<string, number>>>>> = {
+  1: { siloLevelPct: 10, mixTankLevelPct: 1 },
+  4: { tempC: 0.3, f0Min: 0.4, bStar: 0.09 },
+  6: { levelL: 1_000, levelPct: 5, headspaceBar: 0.05, nextCleanS: 3_600 },
+};
 
 /** What the panel shows with no stage selected (src/ui/stagePanel.ts, the shared spec's "Select a stage"). */
 export const NO_STAGE_TITLE = 'Select a stage';
@@ -290,7 +303,10 @@ export async function selectionState(page: Page): Promise<SelectionState> {
 }
 
 export interface SelectedOptions {
-  /** Also check each row shows the static plant's value (only for the app without ?mock). */
+  /**
+   * Also check each row shows the plant's opening value (only for the app without ?mock): exactly, or within
+   * its band for the values in LIVE_TOLERANCES.
+   */
   staticValues?: boolean;
 }
 
@@ -317,8 +333,19 @@ export async function expectSelected(page: Page, stage: StageInfo, options: Sele
     ).toEqual(stage.values.map((value) => value.key));
     for (const [index, value] of stage.values.entries()) {
       const row = shown.rows[index];
-      if (options.staticValues) {
+      const liveTolerance = LIVE_TOLERANCES[stage.id]?.[value.key];
+      if (options.staticValues && liveTolerance === undefined) {
         expect(row.text, `row ${value.key}`).toBe(staticRowText(stage, value));
+      } else if (options.staticValues && liveTolerance !== undefined) {
+        // A live value: its label and unit, and a number within its band of the opening value (plus rounding).
+        const unit = value.unit ? ` ${value.unit}` : '';
+        expect(row.text.startsWith(`${value.label} `) && row.text.endsWith(unit), `row ${value.key}: ${row.text}`).toBe(true);
+        const shown = Number(row.text.slice(value.label.length, row.text.length - unit.length).replace(/,/g, ''));
+        const scale = value.scale ?? 1;
+        const opening = STATIC_VALUES[stage.id].values[value.key] * scale;
+        expect(Math.abs(shown - opening), `row ${value.key}: ${row.text}, opening ${opening}`).toBeLessThanOrEqual(
+          liveTolerance * scale + 10 ** -value.decimals,
+        );
       } else {
         expect(row.text, `row ${value.key} shows its label`).toContain(value.label);
         expect(row.text, `row ${value.key} shows a number`).toMatch(/\d/);
