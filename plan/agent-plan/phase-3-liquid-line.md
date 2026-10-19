@@ -43,7 +43,16 @@ Each new snapshot field follows the same path: `sim` lists it in its hand-off no
 - [ ] `process` signs off the acceptance runs.
 - [ ] 60 fps still holds.
 
-**Status (`process`, week 4):** the acceptance runs and their expected numbers are written ([H76–H96](../hand-calculations.md#phase-3-acceptance-runs)), with how to run each one; sign-off waits for `sim`'s model. The "About this model" text is in `src/data/about.md`, the stage 4 divert and "your stage order" wordings are fixed, and [D13](../DECISIONS.md#d13-phase-3-liquid-line-defaults) lists the new liquid-line keys, with the keys `sim` adds still to complete. One catch for the divert check: with ±0.3 °C of noise, only a set point of 138.9 °C or lower diverts on the first step whatever the noise; 139.0 °C can read 139.3 °C, which is above the 139.22 °C limit ([H88](../hand-calculations.md#phase-3-acceptance-runs)). Test 139 °C with the noise off.
+**Status (`process`, week 4):** the acceptance runs and their expected numbers are written ([H76–H96](../hand-calculations.md#phase-3-acceptance-runs)), with how to run each one. The "About this model" text is in `src/data/about.md`, the stage 4 divert and "your stage order" wordings are fixed, and [D13](../DECISIONS.md#d13-phase-3-liquid-line-defaults) documents the new liquid-line keys.
+
+**Acceptance sign-off (`process`, week 6): signed off.** `tests/sim/acceptance.test.ts` (9 tests) runs H76–H96 through `createSim` as the rows say, with their tolerances, and passes. The rows it checks only in part were checked once by hand against the live model, and all are within tolerance: the other line points and stage 1–3 and 5 values (H76–H79, H81), the KPIs and the default-noise band (H80, H92), the tanks at t = 0 (H82), the level at the first throttle (H84), and the zero flows and reset count of the first clean (H86). The model diverts when B\* < 1 for the reading or the set point, so 139 °C diverts on the first step even with the default noise ([H88](../hand-calculations.md#phase-3-acceptance-runs), [D4](../DECISIONS.md#d4-divert-rule-and-display-noise)). For `qa`, to make the test cover the rows in full:
+
+- Assert the remaining H76–H82 values above, and H86's zero flows and `nextCleanS` reset.
+- H88: 139 °C with the default noise over several seeds (the live-line test covers 139.2 °C over 200 seeds).
+- H83: the 14,400 s check runs only if a sample lands on that time; fail if none does.
+- H95: the identity runs on `startLiquid` with a divert at 3 h rather than through `createSim` with H88's divert at t = 0, and the run without faults checks the expected litres rather than the identity. Both are equivalent checks; align them with the row when convenient.
+
+H59 (about 9% of production throttled) waits for phase 4's filler breakdowns; with the filler stub it is 3.1%.
 
 ## Watch for
 

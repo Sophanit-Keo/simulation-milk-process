@@ -15,7 +15,7 @@ Milk is separated at 60 °C in the upstream milk treatment and stored cold befor
 
 The model computes the sterilizing effect B* from the temperature at the holding-tube outlet and the live holding time. When B* falls below 1, the plant sends 3 min of product to the reject tank (800 L at full flow), then cleans for 80 min (CIP) and sterilizes for 30 min at 125 °C or more. The UHT plant is out for 113 min, while the fillers drain the aseptic tank.
 
-At 140 °C and a 4 s hold, B* is 1.19 and the divert limit is 139.22 °C. The temperature on screen moves a little, but that noise is capped at ±0.3 °C, and the divert check reads the same number. The lowest reading, 139.7 °C, still gives B* 1.11, so noise alone never diverts. F0 can dip just under 5 min within that band, so the status lamps follow B*, not F0 ([D4](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d4-divert-rule-and-display-noise)).
+At 140 °C and a 4 s hold, B* is 1.19 and the divert limit is 139.22 °C. The temperature on screen moves a little, but that noise is capped at ±0.3 °C. The divert check reads both the noisy reading and the set point, so a set point under the limit diverts at once. The lowest reading at 140 °C, 139.7 °C, still gives B* 1.11, so noise alone never diverts. F0 can dip just under 5 min within that band, so the status lamps follow B*, not F0 ([D4](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d4-divert-rule-and-display-noise)).
 
 ## Holding time follows the flow
 
