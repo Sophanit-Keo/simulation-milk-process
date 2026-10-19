@@ -52,19 +52,29 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | Raw-milk fat | 4.0% | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Raw-milk silo | 100,000 L, starts 60% full | Silos hold 30,000–250,000 L ([Tanks](https://dairyprocessinghandbook.tetrapak.com/chapter/tanks)); size and start level are sim assumptions ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | Mixing tank | 10,000 L, starts 50% full | Batch tanks hold 250–10,000 kg ([Mixers](https://dairyprocessinghandbook.tetrapak.com/chapter/mixers)); start level is a sim assumption ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
+| Raw-milk intake | A 25,000 L tanker unloads at 30,000 L/h whenever the silo falls below 40% | Sim assumption ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
+| Mixing-tank level control | Holds its start level with a 10 min time constant; fills toward 80% while the UHT plant stops | Sim assumption ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
+| Specific heat of milk | 3.9 kJ/(kg·K), litres counted as kilograms | Sim assumption between whole and skim milk ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
+| Preheat and deaeration | 30 s lag to the preheat temperature; air 6% by volume in raw milk, 0.5% after the deaerator | 6% average after milking ([Deaerators](https://dairyprocessinghandbook.tetrapak.com/chapter/deaerators)); lag and 0.5% are sim assumptions ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | UHT plant capacity | 16,000 L/h | Direct plants run 2,000–45,000 L/h ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
 | Fillers | 2 × 7,500 packs/h, 1 L | Below the 8,000/h maximum of the [A3/Flex](https://www.tetrapak.com/solutions/packaging/filling-machines/tetra-pak-a3flex) |
 | Filler time between failures | Random (exponential), mean 8 h of running | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Filler repair time | 2 min + random (exponential), mean 12 min | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Homogenizer | 200 bar + 30 bar; outlet about 82 °C | 180–250 bar; second stage about 30 bar; 1 °C per 40 bar ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers), [D5](DECISIONS.md#d5-homogenizer-outlet)) |
+| Homogenizer power and globules | 82% efficiency; globules 3.5 µm raw, 0.8 µm at 200 bar, size ∝ (200 bar ÷ pressure)^0.6; creaming risk 0% at 1 µm or less, 100% at 2 µm | 68 kW drawn for 55.6 kW hydraulic; 3.5 µm to below 1 µm ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)); 0.8 µm, the exponent and 2 µm are sim assumptions ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | Holding time | 4 s at full flow | Practical range 4–6 s ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
 | UHT display noise | ±0.3 °C at most | Keeps B\* at 1.11 or more at 140 °C ([D4](DECISIONS.md#d4-divert-rule-and-display-noise)) |
+| Stage 4 amber | B\* below 1.1 | Sim assumption, just under the lowest noisy B\* at 140 °C ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
+| Steam latent heat | 2,200 kJ/kg, for steam injected (= water flashed off) and condenser load | Sim assumption between the steam-table values at 140 °C and 80 °C ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | UHT fault temperature | Falls to 135.5 °C | Sim assumption; diverts at 4 s and at 8 s hold ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Divert before cleaning | 3 min | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Reject tank | 6,000 L | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Aseptic tank | 20,000 L, starts 50% full | Sizes run 7,000–50,000 L ([Tetra Alsafe](https://www.machineryworld.com/wp-content/uploads/2020/11/pd10196_tetra_alsafe.pdf)) |
 | Tank thresholds | UHT plant to 50% above 90% full, back to full flow below 60%; fillers stop below 150 L | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Filler restart | Starved fillers start again above 500 L | Sim assumption ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
+| Sterile-air headspace | 2.0 bar when the tank is empty, rising with the level to 3.0 bar when full | 3.0 bar at most ([D9](DECISIONS.md#d9-other-open-values)); the rest is a sim assumption ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | Cleaning | Full CIP 80 min; intermediate clean 30 min | CIP takes 70–90 min, AIC 30 min ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
+| CIP lye temperature | 75 °C | Alkaline detergent for about 30 min at 75 °C in circuits with heated surfaces, UHT included ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment), [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | Intermediate clean interval | Every 10 h of production | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Full CIP trigger | Only after a divert (B\* < 1): 3 min divert, 80 min CIP, then 30 min sterilizing at 125 °C or more; 113 min out | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Batch | One filler for one 8-hour shift (60,000 packs, about 60 pallets); shifts start at 06:00, 14:00 and 22:00, the first on day 1 at 06:00 | Sim assumption ([D1](DECISIONS.md#d1-batch-size)) |

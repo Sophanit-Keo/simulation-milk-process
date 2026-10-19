@@ -18,7 +18,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D10](#d10-formula-tests-in-phase-1) | Formula tests active from phase 1 | — | Proposed |
 | [D11](#d11-opening-state) | Open on day 8 with a week of history | — | Proposed (needs a contract change) |
 | [D12](#d12-conveyor-models) | Kenney Factory Kit for conveyors | — | Proposed |
-| [D13](#d13-phase-3-liquid-line-defaults) | Silo and mixing-tank sizes; the liquid-line keys `sim` adds in phase 3 | — | Proposed (list to complete) |
+| [D13](#d13-phase-3-liquid-line-defaults) | Silo and mixing-tank sizes and the 21 liquid-line keys of schema 4 | — | Proposed |
 
 ## D1. Batch size
 
@@ -77,7 +77,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 - **Why:** 140 °C is the value in the chart, the stage panels, the preview and every text. At 4 s the divert limit is 139.22 °C, a margin of 0.78 °C. With noise capped at ±0.3 °C the lowest reading is 139.7 °C, where B\* is 1.11, so noise alone never diverts. The displayed F0 then ranges from 4.83 to 5.55 min. It dips under the 5 min target whenever the reading is below 139.85 °C, so status colours should follow B\*, not F0.
 - **Alternative for the developer:** a 140.5 °C set point gives B\* ≈ 1.32, F0 ≈ 5.81 min and a 1.28 °C margin. With the same noise, F0 ranges from 5.42 to 6.22 min. The chart, stage panels and texts would then change from 140 °C to 140.5 °C.
 - **What it changes:** `uht.setpointC` 140, `uht.displayNoiseC` 0.3. Stage 4's first line ([Stage 4](03-stages-1-5-liquid-line.md#4-uht-treatment)) should read "any drop below the divert limit (B\* < 1)"; that file belongs to `lead`.
-- **Phase 3 note:** Stage 4 now reads "any drop below the divert limit (B\* < 1 at the holding-tube outlet)", and plans 02, 03, 06 and 10 give the whole sequence the same way: divert for 3 min, then an 80 min CIP and 30 min of sterilizing at 125 °C or more, 113 min out. Noise can still delay a divert when the set point is close to the limit: with ±0.3 °C, only a set point under 139.22 − 0.3 = 138.92 °C diverts on the first step whatever the noise (138.9 °C on the 0.1 °C slider). At 139.0 °C a reading can be as high as 139.3 °C, where B\* is 1.017, so that step does not divert ([H88](hand-calculations.md#phase-3-acceptance-runs)).
+- **Phase 3 note:** Stage 4 now reads "any drop below the divert limit (B\* < 1 at the holding-tube outlet)", and plans 02, 03, 06 and 10 give the whole sequence the same way: divert for 3 min, then an 80 min CIP and 30 min of sterilizing at 125 °C or more, 113 min out. The live model checks B\* < 1 for both the noisy reading and the set point, and diverts if either is below 1: the reading scatters around the set point, which is the temperature the milk really has. So any set point under the limit (139.22 °C at 4 s) diverts on the first step, whatever the noise, and the noise cannot hide it. A set point just above the limit, such as 139.3 °C, diverts only in a step whose reading falls under it. Noise alone still never diverts at 140 °C, where the lowest reading gives B\* 1.11 ([H63](hand-calculations.md#model-checks), [H88](hand-calculations.md#phase-3-acceptance-runs)). `lead` accepted this rule in phase 3.
 
 ## D5. Homogenizer outlet
 
@@ -165,35 +165,52 @@ This log settles the numbers and rules that the plan left open or that the [revi
 
 ## D13. Phase 3 liquid-line defaults
 
-- **Status:** Proposed (the list of keys `sim` adds is still to be completed)
-- **Date:** 2026-10-18
+- **Status:** Proposed
+- **Date:** 2026-10-18; the keys `sim` added completed 2026-10-19
 - **Review note:** none ([Phase 3](agent-plan/phase-3-liquid-line.md))
-- **Decision:** the stage 1 tank sizes and start levels below, which `lead` added to `plant.json` with contracts v2, plus the keys `sim` adds for the live stage 1–6 model this phase.
+- **Decision:** the stage 1 tank sizes and start levels, which `lead` added to `plant.json` with contracts v2 (schema 3), and the 21 keys `sim` added for the live stage 1–6 model (schema 4). No value needed changing.
+
+Tank sizes and start levels (schema 3):
 
 | Setting | Default | `plant.json` key | Basis |
 |---|---|---|---|
 | Raw-milk silo | 100,000 L | `standardization.siloCapacityL` = 100,000 | Silos hold 30,000–250,000 L ([Tanks](https://dairyprocessinghandbook.tetrapak.com/chapter/tanks)); the value is a sim assumption |
 | Silo start level | 60% (60,000 L) | `standardization.siloStartFrac` = 0.6 | Sim assumption |
 | Mixing tank | 10,000 L | `standardization.mixTankCapacityL` = 10,000 | The top of the 250–10,000 kg batch-tank range ([Mixers](https://dairyprocessinghandbook.tetrapak.com/chapter/mixers)), litres treated as kilograms |
-| Mixing-tank start level | 50% (5,000 L) | `standardization.mixTankStartFrac` = 0.5 | Sim assumption, as for the aseptic tank ([D2](#d2-missing-defaults)) |
+| Mixing-tank start level | 50% (5,000 L) | `standardization.mixTankStartFrac` = 0.5 | Sim assumption, as for the aseptic tank ([D2](#d2-missing-defaults)); the level control holds it while the UHT plant draws |
+
+The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModels.ts`:
+
+| Setting | Default | `plant.json` key | Basis |
+|---|---|---|---|
+| Specific heat of milk | 3.9 kJ/(kg·K) | `product.cpKjPerKgK` = 3.9 | Sim assumption between whole milk (3.77) and skim milk (3.98–4.02) in [Engineering ToolBox](https://www.engineeringtoolbox.com/specific-heat-capacity-food-d_295.html); litres count as kilograms |
+| Mixing tank while the UHT plant stops | Fills to 80% (8,000 L) | `standardization.mixTankIdleFrac` = 0.8 | Sim assumption |
+| Mixing-tank level control | First-order, 10 min time constant | `standardization.mixTankLagS` = 600 | Sim assumption |
+| Raw-milk tanker | 25,000 L | `standardization.tankerL` = 25,000 | Sim assumption (road milk tankers carry about 25,000–30,000 L) |
+| Tanker unloading rate | 30,000 L/h | `standardization.tankerUnloadLph` = 30,000 | Sim assumption; above the 16,222.22 L/h the separator draws at full flow (H3), so the silo never runs dry |
+| Tanker call level | Silo below 40% (40,000 L) | `standardization.tankerBelowFrac` = 0.4 | Sim assumption; a tanker arriving at 40,000 L cannot overfill the silo (65,000 L even with no draw) |
+| Preheater and deaerator lag | First-order, 30 s time constant | `preheating.lagS` = 30 | Sim assumption |
+| Air in raw milk | 6% by volume | `preheating.rawAirPct` = 6 | 5.5–7.0% after milking, 6% on average ([Deaerators](https://dairyprocessinghandbook.tetrapak.com/chapter/deaerators)) |
+| Air after the deaerator | 0.5% by volume | `preheating.deaeratedAirPct` = 0.5 | Sim assumption; the handbook gives no figure after vacuum deaeration |
+| Homogenizer efficiency | 82% | `homogenizer.efficiencyFrac` = 0.82 | 55.556 kW hydraulic for 68 kW drawn in the handbook example, 81.7% ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers); [H8](hand-calculations.md#formulas)) |
+| Fat globules in raw milk | 3.5 µm | `homogenizer.rawGlobuleUm` = 3.5 | "An average of 3.5 µm" ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)) |
+| Globules after homogenizing | 0.8 µm at 200 bar | `homogenizer.globuleRefBar` = 200, `homogenizer.globuleRefUm` = 0.8 | "Below 1 µm" ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)); 0.8 µm is a sim assumption |
+| Globule size against pressure | Size × (200 bar ÷ stage 1 pressure)^0.6, at most 3.5 µm | `homogenizer.globuleExponent` = 0.6 | Sim assumption; the size falls with pressure and levels off at high pressure, but the exponent is not checked against a source |
+| Creaming risk | 0% at 1 µm or less, rising linearly to 100% at 2 µm | `homogenizer.creamingOkUm` = 1.0, `homogenizer.creamingFullUm` = 2.0 | Under 1 µm no cream layer forms, and smaller globules cream more slowly ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)); 2 µm is a sim assumption |
+| Stage 4 amber | B\* below 1.1 | `uht.bStarWarnBelow` = 1.1 | Sim assumption, just under the 1.1101 of the lowest noisy reading at 140 °C ([H21](hand-calculations.md#formulas)) |
+| Latent heat of steam | 2,200 kJ/kg | `uht.steamLatentKjPerKg` = 2,200 | Sim assumption between the steam-table values of about 2,145 kJ/kg at 140 °C and 2,308 kJ/kg at 80 °C |
+| Filler restart level | Above 500 L | `asepticTank.fillersRestartAboveL` = 500 | Sim assumption |
+| Headspace pressure | 2.0 bar when empty, rising with the level to 3.0 bar when full | `asepticTank.headspaceMinBar` = 2.0 | Sim assumption under the 3.0 bar maximum ([D9](#d9-other-open-values)) |
+| CIP lye temperature | 75 °C | `cleaning.cipTempC` = 75 | The handbook's programme for circuits with heated surfaces "(UHT, etc.)": alkaline detergent at 0.5–2% for about 30 min at 75 °C, then acid at 70 °C ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment)) |
 
 - **Why:**
-  - **Silo.** At 16,000 L/h of 3.5% milk the separator draws 16,222.22 L/h of raw milk ([H3](hand-calculations.md#formulas)), about 389,000 L a day, so 60,000 L lasts 3.7 h and a full silo 6.2 h. Dairies take milk in from tankers through the day, so the model needs an intake rule, which `sim` adds below. 100,000 L lies well inside the sources' range and gives the 3D silo a visible level change between deliveries.
-  - **Mixing tank.** It sits between standardization and the UHT plant. Its inflow follows the UHT plant's draw, so at steady state its level stays where it started. At 50% it holds 5,000 L: 18.75 min of UHT feed, or room for 18.75 min of separator output while the UHT plant is stopped.
+  - **Silo.** At 16,000 L/h of 3.5% milk the separator draws 16,222.22 L/h of raw milk ([H3](hand-calculations.md#formulas)), about 389,000 L a day, so 60,000 L lasts 3.7 h and a full silo 6.2 h. Dairies take milk in from tankers through the day. With a 25,000 L tanker called at 40%, one arrives about every 92 min at full flow (about 16 a day) and unloads in 50 min. 100,000 L lies well inside the sources' range and gives the 3D silo a visible level change between deliveries.
+  - **Mixing tank.** It sits between standardization and the UHT plant. Its inflow follows the UHT plant's draw, so at steady state its level stays where it started. While the UHT plant cleans, the separator fills it toward 80%, which leaves 2,000 L of room.
+  - **Stage values at full flow.** With these keys the live model shows 1,317.33 kW of heat recovered (16,000 L/h from 4 to 80 °C), 124.66 kW drawn by the homogenizer (102.22 kW hydraulic at 230 bar ÷ 0.82), globules of 0.8 µm with no creaming risk, 1,652 L/h of steam injected and flashed off (about 10% of the flow, to lift the milk from 81.75 to 140 °C), and a 1,010 kW condenser load. The homogenizer-pressure-loss scenario raises the globules to 1.21 µm at 100 bar (risk 21%) and 1.84 µm at 50 bar (risk 84%).
+  - **CIP lye.** The handbook also says to clean alkaline at the temperature the product reached, but at least 70 °C, and UHT lines are often cleaned hotter. The model shows 75 °C, the handbook's programme for heated circuits including UHT, as a timed state; it is a display value, not a cleaning model.
   - **Rules the acceptance runs assume** ([Phase 3 acceptance runs](hand-calculations.md#phase-3-acceptance-runs)): the intermediate-clean count runs during production, throttled or not, and a full CIP restarts it, since the plant is clean afterwards. An aseptic tank that opens above 90% throttles the UHT plant on the first step. Litres sent to the reject tank count in the mass balance as they arrive, whatever later empties the tank.
-- **Keys `sim` adds in phase 3 (to complete in the next round).** Each needs its value, unit and source or "sim assumption" here, and a row in [default settings](06-simulation-model.md#default-settings). The phase-3 task card asks for:
-  - [ ] Raw-milk intake: how and when tankers refill the silo, so it never runs dry. *To complete.*
-  - [ ] Preheat lag (first-order time constant). *To complete.*
-  - [ ] Air content before and after the deaerator (% by volume). *To complete.*
-  - [ ] Heat recovered in the preheater: specific heat and recovery share, or the formula `sim` uses. *To complete.*
-  - [ ] Fat-globule size against stage 1 pressure, and the creaming-risk score. *To complete.*
-  - [ ] Homogenizer efficiency for the power draw (handbook example: 55.556 kW hydraulic, 68 kW drawn, about 82%, [H8](hand-calculations.md#formulas)). *To complete.*
-  - [ ] Steam injected and condenser load in stage 5. *To complete.*
-  - [ ] Headspace pressure in the aseptic tank (at most 3.0 bar, [D9](#d9-other-open-values)). *To complete.*
-  - [ ] Filler restart margin above the 150 L stop level. *To complete.*
-  - [ ] What empties the reject tank, and when. *To complete.*
-  - [ ] Mixing-tank level control while the UHT plant is stopped. *To complete.*
-- **What it changes:** the four `standardization` keys above, already in `plant.json` (`schemaVersion` 3), and the Raw-milk silo and Mixing tank rows in [default settings](06-simulation-model.md#default-settings). The keys `sim` adds go into both once this list is complete.
+  - **Rules with no key** (`src/sim/liquidLine.ts`): the full CIP pumps the reject tank out, empty by the CIP's end (reject milk leaves by road); a full reject tank stops the UHT flow; a full aseptic tank takes only what the fillers draw.
+- **What it changes:** the four `standardization` keys of schema 3 and the 21 keys of schema 4, all already in `plant.json`, and the matching rows in [default settings](06-simulation-model.md#default-settings).
 
 ---
 
