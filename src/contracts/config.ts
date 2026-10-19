@@ -29,6 +29,8 @@ export interface PlantConfig {
     fatPct: number;
     packVolumeL: number;
     shelfLifeDays: number;
+    /** Specific heat of milk, for heat recovered, steam injected and condenser load; litres count as kilograms (sim assumption, phase 3; sources give 3.9–4.0). */
+    cpKjPerKgK: number;
   };
   /** Stage 1. */
   standardization: {
@@ -38,12 +40,35 @@ export interface PlantConfig {
     siloTempC: number;
     separatorTempC: number;
     feedTankTempC: number;
+    /** Raw-milk silo (sources: 30,000–250,000 L) and its level when the app opens (sim assumption, phase 3). */
+    siloCapacityL: number;
+    siloStartFrac: number;
+    /** Mixing tank after standardization, which feeds the UHT plant (sources: batch tanks up to 10,000 kg). */
+    mixTankCapacityL: number;
+    /** Level the mixing tank opens at, and holds by level control while the UHT plant draws from it. */
+    mixTankStartFrac: number;
+    /** Level the separator fills the mixing tank to while the UHT plant makes nothing (sim assumption, phase 3). */
+    mixTankIdleFrac: number;
+    /** Time constant of the mixing tank's level control (sim assumption, phase 3). */
+    mixTankLagS: number;
+    /** Raw milk one tanker unloads into the silo (sim assumption, phase 3; road tankers carry about 25,000–30,000 L). */
+    tankerL: number;
+    /** Unloading rate of a tanker; above the most raw milk the separator draws, so the silo never runs dry (sim assumption, phase 3). */
+    tankerUnloadLph: number;
+    /** A tanker starts unloading when the silo falls below this share of its capacity (sim assumption, phase 3). */
+    tankerBelowFrac: number;
   };
   /** Stage 2. */
   preheating: {
     preheatTempC: number;
     /** Temperature lost in the deaerator's vacuum vessel (sources: 4–5 °C). */
     deaeratorDropC: number;
+    /** Time constant of the preheater outlet and of the deaerator's air content, a first-order lag (sim assumption, phase 3). */
+    lagS: number;
+    /** Air in the milk before the deaerator, % by volume (sim assumption, phase 3). */
+    rawAirPct: number;
+    /** Air left after the deaerator while it runs, % by volume (sim assumption, phase 3). */
+    deaeratedAirPct: number;
   };
   /** Stage 3. */
   homogenizer: {
@@ -51,6 +76,20 @@ export interface PlantConfig {
     stage2Bar: number;
     /** Pressure drop that adds 1 °C (sources: 40 bar), for the outlet temperature rise (R7). */
     barPerDegreeC: number;
+    /** Hydraulic power ÷ power drawn (H8: 55.556 kW hydraulic for 68 kW drawn in the handbook example, about 82%). */
+    efficiencyFrac: number;
+    /** Mean fat-globule size before homogenizing (sources: about 3.5 µm). */
+    rawGlobuleUm: number;
+    /** The globule size after homogenizing is globuleRefUm at a stage 1 pressure of globuleRefBar... */
+    globuleRefBar: number;
+    /** ...(sources: under 1 µm at 180–250 bar; sim assumption, phase 3)... */
+    globuleRefUm: number;
+    /** ...and scales as (globuleRefBar ÷ stage 1 pressure) to this power, up to rawGlobuleUm (sim assumption, phase 3). */
+    globuleExponent: number;
+    /** No creaming risk at or below this globule size (sources: under 1 µm, no cream layer forms)... */
+    creamingOkUm: number;
+    /** ...rising linearly to a 100% creaming-risk score at this size (sim assumption, phase 3). */
+    creamingFullUm: number;
   };
   /** Stage 4. */
   uht: {
@@ -67,6 +106,10 @@ export interface PlantConfig {
     rejectTankL: number;
     sterilizeTempC: number;
     sterilizeS: number;
+    /** Stage 4 turns amber when B* falls below this, a thin margin above the divert at 1 (sim assumption, phase 3; noise alone keeps B* ≥ 1.11 at 140 °C, H21). */
+    bStarWarnBelow: number;
+    /** Heat one kilogram of steam gives up as it condenses in the injector, and takes as it flashes off (sim assumption, phase 3; steam tables give about 2,150–2,300 kJ/kg at 140–80 °C). */
+    steamLatentKjPerKg: number;
   };
   /** Stage 5. */
   flashCooling: {
@@ -85,6 +128,10 @@ export interface PlantConfig {
     fillersStopBelowL: number;
     maxHeadspaceBar: number;
     tempC: number;
+    /** Starved fillers start again once the level is back above this, a margin over fillersStopBelowL (sim assumption, phase 3). */
+    fillersRestartAboveL: number;
+    /** Sterile-air pressure over an empty tank; it rises with the level to maxHeadspaceBar when full (sim assumption, phase 3). */
+    headspaceMinBar: number;
   };
   cleaning: {
     cipS: number;
@@ -93,6 +140,8 @@ export interface PlantConfig {
     aicEveryProductionS: number;
     /** Full CIP runs only after a divert (R2). */
     cipAfterDivert: boolean;
+    /** Temperature of the lye circulating through the UHT plant during a full CIP (sim assumption, phase 3). */
+    cipTempC: number;
   };
   /** Stage 7. */
   fillers: {
@@ -141,8 +190,23 @@ const POSITIVE_KEYS = [
   'clock.maxFrameS',
   'product.packVolumeL',
   'homogenizer.barPerDegreeC',
+  'homogenizer.efficiencyFrac',
+  'homogenizer.rawGlobuleUm',
+  'homogenizer.globuleRefBar',
+  'homogenizer.globuleRefUm',
+  'product.cpKjPerKgK',
+  'preheating.lagS',
   'uht.capacityLph',
+  'uht.steamLatentKjPerKg',
   'uht.holdAtCapacityS',
+  'uht.rejectTankL',
+  'standardization.siloCapacityL',
+  'standardization.mixTankCapacityL',
+  'standardization.mixTankLagS',
+  'standardization.tankerL',
+  'standardization.tankerUnloadLph',
+  'standardization.tankerBelowFrac',
+  'cleaning.aicEveryProductionS',
   'asepticTank.capacityL',
   'fillers.count',
   'fillers.ratePacksPerH',
@@ -196,7 +260,7 @@ export function checkPlantConfig(config: PlantConfig): string[] {
     if (!(typeof value === 'number' && value > 0)) fail(`${path} must be greater than 0`);
   }
 
-  const { clock, product, standardization: std, asepticTank: tank, fillers, uht, quality } = config;
+  const { clock, product, standardization: std, asepticTank: tank, fillers, uht, quality, homogenizer } = config;
   if (!isSpeed(clock.defaultSpeed)) fail('clock.defaultSpeed must be one of the speed presets');
   if (clock.fastStepS < clock.baseStepS) fail('clock.fastStepS must be at least clock.baseStepS');
   if (clock.baseStepS < MIN_BASE_STEP_S) fail(`clock.baseStepS must be at least ${MIN_BASE_STEP_S} s`);
@@ -208,8 +272,29 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   if (!(0 < tank.resumeBelowFrac && tank.resumeBelowFrac < tank.throttleAboveFrac && tank.throttleAboveFrac <= 1)) {
     fail('aseptic tank needs 0 < resumeBelowFrac < throttleAboveFrac ≤ 1');
   }
+  if (std.siloStartFrac > 1 || std.mixTankStartFrac > 1 || std.mixTankIdleFrac > 1) {
+    fail('silo and mixing-tank start and idle fractions must lie in 0–1');
+  }
+  // A tanker arriving at the threshold must fit, and must outpace the separator's most raw milk, or the silo runs dry.
+  if (std.tankerBelowFrac * std.siloCapacityL + std.tankerL > std.siloCapacityL) {
+    fail('standardization: a tanker unloading at tankerBelowFrac would overfill the silo');
+  }
+  if (std.rawMilkFatPct < std.creamFatPct && product.fatPct < std.creamFatPct) {
+    const surplusFrac = (std.rawMilkFatPct - product.fatPct) / (std.creamFatPct - product.fatPct);
+    if (!(std.tankerUnloadLph > uht.capacityLph / (1 - surplusFrac))) {
+      fail('standardization.tankerUnloadLph must exceed the raw milk drawn at full UHT flow, or the silo runs dry');
+    }
+  }
   if (tank.startFrac > 1 || tank.throttledFlowFrac <= 0 || tank.throttledFlowFrac > 1) fail('aseptic tank fractions must lie in 0–1');
   if (tank.fillersStopBelowL >= tank.capacityL) fail('fillersStopBelowL must be below the tank capacity');
+  if (!(tank.fillersStopBelowL < tank.fillersRestartAboveL && tank.fillersRestartAboveL < tank.resumeBelowFrac * tank.capacityL)) {
+    fail('aseptic tank needs fillersStopBelowL < fillersRestartAboveL < resumeBelowFrac × capacityL');
+  }
+  if (tank.headspaceMinBar > tank.maxHeadspaceBar) fail('asepticTank.headspaceMinBar must not exceed maxHeadspaceBar');
+  if (homogenizer.efficiencyFrac > 1) fail('homogenizer.efficiencyFrac must lie in 0–1');
+  if (homogenizer.globuleRefUm > homogenizer.rawGlobuleUm) fail('homogenizer.globuleRefUm must not exceed rawGlobuleUm');
+  if (!(homogenizer.creamingOkUm < homogenizer.creamingFullUm)) fail('homogenizer needs creamingOkUm < creamingFullUm');
+  if (uht.bStarWarnBelow < 1) fail('uht.bStarWarnBelow must be at least 1, the divert level');
   if (fillers.ratePacksPerH > fillers.maxRatePacksPerH) fail('filler rate exceeds the machine maximum');
   if (uht.faultTempC >= uht.setpointC) fail('uht.faultTempC must be below the set point');
   return problems;

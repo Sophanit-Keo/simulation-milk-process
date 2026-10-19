@@ -1,0 +1,505 @@
+// The liquid line, stages 1–6, as a fixed-step continuous model (plan 06). Every step the
+// silo, the mixing tank, the aseptic tank and the reject tank move by inflow minus outflow, and the
+// UHT plant walks its modes: production, divert, CIP, sterilize, and an intermediate clean (AIC).
+//
+// Step size: the flows are constant between two events (a mode timer running out, a clean falling
+// due, the aseptic tank's level crossing a throttle or filler threshold, a tank filling up, the silo
+// calling for a tanker), so a step is cut at each such event and the levels are exact whatever the
+// step. The lags (preheater, air content, mixing-tank level control) are integrated exactly
+// (formulas.ts, lagToward). The display noise is drawn once per step.
+import {
+  fracToPct,
+  lphToLps,
+  lpsToLph,
+  sToH,
+  type Kpis,
+  type LiquidSnapshot,
+  type LogKind,
+  type PlantConfig,
+  type Status,
+  type UhtMode,
+} from '../contracts';
+import type { Setpoints } from './core';
+import { createFillerStub, type FillerSupply } from './fillerStub';
+import { bStar, creamShareFrac, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, lagToward, surplusCreamFrac, tubeVolumeL } from './formulas';
+import {
+  condenserKw,
+  creamingRiskPct,
+  globuleUm,
+  headspaceBar,
+  heatRecoveredKw,
+  homogenizerPowerKw,
+  separatorFlows,
+  steamLph,
+} from './liquid/stageModels';
+import type { Rng } from './rng';
+
+/** Levels this close to a threshold count as on it (floating-point slack, far below any level shown). */
+const LEVEL_EPS_L = 1e-6;
+/** Times this close to zero count as zero. */
+const TIME_EPS_S = 1e-9;
+/** At most this many cuts in one step; a well-formed config needs a handful at most. */
+const MAX_CUTS_PER_STEP = 64;
+
+export type LiquidStageId = 1 | 2 | 3 | 4 | 5 | 6;
+export const LIQUID_STAGE_IDS: readonly LiquidStageId[] = [1, 2, 3, 4, 5, 6];
+
+/** Everything the model carries from one step to the next. */
+export interface LiquidState {
+  mode: UhtMode;
+  /** Time left in a timed mode (divert, cip, sterilize, aic); 0 in production. */
+  modeRemainingS: number;
+  throttled: boolean;
+  fillersStarved: boolean;
+  /** Production time since the last clean (AIC or full CIP). */
+  productionSinceCleanS: number;
+  divertCount: number;
+  siloL: number;
+  mixTankL: number;
+  asepticL: number;
+  rejectL: number;
+  /** Raw milk the tanker now unloading still holds; 0 while no tanker unloads. */
+  tankerLeftL: number;
+  /** Preheater outlet, lagging its target (preheating.lagS). */
+  preheatTempC: number;
+  /** Air left in the milk after the deaerator, lagging its target. */
+  airPct: number;
+  /** Display noise on the holding-tube reading, drawn once per step, within ±uht.displayNoiseC (D4). */
+  noiseC: number;
+}
+
+/** Litres and seconds summed since the plant opened, for the mass balance and the long-run checks. */
+export interface LiquidTotals {
+  /** Raw milk drawn from the silo by the separator. */
+  rawDrawnL: number;
+  /** Standardized milk from the separator into the mixing tank. */
+  standardizedL: number;
+  surplusCreamL: number;
+  /** Milk through the holding tube, to the flash vessel or the reject tank. */
+  uhtL: number;
+  /** Milk sent to the reject tank (the divertedL KPI). */
+  divertedL: number;
+  /** Milk into the aseptic tank. */
+  toAsepticL: number;
+  /** Milk the fillers drew from the aseptic tank. */
+  toFillersL: number;
+  /** Raw milk the tankers unloaded into the silo. */
+  tankerL: number;
+  /** Reject milk pumped out of the reject tank during full CIPs. */
+  rejectPumpedL: number;
+  productionS: number;
+  /** Production time spent throttled (H59: about 9% of production time). */
+  throttledProductionS: number;
+}
+
+/** Flows at one instant, for the line points and the stage values. */
+export interface LiquidFlows {
+  /** Raw milk from the silo to the separator. */
+  rawLph: number;
+  /** Standardized milk from the separator to the mixing tank. */
+  standardizedLph: number;
+  surplusCreamLph: number;
+  /** Through the UHT plant: feed pump, preheater, homogenizer, holding tube. */
+  uhtLph: number;
+  /** From the holding tube to the reject tank. */
+  divertLph: number;
+  /** On through the flash vessel and the cooler to the aseptic tank. */
+  productLph: number;
+  /** From the aseptic tank to the fillers. */
+  fillerLph: number;
+  fillersRunning: number;
+}
+
+/** Stages 1–6 as the snapshot shows them. */
+export interface LiquidView {
+  values: Record<LiquidStageId, Record<string, number>>;
+  statuses: Record<LiquidStageId, Status>;
+  flows: LiquidFlows;
+  liquid: LiquidSnapshot;
+  kpis: Pick<Kpis, 'uhtFlowLph' | 'f0Min' | 'bStar' | 'divertedL' | 'tankLevelPct' | 'packsPerH'>;
+}
+
+export type LiquidLog = (timeS: number, kind: LogKind, message: string) => void;
+
+export interface LiquidLine {
+  readonly state: Readonly<LiquidState>;
+  readonly totals: Readonly<LiquidTotals>;
+  /** One fixed step of dtS that ends at endS, with the live set points; mode changes and switches go to log. */
+  step(dtS: number, endS: number, setpoints: Readonly<Setpoints>, log: LiquidLog): void;
+  /** The stage values, statuses, line flows and liquid snapshot for the current state. */
+  view(setpoints: Readonly<Setpoints>, timeS: number): LiquidView;
+}
+
+export interface LiquidLineOptions {
+  /** The fillers that draw from the aseptic tank; defaults to the phase 3 stub. */
+  fillers?: FillerSupply;
+}
+
+const TIMED_MODES: ReadonlySet<UhtMode> = new Set(['divert', 'cip', 'sterilize', 'aic']);
+
+/** Time for a level moving at rateLps to reach targetL, or Infinity if it is moving away or still. */
+function timeToReachS(levelL: number, rateLps: number, targetL: number): number {
+  if (rateLps > 0 && targetL > levelL) return (targetL - levelL) / rateLps;
+  if (rateLps < 0 && targetL < levelL) return (levelL - targetL) / -rateLps;
+  return Infinity;
+}
+
+const formatL = (litres: number): string => Math.round(litres).toLocaleString('en-US');
+const formatMin = (seconds: number): string => `${Math.round(seconds / 60)} min`;
+
+export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidLineOptions = {}): LiquidLine {
+  const { standardization: std, preheating, homogenizer, uht, flashCooling, asepticTank: tank, cleaning, product } = config;
+  const fillers = options.fillers ?? createFillerStub(config);
+  const tubeL = tubeVolumeL(uht.holdAtCapacityS, uht.capacityLph);
+  const creamOutFrac = surplusCreamFrac(std.rawMilkFatPct, product.fatPct, std.creamFatPct);
+  const throttleAboveL = tank.throttleAboveFrac * tank.capacityL;
+  const resumeBelowL = tank.resumeBelowFrac * tank.capacityL;
+  const tankerBelowL = std.tankerBelowFrac * std.siloCapacityL;
+
+  const asepticStartL = tank.capacityL * tank.startFrac;
+  const state: LiquidState = {
+    mode: 'production',
+    modeRemainingS: 0,
+    throttled: asepticStartL >= throttleAboveL,
+    fillersStarved: asepticStartL <= tank.fillersStopBelowL,
+    productionSinceCleanS: 0,
+    divertCount: 0,
+    siloL: std.siloCapacityL * std.siloStartFrac,
+    mixTankL: std.mixTankCapacityL * std.mixTankStartFrac,
+    asepticL: asepticStartL,
+    rejectL: 0,
+    tankerLeftL: 0,
+    // The plant opens running at its set points, so the lags start on their targets.
+    preheatTempC: preheating.preheatTempC,
+    airPct: preheating.deaeratedAirPct,
+    noiseC: 0,
+  };
+  const totals: LiquidTotals = {
+    rawDrawnL: 0,
+    standardizedL: 0,
+    surplusCreamL: 0,
+    uhtL: 0,
+    divertedL: 0,
+    toAsepticL: 0,
+    toFillersL: 0,
+    tankerL: 0,
+    rejectPumpedL: 0,
+    productionS: 0,
+    throttledProductionS: 0,
+  };
+
+  /** UHT flow the plant runs at in production or divert: full capacity, or the throttled share. */
+  const nominalUhtLph = (): number => uht.capacityLph * (state.throttled ? tank.throttledFlowFrac : 1);
+  const producing = (): boolean => state.mode === 'production' || state.mode === 'divert';
+  /** The level the mixing tank's level control steers to: hold while the UHT plant draws, fill up while it doesn't. */
+  const mixTargetL = (uhtLph: number): number => std.mixTankCapacityL * (uhtLph > 0 ? std.mixTankStartFrac : std.mixTankIdleFrac);
+
+  /** Flows that hold until the next event. The mixing tank's inflow is its rate right now. */
+  function flowsNow(setpoints: Readonly<Setpoints>, timeS: number): LiquidFlows {
+    const fillersRunning = state.fillersStarved ? 0 : fillers.readyCount(timeS);
+    const fillerLph = fillers.drawLph(fillersRunning, setpoints.fillerRatePacksPerH);
+    let uhtLph = producing() ? nominalUhtLph() : 0;
+    // A full aseptic tank takes only what the fillers draw; a full reject tank takes nothing.
+    if (state.mode === 'production' && state.asepticL >= tank.capacityL - LEVEL_EPS_L) uhtLph = Math.min(uhtLph, fillerLph);
+    if (state.mode === 'divert' && state.rejectL >= uht.rejectTankL - LEVEL_EPS_L) uhtLph = 0;
+    const divertLph = state.mode === 'divert' ? uhtLph : 0;
+    const productLph = state.mode === 'production' ? uhtLph : 0;
+    const correctionLph = lpsToLph((mixTargetL(uhtLph) - state.mixTankL) / std.mixTankLagS);
+    const standardizedLph = Math.max(0, uhtLph + correctionLph);
+    const { rawMilkLph, surplusCreamLph } = separatorFlows(config, standardizedLph);
+    return { rawLph: rawMilkLph, standardizedLph, surplusCreamLph, uhtLph, divertLph, productLph, fillerLph, fillersRunning };
+  }
+
+  /** Time until the next event that changes a flow, with the flows constant until then. */
+  function nextEventS(flows: LiquidFlows): number {
+    let soonestS = Infinity;
+    const at = (s: number) => (soonestS = Math.min(soonestS, Math.max(0, s)));
+    if (TIMED_MODES.has(state.mode)) at(state.modeRemainingS);
+    if (state.mode === 'production') at(cleaning.aicEveryProductionS - state.productionSinceCleanS);
+    const netLps = lphToLps(flows.productLph - flows.fillerLph);
+    at(timeToReachS(state.asepticL, netLps, state.throttled ? resumeBelowL : throttleAboveL));
+    at(timeToReachS(state.asepticL, netLps, state.fillersStarved ? tank.fillersRestartAboveL : tank.fillersStopBelowL));
+    at(timeToReachS(state.asepticL, netLps, tank.capacityL));
+    at(timeToReachS(state.rejectL, lphToLps(flows.divertLph), uht.rejectTankL));
+    // The silo's tanker threshold: exact while the mixing tank sits on its target, close otherwise.
+    if (state.tankerLeftL <= 0) at(timeToReachS(state.siloL, -lphToLps(flows.rawLph), tankerBelowL));
+    return soonestS;
+  }
+
+  /** Moves every level and lag on by dtS at constant flows. */
+  function advance(dtS: number, flows: LiquidFlows): void {
+    if (dtS <= 0) return;
+    const hours = sToH(dtS);
+    const uhtL = flows.uhtLph * hours;
+
+    // Stage 1: level control steers the mixing tank to its target (exact first-order lag); the separator
+    // supplies what the UHT plant draws plus the correction, never less than nothing.
+    let mixDeltaL = lagToward(state.mixTankL, mixTargetL(flows.uhtLph), dtS, std.mixTankLagS) - state.mixTankL;
+    let standardizedL = uhtL + mixDeltaL;
+    if (standardizedL < 0) {
+      standardizedL = 0;
+      mixDeltaL = -uhtL;
+    }
+    state.mixTankL += mixDeltaL;
+    const rawL = standardizedL / (1 - creamOutFrac);
+    const tankerInL = Math.min(state.tankerLeftL, std.tankerUnloadLph * hours);
+    state.tankerLeftL -= tankerInL;
+    // checkPlantConfig keeps the tanker ahead of the draw, so the silo never runs dry; the floor is a guard.
+    state.siloL = Math.max(0, state.siloL + tankerInL - rawL);
+    totals.rawDrawnL += rawL;
+    totals.standardizedL += standardizedL;
+    totals.surplusCreamL += rawL - standardizedL;
+    totals.tankerL += tankerInL;
+    totals.uhtL += uhtL;
+
+    // Stages 4–6: product goes on to the aseptic tank, or to the reject tank while diverting.
+    const fillersL = flows.fillerLph * hours;
+    const productL = flows.productLph * hours;
+    const divertL = flows.divertLph * hours;
+    state.asepticL += productL - fillersL;
+    state.rejectL += divertL;
+    totals.toAsepticL += productL;
+    totals.toFillersL += fillersL;
+    totals.divertedL += divertL;
+    // A full CIP pumps the reject tank out (reject milk leaves by road), emptying it by the CIP's end.
+    if (state.mode === 'cip' && state.rejectL > 0) {
+      const pumpedL = Math.min(state.rejectL, (state.rejectL * dtS) / Math.max(state.modeRemainingS, dtS));
+      state.rejectL -= pumpedL;
+      totals.rejectPumpedL += pumpedL;
+    }
+
+    // Stage 2: the preheater outlet runs at the preheat temperature (lye temperature during a full CIP);
+    // the deaerator takes the air down while milk flows, and it creeps back while the plant stands.
+    const preheatTargetC = state.mode === 'cip' ? cleaning.cipTempC : preheating.preheatTempC;
+    state.preheatTempC = lagToward(state.preheatTempC, preheatTargetC, dtS, preheating.lagS);
+    const airTargetPct = flows.uhtLph > 0 ? preheating.deaeratedAirPct : preheating.rawAirPct;
+    state.airPct = lagToward(state.airPct, airTargetPct, dtS, preheating.lagS);
+
+    if (TIMED_MODES.has(state.mode)) state.modeRemainingS -= dtS;
+    if (state.mode === 'production') {
+      state.productionSinceCleanS += dtS;
+      totals.productionS += dtS;
+      if (state.throttled) totals.throttledProductionS += dtS;
+    }
+  }
+
+  function enterMode(mode: UhtMode, durationS: number): void {
+    // A timer that ran a hair past zero carries the overrun into the next mode.
+    const carryS = TIMED_MODES.has(state.mode) ? Math.min(0, state.modeRemainingS) : 0;
+    state.mode = mode;
+    state.modeRemainingS = mode === 'production' ? 0 : durationS + carryS;
+  }
+
+  /**
+   * In production, divert when B* falls below 1 (D4), decided on the noisy reading at the holding-tube
+   * outlet. The reading scatters around the set point, the temperature the milk really has, so a set point
+   * under the divert limit diverts at once too, even in a step whose noise lifts the reading over it.
+   * Noise alone still never diverts: at 140 °C the lowest reading gives B* 1.11 (H21).
+   */
+  function checkDivert(nowS: number, setpoints: Readonly<Setpoints>, flows: LiquidFlows, log: LiquidLog): void {
+    if (state.mode !== 'production' || flows.uhtLph <= 0) return;
+    const holdS = holdTimeS(tubeL, flows.uhtLph);
+    const readingC = Math.min(setpoints.uhtSetpointC + state.noiseC, setpoints.uhtSetpointC);
+    const bStarNow = bStar(readingC, holdS);
+    if (bStarNow >= 1) return;
+    enterMode('divert', uht.divertBeforeCleaningS);
+    state.divertCount += 1;
+    log(nowS, 'bad', `UHT at ${readingC.toFixed(1)} °C gives B* ${bStarNow.toFixed(2)}, below 1: diverting to the reject tank`);
+  }
+
+  /** Switches whose threshold the last cut landed on, then mode changes whose time has come. */
+  function applyEvents(nowS: number, log: LiquidLog): void {
+    if (!state.throttled && state.asepticL >= throttleAboveL - LEVEL_EPS_L) {
+      state.throttled = true;
+      log(nowS, 'warn', `Aseptic tank above ${fracToPct(tank.throttleAboveFrac)}%: UHT plant throttled to ${fracToPct(tank.throttledFlowFrac)}%`);
+    } else if (state.throttled && state.asepticL <= resumeBelowL + LEVEL_EPS_L) {
+      state.throttled = false;
+      log(nowS, 'ok', `Aseptic tank below ${fracToPct(tank.resumeBelowFrac)}%: UHT plant back to full flow`);
+    }
+    if (!state.fillersStarved && state.asepticL <= tank.fillersStopBelowL + LEVEL_EPS_L) {
+      state.fillersStarved = true;
+      log(nowS, 'warn', `Aseptic tank below ${formatL(tank.fillersStopBelowL)} L: fillers stopped, waiting for product`);
+    } else if (state.fillersStarved && state.asepticL >= tank.fillersRestartAboveL - LEVEL_EPS_L) {
+      state.fillersStarved = false;
+      log(nowS, 'ok', `Aseptic tank back above ${formatL(tank.fillersRestartAboveL)} L: fillers running again`);
+    }
+    if (state.tankerLeftL <= 0 && state.siloL <= tankerBelowL + LEVEL_EPS_L) state.tankerLeftL = std.tankerL;
+
+    if (TIMED_MODES.has(state.mode) && state.modeRemainingS <= TIME_EPS_S) {
+      switch (state.mode) {
+        case 'divert':
+          if (cleaning.cipAfterDivert) {
+            enterMode('cip', cleaning.cipS);
+            log(nowS, 'warn', `Full CIP started after the divert: ${formatMin(cleaning.cipS)}`);
+          } else {
+            enterMode('production', 0);
+            log(nowS, 'ok', 'Divert over: UHT plant back in production');
+          }
+          break;
+        case 'cip':
+          enterMode('sterilize', uht.sterilizeS);
+          log(nowS, 'info', `CIP done: sterilizing at ${uht.sterilizeTempC} °C for ${formatMin(uht.sterilizeS)}`);
+          break;
+        case 'sterilize':
+          enterMode('production', 0);
+          state.productionSinceCleanS = 0;
+          log(nowS, 'ok', 'UHT plant sterile: back in production');
+          break;
+        case 'aic':
+          enterMode('production', 0);
+          state.productionSinceCleanS = 0;
+          log(nowS, 'ok', 'Intermediate clean done: back in production');
+          break;
+      }
+    }
+    if (state.mode === 'production' && state.productionSinceCleanS >= cleaning.aicEveryProductionS - TIME_EPS_S) {
+      enterMode('aic', cleaning.aicS);
+      log(nowS, 'info', `Intermediate clean (AIC) started: ${formatMin(cleaning.aicS)}, the aseptic tank feeds the fillers`);
+    }
+  }
+
+  function step(dtS: number, endS: number, setpoints: Readonly<Setpoints>, log: LiquidLog): void {
+    const startS = endS - dtS;
+    // Bounded noise with no tails (D4): uniform within ±displayNoiseC, so noise alone never diverts at 140 °C.
+    state.noiseC = uht.displayNoiseC * (2 * rng.next() - 1);
+    let doneS = 0;
+    for (let cuts = 0; doneS < dtS - TIME_EPS_S; cuts++) {
+      const nowS = startS + doneS;
+      checkDivert(nowS, setpoints, flowsNow(setpoints, nowS), log);
+      const flows = flowsNow(setpoints, nowS);
+      const leftS = dtS - doneS;
+      const cutS = cuts < MAX_CUTS_PER_STEP ? Math.min(leftS, nextEventS(flows)) : leftS;
+      advance(cutS, flows);
+      doneS += cutS;
+      applyEvents(startS + doneS, log);
+    }
+    // Floating-point slack only; the cuts above keep every level inside its tank.
+    state.asepticL = Math.min(tank.capacityL, Math.max(0, state.asepticL));
+    state.rejectL = Math.min(uht.rejectTankL, Math.max(0, state.rejectL));
+  }
+
+  function view(setpoints: Readonly<Setpoints>, timeS: number): LiquidView {
+    const flows = flowsNow(setpoints, timeS);
+    const { uhtLph } = flows;
+
+    const deaeratorTempC = state.preheatTempC - preheating.deaeratorDropC;
+    const stage1Bar = setpoints.homogenizerStage1Bar;
+    const totalBar = stage1Bar + homogenizer.stage2Bar;
+    const outletTempC = homogenizerOutletC(deaeratorTempC, totalBar, homogenizer.barPerDegreeC);
+    const globule = globuleUm(config, stage1Bar);
+    const creamingRisk = creamingRiskPct(config, globule);
+
+    // The holding-tube outlet reads the set point plus noise while product or AIC water runs at
+    // sterilizing heat, the lye during a full CIP and the hot water while re-sterilizing.
+    const setpointC = setpoints.uhtSetpointC;
+    const tempC =
+      state.mode === 'cip' ? cleaning.cipTempC : state.mode === 'sterilize' ? uht.sterilizeTempC : setpointC + state.noiseC;
+    // With nothing flowing there is no hold and no sterilizing effect; the limit shown is the one production restarts at.
+    const holdS = uhtLph > 0 ? holdTimeS(tubeL, uhtLph) : 0;
+    const f0 = uhtLph > 0 ? f0Min(tempC, holdS) : 0;
+    const bStarNow = uhtLph > 0 ? bStar(tempC, holdS) : 0;
+    const limitC = divertLimitC(holdTimeS(tubeL, uhtLph > 0 ? uhtLph : nominalUhtLph()));
+    const waterLph = steamLph(config, flows.productLph, outletTempC, setpointC);
+    const levelFrac = state.asepticL / tank.capacityL;
+
+    const values: LiquidView['values'] = {
+      1: {
+        siloTempC: std.siloTempC,
+        separatorTempC: std.separatorTempC,
+        feedTankTempC: std.feedTankTempC,
+        rawMilkFatPct: std.rawMilkFatPct,
+        productFatPct: product.fatPct,
+        creamShareFrac: creamShareFrac(product.fatPct, std.skimFatPct, std.creamFatPct),
+        rawMilkLph: flows.rawLph,
+        surplusCreamLph: flows.surplusCreamLph,
+        siloLevelPct: fracToPct(state.siloL / std.siloCapacityL),
+        mixTankLevelPct: fracToPct(state.mixTankL / std.mixTankCapacityL),
+      },
+      2: {
+        preheatTempC: state.preheatTempC,
+        deaeratorTempC,
+        airPct: state.airPct,
+        heatRecoveredKw: heatRecoveredKw(config, uhtLph, state.preheatTempC),
+      },
+      3: {
+        stage1Bar,
+        stage2Bar: homogenizer.stage2Bar,
+        inletTempC: deaeratorTempC,
+        outletTempC,
+        globuleUm: globule,
+        creamingRiskPct: creamingRisk,
+        powerKw: homogenizerPowerKw(config, uhtLph, totalBar),
+      },
+      4: { setpointC, tempC, flowLph: uhtLph, holdS, f0Min: f0, bStar: bStarNow, divertLimitC: limitC, rejectLevelL: state.rejectL },
+      5: {
+        flashTempC: flashCooling.flashTempC,
+        coolerTempC: flashCooling.coolerTempC,
+        waterRemovedLph: waterLph,
+        condenserKw: condenserKw(config, waterLph),
+      },
+      6: {
+        levelL: state.asepticL,
+        levelPct: fracToPct(levelFrac),
+        capacityL: tank.capacityL,
+        tempC: tank.tempC,
+        inflowLph: flows.productLph,
+        outflowLph: flows.fillerLph,
+        headspaceBar: headspaceBar(config, levelFrac),
+        nextCleanS: Math.max(0, cleaning.aicEveryProductionS - state.productionSinceCleanS),
+      },
+    };
+
+    const flowing = (lph: number): Status => (lph > 0 ? 'ok' : 'idle');
+    // Stage 4 follows B*, not F0 (D4): red while diverting, amber while cleaning or when the margin is thin.
+    let uhtStatus: Status;
+    if (state.mode === 'divert') uhtStatus = 'bad';
+    else if (state.mode !== 'production') uhtStatus = 'warn';
+    else if (uhtLph <= 0) uhtStatus = 'idle';
+    else if (Math.min(bStarNow, bStar(setpointC, holdS)) < 1) uhtStatus = 'bad';
+    else if (bStarNow < uht.bStarWarnBelow) uhtStatus = 'warn';
+    else uhtStatus = 'ok';
+    const statuses: LiquidView['statuses'] = {
+      1: flowing(flows.rawLph),
+      2: flowing(uhtLph),
+      3: uhtLph <= 0 ? 'idle' : creamingRisk > 0 ? 'warn' : 'ok',
+      4: uhtStatus,
+      5: flowing(flows.productLph),
+      6: state.throttled || state.fillersStarved ? 'warn' : 'ok',
+    };
+
+    const tankLevel = (levelL: number, capacityL: number) => ({ levelL, capacityL });
+    const liquid: LiquidSnapshot = {
+      uhtMode: state.mode,
+      modeRemainingS: Math.max(0, state.modeRemainingS),
+      throttled: state.throttled,
+      fillersRunning: flows.fillersRunning,
+      fillersStarved: state.fillersStarved,
+      headspaceBar: values[6].headspaceBar,
+      productionSinceCleanS: state.productionSinceCleanS,
+      divertCount: state.divertCount,
+      tanks: {
+        silo: tankLevel(state.siloL, std.siloCapacityL),
+        mixTank: tankLevel(state.mixTankL, std.mixTankCapacityL),
+        asepticTank: tankLevel(state.asepticL, tank.capacityL),
+        rejectTank: tankLevel(state.rejectL, uht.rejectTankL),
+      },
+    };
+
+    return {
+      values,
+      statuses,
+      flows,
+      liquid,
+      kpis: {
+        uhtFlowLph: uhtLph,
+        f0Min: f0,
+        bStar: bStarNow,
+        divertedL: totals.divertedL,
+        tankLevelPct: values[6].levelPct,
+        packsPerH: flows.fillerLph / product.packVolumeL,
+      },
+    };
+  }
+
+  return { state, totals, step, view };
+}

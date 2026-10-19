@@ -150,6 +150,28 @@ describe('checkPlantConfig catches a broken copy', () => {
     expect(problemsWith(change)).toContain(problem);
   });
 
+  // Phase 3: rules that keep the liquid-line model working.
+  it.each([
+    ['a tanker that would overfill the silo', (copy: PlantConfig) => (copy.standardization.tankerL = 70_000), /overfill the silo/],
+    ['a tanker slower than the separator draws', (copy: PlantConfig) => (copy.standardization.tankerUnloadLph = 16_000), /tankerUnloadLph/],
+    ['no tanker threshold, so the silo would run dry first', (copy: PlantConfig) => (copy.standardization.tankerBelowFrac = 0), /tankerBelowFrac must be greater than 0/],
+    ['a mixing-tank idle level above full', (copy: PlantConfig) => (copy.standardization.mixTankIdleFrac = 1.2), /idle fractions/],
+    ['a filler restart level at or below the stop level', (copy: PlantConfig) => (copy.asepticTank.fillersRestartAboveL = 150), /fillersRestartAboveL/],
+    ['a filler restart level above the resume level', (copy: PlantConfig) => (copy.asepticTank.fillersRestartAboveL = 13_000), /fillersRestartAboveL/],
+    ['a headspace minimum above the maximum', (copy: PlantConfig) => (copy.asepticTank.headspaceMinBar = 3.5), /headspaceMinBar/],
+    ['a homogenizer more than 100% efficient', (copy: PlantConfig) => (copy.homogenizer.efficiencyFrac = 1.2), /efficiencyFrac/],
+    ['a zero homogenizer efficiency', (copy: PlantConfig) => (copy.homogenizer.efficiencyFrac = 0), /efficiencyFrac must be greater than 0/],
+    ['globules after homogenizing larger than before', (copy: PlantConfig) => (copy.homogenizer.globuleRefUm = 4), /globuleRefUm/],
+    ['a creaming-risk band the wrong way round', (copy: PlantConfig) => (copy.homogenizer.creamingFullUm = 0.9), /creamingOkUm/],
+    ['an amber B* level under the divert at 1', (copy: PlantConfig) => (copy.uht.bStarWarnBelow = 0.9), /bStarWarnBelow/],
+    ['a zero lag', (copy: PlantConfig) => (copy.preheating.lagS = 0), /preheating\.lagS must be greater than 0/],
+    ['a zero mixing-tank lag', (copy: PlantConfig) => (copy.standardization.mixTankLagS = 0), /mixTankLagS must be greater than 0/],
+    ['a zero clean interval, which would clean forever', (copy: PlantConfig) => (copy.cleaning.aicEveryProductionS = 0), /aicEveryProductionS must be greater than 0/],
+    ['a zero steam latent heat', (copy: PlantConfig) => (copy.uht.steamLatentKjPerKg = 0), /steamLatentKjPerKg must be greater than 0/],
+  ])('%s', (_label, change, problem) => {
+    expect(problemsWith(change).join('\n')).toMatch(problem);
+  });
+
   it('a value that is not finite', () => {
     expect(problemsWith((copy) => (copy.fillers.mtbfMeanS = Number.NaN)).join('\n')).toMatch(/fillers\.mtbfMeanS/);
   });

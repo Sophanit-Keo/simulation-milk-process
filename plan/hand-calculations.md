@@ -99,7 +99,7 @@ Run the model with seed 81006 and compare. These are for phases 3 and 4; the lon
 | # | What | How | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
 | H58 | Output over 30 days | Pallets made ÷ 30 | About 350 pallets a day (347 pallet-loads, H40); a one-year run of the preview, which carries part-full pallets over, gave 346.9 pallet-loads | ±3% | [D2](DECISIONS.md#d2-missing-defaults) |
-| H59 | Share of production time throttled | Throttled time ÷ production time | About 9% (one-year run: 8.8%) | ±3 points | [D2](DECISIONS.md#d2-missing-defaults) |
+| H59 | Share of production time throttled | Throttled time ÷ production time | About 9% (one-year run: 8.8%). Phase 4 only: the 9% comes from filler breakdowns, which let the tank fill. With phase 3's filler stub, which never stops, the plant throttles 3.125% of its production time in the long run: each 10 h of production has to shed the tank's net gain of 10,000 − 7,500 = 2,500 L, and a throttled hour sheds 8,000 L more than a full-flow hour, so 2,500 ÷ 8,000 = 0.3125 h in 10 h. A 90-day run gives 3.13% | ±3 points | [D2](DECISIONS.md#d2-missing-defaults) |
 | H60 | Tank balance | Level change = litres in − litres out, every step | Exact to rounding | ±0.001 L | Plan 06, tank level formula |
 | H61 | Pack balance | Packs made = packs on closed pallets (1,008 each, fewer on the last of a batch) + packs on open pallets + samples taken | Exact | exact | Plan 06, discrete model |
 | H62 | Temperature drop at full flow and at 50% | Trigger `uhtTempDrop` in each state | Divert both times; reject tank +800 L or +400 L; back in production after 113 min | exact | H24, H35, H36 |
@@ -129,6 +129,64 @@ How the flows move once phases 3 and 4 make them live, for the tests that follow
 - **Throttled** (tank above 90%): every point from `silo` to `cooler` carries 8,000 L/h (`silo` 8,111.11 L/h), the hold doubles to 8 s (H10) and the temperatures stay as above.
 - **Divert:** `divert` carries the whole UHT flow and `flashVessel` and `cooler` carry 0, so the reject tank gains 800 L in 3 min at full flow (H35, H62).
 - **Fillers:** `asepticTank` and `filler` carry 7,500 L/h per running filler, and 0 while both are stopped or the tank is below 150 L.
+
+## Phase 3 acceptance runs
+
+These runs check the live stage 1–6 model against the rows above. `qa` automates them, and `process` signs them off for the [phase-3 exit checklist](agent-plan/phase-3-liquid-line.md#exit-checklist). Four runs follow the phase-3 card: (a) a normal run, H76–H87; (b) set 139 °C, which must divert, H88–H91; (c) throttle to 50%, H92–H93; (d) an intermediate clean covered by the buffer, H94. H95 and H96 check mass balance and step size. Values the hand calculations don't give yet (air content, heat recovered, globule size, creaming risk, power, steam, condenser load, headspace pressure) wait for the keys `sim` adds to [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults), and get rows in the next round.
+
+How to run them:
+
+- **Config.** Take `copyConfig()` from `tests/helpers/plantConfig.ts`, change only the keys the row names, then call `createSim(config)`. The seed stays 81006. *Noise off* means `uht.displayNoiseC` = 0: the holding-tube reading is then the set point, so F0, B\* and the divert limit can be checked to their H-row tolerance. With the default ±0.3 °C, check the noise band instead (H21, H22).
+- **Time.** t is sim time since the plant opened, `snapshot.timeS` − 21,600 (day 1, 06:00). "At t = 0" means before the first step.
+- **Stepping.** At the default ×10, each `step(0.1)` advances exactly 1 s. After `dispatch({ type: 'setSpeed', speed: 1000 })`, each `step(0.1)` advances 100 s in 1 s steps; at ×10,000 it advances 1,000 s in 10 s steps (`clock.fastStepS`). A step never crosses a shift change (t = 28,800, 57,600 and 86,400 s), and those lie on every step grid used here.
+- **Set points.** `dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value })` takes effect on the next step.
+- **Crossings.** The model sees a level cross a threshold at the end of the step in which it crosses, so a switch can come up to one step after the exact time. Time tolerances below allow for that at 1 s steps, and level tolerances for the one-step overshoot (at most 4.44 L at full flow).
+
+### Normal run, at the defaults
+
+| # | What | How | Expected | Tolerance | Source |
+|---|---|---|---|---|---|
+| H76 | Line points at steady state | Noise off; read `snapshot.line` at t = 600 s, when any start-up lag has settled | `silo` 4 °C, 16,222.22 L/h; `separator` 60 °C, `feedTank` 4 °C, `preheater` 80 °C, `deaerator` 76 °C, `homogenizer` 81.75 °C, `holdingTube` 140 °C, `flashVessel` 80 °C, `cooler` 20 °C, each 16,000 L/h; `divert` 140 °C, 0 L/h; `asepticTank` and `filler` 20 °C, 15,000 L/h | ±0.01 °C; ±0.01 L/h | H3, H64–H75 |
+| H77 | Stage 1 values | Same run, `stages[1].values` at t = 600 s | `rawMilkLph` 16,222.22; `surplusCreamLph` 222.22; `creamShareFrac` 0.08636; `rawMilkFatPct` 4.0, `productFatPct` 3.5; `mixTankLevelPct` 50, since the mixing tank's inflow follows the UHT draw; `siloLevelPct` above 0 and at most 100 (the intake rule comes from D13) | ±0.01 L/h; ±0.00001; ±0.5 points | H1–H4; [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults) |
+| H78 | Stage 2 values | Same | `preheatTempC` 80, `deaeratorTempC` 76 | ±0.01 °C | H6, H67, H68 |
+| H79 | Stage 3 values | Same | `stage1Bar` 200, `stage2Bar` 30, `inletTempC` 76, `outletTempC` 81.75. Context for `powerKw`: the hydraulic power at 16,000 L/h and 230 bar is 4.444 L/s × 23 MPa = 102.22 kW, before the efficiency in D13 | ±0.001 °C; bar exact | H7, H8; [D5](DECISIONS.md#d5-homogenizer-outlet) |
+| H80 | Stage 4 values and KPIs | Same; then the same read with the default noise | Noise off: `setpointC` 140, `tempC` 140, `flowLph` 16,000, `holdS` 4.000, `f0Min` 5.175, `bStar` 1.1856, `divertLimitC` 139.224, `rejectLevelL` 0; KPIs `uhtFlowLph` 16,000, `f0Min` and `bStar` as the stage, `divertedL` 0; `liquid.uhtMode` 'production'. Default noise: `tempC` 139.7–140.3, `bStar` 1.1101–1.2662, `f0Min` 4.830–5.545, the limit unchanged, and stage 4 never 'bad' | H-row tolerances; bands inclusive | H9, H11–H13, H21, H22; [D4](DECISIONS.md#d4-divert-rule-and-display-noise) |
+| H81 | Stage 5 values | Same | Flash vessel 80 °C, cooler 20 °C, 16,000 L/h through both (H72, H73) | ±0.01 °C; ±0.01 L/h | H72, H73; [D5](DECISIONS.md#d5-homogenizer-outlet) |
+| H82 | Stage 6 and the liquid snapshot at the start | Same run, at t = 0 and t = 600 s | At t = 0: `levelL` 10,000, `levelPct` 50, `capacityL` 20,000, `tempC` 20, `nextCleanS` 36,000; tanks: silo 60,000 of 100,000 L, mixing tank 5,000 of 10,000 L, aseptic tank 10,000 of 20,000 L, reject tank 0 of 6,000 L; `throttled` false, `fillersRunning` 2, `fillersStarved` false, `divertCount` 0, `modeRemainingS` 0; KPI `tankLevelPct` 50. At t = 600 s: `inflowLph` 16,000, `outflowLph` 15,000, `levelL` 10,166.67, `nextCleanS` 35,400, `headspaceBar` above 0 and at most 3.0 | ±0.01 L; ±0.01 L/h; ±1 s | H31; [D2](DECISIONS.md#d2-missing-defaults), [D9](DECISIONS.md#d9-other-open-values), [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults) |
+| H83 | The tank rises 1,000 L/h | ×1,000 from t = 0; read at t = 14,400 s (4 h) | `levelL` 14,000 (70%); every step, the level changes by exactly (inflow − outflow) × step | ±0.1 L; per step as H60 | H31, H60 |
+| H84 | First throttle | Same run to t = 28,801 s | The level reaches 18,000 L at t = 28,800 s (8 h, day 1 14:00) and `throttled` turns true on the next step; from then `silo` carries 8,111.11 L/h and `separator` to `cooler` 8,000 L/h; one log entry; `nextCleanS` 7,200 | ±1 s; ±5 L; ±0.01 L/h | H33 |
+| H85 | Throttled time | Same run to t = 32,000 s | `throttled` turns false at t = 31,885.7 s (8 h 51.43 min), when the level falls below 12,000 L; throttled for 3,085.7 s = 51.43 min; exactly one switch each way | ±3 s | H34; [D2](DECISIONS.md#d2-missing-defaults) |
+| H86 | First intermediate clean | Same run to t = 37,900 s | `uhtMode` 'aic' from t = 36,000 s (10 h of production; throttled time counts) to 37,800 s, with `modeRemainingS` counting down from 1,800; `feedTank` to `cooler` carry 0 L/h; the level falls from 13,142.86 L to 5,642.86 L, exactly 7,500 L; `fillersRunning` stays 2; `nextCleanS` back to 36,000 when production resumes | ±1 s; ±5 L | H32; [D2](DECISIONS.md#d2-missing-defaults), [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults) |
+| H87 | 24 h without faults | Same run to t = 86,400 s | Second clean from t = 73,800 to 75,600 s (15,642.86 L → 8,142.86 L, no throttle before it); `levelL` 11,142.86 at 24 h; 1 throttle, 2 cleans, 0 diverts; `fillersStarved` never true (lowest level 5,642.86 L); the UHT plant made 361,142.86 L and the fillers drew 360,000 L | ±1 s; ±5 L | H31–H34 |
+
+### Set 139 °C: divert
+
+| # | What | How | Expected | Tolerance | Source |
+|---|---|---|---|---|---|
+| H88 | 139 °C diverts within one step at full flow | Noise off; at t = 0 set `uhtSetpointC` 139, step once at ×10, then set it back to 140 | After the first step: `uhtMode` 'divert', `divertCount` 1, stage 4 'bad', `bStar` 0.9521, `f0Min` 4.111; `divert` carries 16,000 L/h, `flashVessel` and `cooler` 0; one log entry. Setting 140 °C again does not stop the sequence. The model diverts when B\* < 1 for either the noisy reading or the set point ([D4](DECISIONS.md#d4-divert-rule-and-display-noise)), so with the default noise 139 °C also diverts on the first step, even when the reading is as high as 139.3 °C (B\* 1.0169); check it over several seeds. A set point above the limit, such as 139.3 °C, diverts only in a step whose reading falls under 139.224 °C | B\* ±0.0001; F0 ±0.001; the step exact | H13; [D4](DECISIONS.md#d4-divert-rule-and-display-noise) |
+| H89 | Reject volume at full flow | Same run to t = 181 s | The reject tank (`rejectLevelL`, `liquid.tanks.rejectTank`) gains 800 L over the 180 s divert; KPI `divertedL` 800; `uhtMode` 'cip' from t = 180 s | ±5 L; ±1 s | H35 |
+| H90 | Back in production after 113 min | Same run to t = 7,000 s | 'cip' from t = 180 to 4,980 s, 'sterilize' to 6,780 s, 'production' from 6,780 s (113 min); `modeRemainingS` counts down through each; log entries for divert, CIP, sterilizing and production; no second divert at 140 °C; `nextCleanS` 36,000 when production resumes (a full CIP restarts the count). The aseptic tank gets no milk from t = 0: the fillers stop at 150 L at t = 2,364 s (39.4 min) with `fillersStarved` true, and the level stays within one step's draw (4.17 L) of 150 L until production resumes | ±2 s; ±5 L | H36, H37; [D2](DECISIONS.md#d2-missing-defaults), [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults) |
+| H91 | The same set point at 50% flow | `asepticTank.startFrac` = 0.95, default noise; set 139 °C at t = 60 s, then 135.5 °C at t = 120 s | 139 °C does not divert: at 8 s its lowest reading, 138.7 °C, gives B\* 1.7830. 135.5 °C (the [D2](DECISIONS.md#d2-missing-defaults) fault temperature) diverts on the next step: its highest reading, 135.8 °C, gives B\* 0.9440. The plant stays throttled (the level is still about 18,000 L at the end of the divert), so the reject tank gains 400 L by t = 300 s; then CIP and sterilizing as H90 | ±5 L; ±1 s | H24, H35 |
+
+### Throttle to 50%
+
+| # | What | How | Expected | Tolerance | Source |
+|---|---|---|---|---|---|
+| H92 | The R6 values | `asepticTank.startFrac` = 0.95 (19,000 L), noise off; read at t = 60 s | `throttled` true from the first step; stage 4 `flowLph` 8,000, `holdS` 8.000, `bStar` 2.3712, `f0Min` 10.350, `divertLimitC` 136.063; `silo` 8,111.11 L/h, `surplusCreamLph` 111.11, `separator` to `cooler` 8,000 L/h; the tank falls 7,000 L/h (18,883.33 L at t = 60 s). With the default noise: `bStar` 2.2202–2.5324, `f0Min` 9.659–11.090. The default run (H84) shows the same values between t = 28,801 and 31,885 s | H-row tolerances; ±0.01 L/h; ±5 L | H10, H15–H17; [R6](REVIEW.md#r6-holding-time) |
+| H93 | Back to full flow | Same run to t = 3,610 s | The level reaches 12,000 L at t = 3,600 s (7,000 L in 1 h) and `throttled` turns false on the next step; then `holdS` 4.000, `bStar` 1.1856, `divertLimitC` 139.224 again | ±2 s; ±5 L | H34 |
+
+### Intermediate clean covered by the buffer
+
+| # | What | How | Expected | Tolerance | Source |
+|---|---|---|---|---|---|
+| H94 | The tank covers a clean from 50% | `cleaning.aicEveryProductionS` = 10, so the clean starts from about 10,000 L; ×10 to t = 1,900 s | 'aic' from t = 10 to 1,810 s; the level falls from 10,002.78 L to 2,502.78 L, exactly the 7,500 L the fillers draw in 30 min; `fillersRunning` 2 and `fillersStarved` false throughout | ±1 s; ±5 L | H32; [review](REVIEW.md#checked-and-correct) |
+
+### Mass balance and step size
+
+| # | What | How | Expected | Tolerance | Source |
+|---|---|---|---|---|---|
+| H95 | Mass balance over 24 h | H76–H87's run, and H88's divert run, each for 24 h (t = 0 to 86,400 s) at ×1,000 | Litres drawn from the silo = litres to the fillers + litres sent to the reject tank (`divertedL`, not its level, which may be emptied) + surplus cream + change in mixing-tank contents + change in aseptic-tank contents. Steam drops out, since the flash vessel removes what it added. Without faults: fillers 360,000 L, aseptic tank +1,142.86 L, reject 0; if the mixing tank ends at its start level, 366,158.73 L drawn and 5,015.87 L of cream | 0.1% of the litres drawn | H3, H31–H35, H60 |
+| H96 | 1 s and 60 s steps agree | H87's run at 1 s steps (×1,000), and again with `clock.fastStepS` = 60 at ×10,000 | At t = 86,400 s, every tank level, `divertedL`, litres drawn from the silo and litres to the fillers within 1% of the 1 s run; the same number of throttles (1), cleans (2) and diverts (0). Context: the 60 s run sees each crossing up to a step late (throttle at t = 28,860 s, full flow again at 31,980 s), so its aseptic tank ends near 11,067 L, 0.7% under 11,142.86 L | ±1% | H57; [D8](DECISIONS.md#d8-clock) |
 
 ## Checks against the plan and the review
 

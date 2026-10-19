@@ -62,3 +62,19 @@ export function setLamp(lamp: HTMLElement, status: Status): void {
   lamp.dataset.status = status;
   lamp.setAttribute('aria-label', STATUS_TEXT[status]);
 }
+
+/** A colour token of src/styles/tokens.css as the page resolves it now, e.g. readToken('--accent'). */
+export function readToken(name: `--${string}`): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+/**
+ * Calls `onChange` when the OS colour scheme flips or the page switches theme on <html> (data-theme),
+ * as the 3D view does (src/scene/theme.ts), until `signal` aborts.
+ */
+export function watchTheme(onChange: () => void, signal: AbortSignal): void {
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', onChange, { signal });
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  signal.addEventListener('abort', () => observer.disconnect(), { once: true });
+}

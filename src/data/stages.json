@@ -42,6 +42,30 @@
         "label": "Mixing tank (UHT feed)",
         "unit": "°C",
         "decimals": 0
+      },
+      {
+        "key": "rawMilkLph",
+        "label": "Raw milk drawn",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "surplusCreamLph",
+        "label": "Surplus cream",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "siloLevelPct",
+        "label": "Silo level",
+        "unit": "%",
+        "decimals": 0
+      },
+      {
+        "key": "mixTankLevelPct",
+        "label": "Mixing tank level",
+        "unit": "%",
+        "decimals": 0
       }
     ],
     "tourCaption": [
@@ -66,6 +90,18 @@
         "key": "deaeratorTempC",
         "label": "Deaerator",
         "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "airPct",
+        "label": "Air after deaerator",
+        "unit": "%",
+        "decimals": 2
+      },
+      {
+        "key": "heatRecoveredKw",
+        "label": "Heat recovered",
+        "unit": "kW",
         "decimals": 0
       }
     ],
@@ -104,6 +140,24 @@
         "label": "Outlet",
         "unit": "°C",
         "decimals": 0
+      },
+      {
+        "key": "globuleUm",
+        "label": "Fat globule size",
+        "unit": "µm",
+        "decimals": 2
+      },
+      {
+        "key": "creamingRiskPct",
+        "label": "Creaming risk",
+        "unit": "%",
+        "decimals": 0
+      },
+      {
+        "key": "powerKw",
+        "label": "Power draw",
+        "unit": "kW",
+        "decimals": 0
       }
     ],
     "tourCaption": [
@@ -118,6 +172,18 @@
     "zone": "process",
     "description": "Steam heats the milk to about 140 °C, a holding tube keeps it there for about 4 s, and any drop below the divert limit (B* < 1) sends it to the reject tank.",
     "values": [
+      {
+        "key": "flowLph",
+        "label": "Flow",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "holdS",
+        "label": "Holding time",
+        "unit": "s",
+        "decimals": 1
+      },
       {
         "key": "tempC",
         "label": "Holding-tube outlet",
@@ -149,15 +215,9 @@
         "decimals": 2
       },
       {
-        "key": "holdS",
-        "label": "Holding time",
-        "unit": "s",
-        "decimals": 1
-      },
-      {
-        "key": "flowLph",
-        "label": "Flow",
-        "unit": "L/h",
+        "key": "rejectLevelL",
+        "label": "Reject tank",
+        "unit": "L",
         "decimals": 0
       }
     ],
@@ -183,6 +243,18 @@
         "key": "coolerTempC",
         "label": "Cooler outlet",
         "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "waterRemovedLph",
+        "label": "Water flashed off",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "condenserKw",
+        "label": "Condenser load",
+        "unit": "kW",
         "decimals": 0
       }
     ],
@@ -221,6 +293,31 @@
         "label": "Milk temperature",
         "unit": "°C",
         "decimals": 0
+      },
+      {
+        "key": "inflowLph",
+        "label": "Inflow from UHT",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "outflowLph",
+        "label": "Outflow to fillers",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "headspaceBar",
+        "label": "Headspace pressure",
+        "unit": "bar",
+        "decimals": 1
+      },
+      {
+        "key": "nextCleanS",
+        "label": "Next intermediate clean",
+        "unit": "h",
+        "decimals": 1,
+        "scale": 0.0002777777777777778
       }
     ],
     "tourCaption": [

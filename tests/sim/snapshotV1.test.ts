@@ -66,8 +66,8 @@ function expectLineMatchesStages(snap: Snapshot, where: string): void {
 }
 
 describe('contracts v1', () => {
-  it('CONTRACT_VERSION is 1', () => {
-    expect(CONTRACT_VERSION).toBe(1);
+  it('CONTRACT_VERSION is 2 (contracts v2, phase 3; v1 is a subset of it)', () => {
+    expect(CONTRACT_VERSION).toBe(2);
   });
 
   it('LINE_POINT_IDS lists the 12 measuring points once each, in flow order', () => {
@@ -87,8 +87,8 @@ describe('contracts v1', () => {
     ]);
   });
 
-  it.each(SIMS)('%s snapshots carry version 1', (_name, create) => {
-    expect(create(plantConfig).snapshot().version).toBe(1);
+  it.each(SIMS)('%s snapshots carry the contract version', (_name, create) => {
+    expect(create(plantConfig).snapshot().version).toBe(CONTRACT_VERSION);
   });
 });
 
@@ -116,10 +116,10 @@ describe.each(SIMS)('%s: Snapshot.line', (name, create) => {
 });
 
 // The line points of plan/hand-calculations.md (H64–H75): the chart values of plan 02 ("Chart values as
-// text") and the R7 homogenizer outlet, for the static plant at full flow with both fillers running and no
-// divert. Only `process` changes an expected value here, with a source (ownership rule 4).
+// text") and the R7 homogenizer outlet, for the plant as it opens at full flow with both fillers running and
+// no divert. Only `process` changes an expected value here, with a source (ownership rule 4).
 const LINE_POINTS_H: [h: string, id: LinePointId, tempC: number, flowLph: number, why: string][] = [
-  ['H64', 'silo', 4, 16_000, 'raw milk to the separator'],
+  ['H64', 'silo', 4, 16_222.22, 'raw milk to the separator: phase 3, 16,000 L/h of 3.5% milk needs 16,222.22 L/h (H3)'],
   ['H65', 'separator', 60, 16_000, 'standardized milk to the mixing tank'],
   ['H66', 'feedTank', 4, 16_000, 'the mixing tank, which feeds the UHT plant'],
   ['H67', 'preheater', 80, 16_000, 'preheater outlet'],
@@ -133,7 +133,7 @@ const LINE_POINTS_H: [h: string, id: LinePointId, tempC: number, flowLph: number
   ['H75', 'filler', 20, 15_000, 'both fillers together'],
 ];
 
-describe('createSim: the static line sits on the hand-calculated line points', () => {
+describe('createSim: the line opens on the hand-calculated line points', () => {
   const line = () => createSim(plantConfig).snapshot().line;
 
   it('has one hand value for each of the 12 points', () => {
@@ -145,7 +145,9 @@ describe('createSim: the static line sits on the hand-calculated line points', (
     // Every hand value is exact but the homogenizer outlet, which is computed (±0.001 °C in H69).
     if (id === 'homogenizer') expectWithin(point.tempC, tempC, 0.001);
     else expect(point.tempC).toBe(tempC);
-    expect(point.flowLph).toBe(flowLph);
+    // Every flow is exact but the raw milk, which is computed (±0.01 L/h in H64, phase 3).
+    if (id === 'silo') expectWithin(point.flowLph, flowLph, 0.01);
+    else expect(point.flowLph).toBe(flowLph);
   });
 
   it('stage 4 reads 140 °C at the holding tube, as the line does (H70)', () => {
@@ -225,10 +227,14 @@ describe('createMockSim: a red UHT stage diverts', () => {
     }
   });
 
-  it("the UHT points carry the KPI strip's UHT flow in every frame", () => {
+  it("the UHT points carry the KPI strip's UHT flow in every frame, and the silo the raw milk stage 1 shows", () => {
     for (const snap of snaps) {
-      if (snap.line.holdingTube.flowLph !== snap.kpis.uhtFlowLph || snap.line.silo.flowLph !== snap.kpis.uhtFlowLph) {
-        expect.fail(`at ${snap.timeS} s: holding tube ${snap.line.holdingTube.flowLph} L/h, KPI ${snap.kpis.uhtFlowLph} L/h`);
+      const { holdingTube, feedTank, silo } = snap.line;
+      if (holdingTube.flowLph !== snap.kpis.uhtFlowLph || feedTank.flowLph !== snap.kpis.uhtFlowLph) {
+        expect.fail(`at ${snap.timeS} s: holding tube ${holdingTube.flowLph} L/h, feed tank ${feedTank.flowLph} L/h, KPI ${snap.kpis.uhtFlowLph} L/h`);
+      }
+      if (silo.flowLph !== snap.stages[1].values.rawMilkLph) {
+        expect.fail(`at ${snap.timeS} s: silo ${silo.flowLph} L/h, stage 1 raw milk ${snap.stages[1].values.rawMilkLph} L/h`);
       }
     }
   });

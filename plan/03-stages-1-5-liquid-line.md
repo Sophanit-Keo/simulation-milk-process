@@ -29,7 +29,7 @@ Heat exchangers warm the cold feed to about 75–80 °C, then a vacuum vessel st
 A high-pressure piston pump forces milk through a gap of about 0.1 mm, so fat globules shrink below 1 µm and no cream layer forms during months on the shelf.
 
 - **Real process:** UHT lines homogenize at 180–250 bar ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)). The pump has 3–5 pistons; the first stage breaks the globules (about 3.5 µm down to under 1 µm), and the second adds about 30 bar back-pressure to break clusters. It runs at 55–80 °C, and every 40 bar of pressure drop adds 1 °C ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)).
-- **Position note:** your stage order puts homogenization before UHT, as indirect plants do. Direct plants with flash cooling use an aseptic homogenizer after the flash vessel instead ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)).
+- **Position note:** the course's stage order puts homogenization before UHT, as indirect plants do. Direct plants with flash cooling use an aseptic homogenizer after the flash vessel instead ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)).
 - **3D:** box-shaped machine with three pistons driven by a crank, two pressure gauges, motor with belt drive.
 - **Simulate:** stage 1 and stage 2 pressures, temperature rise, globule size, a creaming-risk score, power draw (handbook example: 68 kW for 10,000 L/h at 200 bar).
 
@@ -37,14 +37,14 @@ A high-pressure piston pump forces milk through a gap of about 0.1 mm, so fat gl
 
 ## 4. UHT Treatment
 
-Steam heats the milk to about 140 °C, a holding tube keeps it there for about 4 s, and any drop below the divert limit (B\* < 1) diverts the flow to reject.
+Steam heats the milk to about 140 °C, a holding tube keeps it there for about 4 s, and any drop below the divert limit (B\* < 1 at the holding-tube outlet) diverts the flow to reject.
 
 - **Real process:** milk needs 135–150 °C for a few seconds, in practice 137–142 °C for 4–6 s ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)); EU law requires at least 135 °C ([Regulation 853/2004, Annex III §IX](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX)). Direct plants inject steam through a ring nozzle to 140–150 °C, under pressure so it cannot boil. The target is a 9-log kill of heat-resistant spores (B\* above 1) and an F0 of 5–6 min ([UHT milk module](https://ebooks.inflibnet.ac.in/ftp04/chapter/uht-milk-and-milk-products/)).
 - **Safety logic:** temperature is recorded at the holding-tube outlet ([FDA aseptic guide](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-guides/aseptic-processing-and-packaging-food-industry)). If it drops, product goes to a reject tank, and the plant is flushed, cleaned and re-sterilized before restart. Before each run, hot water at 125 °C or more circulates for at least 30 min ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)).
 - **3D:** steam injector head, coiled holding tube, flow-diversion valve with a green/red light, steam pipe from the boiler house.
-- **Simulate:** holding time = tube volume ÷ flow, live F0 and B\*, divert events, plant capacity (direct systems run 2,000–45,000 L/h).
+- **Simulate:** holding time = tube volume ÷ flow, live F0 and B\*, divert and the clean and re-sterilize that follow, plant capacity (direct systems run 2,000–45,000 L/h).
 
-> **Decided:** the model diverts when B\* < 1, about 139.2 °C at a 4 s hold, 0.8 °C under the 140 °C set point, so display noise stays within ±0.3 °C. See [D4](DECISIONS.md#d4-divert-rule-and-display-noise).
+> **Decided:** the model diverts when B\* < 1 at the holding-tube outlet, computed from the live hold: below 139.22 °C at a 4 s hold (full flow), 0.78 °C under the 140 °C set point, and below 136.06 °C at 8 s (50% flow). It diverts for 3 min, then runs an 80 min CIP and 30 min of sterilizing at 125 °C or more, so the UHT plant is out for 113 min ([H36](hand-calculations.md#counts-and-rates)). Display noise is capped at ±0.3 °C, inside the margin, so noise alone never diverts. See [D4](DECISIONS.md#d4-divert-rule-and-display-noise), [D2](DECISIONS.md#d2-missing-defaults) and [R6](REVIEW.md#r6-holding-time).
 
 ## 5. Flash Cooling
 

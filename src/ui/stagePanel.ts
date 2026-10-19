@@ -1,6 +1,7 @@
 import { ZONE_NAMES, type Snapshot, type StageId, type StageInfo, type Status } from '../contracts';
 import { el, setText, STATUS_TEXT } from './dom';
 import { formatValue } from './format';
+import { DERIVED_ROWS, STATE_ROWS, type DerivedRow, type StateRow } from './liquidRows';
 
 export interface StagePanel {
   /** Shows a stage's name, description and value rows, filled from the snapshot if there is one yet. */
@@ -11,6 +12,16 @@ export interface StagePanel {
   update(snapshot: Snapshot): void;
   dispose(): void;
 }
+
+/** Something the panel shows for one stage below its live values, such as a trend chart or a set-point slider. */
+export interface PanelPart {
+  update(snapshot: Snapshot): void;
+  /** Removes what the part added, and its listeners; the panel calls it when it shows another stage. */
+  dispose(): void;
+}
+
+/** Builds a stage's parts into `host`, in the order they should appear; none for most stages. */
+export type PanelParts = (stage: StageId, host: HTMLElement) => PanelPart[];
 
 const EMPTY_TITLE = 'Select a stage';
 const EMPTY_HINT = 'Pick a stage from the list, or click a machine in the 3D view, to see what it does and its live values.';
@@ -24,12 +35,23 @@ const HOW_TO: readonly (readonly (string | { key: string })[])[] = [
   ['Drag to orbit, scroll to zoom, click a machine to select it.'],
 ];
 
+interface StateCell {
+  row: StateRow;
+  lamp: HTMLElement;
+  text: HTMLElement;
+}
+
 /**
  * The info panel (#panel): "Select a stage" and a short how-to until something is selected,
- * then that stage's name, zone, status, description (stages.json) and one row per live value,
- * formatted with the value's scale, decimals and unit.
+ * then that stage's name, zone, status, description (stages.json) and its live values: first the
+ * liquid line's states in words where they belong (the UHT mode, the throttle, the fillers; liquidRows.ts),
+ * then one row per value, formatted with the value's scale, decimals and unit, with any value the panel
+ * works out itself (the margin over the divert limit) after the row it follows; then the stage's parts.
+ *
+ * Only the stages.json rows carry data-value-key; the state rows carry data-state-key and the worked-out
+ * ones data-derived-key.
  */
-export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[]): StagePanel {
+export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[], parts: PanelParts = () => []): StagePanel {
   const infos = new Map(stages.map((info) => [info.id, info]));
   const original = [...panel.childNodes];
 
@@ -58,6 +80,9 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
   const rows = el('dl', 'vals');
   live.append(liveTitle, rows);
 
+  // Charts and sliders; empty, and so taking no room, for a stage without any.
+  const tools = el('div', 'p-tools');
+
   const howTo = el('ul', 'how');
   howTo.setAttribute('aria-label', 'How to use');
   for (const line of HOW_TO) {
@@ -66,22 +91,73 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
     howTo.append(item);
   }
 
-  panel.replaceChildren(head, description, live, howTo);
+  panel.replaceChildren(head, description, live, tools, howTo);
 
   let shown: StageInfo | null = null;
   let shownStatus: Status | null = null;
-  // The value cell of each row of the shown stage, by value key.
+  // The value cell of each row of the shown stage, by value key; the state and worked-out rows likewise.
   let cells = new Map<string, HTMLElement>();
+  let stateCells: StateCell[] = [];
+  let derivedCells: { row: DerivedRow; cell: HTMLElement }[] = [];
+  let shownParts: PanelPart[] = [];
   showEmpty();
+
+  function dropParts(): void {
+    for (const part of shownParts) part.dispose();
+    shownParts = [];
+    tools.replaceChildren();
+  }
 
   function showEmpty(): void {
     shown = null;
     shownStatus = null;
+    dropParts();
     title.textContent = EMPTY_TITLE;
     description.textContent = EMPTY_HINT;
-    for (const node of [number, subtitle, chip, live]) node.hidden = true;
+    for (const node of [number, subtitle, chip, live, tools]) node.hidden = true;
     howTo.hidden = false;
     panel.scrollTop = 0;
+  }
+
+  function valueRow(key: string, label: string, keyAttribute: 'valueKey' | 'derivedKey'): { row: HTMLElement; cell: HTMLElement } {
+    const row = el('div', 'val');
+    row.dataset[keyAttribute] = key;
+    const cell = el('dd', '', '—');
+    // The space keeps "Flow 16,000 L/h" apart in the row's text; the grid ignores it.
+    row.append(el('dt', '', label), ' ', cell);
+    return { row, cell };
+  }
+
+  function buildRows(info: StageInfo): HTMLElement[] {
+    cells = new Map();
+    stateCells = [];
+    derivedCells = [];
+    const built: HTMLElement[] = [];
+    for (const state of STATE_ROWS[info.id] ?? []) {
+      const row = el('div', 'val val-state');
+      row.dataset.stateKey = state.key;
+      const lamp = el('span', 'lamp');
+      lamp.dataset.status = 'idle';
+      lamp.setAttribute('aria-hidden', 'true'); // the words say the same
+      const text = el('span', '', '—');
+      const cell = el('dd');
+      cell.append(lamp, text);
+      row.append(el('dt', '', state.label), ' ', cell);
+      stateCells.push({ row: state, lamp, text });
+      built.push(row);
+    }
+    const derived = DERIVED_ROWS[info.id] ?? [];
+    for (const value of info.values) {
+      const { row, cell } = valueRow(value.key, value.label, 'valueKey');
+      cells.set(value.key, cell);
+      built.push(row);
+      for (const extra of derived.filter((candidate) => candidate.after === value.key)) {
+        const worked = valueRow(extra.key, extra.label, 'derivedKey');
+        derivedCells.push({ row: extra, cell: worked.cell });
+        built.push(worked.row);
+      }
+    }
+    return built;
   }
 
   function update(snapshot: Snapshot): void {
@@ -97,6 +173,14 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
       const cell = cells.get(info.key);
       if (cell) setText(cell, formatValue(stage?.values[info.key], info));
     }
+    const values = stage?.values ?? {};
+    for (const { row, cell } of derivedCells) setText(cell, row.read(values));
+    for (const { row, lamp, text } of stateCells) {
+      const state = row.read(snapshot.liquid);
+      if (lamp.dataset.status !== state.status) lamp.dataset.status = state.status;
+      setText(text, state.text);
+    }
+    for (const part of shownParts) part.update(snapshot);
   }
 
   return {
@@ -110,23 +194,18 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
         title.textContent = info.name;
         subtitle.textContent = `Stage ${info.id} · ${ZONE_NAMES[info.zone]}`;
         description.textContent = info.description;
-        cells = new Map();
-        rows.replaceChildren(
-          ...info.values.map((value) => {
-            const row = el('div', 'val');
-            row.dataset.valueKey = value.key;
-            const cell = el('dd', '', '—');
-            cells.set(value.key, cell);
-            // The space keeps "Flow 16,000 L/h" apart in the row's text; the grid ignores it.
-            row.append(el('dt', '', value.label), ' ', cell);
-            return row;
-          }),
-        );
+        rows.replaceChildren(...buildRows(info));
         for (const node of [number, subtitle, chip, live]) node.hidden = false;
-        live.hidden = info.values.length === 0;
+        live.hidden = rows.childElementCount === 0;
         howTo.hidden = true;
         chipLamp.dataset.status = 'idle';
         chipText.textContent = STATUS_TEXT.idle;
+        // The old stage's charts are destroyed before the new stage's are built.
+        dropParts();
+        // On show while they are built, so a chart measures its box at once.
+        tools.hidden = false;
+        shownParts = parts(info.id, tools);
+        tools.hidden = shownParts.length === 0;
       }
       // A new selection starts at the top of the panel, even for the stage already shown.
       panel.scrollTop = 0;
@@ -135,6 +214,7 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
     clear: showEmpty,
     update,
     dispose() {
+      dropParts();
       panel.replaceChildren(...original);
     },
   };

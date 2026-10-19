@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LinePoint, LinePointId } from '../../src/contracts';
 import { createPipes, TEMP_STOPS, tempColor, type Pipes } from '../../src/scene/pipes';
-import { readSceneColor, type SceneColorVar } from '../../src/scene/theme';
+import { LAMP_GLOW_HEX, readSceneColor, type SceneColorVar } from '../../src/scene/theme';
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
 import { stubTheme } from './browserStubs';
@@ -145,5 +145,84 @@ describe('createPipes', () => {
     pipes.applyTheme();
     for (const { color: c } of vertices(scene, 'holding-tube')) expectColor(c, color('#ff00ff'), 'pipe-holding-tube');
     pipes.dispose();
+  });
+
+  /** The colour attribute's version: three.js bumps it each time a run is marked for upload. */
+  const colourVersion = (scene: THREE.Scene, run: string): number => {
+    const mesh = scene.getObjectByName(`pipe-${run}`) as THREE.Mesh;
+    return (mesh.geometry.getAttribute('color') as THREE.BufferAttribute).version;
+  };
+
+  it('re-uploads the colours of only the runs whose temperatures moved', () => {
+    const { pipes, scene, line } = setUp();
+    const versions = (): Record<string, number> =>
+      Object.fromEntries(['silo-manifold', 'feed', 'holding-tube', 'product', 'divert', 'filler-a'].map((run) => [run, colourVersion(scene, run)]));
+    const before = versions();
+    pipes.update(line, 0.016);
+    expect(versions(), 'nothing moved: nothing re-uploaded').toEqual(before);
+    // The UHT temperature's display noise: the runs carrying the holding-tube temperature, and no others.
+    line.holdingTube.tempC = 140.2;
+    line.divert.tempC = 140.2;
+    pipes.update(line, 0.016);
+    const after = versions();
+    for (const run of ['feed', 'holding-tube', 'product', 'divert']) expect(after[run], run).toBeGreaterThan(before[run]);
+    for (const run of ['silo-manifold', 'filler-a']) expect(after[run], run).toBe(before[run]);
+    pipes.dispose();
+  });
+
+  it('moves each point’s stripes at a speed proportional to its flow, and holds them at no flow', () => {
+    const { pipes, line } = setUp();
+    line.silo.flowLph = 16_000;
+    line.filler.flowLph = 8_000;
+    line.divert.flowLph = 0;
+    pipes.update(line, 0.01);
+    const { phaseM } = pipes.state();
+    // 10,000 L/h moves the stripes 1 m a second.
+    expect(phaseM.silo).toBeCloseTo(0.016, 6);
+    expect(phaseM.filler).toBeCloseTo(phaseM.silo / 2, 6);
+    expect(phaseM.divert).toBe(0);
+    // No animation time (paused): nothing moves, whatever the flow.
+    pipes.update(line, 0);
+    expect(pipes.state().phaseM).toEqual(phaseM);
+    pipes.dispose();
+  });
+
+  it('moves the stripes at most a quarter of a stripe and gap per frame, so a slow frame at ×10,000 doesn’t strobe', () => {
+    const { pipes, line } = setUp();
+    line.silo.flowLph = 16_000;
+    // 1.6 m/s for 0.3 s of animation time (a 0.1 s frame at ×10,000) would be 0.48 m.
+    pipes.update(line, 0.3);
+    expect(pipes.state().phaseM.silo).toBeCloseTo(0.7 / 4, 6);
+    pipes.dispose();
+  });
+
+  it('lights the divert route to the reject tank while diverting, and only that run', () => {
+    const { pipes, scene, line } = setUp();
+    const material = (run: string): THREE.MeshStandardMaterial =>
+      (scene.getObjectByName(`pipe-${run}`) as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    expect(pipes.state().divertLit).toBe(false);
+    expect(material('divert').emissiveIntensity).toBe(0);
+    pipes.update(line, 0.016, true);
+    expect(pipes.state().divertLit).toBe(true);
+    expect(material('divert').emissiveIntensity).toBeGreaterThan(0);
+    expect(material('divert').emissive.getHex()).toBe(LAMP_GLOW_HEX.bad);
+    for (const run of ['feed', 'holding-tube', 'product']) {
+      expect(material(run), run).not.toBe(material('divert'));
+      expect(material(run).emissive.getHex(), run).toBe(0); // black: no glow
+    }
+    pipes.update(line, 0.016, false);
+    expect(pipes.state().divertLit).toBe(false);
+    expect(material('divert').emissiveIntensity).toBe(0);
+    pipes.dispose();
+  });
+
+  it('disposes both milk materials and the stripe texture', () => {
+    const { pipes, scene } = setUp();
+    const disposed = new Set<unknown>();
+    const milk = (scene.getObjectByName('pipe-feed') as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    const divert = (scene.getObjectByName('pipe-divert') as THREE.Mesh).material as THREE.Material;
+    for (const item of [milk, divert, milk.map as THREE.Texture]) item.addEventListener('dispose', () => disposed.add(item));
+    pipes.dispose();
+    expect(disposed.size).toBe(3);
   });
 });

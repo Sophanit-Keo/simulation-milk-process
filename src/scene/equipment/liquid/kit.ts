@@ -7,14 +7,20 @@ import type { EquipmentContext, MaterialName } from '../types';
 export type Shape = 'box' | 'cyl' | 'cylLo' | 'cyl8' | 'coneDown' | 'coneUp' | 'dome' | 'sphere';
 
 /**
- * The shared materials plus two the shared set lacks: the preview's blue-grey paint for drives and
- * pumps, and white gauge faces. Both keep fixed colours, as in the preview, which doesn't theme them.
+ * The shared materials plus the module's own: the preview's blue-grey paint for drives and pumps and
+ * white gauge faces (which the shared set now has too, and then wins), see-through white for steam and
+ * vapour, and the divert valve's lamp, whose colour liquidLine.ts sets from the plant's mode.
  */
-export type LiquidMaterial = MaterialName | 'paint' | 'gauge';
+type OwnMaterial = 'paint' | 'gauge' | 'steam' | 'lamp';
+export type LiquidMaterial = MaterialName | OwnMaterial;
 
-const OWN_MATERIALS: Record<Exclude<LiquidMaterial, MaterialName>, THREE.MeshStandardMaterialParameters> = {
+const OWN_MATERIALS: Record<OwnMaterial, THREE.MeshStandardMaterialParameters> = {
   paint: { color: 0x4f7896, metalness: 0.25, roughness: 0.55 },
   gauge: { color: 0xf5f5f0, roughness: 0.4 },
+  // No depth writes, so the puffs never cut holes in each other or in what stands behind them.
+  steam: { color: 0xffffff, roughness: 1, transparent: true, opacity: 0.55, depthWrite: false },
+  // Lit from inside: the emissive colour is the lamp colour, and the plant's lights add little to it.
+  lamp: { color: 0x000000, roughness: 0.3, emissiveIntensity: 1 },
 };
 
 function makeShape(shape: Shape): THREE.BufferGeometry {

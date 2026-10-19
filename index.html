@@ -48,6 +48,13 @@
     <p class="p-what">Pick a stage from the list, or click a machine in the 3D view, to see what it does and its live values.</p>
   </aside>
 
+  <!-- The event log, newest first (src/ui/eventLog.ts). It sits under the rail, in a box of its own size,
+       so a busy run never moves anything else; the list scrolls inside it. -->
+  <section id="log" class="log-card card" aria-labelledby="log-title">
+    <h2 class="eyebrow" id="log-title">What happened</h2>
+    <ol class="log" aria-labelledby="log-title" tabindex="0"></ol>
+  </section>
+
   <!-- A labelled region, not <footer>: at the top level a footer is the page's contentinfo landmark.
        The eight cards of the plan 08 wireframe; the other KPIs of plan 06 are the small [data-kpi-sub]
        values in the card they belong with, so every KPI of the snapshot is on screen. A card with two

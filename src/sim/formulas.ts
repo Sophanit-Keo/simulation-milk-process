@@ -7,6 +7,14 @@ export function creamShareFrac(targetFatPct: number, skimFatPct: number, creamFa
   return (targetFatPct - skimFatPct) / (creamFatPct - skimFatPct);
 }
 
+/**
+ * Share of the raw milk that leaves the separator as surplus cream (H2): the fat above the target goes out
+ * as cream, so x = (f_raw − f_target) ÷ (f_cream − f_target). Litres are treated as kilograms.
+ */
+export function surplusCreamFrac(rawFatPct: number, targetFatPct: number, creamFatPct: number): number {
+  return (rawFatPct - targetFatPct) / (creamFatPct - targetFatPct);
+}
+
 /** Volume of a holding tube that holds the milk for holdS at flowLph. */
 export function tubeVolumeL(holdS: number, flowLph: number): number {
   return lphToLps(flowLph) * holdS;
@@ -42,4 +50,20 @@ export function homogenizerOutletC(inletC: number, totalBar: number, barPerDegre
 /** Overall equipment effectiveness (OEE.com). */
 export function oeeFrac(availabilityFrac: number, performanceFrac: number, qualityFrac: number): number {
   return availabilityFrac * performanceFrac * qualityFrac;
+}
+
+/** One litre per second against one bar is 0.001 m³/s × 100,000 Pa = 100 W. */
+const KW_PER_LPS_BAR = 0.1;
+
+/** Hydraulic power of a pump pushing flowLph against a pressure rise of bar (H8: 10,000 L/h at 200 bar is 55.556 kW). */
+export function hydraulicPowerKw(flowLph: number, bar: number): number {
+  return lphToLps(flowLph) * bar * KW_PER_LPS_BAR;
+}
+
+/**
+ * One step of a first-order lag toward targetValue, integrated exactly: x += (target − x)(1 − e^(−dt/τ)).
+ * Two half steps land where one whole step does, so the result does not depend on the step size.
+ */
+export function lagToward(value: number, targetValue: number, dtS: number, timeConstantS: number): number {
+  return value + (targetValue - value) * (1 - Math.exp(-dtS / timeConstantS));
 }

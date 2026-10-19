@@ -18,7 +18,17 @@ export interface SceneDebug {
   /** Frames per second, averaged over the last second. */
   fps(): number;
   equipmentIds(): string[];
+  /**
+   * What a machine shows now (Equipment.debugState), e.g. { fillFrac: 0.5 } for a tank or
+   * { diverting: true, lamp: 'bad', flagRad: -1.57 } for the divert valve; null for an unknown id or a
+   * machine that reports nothing.
+   */
+  equipmentState(id: string): EquipmentState | null;
+  /** The pipes: whether the divert route is lit, and each line point's stripe offset in metres. */
+  pipeState(): { divertLit: boolean; phaseM: Record<string, number> };
 }
+
+export type EquipmentState = Readonly<Record<string, number | string | boolean>>;
 
 declare global {
   interface Window {
@@ -36,6 +46,8 @@ export interface DebugSources {
   cameraPositionM(): PointM;
   info(): { calls: number; triangles: number };
   equipmentIds(): string[];
+  equipmentState(id: string): EquipmentState | null;
+  pipeState(): { divertLit: boolean; phaseM: Record<string, number> };
 }
 
 export interface DebugHook {
@@ -63,6 +75,15 @@ export function installDebugHook(sources: DebugSources): DebugHook {
       return (recent.length - 1) / msToS(recent[recent.length - 1] - recent[0]);
     },
     equipmentIds: () => sources.equipmentIds(),
+    // Copies, so a test can't change what the scene holds.
+    equipmentState: (id) => {
+      const state = sources.equipmentState(String(id));
+      return state ? { ...state } : null;
+    },
+    pipeState: () => {
+      const { divertLit, phaseM } = sources.pipeState();
+      return { divertLit, phaseM: { ...phaseM } };
+    },
   };
   window.__scene = hook;
   return {

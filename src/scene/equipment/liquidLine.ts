@@ -3,37 +3,72 @@
 // ("stage 1" to "stage 6" blocks) at the preview's positions and sizes, so the pipe routes scene-core
 // draws from the same file meet each machine. The holding-tube coil and every pipe belong to
 // scene-core; this module stands the machines between them. The boiler house (Could) is left out.
-import type * as THREE from 'three';
-import { lphToLps, pctToFrac, type Snapshot, type StageId } from '../../contracts';
-import plantJson from '../../data/plant.json';
+//
+// Phase 3 makes them live from the snapshot (contracts v2): tank levels, the separator and agitator with
+// the flow, the heat exchanger's glow, deaerator bubbles, pistons and gauge needles, steam and vapour,
+// and the divert valve with its lamp. The mappings from snapshot to picture are in liquid/visuals.ts.
+import * as THREE from 'three';
+import { pctToFrac, type Snapshot, type StageId, type UhtMode } from '../../contracts';
 import type { PointM } from '../layout';
+import { advancePhase, motionDtS } from '../motion';
+import { LAMP_GLOW_HEX, type LampStatus } from '../theme';
 import { MachineBuilder } from './liquid/builder';
 import { createKit, type Kit } from './liquid/kit';
-import { labelValue, lineFlowLph, stageValue } from './liquid/readings';
+import { createPuffs } from './liquid/puffs';
+import { labelValue, lineFlowLph, lineTempC, stageValue } from './liquid/readings';
+import {
+  flowFrac,
+  GAUGE_FULL_SCALE_BAR,
+  heatGlowFrac,
+  needleAngleRad,
+  steamFrac,
+  tankFillFrac,
+  uhtModeOf,
+  valveLamp,
+  vapourFrac,
+  type TankId,
+} from './liquid/visuals';
 import type { Equipment, EquipmentFactory } from './types';
 
 // Grey-box motion. It shows what runs, so it stays on under prefers-reduced-motion, but it is slower
 // than the preview's (bowl 9, agitator 2.2, pistons 11 rad/s) so it reads as information, not busyness.
+// It runs on animation time (motion.ts): a little faster at high sim speeds, still while paused.
 const BOWL_RAD_PER_S = 4;
-/** How fast the bowl spins up or down when the flow starts or stops (fraction of the gap per second). */
-const BOWL_EASE_PER_S = 1.5;
+/** How fast the bowl and the agitator spin up or down when the flow starts or stops (fraction of the gap per second). */
+const SPIN_EASE_PER_S = 1.5;
+/** Below this a spin-down counts as stopped, so a part with no flow ends up still rather than creeping. */
+const STOPPED_RAD_PER_S = 0.02;
+/**
+ * The most a spinning part turns in one frame: under half of one of the bowl's eight facets, so on a slow
+ * frame at a high speed it never seems to stand still or run backwards.
+ */
+const MAX_TURN_PER_FRAME_RAD = 0.35;
 const AGITATOR_RAD_PER_S = 1.2;
 /** Piston cycle at full UHT flow; slower at reduced flow, still at zero flow. */
 const PISTON_RAD_PER_S = 7;
 const PISTON_STROKE_M = 0.12;
+/** A crank turns at most a sixth of a turn per frame, so a stroke always reads as a stroke. */
+const MAX_CRANK_PER_FRAME_RAD = Math.PI / 3;
 /** The three cranks sit a third of a turn apart. */
 const PISTON_PHASE_RAD = (2 * Math.PI) / 3;
 const VALVE_EASE_PER_S = 8;
+const FULL_TURN_RAD = 2 * Math.PI;
+
+/** The plates' glow at the preheat set point: the pipe ramp's 80 °C orange (--t80), given off at this strength. */
+const GLOW_HEX = 0xea8027;
+const GLOW_MAX_INTENSITY = 0.5;
 
 /** Lowest milk shown in a tank, so an empty one still shows its floor (as the preview does). */
 const MIN_MILK_M = 0.01;
 
-/** Full-flow reference for the homogenizer's stroke rate. */
-const UHT_CAPACITY_LPH = plantJson.uht.capacityLph;
-/** The reject tank's volume, for its milk level. */
-const REJECT_TANK_L = plantJson.uht.rejectTankL;
-/** The preview empties a full reject tank during the re-sterilization that follows a divert. */
-const REJECT_DRAIN_LPS = REJECT_TANK_L / plantJson.uht.sterilizeS;
+/** What the divert valve's label says the plant is doing. */
+const VALVE_TEXT: Readonly<Record<UhtMode, string>> = {
+  production: 'forward',
+  divert: 'diverting',
+  cip: 'cleaning',
+  sterilize: 'sterilizing',
+  aic: 'intermediate clean',
+};
 
 /** The liquid line, stages 1–6: one Equipment per machine. */
 export const liquidLine: EquipmentFactory = (ctx) => {
@@ -65,12 +100,15 @@ interface MachineSpec {
   labelAnchorM: PointM;
   labelText?: (snapshot: Snapshot) => string;
   update?: (snapshot: Snapshot, realDtS: number) => void;
+  debugState?: () => Readonly<Record<string, number | string | boolean>>;
+  /** Frees what the machine made beside the builder's parts (a material of its own). */
+  dispose?: () => void;
 }
 
 function machine(builder: MachineBuilder, spec: MachineSpec): Equipment {
   const { object, dispose } = builder.build();
   object.userData = { equipmentId: spec.id, stage: spec.stage };
-  return {
+  const equipment: Equipment = {
     id: spec.id,
     stage: spec.stage,
     label: spec.label,
@@ -78,22 +116,65 @@ function machine(builder: MachineBuilder, spec: MachineSpec): Equipment {
     labelAnchorM: spec.labelAnchorM,
     labelText: spec.labelText ?? (() => ''),
     update: spec.update ?? (() => {}),
-    dispose,
+    dispose: () => {
+      spec.dispose?.();
+      dispose();
+    },
   };
+  if (spec.debugState) equipment.debugState = spec.debugState;
+  return equipment;
 }
-
-/** Motion runs on real time, like the preview's, and stops while the sim is paused. */
-const motionDtS = (snapshot: Snapshot, realDtS: number): number => (snapshot.paused ? 0 : realDtS);
 
 /** Moves `current` toward `target` by a share of the gap that grows with dt, without overshooting. */
 const ease = (current: number, target: number, ratePerS: number, dtS: number): number =>
   current + (target - current) * Math.min(1, ratePerS * dtS);
 
-/** Raises a unit-cylinder milk surface to `levelFrac` of the tank's fill height. */
+/** A spin rate eased toward full speed while milk flows, and toward a stop, which it then reaches, while none does. */
+function easeSpin(spinRadPerS: number, flowing: boolean, fullRadPerS: number, dtS: number): number {
+  const next = ease(spinRadPerS, flowing ? fullRadPerS : 0, SPIN_EASE_PER_S, dtS);
+  return !flowing && next < STOPPED_RAD_PER_S ? 0 : next;
+}
+
+/** Raises a unit-shape milk surface to `levelFrac` of the tank's fill height. */
 function setMilkLevel(milk: THREE.Mesh, baseM: number, fullM: number, levelFrac: number): void {
   const heightM = Math.max(MIN_MILK_M, Math.min(Math.max(levelFrac, 0), 1) * fullM);
   milk.scale.y = heightM;
   milk.position.y = baseM + heightM / 2;
+}
+
+interface TankLevelView {
+  /** Follows the tank in the snapshot; `fallbackFrac` stands in when the snapshot lacks the tank. */
+  update(snapshot: Snapshot, fallbackFrac?: number): void;
+  fillFrac(): number;
+}
+
+/**
+ * The milk in a tank, or in the level gauge of an opaque one: a unit shape whose height follows the tank's
+ * fill (contracts v2, liquid.tanks). A snapshot without the tank leaves the level where it was.
+ */
+function tankLevel(milk: THREE.Mesh, baseM: number, fullM: number, tank: TankId): TankLevelView {
+  let fillFrac = 0;
+  setMilkLevel(milk, baseM, fullM, fillFrac);
+  return {
+    update(snapshot, fallbackFrac) {
+      const frac = tankFillFrac(snapshot, tank) ?? fallbackFrac;
+      if (frac === undefined || frac === fillFrac) return;
+      fillFrac = frac;
+      setMilkLevel(milk, baseM, fullM, fillFrac);
+    },
+    fillFrac: () => fillFrac,
+  };
+}
+
+/**
+ * A level gauge down the front (+z, toward the stage cameras) of an opaque tank: a dark track, merged with
+ * the machine's dark steel, and a milk-white bar in front of it that rises with the level.
+ */
+function levelGauge(b: MachineBuilder, frontM: PointM, bottomM: number, heightM: number, widthM: number, tank: TankId): TankLevelView {
+  const [xM, , zM] = frontM;
+  b.part('box', 'steelDark', [xM, bottomM + heightM / 2, zM], [widthM + 0.08, heightM + 0.08, 0.04]);
+  const milk = b.mesh('milk', 'box', 'milk', [xM, bottomM, zM + 0.03], [widthM, MIN_MILK_M, 0.03]);
+  return tankLevel(milk, bottomM, heightM, tank);
 }
 
 /* stage 1: silos, separator, standardization skid, mixing tank */
@@ -104,12 +185,17 @@ function silo(kit: Kit, id: string, label: string, zM: number): Equipment {
   b.part('cyl', 'steel', [-59, 5.6, zM], [2.2, 10, 2.2], { castShadow: true });
   b.part('dome', 'steel', [-59, 10.6, zM], [2.2, 0.8, 2.2], { castShadow: true });
   b.part('box', 'steelDark', [-56.75, 5.6, zM], [0.08, 9.6, 0.5]); // ladder, on the side the outlet pipe leaves
+  // The silo is opaque, so its level shows on a gauge down the front. Both silos show the snapshot's one
+  // silo level: the raw milk is drawn from both alike.
+  const level = levelGauge(b, [-59, 0, zM + 2.22], 1.0, 9.2, 0.14, 'silo');
   return machine(b, {
     id,
     stage: 1,
     label,
     labelAnchorM: [-59, 11.9, zM],
     labelText: (s) => labelValue(stageValue(s, 1, 'siloTempC'), 0, '°C'),
+    update: (s) => level.update(s),
+    debugState: () => ({ fillFrac: level.fillFrac() }),
   });
 }
 
@@ -122,7 +208,7 @@ function separator(kit: Kit): Equipment {
   b.part('cyl8', 'steel', [0, 0, 0], [0.6, 1.1, 0.6], { parent: bowl, castShadow: true });
   b.part('coneUp', 'steel', [0, 0.75, 0], [0.6, 0.4, 0.6], { parent: bowl, castShadow: true });
   b.part('box', 'steelDark', [0.56, 0, 0], [0.12, 0.9, 0.16], { parent: bowl }); // a fin, so the spin shows
-  // Already turning on the first frame, as in the preview; it spins down if the flow stops.
+  // Already turning on the first frame, as in the preview; it spins down to a stop while no milk flows.
   let spinRadPerS = BOWL_RAD_PER_S;
   return machine(b, {
     id: 'separator',
@@ -132,9 +218,10 @@ function separator(kit: Kit): Equipment {
     labelText: (s) => labelValue(stageValue(s, 1, 'separatorTempC'), 0, '°C'),
     update(s, realDtS) {
       const dtS = motionDtS(s, realDtS);
-      spinRadPerS = ease(spinRadPerS, lineFlowLph(s, 'separator') > 0 ? BOWL_RAD_PER_S : 0, BOWL_EASE_PER_S, dtS);
-      bowl.rotation.y = (bowl.rotation.y + spinRadPerS * dtS) % (2 * Math.PI);
+      spinRadPerS = easeSpin(spinRadPerS, lineFlowLph(s, 'separator') > 0, BOWL_RAD_PER_S, dtS);
+      bowl.rotation.y = advancePhase(bowl.rotation.y, spinRadPerS * dtS, MAX_TURN_PER_FRAME_RAD, FULL_TURN_RAD);
     },
+    debugState: () => ({ spinRadPerS, angleRad: bowl.rotation.y }),
   });
 }
 
@@ -163,6 +250,9 @@ function mixingTank(kit: Kit): Equipment {
   b.part('dome', 'steel', [-42.4, 4.15, -14], [1.5, 0.38, 1.5], { castShadow: true });
   b.part('box', 'paint', [-42.4, 4.8, -14], [0.55, 0.6, 0.55]); // agitator drive
   const agitator = b.mesh('agitator', 'box', 'steelDark', [-42.4, 5.15, -14], [1.1, 0.06, 0.12]);
+  const level = levelGauge(b, [-42.4, 0, -12.48], 0.95, 3.0, 0.1, 'mixTank');
+  // It stirs while the separator fills it, and comes to rest when the flow stops.
+  let spinRadPerS = AGITATOR_RAD_PER_S;
   return machine(b, {
     id: 'mixing-tank',
     stage: 1,
@@ -171,8 +261,12 @@ function mixingTank(kit: Kit): Equipment {
     // It is the UHT feed tank of stages.json: the milk leaves it cold for the preheater.
     labelText: (s) => labelValue(stageValue(s, 1, 'feedTankTempC'), 0, '°C'),
     update(s, realDtS) {
-      agitator.rotation.y = (agitator.rotation.y + AGITATOR_RAD_PER_S * motionDtS(s, realDtS)) % (2 * Math.PI);
+      const dtS = motionDtS(s, realDtS);
+      spinRadPerS = easeSpin(spinRadPerS, lineFlowLph(s, 'separator') > 0, AGITATOR_RAD_PER_S, dtS);
+      agitator.rotation.y = advancePhase(agitator.rotation.y, spinRadPerS * dtS, MAX_TURN_PER_FRAME_RAD, FULL_TURN_RAD);
+      level.update(s);
     },
+    debugState: () => ({ fillFrac: level.fillFrac(), spinRadPerS, angleRad: agitator.rotation.y }),
   });
 }
 
@@ -198,13 +292,31 @@ function plateHeatExchanger(kit: Kit): Equipment {
   for (const xM of [-30.2, -27.6]) b.part('box', 'paint', [xM, 1.15, -14], [0.26, 2.1, 1.15], { castShadow: true }); // frame and pressure plate
   for (const zM of [-14.45, -13.55]) b.part('box', 'steelDark', [-28.9, 2.25, zM], [3.0, 0.1, 0.1]); // carrying bars
   const plates = Array.from({ length: 18 }, (_, i) => ({ atM: [-29.95 + i * 0.122, 1.1, -14] as PointM, sizeM: [0.055, 1.75, 0.95] as const }));
-  b.instanced('plates', 'box', 'steel', plates, true);
+  const plateMesh = b.instanced('plates', 'box', 'steel', plates, true);
+  // The plates glow with the milk's heat. They get their own copy of the steel, which takes the shared
+  // steel's themed colour each frame and adds the glow: still one draw call for the whole pack.
+  const steel = kit.material('steel');
+  const glow = steel instanceof THREE.MeshStandardMaterial ? steel.clone() : new THREE.MeshStandardMaterial();
+  glow.name = 'plate-glow';
+  glow.emissive.setHex(GLOW_HEX);
+  glow.emissiveIntensity = 0;
+  plateMesh.material = glow;
+  let glowFrac = 0;
   return machine(b, {
     id: 'plate-heat-exchanger',
     stage: 2,
     label: 'Plate heat exchanger',
     labelAnchorM: [-28.9, 2.65, -14],
     labelText: (s) => labelValue(stageValue(s, 2, 'preheatTempC'), 0, '°C'),
+    update(s) {
+      if (steel instanceof THREE.MeshStandardMaterial) glow.color.copy(steel.color);
+      const tempC = lineTempC(s, 'preheater');
+      if (tempC === undefined) return;
+      glowFrac = heatGlowFrac(tempC);
+      glow.emissiveIntensity = GLOW_MAX_INTENSITY * glowFrac;
+    },
+    debugState: () => ({ glowFrac }),
+    dispose: () => glow.dispose(),
   });
 }
 
@@ -216,12 +328,24 @@ function deaerator(kit: Kit): Equipment {
   b.part('dome', 'steel', [-24.8, 3.45, -14], [0.7, 0.32, 0.7], { castShadow: true });
   b.part('cyl', 'steel', [-24.8, 4.1, -14], [0.28, 0.7, 0.28], { castShadow: true }); // condenser
   b.part('box', 'paint', [-23.5, 0.23, -12.8], [0.6, 0.45, 0.6]); // vacuum pump
+  // A sight glass on the front, in which air bubbles rise out of the milk while it flows.
+  b.part('cylLo', 'glass', [-24.8, 2.2, -13.24], [0.09, 1.5, 0.09]);
+  const bubbles = createPuffs(b, 'bubbles', 'gauge', {
+    fromM: [-24.8, 1.5, -13.2],
+    travelM: [0, 1.38, 0],
+    radiusM: 0.035,
+    count: 6,
+    cycleS: 1.6,
+    envelope: 'steady',
+  });
   return machine(b, {
     id: 'deaerator',
     stage: 2,
     label: 'Deaerator',
     labelAnchorM: [-24.8, 4.9, -14],
     labelText: (s) => labelValue(stageValue(s, 2, 'deaeratorTempC'), 0, '°C'),
+    update: (s, realDtS) => bubbles.update(flowFrac(lineFlowLph(s, 'deaerator')), motionDtS(s, realDtS)),
+    debugState: () => ({ bubbling: bubbles.mesh.visible, phase: bubbles.phase() }),
   });
 }
 
@@ -234,6 +358,17 @@ function homogenizer(kit: Kit): Equipment {
   b.part('box', 'paint', [-20.5, 0.75, -14], [2.2, 1.1, 1.3], { castShadow: true }); // crankcase
   b.part('cyl', 'paint', [-20.5, 0.55, -15.35], [0.42, 1.2, 0.42], { rotationRad: [0, 0, Math.PI / 2], castShadow: true }); // main motor
   for (const xM of [-21.0, -20.1]) b.part('cylLo', 'gauge', [xM, 1.34, -13.75], [0.13, 0.06, 0.13]); // stage 1 and 2 gauges
+  // A needle on each dial, turning about the dial's centre: needle_1 reads stage 1, needle_2 stage 2.
+  const needles = [-21.0, -20.1].map((xM, i) => {
+    const pivot = b.pivot(`needle_${i + 1}`, [xM, 1.38, -13.75]);
+    b.mesh(`needle_${i + 1}_hand`, 'box', 'rubber', [0.05, 0, 0], [0.11, 0.012, 0.018], { parent: pivot });
+    pivot.rotation.y = needleAngleRad(0, 1);
+    return pivot;
+  });
+  const dials = [
+    { key: 'stage1Bar', fullScaleBar: GAUGE_FULL_SCALE_BAR.stage1 },
+    { key: 'stage2Bar', fullScaleBar: GAUGE_FULL_SCALE_BAR.stage2 },
+  ] as const;
   // Named for the hero model (assets' hero spec): piston_1 to piston_3, left to right, stroking along z.
   const pistonZM = -13.1;
   const pistons = [-21.1, -20.5, -19.9].map((xM, i) =>
@@ -247,12 +382,18 @@ function homogenizer(kit: Kit): Equipment {
     labelAnchorM: [-20.5, 1.9, -14],
     labelText: (s) => labelValue(stageValue(s, 3, 'stage1Bar'), 0, 'bar'),
     update(s, realDtS) {
-      const flowFrac = Math.min(Math.max(lineFlowLph(s, 'homogenizer') / UHT_CAPACITY_LPH, 0), 1);
-      crankRad = (crankRad + PISTON_RAD_PER_S * flowFrac * motionDtS(s, realDtS)) % (2 * Math.PI);
-      pistons.forEach((piston, i) => {
-        piston.position.z = pistonZM - originM[2] + PISTON_STROKE_M * Math.sin(crankRad + i * PISTON_PHASE_RAD);
-      });
+      const stepRad = PISTON_RAD_PER_S * flowFrac(lineFlowLph(s, 'homogenizer')) * motionDtS(s, realDtS);
+      crankRad = advancePhase(crankRad, stepRad, MAX_CRANK_PER_FRAME_RAD, FULL_TURN_RAD);
+      for (let i = 0; i < pistons.length; i++) {
+        pistons[i].position.z = pistonZM - originM[2] + PISTON_STROKE_M * Math.sin(crankRad + i * PISTON_PHASE_RAD);
+      }
+      // The needles read the pressure as it is, paused or not; a missing value leaves a needle where it was.
+      for (let i = 0; i < dials.length; i++) {
+        const bar = stageValue(s, 3, dials[i].key);
+        if (bar !== undefined) needles[i].rotation.y = needleAngleRad(bar, dials[i].fullScaleBar);
+      }
     },
+    debugState: () => ({ crankRad, needle1Rad: needles[0].rotation.y, needle2Rad: needles[1].rotation.y }),
   });
 }
 
@@ -261,11 +402,22 @@ function homogenizer(kit: Kit): Equipment {
 function steamInjector(kit: Kit): Equipment {
   const b = new MachineBuilder(kit, 'steam-injector', [-17, 0, -14]);
   b.part('cylLo', 'steel', [-17, 1.0, -14], [0.18, 0.75, 0.18], { castShadow: true });
+  // Puffs beside the steam inlet while the plant makes product; smaller at reduced flow.
+  const steam = createPuffs(b, 'steam', 'steam', {
+    fromM: [-16.8, 1.42, -13.85],
+    travelM: [0.1, 0.85, 0.15],
+    radiusM: 0.12,
+    count: 5,
+    cycleS: 1.3,
+    envelope: 'swell',
+  });
   return machine(b, {
     id: 'steam-injector',
     stage: 4,
     label: 'Steam injector',
     labelAnchorM: [-17, 1.8, -14],
+    update: (s, realDtS) => steam.update(steamFrac(s), motionDtS(s, realDtS)),
+    debugState: () => ({ steamFrac: steam.strength(), phase: steam.phase() }),
   });
 }
 
@@ -294,17 +446,31 @@ function divertValve(kit: Kit): Equipment {
   // The flag points down the open outlet: +x to the flash vessel, or +z to the reject tank.
   const flag = b.pivot('flag', [-12.6, 2.9, -14]);
   b.part('box', 'paint', [0.18, 0, 0], [0.36, 0.05, 0.1], { parent: flag });
+  // The lamp on top: red while diverting, amber while the plant cleans or re-sterilizes, green in production.
+  const lampMaterial = kit.material('lamp');
+  b.mesh('lamp', 'sphere', 'lamp', [-12.6, 3.02, -14], [0.07, 0.07, 0.07]);
+  let lamp: LampStatus | null = null;
+  let diverting = false;
+  const showLamp = (status: LampStatus): void => {
+    if (status === lamp) return;
+    lamp = status;
+    if (lampMaterial instanceof THREE.MeshStandardMaterial) lampMaterial.emissive.setHex(LAMP_GLOW_HEX[status]);
+  };
+  showLamp('ok');
   return machine(b, {
     id: 'divert-valve',
     stage: 4,
     label: 'Flow-diversion valve',
     labelAnchorM: [-12.6, 3.25, -14],
-    labelText: (s) => (lineFlowLph(s, 'divert') > 0 ? 'diverting' : 'forward'),
+    labelText: (s) => VALVE_TEXT[uhtModeOf(s)],
     update(s, realDtS) {
+      const mode = uhtModeOf(s);
+      diverting = mode === 'divert';
+      showLamp(valveLamp(mode));
       // Rotating +x by -90° about y points it along +z. The flip follows the state even while paused.
-      const targetRad = lineFlowLph(s, 'divert') > 0 ? -Math.PI / 2 : 0;
-      flag.rotation.y = ease(flag.rotation.y, targetRad, VALVE_EASE_PER_S, realDtS);
+      flag.rotation.y = ease(flag.rotation.y, diverting ? -Math.PI / 2 : 0, VALVE_EASE_PER_S, realDtS);
     },
+    debugState: () => ({ diverting, lamp: lamp ?? 'ok', flagRad: flag.rotation.y }),
   });
 }
 
@@ -317,29 +483,16 @@ function rejectTank(kit: Kit): Equipment {
   const milkBaseM = 0.1;
   const milkFullM = 1.45;
   const milk = b.mesh('milk', 'cyl', 'milk', [-12.6, milkBaseM, -10.5], [0.7, MIN_MILK_M, 0.7]);
-  setMilkLevel(milk, milkBaseM, milkFullM, 0);
-  // The snapshot has no reject-tank contents yet (contracts v1), so the tank sums the divert flow itself.
-  // While nothing is diverted it empties at the preview's rate, a full tank over one re-sterilization,
-  // so a run with many diverts (the mock) doesn't leave it full for good.
-  let rejectL = 0;
-  let lastTimeS: number | null = null;
+  // Diverted milk collects here (liquid.tanks.rejectTank) until the clean after a divert empties it.
+  const level = tankLevel(milk, milkBaseM, milkFullM, 'rejectTank');
   return machine(b, {
     id: 'reject-tank',
     stage: 4,
     label: 'Reject tank',
     labelAnchorM: [-12.6, 2.1, -10.5],
-    labelText: () => labelValue(rejectL, 0, 'L'),
-    update(s) {
-      if (lastTimeS !== null) {
-        const simDtS = s.timeS - lastTimeS;
-        const inLps = lphToLps(lineFlowLph(s, 'divert'));
-        const changeLps = inLps > 0 ? inLps : -REJECT_DRAIN_LPS;
-        // Time running backwards means a fresh sim: start empty.
-        rejectL = simDtS < 0 ? 0 : Math.min(Math.max(rejectL + changeLps * simDtS, 0), REJECT_TANK_L);
-      }
-      lastTimeS = s.timeS;
-      setMilkLevel(milk, milkBaseM, milkFullM, rejectL / REJECT_TANK_L);
-    },
+    labelText: (s) => labelValue(s.liquid?.tanks?.rejectTank?.levelL, 0, 'L'),
+    update: (s) => level.update(s),
+    debugState: () => ({ fillFrac: level.fillFrac() }),
   });
 }
 
@@ -352,12 +505,23 @@ function flashVessel(kit: Kit): Equipment {
   b.part('cyl', 'steel', [-10, 2.5, -14], [0.85, 3.0, 0.85], { castShadow: true });
   b.part('dome', 'steel', [-10, 4.0, -14], [0.85, 0.35, 0.85], { castShadow: true });
   b.part('cyl', 'steel', [-8.25, 4.9, -14], [0.3, 1.3, 0.3], { rotationRad: [0, 0, Math.PI / 2], castShadow: true }); // vapour condenser
+  // Vapour off the condenser's vent, as much as the water flashed off (the steam injected); none in a divert.
+  const vapour = createPuffs(b, 'vapour', 'steam', {
+    fromM: [-7.8, 5.15, -14],
+    travelM: [0.35, 1.7, 0.1],
+    radiusM: 0.3,
+    count: 6,
+    cycleS: 2.8,
+    envelope: 'swell',
+  });
   return machine(b, {
     id: 'flash-vessel',
     stage: 5,
     label: 'Flash vessel',
     labelAnchorM: [-10, 5.6, -14],
     labelText: (s) => labelValue(stageValue(s, 5, 'flashTempC'), 0, '°C'),
+    update: (s, realDtS) => vapour.update(vapourFrac(s), motionDtS(s, realDtS)),
+    debugState: () => ({ vapourFrac: vapour.strength(), phase: vapour.phase() }),
   });
 }
 
@@ -390,7 +554,7 @@ function asepticTank(kit: Kit): Equipment {
   const milkBaseM = 1.1;
   const milkFullM = 4.35;
   const milk = b.mesh('milk', 'cyl', 'milk', [4, milkBaseM, -14], [1.7, MIN_MILK_M, 1.7]);
-  setMilkLevel(milk, milkBaseM, milkFullM, 0);
+  const level = tankLevel(milk, milkBaseM, milkFullM, 'asepticTank');
   return machine(b, {
     id: 'aseptic-tank',
     stage: 6,
@@ -398,8 +562,10 @@ function asepticTank(kit: Kit): Equipment {
     labelAnchorM: [4, 6.7, -14],
     labelText: (s) => labelValue(stageValue(s, 6, 'levelPct'), 0, '%'),
     update(s) {
+      // Stage 6's levelPct stands in for a snapshot without contracts v2's tanks.
       const levelPct = stageValue(s, 6, 'levelPct');
-      if (levelPct !== undefined) setMilkLevel(milk, milkBaseM, milkFullM, pctToFrac(levelPct));
+      level.update(s, levelPct === undefined ? undefined : pctToFrac(levelPct));
     },
+    debugState: () => ({ fillFrac: level.fillFrac() }),
   });
 }

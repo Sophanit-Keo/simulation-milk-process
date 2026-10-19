@@ -28,6 +28,15 @@ const LIGHT_FALLBACKS = {
 
 export type SceneColorVar = keyof typeof LIGHT_FALLBACKS;
 
+/** A lamp's state, as the rail's lamps have them (plan 08): green running, amber hold or warning, red stopped. */
+export type LampStatus = 'ok' | 'warn' | 'bad';
+
+/**
+ * Lit lamps in the 3D view (the divert valve's lamp, the lit divert route) in tokens.css's lamp colours.
+ * A lit lamp gives off light, so it keeps the brighter dark-theme values in both themes.
+ */
+export const LAMP_GLOW_HEX: Readonly<Record<LampStatus, number>> = { ok: 0x3cc47f, warn: 0xe8ad2c, bad: 0xf0604d };
+
 export function readSceneColor(name: SceneColorVar): string {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return value || LIGHT_FALLBACKS[name];

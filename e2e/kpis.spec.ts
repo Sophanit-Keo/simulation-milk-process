@@ -49,10 +49,10 @@ const SUB_SHAPES: Record<KpiSub, RegExp> = {
 };
 
 /**
- * What the static plant shows. The first four are the shared spec's examples and the hand values behind
+ * What the plant shows as it opens. The first four are the shared spec's examples and the hand values behind
  * them (H11, H12, H31: 16,000 L/h through the UHT plant, F0 5.17 min and B* 1.19, the tank at its 50%
- * start, 2 × 7,500 packs/h). The model gives no OEE, batches, stock or trucks before phases 3 and 4,
- * so those follow the static snapshot.
+ * start, 2 × 7,500 packs/h); since phase 3, F0, B* and the tank move with sim time (LIVE_SLOTS). The model
+ * gives no OEE, batches, stock or trucks before phase 4, so those follow the static snapshot.
  */
 const STATIC_TEXTS: Record<KpiSlot, string> = {
   uht: '16,000 L/h',
@@ -63,6 +63,29 @@ const STATIC_TEXTS: Record<KpiSlot, string> = {
   hold: formatted(STATIC_KPIS.batchesOnHold),
   stock: formatted(STATIC_KPIS.palletsInStock),
   trucks: formatted(STATIC_KPIS.trucksShipped),
+};
+
+/**
+ * KPIs that move with sim time on the live plant (phase 3), each checked against its band rather than one
+ * text: the UHT reading carries up to ±0.3 °C of noise (D4), so F0 shows 4.83–5.55 min and B* 1.11–1.27
+ * (H21, H22) around the opening "F0 5.17 · B* 1.19"; the aseptic tank gains 1,000 L/h (H31), about 1% in
+ * 12 sim minutes, from its opening 50 %.
+ */
+const LIVE_SLOTS: Partial<Record<KpiSlot, (text: string) => void>> = {
+  sterility(text) {
+    const match = /^F0 (\d+\.\d{2}) · B\* (\d+\.\d{2})$/.exec(text);
+    expect(match, `sterility text ${text}`).not.toBeNull();
+    const [f0Min, bStar] = [Number(match?.[1]), Number(match?.[2])];
+    expect(f0Min, `F0 in ${text}`).toBeGreaterThanOrEqual(4.83);
+    expect(f0Min, `F0 in ${text}`).toBeLessThanOrEqual(5.55);
+    expect(bStar, `B* in ${text}`).toBeGreaterThanOrEqual(1.11);
+    expect(bStar, `B* in ${text}`).toBeLessThanOrEqual(1.27);
+  },
+  tank(text) {
+    const levelPct = Number(/^(\d{1,3}) %$/.exec(text)?.[1]);
+    expect(levelPct, `tank level ${text}`).toBeGreaterThanOrEqual(50);
+    expect(levelPct, `tank level ${text}`).toBeLessThanOrEqual(52);
+  },
 };
 
 /** The secondary values on the static plant, which has none of them before phases 3 and 4: zeros, in words. */
@@ -232,7 +255,9 @@ for (const path of ['/', '/?mock']) {
       for (const slot of KPI_SLOTS) {
         expect(read[slot].count, `KPI ${slot} has one [data-kpi-value]`).toBe(1);
         expect(read[slot].text, `KPI ${slot}`).toMatch(KPI_SHAPES[slot]);
-        if (path === '/') expect(read[slot].text, `KPI ${slot} on the static plant`).toBe(STATIC_TEXTS[slot]);
+        const live = LIVE_SLOTS[slot];
+        if (path === '/' && live) live(read[slot].text ?? '');
+        else if (path === '/') expect(read[slot].text, `KPI ${slot} on the static plant`).toBe(STATIC_TEXTS[slot]);
       }
       for (const [sub, slot] of Object.entries(KPI_SUBS) as [KpiSub, KpiSlot][]) {
         const { count, text } = read[`sub:${sub}`];
@@ -251,7 +276,8 @@ for (const path of ['/', '/?mock']) {
       expect(lamps.length, 'lamps on screen').toBeGreaterThanOrEqual(11);
       for (const lamp of lamps) {
         // The static plant runs every stage and the clock: green everywhere. The mock may show any status.
-        const expected = path === '/' ? 'ok' : expect.stringMatching(/^(ok|warn|bad|idle)$/);
+        // The event log's lamps show each entry's kind, not a status: a plain note is the unlit ring there.
+        const expected = path === '/' && lamp.where !== 'event-log' ? 'ok' : expect.stringMatching(/^(ok|warn|bad|idle)$/);
         expect(lamp.status, `lamp in ${lamp.where}`).toEqual(expected);
       }
     }).toPass({ timeout: 10_000 });
@@ -261,8 +287,8 @@ for (const path of ['/', '/?mock']) {
 test('the KPI strip cuts no value short from tablet to desktop widths, even the longest, and one screen still fits', async ({ page }) => {
   await page.goto('/');
   await waitForClock(page);
-  // The static plant's values in place, so the first widths measured are theirs.
-  await expect(page.locator('#kpis [data-kpi="sterility"] [data-kpi-value]')).toHaveText(STATIC_TEXTS.sterility);
+  // The live plant's values in place, so the first widths measured are theirs.
+  await expect(page.locator('#kpis [data-kpi="sterility"] [data-kpi-value]')).toHaveText(KPI_SHAPES.sterility);
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     for (const [width, height] of STRIP_SIZES) {

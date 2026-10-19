@@ -1,28 +1,43 @@
 // A lively stand-in for the model, so the 3D view and the UI can build every state
 // before phases 3 and 4 produce it (agent plan, "Contracts"). Same clock, queue and
 // commands as createSim and the same value keys, but the values drift with sim time
-// and stages now and then turn amber or red. Everything is seeded and depends only
-// on sim time and the commands, so two runs with the same input match.
+// and stages now and then turn amber or red. Now and then the UHT plant also runs a
+// divert (divert, CIP, sterilize, back to production) or an intermediate clean, so
+// every liquid-line mode shows. Everything is seeded and depends only on sim time and
+// the commands, so two runs with the same input match.
 import {
   dayToS,
   fracToPct,
   hToS,
   minToS,
+  pctToFrac,
   sToDay,
   sToH,
   STAGE_IDS,
   type Kpis,
   type LinePoint,
   type LinePointId,
+  type LiquidSnapshot,
   type PlantConfig,
   type Sim,
   type StageId,
   type Status,
+  type UhtMode,
 } from '../contracts';
 import { createCore } from './core';
 import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, oeeFrac, tubeVolumeL } from './formulas';
+import {
+  condenserKw,
+  creamingRiskPct,
+  globuleUm,
+  headspaceBar,
+  heatRecoveredKw,
+  homogenizerPowerKw,
+  separatorFlows,
+  steamLph,
+} from './liquid/stageModels';
 import { createRng, mulberry32 } from './rng';
-import { fillerDrawLph, linePoints, staticPlant, toStages, type StageValues } from './staticPlant';
+import { fillerDrawLph, linePoints, staticLiquid, staticPlant, toStages, type StageValues } from './staticPlant';
 
 /** A stage keeps its random status this long before it may change. */
 const STATUS_WINDOW_S = minToS(15);
@@ -31,6 +46,19 @@ const WARN_FRAC = 0.08;
 const BAD_FRAC = 0.03;
 /** An amber UHT stage's lowest noisy reading stays at least this far above the divert limit. */
 const WARN_ABOVE_LIMIT_C = 0.05;
+/** Each window of this length may hold one episode: a divert with its cleaning, or an intermediate clean. */
+const EPISODE_WINDOW_S = hToS(6);
+/** Share of windows with a divert episode, and with an intermediate clean. */
+const DIVERT_EPISODE_FRAC = 0.15;
+const AIC_EPISODE_FRAC = 0.25;
+
+const EPISODE_LOG: Record<UhtMode, [kind: 'ok' | 'info' | 'warn' | 'bad', message: string]> = {
+  production: ['ok', 'Mock: UHT plant back in production'],
+  divert: ['bad', 'Mock: UHT plant diverting to the reject tank'],
+  cip: ['warn', 'Mock: UHT plant in full CIP'],
+  sterilize: ['info', 'Mock: UHT plant sterilizing'],
+  aic: ['info', 'Mock: UHT plant in an intermediate clean'],
+};
 
 const STAGE_NAMES: Record<StageId, string> = {
   1: 'Standardization',
@@ -48,11 +76,23 @@ const STAGE_NAMES: Record<StageId, string> = {
 const STATUS_RANK: Record<Status, number> = { idle: 0, ok: 1, warn: 2, bad: 3 };
 const worst = (a: Status, b: Status): Status => (STATUS_RANK[a] >= STATUS_RANK[b] ? a : b);
 
-interface MockState {
+/** What each step needs: the status windows, the episode and the flow. */
+interface MockPulse {
+  /** The random status windows, which the log follows. */
+  statuses: Record<StageId, Status>;
+  episode: UhtMode;
+  episodeRemainingS: number;
+  diverting: boolean;
+  flowLph: number;
+}
+
+interface MockState extends MockPulse {
   values: StageValues;
   kpis: Kpis;
-  statuses: Record<StageId, Status>;
+  /** What the lamps show: the statuses with the episode's mode laid over stages 2–5. */
+  shown: Record<StageId, Status>;
   line: Record<LinePointId, LinePoint>;
+  liquid: LiquidSnapshot;
 }
 
 export function createMockSim(config: PlantConfig): Sim {
@@ -75,10 +115,72 @@ export function createMockSim(config: PlantConfig): Sim {
   }
 
   let divertedL = 0;
+  let rejectL = 0;
+  let divertCount = 0;
 
-  function stateAt(timeS: number): MockState {
-    const { values } = staticPlant(config, core.setpoints);
+  /** The episode mode at timeS: a stateless hash of (seed, window), like the status windows. */
+  function episodeAt(timeS: number): { mode: UhtMode; remainingS: number } {
+    const windowIndex = Math.floor(timeS / EPISODE_WINDOW_S);
+    const draw = mulberry32(config.seed ^ Math.imul(windowIndex + 1, 0x27d4eb2d) ^ 0x5bd1e995);
+    const kind = draw();
+    const steps: [UhtMode, number][] =
+      kind < DIVERT_EPISODE_FRAC
+        ? [
+            ['divert', uht.divertBeforeCleaningS],
+            ['cip', config.cleaning.cipS],
+            ['sterilize', uht.sterilizeS],
+          ]
+        : kind < DIVERT_EPISODE_FRAC + AIC_EPISODE_FRAC
+          ? [['aic', config.cleaning.aicS]]
+          : [];
+    const lengthS = steps.reduce((sum, [, durationS]) => sum + durationS, 0);
+    let intoS = timeS - (windowIndex * EPISODE_WINDOW_S + draw() * Math.max(0, EPISODE_WINDOW_S - lengthS));
+    for (const [mode, durationS] of steps) {
+      if (intoS >= 0 && intoS < durationS) return { mode, remainingS: durationS - intoS };
+      intoS -= durationS;
+    }
+    return { mode: 'production', remainingS: 0 };
+  }
+
+  function stateAt(timeS: number): MockState;
+  function stateAt(timeS: number, full: false): MockPulse;
+  function stateAt(timeS: number, full = true): MockState | MockPulse {
     const statuses = Object.fromEntries(STAGE_IDS.map((id) => [id, randomStatus(id, timeS)])) as Record<StageId, Status>;
+
+    // 6: the tank level swings over six hours; above the throttle level the UHT plant runs at reduced flow.
+    const levelFrac = 0.5 + 0.48 * wave(timeS, hToS(6), 6);
+    const tankHigh = levelFrac > tank.throttleAboveFrac;
+    if (tankHigh || levelFrac < 1 - tank.throttleAboveFrac) statuses[6] = worst(statuses[6], 'warn');
+
+    // 4: hold, F0, B* and divert limit follow the live flow (R6). Noise stays inside displayNoiseC (R4);
+    // a red stage 4 is the temperature-drop fault, so B* falls below 1. An episode overrides the random
+    // status: a divert episode runs at the fault temperature, a clean stops the UHT flow.
+    const episode = episodeAt(timeS);
+    const cleaningNow = episode.mode === 'cip' || episode.mode === 'sterilize' || episode.mode === 'aic';
+    const nominalLph = uht.capacityLph * (tankHigh ? tank.throttledFlowFrac : 1);
+    const flowLph = cleaningNow ? 0 : nominalLph;
+    const limitC = divertLimitC(holdTimeS(tubeL, nominalLph));
+    const holdS = flowLph > 0 ? holdTimeS(tubeL, flowLph) : 0;
+    const setpointC = core.setpoints.uhtSetpointC;
+    // Amber runs low but keeps its lowest noisy reading above the divert limit (139.5 ± 0.3 °C would dip
+    // under 139.22 °C at full flow and flicker red); red falls to the fault temperature.
+    const warnTempC = Math.max(setpointC - 0.5, limitC + uht.displayNoiseC + WARN_ABOVE_LIMIT_C);
+    const randomTempC = { idle: setpointC, ok: setpointC, warn: warnTempC, bad: uht.faultTempC }[statuses[4]];
+    const noiseC = uht.displayNoiseC * wave(timeS, 37, 7);
+    const tempC = {
+      production: randomTempC + noiseC,
+      divert: uht.faultTempC + noiseC,
+      cip: config.cleaning.cipTempC,
+      sterilize: uht.sterilizeTempC,
+      aic: setpointC + noiseC,
+    }[episode.mode];
+    const bStarNow = flowLph > 0 ? bStar(tempC, holdS) : 0;
+    if (episode.mode === 'production' && bStarNow < 1) statuses[4] = 'bad';
+    const diverting = episode.mode === 'divert' || (episode.mode === 'production' && statuses[4] === 'bad');
+    const pulse: MockPulse = { statuses, episode: episode.mode, episodeRemainingS: episode.remainingS, diverting, flowLph };
+    if (!full) return pulse;
+    // Only the snapshot needs the stage values; a step needs no more than the pulse above.
+    const { values } = staticPlant(config, core.setpoints);
 
     // 1–2: small drifts around the set temperatures; raw-milk fat differs a little from silo to silo.
     values[1].siloTempC += 0.4 * wave(timeS, hToS(5), 0);
@@ -98,26 +200,46 @@ export function createMockSim(config: PlantConfig): Sim {
       config.homogenizer.barPerDegreeC,
     );
 
-    // 6: the tank level swings over six hours; above the throttle level the UHT plant runs at reduced flow.
-    const levelFrac = 0.5 + 0.48 * wave(timeS, hToS(6), 6);
     values[6].levelL = tank.capacityL * levelFrac;
     values[6].levelPct = fracToPct(levelFrac);
-    const tankHigh = levelFrac > tank.throttleAboveFrac;
-    if (tankHigh || levelFrac < 1 - tank.throttleAboveFrac) statuses[6] = worst(statuses[6], 'warn');
+    const productLph = diverting ? 0 : flowLph;
+    values[4] = {
+      setpointC,
+      tempC,
+      flowLph,
+      holdS,
+      f0Min: flowLph > 0 ? f0Min(tempC, holdS) : 0,
+      bStar: bStarNow,
+      divertLimitC: limitC,
+      rejectLevelL: rejectL,
+    };
 
-    // 4: hold, F0, B* and divert limit follow the live flow (R6). Noise stays inside displayNoiseC (R4);
-    // a red stage 4 is the temperature-drop fault, so B* falls below 1.
-    const flowLph = uht.capacityLph * (tankHigh ? tank.throttledFlowFrac : 1);
-    const holdS = holdTimeS(tubeL, flowLph);
-    const setpointC = core.setpoints.uhtSetpointC;
-    // Amber runs low but keeps its lowest noisy reading above the divert limit (139.5 ± 0.3 °C would dip
-    // under 139.22 °C at full flow and flicker red); red falls to the fault temperature.
-    const warnTempC = Math.max(setpointC - 0.5, divertLimitC(holdS) + uht.displayNoiseC + WARN_ABOVE_LIMIT_C);
-    const baseTempC = { idle: setpointC, ok: setpointC, warn: warnTempC, bad: uht.faultTempC }[statuses[4]];
-    const tempC = baseTempC + uht.displayNoiseC * wave(timeS, 37, 7);
-    const bStarNow = bStar(tempC, holdS);
-    if (bStarNow < 1) statuses[4] = 'bad';
-    values[4] = { setpointC, tempC, flowLph, holdS, f0Min: f0Min(tempC, holdS), bStar: bStarNow, divertLimitC: divertLimitC(holdS) };
+    // 1–3, 5 and 6: the phase 3 values, from the same stage models as the live line.
+    const { rawMilkLph, surplusCreamLph } = separatorFlows(config, flowLph);
+    Object.assign(values[1], {
+      rawMilkLph,
+      surplusCreamLph,
+      siloLevelPct: fracToPct(0.55 + 0.3 * wave(timeS, hToS(9), 3)),
+      mixTankLevelPct: fracToPct(config.standardization.mixTankStartFrac) + 4 * wave(timeS, minToS(41), 4),
+    });
+    const { deaeratedAirPct, rawAirPct } = config.preheating;
+    values[2].airPct = flowLph > 0 ? deaeratedAirPct * (1 + 0.2 * wave(timeS, minToS(17), 5)) : rawAirPct;
+    values[2].heatRecoveredKw = heatRecoveredKw(config, flowLph, values[2].preheatTempC);
+    const totalBar = values[3].stage1Bar + values[3].stage2Bar;
+    values[3].globuleUm = globuleUm(config, values[3].stage1Bar);
+    values[3].creamingRiskPct = creamingRiskPct(config, values[3].globuleUm);
+    values[3].powerKw = homogenizerPowerKw(config, flowLph, totalBar);
+    const waterRemovedLph = steamLph(config, productLph, values[3].outletTempC, setpointC);
+    values[5].waterRemovedLph = waterRemovedLph;
+    values[5].condenserKw = condenserKw(config, waterRemovedLph);
+    const productionSinceCleanS = (timeS - config.clock.startTimeS) % config.cleaning.aicEveryProductionS;
+
+    // What the panels and lamps show: an episode's mode on stage 4, nothing flowing in a clean.
+    const shown = { ...statuses };
+    if (episode.mode === 'divert') shown[4] = 'bad';
+    if (cleaningNow) shown[4] = 'warn';
+    if (flowLph <= 0) shown[2] = shown[3] = 'idle';
+    if (productLph <= 0) shown[5] = 'idle';
 
     values[5].flashTempC += 0.5 * wave(timeS, minToS(13), 8);
     values[5].coolerTempC += 0.4 * wave(timeS, minToS(31), 9);
@@ -125,6 +247,13 @@ export function createMockSim(config: PlantConfig): Sim {
     // 7: a red filler stage means one filler is down.
     values[7].ratePacksPerH *= 0.985 + 0.015 * wave(timeS, minToS(7), 10);
     const runningFillers = fillers.count - (statuses[7] === 'bad' ? 1 : 0);
+    const fillerLph = fillerDrawLph(config, runningFillers, values[7].ratePacksPerH);
+    Object.assign(values[6], {
+      inflowLph: productLph,
+      outflowLph: fillerLph,
+      headspaceBar: headspaceBar(config, levelFrac),
+      nextCleanS: config.cleaning.aicEveryProductionS - productionSinceCleanS,
+    });
 
     // 10: the warehouse warms and cools with the day.
     values[10].tempC += 1.5 * wave(timeS, dayToS(1), 11);
@@ -163,19 +292,46 @@ export function createMockSim(config: PlantConfig): Sim {
     };
     // A red stage 4 is diverting: the whole UHT flow goes to the reject tank, none on to the flash vessel.
     const line = linePoints(values, {
+      rawLph: rawMilkLph,
+      standardizedLph: flowLph,
       uhtLph: flowLph,
-      divertLph: statuses[4] === 'bad' ? flowLph : 0,
-      fillerLph: fillerDrawLph(config, runningFillers, values[7].ratePacksPerH),
+      divertLph: diverting ? flowLph : 0,
+      fillerLph,
     });
-    return { values, kpis, statuses, line };
+    // Contracts v2: a red stage 4 diverts, the high tank throttles, a red filler stage has one filler down,
+    // and an episode sets the mode.
+    const liquid = staticLiquid(config);
+    liquid.uhtMode = diverting ? 'divert' : episode.mode;
+    liquid.modeRemainingS = episode.remainingS;
+    liquid.throttled = tankHigh;
+    liquid.fillersRunning = runningFillers;
+    liquid.headspaceBar = values[6].headspaceBar;
+    liquid.divertCount = divertCount;
+    liquid.tanks.asepticTank.levelL = values[6].levelL;
+    liquid.tanks.rejectTank.levelL = rejectL;
+    liquid.tanks.silo.levelL = config.standardization.siloCapacityL * pctToFrac(values[1].siloLevelPct);
+    liquid.tanks.mixTank.levelL = config.standardization.mixTankCapacityL * pctToFrac(values[1].mixTankLevelPct);
+    liquid.productionSinceCleanS = productionSinceCleanS;
+    return { ...pulse, values, kpis, shown, line, liquid };
   }
 
   let lastStatuses: Record<StageId, Status> | undefined;
+  let lastEpisode: UhtMode = 'production';
+  let lastDiverting = false;
 
   const core = createCore(config, {
     onStep(dtS, timeS) {
-      const { statuses, values } = stateAt(timeS);
-      if (statuses[4] === 'bad') divertedL += sToH(dtS) * values[4].flowLph;
+      const { statuses, episode, episodeRemainingS, diverting, flowLph } = stateAt(timeS, false);
+      if (diverting) {
+        divertedL += sToH(dtS) * flowLph;
+        rejectL = Math.min(uht.rejectTankL, rejectL + sToH(dtS) * flowLph);
+        if (!lastDiverting) divertCount += 1;
+      }
+      // A full CIP pumps the reject tank out by its end, as in the live line.
+      if (episode === 'cip') rejectL -= (rejectL * dtS) / (episodeRemainingS + dtS);
+      lastDiverting = diverting;
+      if (episode !== lastEpisode) core.log(timeS, ...EPISODE_LOG[episode]);
+      lastEpisode = episode;
       for (const id of STAGE_IDS) {
         const status = statuses[id];
         if (!lastStatuses || status === lastStatuses[id]) continue;
@@ -187,14 +343,16 @@ export function createMockSim(config: PlantConfig): Sim {
       lastStatuses = statuses;
     },
   });
-  lastStatuses = stateAt(core.timeS).statuses;
+  const opening = stateAt(core.timeS, false);
+  lastStatuses = opening.statuses;
+  lastEpisode = opening.episode;
 
   return {
     step: (realDtS) => core.step(realDtS),
     dispatch: (command) => core.dispatch(command),
     snapshot() {
-      const { values, kpis, statuses, line } = stateAt(core.timeS);
-      return core.snapshot(toStages(values, (id) => statuses[id]), kpis, line);
+      const { values, kpis, shown, line, liquid } = stateAt(core.timeS);
+      return core.snapshot(toStages(values, (id) => shown[id]), kpis, line, liquid);
     },
   };
 }

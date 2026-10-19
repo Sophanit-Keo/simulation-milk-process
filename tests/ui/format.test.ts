@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Kpis } from '../../src/contracts';
 import {
+  formatDuration,
   formatKpi,
   formatNumber,
+  formatSigned,
   formatSimTime,
   formatSpeed,
   formatValue,
@@ -10,6 +12,7 @@ import {
   KPI_SUB_IDS,
   kpiSubText,
   kpiText,
+  sterilityStatus,
   withUnit,
 } from '../../src/ui/format';
 
@@ -232,5 +235,96 @@ describe('kpiSubText (secondary values of the KPI strip)', () => {
       '0.0 days of cover',
       'order fill 0 %',
     ]);
+  });
+});
+
+describe('formatSigned (the margin over the divert limit)', () => {
+  it.each([
+    [0.78, 2, '+0.78'],
+    [3.88, 2, '+3.88'],
+    [-0.404, 2, '-0.40'],
+    [1_234.5, 1, '+1,234.5'],
+    [0, 2, '0.00'],
+    [-0.001, 2, '0.00'],
+    [0.004, 2, '0.00'],
+  ])('%s with %s decimals reads "%s"', (value, decimals, text) => {
+    expect(formatSigned(value, decimals)).toBe(text);
+  });
+
+  it('shows a dash, with no sign, for a value it cannot show', () => {
+    expect(formatSigned(Number.NaN, 2)).toBe('—');
+  });
+});
+
+describe('formatDuration (time left in a UHT step)', () => {
+  it.each([
+    [0, '0 s'],
+    [0.2, '1 s'],
+    [45, '45 s'],
+    [59.5, '1 min 00 s'],
+    [150, '2 min 30 s'],
+    [599, '9 min 59 s'],
+    [600, '10 min'],
+    [1_800, '30 min'],
+    [3_599, '59 min'],
+    [3_600, '1 h 00 min'],
+    [4_800, '1 h 20 min'],
+    [36_000, '10 h 00 min'],
+  ])('%s s reads "%s"', (durationS, text) => {
+    expect(formatDuration(durationS)).toBe(text);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])('shows a dash for %s', (durationS) => {
+    expect(formatDuration(durationS)).toBe('—');
+  });
+});
+
+describe('sterilityStatus (the sterility card, D4)', () => {
+  it('turns red below B* 1, whatever F0 says', () => {
+    expect(sterilityStatus(0.99)).toBe('bad');
+    expect(sterilityStatus(0.4)).toBe('bad');
+  });
+
+  it('stays unmarked from B* 1 up, even where F0 is under its 5 min target', () => {
+    // 139.5 °C at 4 s: F0 about 4.6 min, under the target, but B* about 1.06 is sterile enough (D4).
+    expect(sterilityStatus(1.06)).toBeNull();
+    expect(sterilityStatus(1)).toBeNull();
+    expect(sterilityStatus(2.4)).toBeNull();
+  });
+
+  it('leaves a B* of 0 (no product in the holding tube) and a missing one unmarked', () => {
+    expect(sterilityStatus(0)).toBeNull();
+    expect(sterilityStatus(Number.NaN)).toBeNull();
+  });
+});
+
+describe('the KPI strip at the values a live run reaches', () => {
+  const live: Kpis = {
+    uhtFlowLph: 8_000,
+    f0Min: 10.3349,
+    bStar: 2.3846,
+    divertedL: 1_234_567.4,
+    tankLevelPct: 89.6,
+    packsPerH: 15_000,
+    oeePct: 85,
+    traysMade: 0,
+    palletsMade: 0,
+    batchesOnHold: 0,
+    batchesReleased: 0,
+    batchesBlocked: 0,
+    palletsInStock: 0,
+    daysOfCover: 0,
+    orderFillPct: 0,
+    trucksShipped: 0,
+  };
+
+  it('shows the throttled UHT plant of R6, with two-digit F0', () => {
+    expect(kpiText('uht', live)).toBe('8,000 L/h');
+    expect(kpiText('sterility', live)).toBe('F0 10.33 · B* 2.38');
+    expect(kpiText('tank', live)).toBe('90 %');
+  });
+
+  it('groups a long run of diverted milk', () => {
+    expect(kpiSubText('diverted', live)).toBe('1,234,567 L diverted');
   });
 });

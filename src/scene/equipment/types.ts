@@ -49,6 +49,11 @@ export interface Equipment {
   labelText(snapshot: Snapshot): string;
   /** Per-frame animation from the snapshot; grey boxes may do nothing yet. */
   update(snapshot: Snapshot, realDtS: number): void;
+  /**
+   * Optional: what the machine shows right now, for tests and the ?debug hook (window.__scene.equipmentState),
+   * e.g. { fillFrac: 0.5 } or { diverting: true, lamp: 'bad' }. Called rarely; it may build a fresh object.
+   */
+  debugState?(): Readonly<Record<string, number | string | boolean>>;
   /** Disposes the module's own geometries and materials (never the shared ones). */
   dispose(): void;
 }
