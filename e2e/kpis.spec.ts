@@ -276,7 +276,8 @@ for (const path of ['/', '/?mock']) {
       expect(lamps.length, 'lamps on screen').toBeGreaterThanOrEqual(11);
       for (const lamp of lamps) {
         // The static plant runs every stage and the clock: green everywhere. The mock may show any status.
-        const expected = path === '/' ? 'ok' : expect.stringMatching(/^(ok|warn|bad|idle)$/);
+        // The event log's lamps show each entry's kind, not a status: a plain note is the unlit ring there.
+        const expected = path === '/' && lamp.where !== 'event-log' ? 'ok' : expect.stringMatching(/^(ok|warn|bad|idle)$/);
         expect(lamp.status, `lamp in ${lamp.where}`).toEqual(expected);
       }
     }).toPass({ timeout: 10_000 });

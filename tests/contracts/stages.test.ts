@@ -1,7 +1,7 @@
 // src/data/stages.json (process lane) and parseStages (contracts v1): the text and the list of live
 // values the stage rail and the info panel show.
 import { describe, expect, it } from 'vitest';
-import { STAGE_IDS, ZONE_IDS, ZONE_NAMES, parseStages, type PlantConfig, type Sim, type StageInfo } from '../../src/contracts';
+import { SECONDS_PER_HOUR, STAGE_IDS, ZONE_IDS, ZONE_NAMES, parseStages, type PlantConfig, type Sim, type StageInfo } from '../../src/contracts';
 import stagesJson from '../../src/data/stages.json';
 import { createSim } from '../../src/sim';
 import { createMockSim } from '../../src/sim/mock';
@@ -11,6 +11,24 @@ const SIMS: [string, (config: PlantConfig) => Sim][] = [
   ['createSim', createSim],
   ['createMockSim', createMockSim],
 ];
+
+/**
+ * The phase 3 value keys agreed for stages 1–6, which the panel lists (stages.json) and the sim lane adds
+ * to the snapshot in parallel. Until a key is in a sim's snapshot it is let off "every value key is in the
+ * snapshot" for that sim (the panel shows "—"). Once both sims give a key, the test below fails until the
+ * key is taken off this list, so the check is strict again after the merge. Empty since the sim lane merged.
+ */
+const AWAITING_SIM = new Set<string>([]);
+
+/** The phase 3 keys agreed per stage (contracts v2 notes); stages.json must list every one. */
+const PHASE_3_KEYS: Record<number, string[]> = {
+  1: ['rawMilkLph', 'surplusCreamLph', 'siloLevelPct', 'mixTankLevelPct'],
+  2: ['airPct', 'heatRecoveredKw'],
+  3: ['globuleUm', 'creamingRiskPct', 'powerKw'],
+  4: ['setpointC', 'tempC', 'flowLph', 'holdS', 'f0Min', 'bStar', 'divertLimitC', 'rejectLevelL'],
+  5: ['waterRemovedLph', 'condenserKw'],
+  6: ['levelL', 'levelPct', 'capacityL', 'tempC', 'inflowLph', 'outflowLph', 'headspaceBar', 'nextCleanS'],
+};
 
 /** A deep copy of stages.json as plain data, for a test to break one thing in. */
 const rawStages = (): Record<string, unknown>[] => structuredClone(stagesJson) as unknown as Record<string, unknown>[];
@@ -93,7 +111,9 @@ describe('stages.json', () => {
     it.each(stages.map((stage) => [stage.id, stage] as const))('stage %s', (id, stage) => {
       const sim = create(plantConfig);
       const values = sim.snapshot().stages[id].values;
-      for (const { key } of stage.values) {
+      // A key still awaited from the sim may be missing, but if the sim gives it, it must be a number.
+      const required = stage.values.filter(({ key }) => !AWAITING_SIM.has(key) || key in values);
+      for (const { key } of required) {
         expect(values, `stage ${id} needs "${key}"`).toHaveProperty([key]);
         expect(Number.isFinite(values[key]), `stage ${id} ${key} is ${values[key]}`).toBe(true);
       }
@@ -101,8 +121,40 @@ describe('stages.json', () => {
       sim.dispatch({ type: 'setSpeed', speed: 10_000 });
       for (let frame = 0; frame < 86; frame++) sim.step(0.1);
       const later = sim.snapshot().stages[id].values;
-      for (const { key } of stage.values) expect(later, `stage ${id} needs "${key}" a day later`).toHaveProperty([key]);
+      for (const { key } of required) expect(later, `stage ${id} needs "${key}" a day later`).toHaveProperty([key]);
     });
+  });
+
+  it('lists every agreed phase 3 key of stages 1–6, with a unit wherever it has one', () => {
+    for (const [id, keys] of Object.entries(PHASE_3_KEYS)) {
+      const listed = stages[Number(id) - 1].values.map((value) => value.key);
+      for (const key of keys) expect(listed, `stage ${id} lists "${key}"`).toContain(key);
+    }
+    for (const stage of stages) {
+      for (const value of stage.values) {
+        if (/(Lph|Kw|Bar|Um|C|L|S)$/.test(value.key)) expect(value.unit, `stage ${stage.id} ${value.key} has a unit`).not.toBe('');
+      }
+    }
+  });
+
+  it('shows the time to the next intermediate clean in hours, scaled by exactly 1 ÷ 3,600', () => {
+    const nextClean = stages[5].values.find((value) => value.key === 'nextCleanS');
+    expect(nextClean).toMatchObject({ unit: 'h' });
+    expect((nextClean?.scale ?? 0) * SECONDS_PER_HOUR).toBeCloseTo(1, 12);
+  });
+
+  it('lists the stage 4 values in the order that tells R6: flow, hold, temperature, limit, then B* and F0', () => {
+    expect(stages[3].values.map((value) => value.key)).toEqual([
+      'flowLph', 'holdS', 'tempC', 'setpointC', 'divertLimitC', 'bStar', 'f0Min', 'rejectLevelL',
+    ]);
+  });
+
+  it('lets off only keys the sims still lack: take a key off AWAITING_SIM once both sims give it', () => {
+    const snapshots = SIMS.map(([, create]) => create(plantConfig).snapshot());
+    const given = [...AWAITING_SIM].filter((key) =>
+      snapshots.every((snapshot) => STAGE_IDS.some((id) => key in snapshot.stages[id].values)),
+    );
+    expect(given, 'keys both sims now give').toEqual([]);
   });
 });
 

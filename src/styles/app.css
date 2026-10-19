@@ -40,18 +40,22 @@ button {
   display: none !important;
 }
 
-/* The middle row and columns use minmax(0, 1fr) so the 3D canvas and long panel
-   content can never push the grid past the window; the rail and panel scroll instead. */
+/* The middle rows and columns have a minimum of 0 (or a small fixed one) so the 3D canvas and long
+   panel content can never push the grid past the window; the rail, the log and the panel scroll instead.
+   The view and the panel span both middle rows. In the left column the rail takes the height its
+   stages need, and the event log the rest; on a short window the rail gives way first, down to the
+   log's minimum. */
 .app {
   height: 100%;
   padding: 12px 16px;
   display: grid;
   gap: 12px;
   grid-template-columns: 236px minmax(0, 1fr) 300px;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, max-content) minmax(112px, 1fr) auto;
   grid-template-areas:
     'bar bar bar'
     'rail view panel'
+    'log view panel'
     'kpis kpis kpis';
 }
 
@@ -484,6 +488,159 @@ kbd {
   text-align: center;
 }
 
+/* A state in words with its lamp ("● Diverting to reject · 2 min 30 s left"). Unlike a number it may
+   wrap, and the lamp stays with its first line. */
+.val-state dd {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  font: 600 13.5px/1.35 var(--font-ui);
+  white-space: normal;
+}
+.val-state .lamp {
+  width: 8px;
+  height: 8px;
+  transform: translateY(-1px);
+}
+.val[data-derived-key] dt::before {
+  content: '└ ';
+  color: var(--line);
+}
+
+/* Charts and set-point sliders under the live values. */
+.p-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.trend {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.trend-head {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.trend-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.trend-key-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.trend-swatch {
+  display: inline-block;
+  width: 16px;
+  border-top: 2px solid var(--accent);
+}
+.trend-swatch[data-tone='bad'] {
+  border-top-color: var(--bad);
+}
+.trend-swatch[data-dashed] {
+  border-top-style: dashed;
+}
+/* A fixed height, so the panel keeps its shape while the chart draws; Chart.js takes the width. */
+.trend-plot {
+  position: relative;
+  height: 118px;
+  min-width: 0;
+}
+/* The box's size until Chart.js arrives and sizes the canvas itself. */
+.trend-plot canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.setpoint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+.sp-head label {
+  font-weight: 600;
+}
+.sp-value {
+  font: 500 13.5px/1.35 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sp-range {
+  width: 100%;
+  margin: 4px 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.sp-ends {
+  display: flex;
+  justify-content: space-between;
+  font: 500 11.5px/1 var(--font-data);
+  color: var(--muted);
+}
+
+/* Event log under the rail. The card keeps the size the grid gives it and the list scrolls inside, so
+   new entries move nothing else on screen. */
+.log-card {
+  grid-area: log;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 10px 10px 14px;
+}
+.log {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.log-entry {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  grid-template-areas: 'lamp time' '. text';
+  column-gap: 7px;
+  align-items: center;
+}
+.log-entry .lamp {
+  grid-area: lamp;
+  width: 8px;
+  height: 8px;
+}
+.log-entry time {
+  grid-area: time;
+  font: 500 11.5px/1.3 var(--font-data);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.log-text {
+  grid-area: text;
+  overflow-wrap: anywhere;
+}
+
 /* KPI strip. Each column's share follows the widest text its card holds at the longest values a run
    reaches by phase 4 ("F0 99.99 · B* 9.99", "999,999 L diverted", "9,999,999 trays made", "99.9 days
    of cover"), so nothing is cut short down to the 1101 px of the one-row layout. */
@@ -586,11 +743,16 @@ kbd {
       'bar bar'
       'rail view'
       'panel panel'
+      'log log'
       'kpis kpis';
   }
   .view {
     height: 62vh;
     min-height: 360px;
+  }
+  /* Below the panel, full width: a fixed height, so the page below it never moves as entries come. */
+  .log-card {
+    height: 200px;
   }
   /* Sterility sits in the second column, so that one is wider. */
   .kpi-grid {
@@ -601,7 +763,7 @@ kbd {
 @media (max-width: 720px) {
   .app {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'bar' 'view' 'rail' 'panel' 'kpis';
+    grid-template-areas: 'bar' 'view' 'rail' 'panel' 'log' 'kpis';
   }
   .view {
     height: 58vh;

@@ -1,6 +1,6 @@
 import type { Snapshot } from '../contracts';
 import { el, setAttr, setText } from './dom';
-import { formatKpi, KPI_IDS, KPI_SUB_IDS, kpiSubText, NO_VALUE, type KpiId, type KpiSubId } from './format';
+import { formatKpi, KPI_IDS, KPI_SUB_IDS, kpiSubText, NO_VALUE, sterilityStatus, type KpiId, type KpiSubId } from './format';
 
 export interface KpiStrip {
   update(snapshot: Snapshot): void;
@@ -44,13 +44,9 @@ export function createKpiStrip(root: HTMLElement): KpiStrip {
         slot.value.replaceChildren(...runs.map((run) => (run.small ? el('small', '', run.text) : run.text)));
       }
       for (const [id, node] of subs) setText(node, kpiSubText(id, snapshot.kpis));
-      // Sterility is the one KPI with a hard limit in phase 2: B* below 1 means under-processed milk.
-      // 0 means the model gives no B* yet, which is not a fault.
+      // Sterility is the one KPI with a hard limit: it turns red on B* alone, never on F0 (D4).
       const sterility = slots.get('sterility');
-      if (sterility) {
-        const { bStar } = snapshot.kpis;
-        setAttr(sterility.card, 'data-s', bStar > 0 && bStar < 1 ? 'bad' : null);
-      }
+      if (sterility) setAttr(sterility.card, 'data-s', sterilityStatus(snapshot.kpis.bStar));
     },
     dispose() {
       for (const slot of slots.values()) {

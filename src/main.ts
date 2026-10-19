@@ -5,6 +5,7 @@ import stagesJson from './data/stages.json';
 import { createWorld } from './scene/world';
 import { createSim } from './sim';
 import { createMockSim } from './sim/mock';
+import type { DebugPanel } from './ui/debugPanel';
 import { createHud } from './ui/hud';
 
 /** The HUD and charts update 4 times a second (plan 07). */
@@ -20,7 +21,8 @@ const viewport = document.querySelector<HTMLElement>('#viewport');
 if (!appRoot || !viewport) throw new Error('index.html must contain #app and #viewport');
 
 // ?mock runs the UI and 3D view on the mock snapshot instead of the model.
-const sim = new URLSearchParams(location.search).has('mock') ? createMockSim(config) : createSim(config);
+const params = new URLSearchParams(location.search);
+const sim = params.has('mock') ? createMockSim(config) : createSim(config);
 
 const pending: Command[] = [];
 const dispatch = (command: Command): void => {
@@ -29,7 +31,21 @@ const dispatch = (command: Command): void => {
 // Rail clicks and 3D clicks both select a stage through this bus, so the panel and the camera agree.
 const bus = createViewBus();
 const world = createWorld(viewport, bus);
-const hud = createHud(appRoot, dispatch, bus, stages);
+const hud = createHud(appRoot, dispatch, bus, stages, {
+  setpoints: {
+    uhtSetpointC: config.uht.setpointC,
+    homogenizerStage1Bar: config.homogenizer.stage1Bar,
+    fillerRatePacksPerH: config.fillers.ratePacksPerH,
+  },
+});
+
+// ?debug adds the lil-gui panel, loaded on demand so neither it nor lil-gui is in the main bundle.
+let debugPanel: DebugPanel | null = null;
+if (params.has('debug')) {
+  void import('./ui/debugPanel').then(({ createDebugPanel }) => {
+    debugPanel = createDebugPanel(hud.dispatch, hud.sentSetpoints);
+  });
+}
 
 let lastMs = performance.now();
 let sinceHudS = HUD_INTERVAL_S;
@@ -50,6 +66,7 @@ function frame(nowMs: number): void {
   sinceHudS += elapsedS;
   if (sinceHudS >= HUD_INTERVAL_S) {
     hud.update(snapshot);
+    debugPanel?.update(snapshot);
     sinceHudS = 0;
   }
 

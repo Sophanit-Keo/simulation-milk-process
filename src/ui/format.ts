@@ -1,4 +1,4 @@
-import { dayToS, hToS, sToDay, sToH, sToMin, type Kpis, type StageValueInfo } from '../contracts';
+import { dayToS, hToS, minToS, sToDay, sToH, sToMin, type Kpis, type StageValueInfo, type Status } from '../contracts';
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
@@ -44,6 +44,29 @@ export function formatNumber(value: number, decimals = 0): string {
   }
   // signDisplay 'negative' would do this, but it is newer than the ES2022 lib the project targets.
   return format.format(value).replace(/^-(?=0(\.0+)?$)/, '');
+}
+
+/** A difference with its sign always shown, e.g. "+0.78" or "-0.40"; zero reads "0.00", with no sign. */
+export function formatSigned(value: number, decimals = 0): string {
+  const number = formatNumber(value, decimals);
+  return number === NO_VALUE || number.startsWith('-') || /^0(\.0+)?$/.test(number) ? number : `+${number}`;
+}
+
+/**
+ * A stretch of sim time as the panel shows what is left of a step, e.g. "45 s", "2 min 30 s", "25 min"
+ * or "1 h 05 min". Rounds up to whole seconds, so a step with time left never reads "0 s". Seconds drop
+ * out from 10 minutes on, where at high speed they would only flicker.
+ */
+export function formatDuration(durationS: number): string {
+  if (!Number.isFinite(durationS) || durationS < 0) return NO_VALUE;
+  const wholeS = Math.ceil(durationS);
+  const hours = Math.floor(sToH(wholeS));
+  const minutes = Math.floor(sToMin(wholeS - hToS(hours)));
+  const seconds = wholeS - hToS(hours) - minToS(minutes);
+  if (hours > 0) return `${hours} h ${pad2(minutes)} min`;
+  if (minutes >= 10) return `${minutes} min`;
+  if (minutes > 0) return `${minutes} min ${pad2(seconds)} s`;
+  return `${seconds} s`;
 }
 
 /** A number and its unit, separated by a space ("140.0 °C", "52 %"); a plain count has no unit. */
@@ -103,6 +126,15 @@ export function formatKpi(id: KpiId, kpis: Kpis): KpiText {
     case 'trucks':
       return kpiNumber(formatNumber(kpis.trucksShipped));
   }
+}
+
+/**
+ * The sterility card's status, from B* alone (D4): below 1 the milk is under-processed and the plant
+ * diverts. Not from F0: with the ±0.3 °C display noise, F0 dips under its 5 min target at a safe 139.8 °C.
+ * A B* of 0 means the model gives none (nothing in the holding tube), which is not a fault.
+ */
+export function sterilityStatus(bStar: number): Extract<Status, 'bad'> | null {
+  return Number.isFinite(bStar) && bStar > 0 && bStar < 1 ? 'bad' : null;
 }
 
 /** formatKpi as one line of text, e.g. "F0 5.17 · B* 1.19": what the slot's [data-kpi-value] reads. */
