@@ -1,4 +1,5 @@
 import { SPEEDS, type Command, type Hud, type SetpointKey, type Snapshot, type StageInfo, type ViewBus } from '../contracts';
+import { createAbout } from './about';
 import { onPress } from './dom';
 import { createEventLog } from './eventLog';
 import { createKpiStrip } from './kpiStrip';
@@ -86,6 +87,7 @@ export function createHud(
   };
 
   const bar = createTopBar(barRoot, send, signal);
+  const about = createAbout(barRoot, signal);
   const rail = createStageRail(railRoot, stages, (stage) => bus.emit({ type: 'selectStage', stage }), signal);
   const log = createEventLog(logRoot);
   const panel = createStagePanel(panelRoot, stages, panelParts);
@@ -114,6 +116,8 @@ export function createHud(
     (event) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
       const target = event.target instanceof Element ? event.target : null;
+      // An open dialog (About) keeps every key: Escape closes it, Space and digits do nothing to the sim.
+      if (target?.closest('dialog[open]')) return;
       if (event.key === 'Escape') {
         if (!target?.closest(TEXT_TAKERS)) bus.emit({ type: 'overview' });
         return;
@@ -149,6 +153,7 @@ export function createHud(
       listeners.abort();
       stopListening();
       bar.dispose();
+      about.dispose();
       rail.dispose();
       log.dispose();
       panel.dispose();
