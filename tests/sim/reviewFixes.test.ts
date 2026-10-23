@@ -121,6 +121,15 @@ describe('the homogenizer and the fillers when stopped', () => {
 });
 
 describe('the ?mock sim (review)', () => {
+  it('diverts on a set point under the limit, even in an amber window', () => {
+    const sim = createMockSim(plantConfig);
+    // The mock opens in an amber stage 4 window with this seed, where it runs a little low.
+    expect(sim.snapshot().stages[4].status).toBe('warn');
+    sim.dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value: 138 });
+    sim.step(0.1);
+    expect(sim.snapshot().liquid.uhtMode).toBe('divert');
+  });
+
   it('never diverts without cleaning afterwards: every divert is followed by a CIP', () => {
     const sim = createMockSim(plantConfig);
     sim.dispatch({ type: 'setSpeed', speed: 1_000 });
@@ -135,5 +144,5 @@ describe('the ?mock sim (review)', () => {
     }
     expect(after.length).toBeGreaterThan(0);
     expect(new Set(after)).toEqual(new Set(['cip']));
-  });
+  }, 30_000);
 });

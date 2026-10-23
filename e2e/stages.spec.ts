@@ -415,11 +415,16 @@ test.describe('the ?debug scene hook', () => {
     await page.goto('/?mock&debug');
     await waitForScene(page);
     await waitForClock(page);
-    // The mock diverts now and then. ×1,000 moves at most 100 s of sim time per frame (main.ts counts no
-    // frame as longer than 0.1 s), less than any divert lasts, so a check on every frame can't miss one.
-    await page.getByTestId('speed-1000').click();
+    // The mock's own diverts come about once every 40 sim hours, so drive one: a UHT set point of 138 °C,
+    // under the 139.22 °C limit, diverts on the next frame (End is 150 °C, each Page Down 2 °C).
+    await railButton(page, 4).click();
+    const slider = page.getByTestId('setpoint-uhtSetpointC');
+    await slider.focus();
+    await page.keyboard.press('End');
+    for (let press = 0; press < 6; press++) await page.keyboard.press('PageDown');
+    await expect(page.getByTestId('setpoint-uhtSetpointC-value')).toHaveText('138.0 °C');
     // Pause in the frame that first shows the divert, from inside the page: a round trip from the test
-    // could take longer than the divert does.
+    // could take longer than a frame does.
     await page.waitForFunction(
       () => {
         const scene = (window as unknown as { __scene: { equipmentState(id: string): { diverting?: boolean } | null } }).__scene;

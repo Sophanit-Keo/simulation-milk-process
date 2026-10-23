@@ -166,8 +166,9 @@ export function createMockSim(config: PlantConfig): Sim {
     const holdS = flowLph > 0 ? holdTimeS(tubeL, flowLph) : 0;
     const setpointC = core.setpoints.uhtSetpointC;
     // Amber runs low but keeps its lowest noisy reading above the divert limit (139.5 ± 0.3 °C would dip
-    // under 139.22 °C at full flow and flicker red); red falls to the fault temperature.
-    const warnTempC = Math.max(setpointC - 0.5, limitC + uht.displayNoiseC + WARN_ABOVE_LIMIT_C);
+    // under 139.22 °C at full flow and flicker red), and never above the set point, so a set point under
+    // the limit still diverts.
+    const warnTempC = Math.min(setpointC, Math.max(setpointC - 0.5, limitC + uht.displayNoiseC + WARN_ABOVE_LIMIT_C));
     const randomTempC = { idle: setpointC, ok: setpointC, warn: warnTempC, bad: uht.faultTempC }[statuses[4]];
     const noiseC = uht.displayNoiseC * wave(timeS, 37, 7);
     const tempC = {
