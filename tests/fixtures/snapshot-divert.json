@@ -1,0 +1,234 @@
+{
+  "version": 2,
+  "timeS": 22290,
+  "speed": 10,
+  "paused": false,
+  "nextEventS": 50400,
+  "stages": {
+    "1": {
+      "id": 1,
+      "status": "ok",
+      "values": {
+        "siloTempC": 4,
+        "separatorTempC": 60,
+        "feedTankTempC": 4,
+        "rawMilkFatPct": 4,
+        "productFatPct": 3.5,
+        "creamShareFrac": 0.08635794743429287,
+        "rawMilkLph": 16222.222222222223,
+        "surplusCreamLph": 222.22222222222263,
+        "siloLevelPct": 56.89074074073913,
+        "mixTankLevelPct": 50
+      }
+    },
+    "2": {
+      "id": 2,
+      "status": "ok",
+      "values": {
+        "preheatTempC": 80,
+        "deaeratorTempC": 76,
+        "airPct": 0.5,
+        "heatRecoveredKw": 1317.3333333333333
+      }
+    },
+    "3": {
+      "id": 3,
+      "status": "ok",
+      "values": {
+        "stage1Bar": 200,
+        "stage2Bar": 30,
+        "inletTempC": 76,
+        "outletTempC": 81.75,
+        "globuleUm": 0.8,
+        "creamingRiskPct": 0,
+        "powerKw": 124.66124661246614
+      }
+    },
+    "4": {
+      "id": 4,
+      "status": "bad",
+      "values": {
+        "setpointC": 138.9,
+        "tempC": 139.0696672911756,
+        "flowLph": 16000,
+        "holdS": 4,
+        "f0Min": 4.17710574817159,
+        "bStar": 0.9667762626880115,
+        "divertLimitC": 139.22374451577414,
+        "rejectLevelL": 400.00000000000074
+      }
+    },
+    "5": {
+      "id": 5,
+      "status": "idle",
+      "values": {
+        "flashTempC": 80,
+        "coolerTempC": 20,
+        "waterRemovedLph": 0,
+        "condenserKw": 0
+      }
+    },
+    "6": {
+      "id": 6,
+      "status": "ok",
+      "values": {
+        "levelL": 9791.666666666479,
+        "levelPct": 48.95833333333239,
+        "capacityL": 20000,
+        "tempC": 20,
+        "inflowLph": 0,
+        "outflowLph": 15000,
+        "headspaceBar": 2.489583333333324,
+        "nextCleanS": 35400
+      }
+    },
+    "7": {
+      "id": 7,
+      "status": "ok",
+      "values": {
+        "fillerCount": 2,
+        "ratePacksPerH": 7500,
+        "tempC": 20
+      }
+    },
+    "8": {
+      "id": 8,
+      "status": "ok",
+      "values": {
+        "packsPerTray": 12,
+        "traysPerPallet": 84,
+        "packsPerPallet": 1008
+      }
+    },
+    "9": {
+      "id": 9,
+      "status": "ok",
+      "values": {
+        "incubationTempC": 55,
+        "incubationDays": 7,
+        "samplesPerBatch": 16
+      }
+    },
+    "10": {
+      "id": 10,
+      "status": "ok",
+      "values": {
+        "tempC": 25,
+        "palletsPerTruck": 22
+      }
+    }
+  },
+  "line": {
+    "silo": {
+      "tempC": 4,
+      "flowLph": 16222.222222222223
+    },
+    "separator": {
+      "tempC": 60,
+      "flowLph": 16000
+    },
+    "feedTank": {
+      "tempC": 4,
+      "flowLph": 16000
+    },
+    "preheater": {
+      "tempC": 80,
+      "flowLph": 16000
+    },
+    "deaerator": {
+      "tempC": 76,
+      "flowLph": 16000
+    },
+    "homogenizer": {
+      "tempC": 81.75,
+      "flowLph": 16000
+    },
+    "holdingTube": {
+      "tempC": 139.0696672911756,
+      "flowLph": 16000
+    },
+    "divert": {
+      "tempC": 139.0696672911756,
+      "flowLph": 16000
+    },
+    "flashVessel": {
+      "tempC": 80,
+      "flowLph": 0
+    },
+    "cooler": {
+      "tempC": 20,
+      "flowLph": 0
+    },
+    "asepticTank": {
+      "tempC": 20,
+      "flowLph": 15000
+    },
+    "filler": {
+      "tempC": 20,
+      "flowLph": 15000
+    }
+  },
+  "liquid": {
+    "uhtMode": "divert",
+    "modeRemainingS": 90,
+    "throttled": false,
+    "fillersRunning": 2,
+    "fillersStarved": false,
+    "headspaceBar": 2.489583333333324,
+    "productionSinceCleanS": 600,
+    "divertCount": 1,
+    "tanks": {
+      "silo": {
+        "levelL": 56890.74074073913,
+        "capacityL": 100000
+      },
+      "mixTank": {
+        "levelL": 5000,
+        "capacityL": 10000
+      },
+      "asepticTank": {
+        "levelL": 9791.666666666479,
+        "capacityL": 20000
+      },
+      "rejectTank": {
+        "levelL": 400.00000000000074,
+        "capacityL": 6000
+      }
+    }
+  },
+  "kpis": {
+    "uhtFlowLph": 16000,
+    "f0Min": 4.17710574817159,
+    "bStar": 0.9667762626880115,
+    "divertedL": 400.00000000000074,
+    "tankLevelPct": 48.95833333333239,
+    "packsPerH": 15000,
+    "oeePct": 0,
+    "traysMade": 0,
+    "palletsMade": 0,
+    "batchesOnHold": 0,
+    "batchesReleased": 0,
+    "batchesBlocked": 0,
+    "palletsInStock": 0,
+    "daysOfCover": 0,
+    "orderFillPct": 0,
+    "trucksShipped": 0
+  },
+  "log": [
+    {
+      "timeS": 22200,
+      "kind": "bad",
+      "message": "UHT at 138.9 °C gives B* 0.93, below 1: diverting to the reject tank"
+    },
+    {
+      "timeS": 22200,
+      "kind": "info",
+      "message": "UHT set point set to 138.9 °C"
+    },
+    {
+      "timeS": 21600,
+      "kind": "info",
+      "message": "Plant opens: day 1, 06:00"
+    }
+  ]
+}

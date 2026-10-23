@@ -83,6 +83,28 @@ Re-measured on 18 October 2026 on the `scene` lane's phase 3 work (stages 1–6 
 
 The frame rates of this run are left out: other lanes' browsers shared the machine (load average about 18), so they say nothing about the scene. The software-GL figures below are still those of phase 2.
 
+### Phase 3: the merged build
+
+Re-measured on 19 October 2026 by `qa` on the merged phase 3 build at `6c275fb` (contracts v2, the live sim, the `scene`, `ui`, `assets` and `process` work and the "About this model" dialog), same machine, browser and method, on the live sim (no `?mock`), a production build served by `vite preview`. 33 machines; no console errors or failed requests; within the overview budget.
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **188** | **105,046** | **188** | **105,046** |
+| 1 Standardization | 89 | 64,108 | 89 | 64,108 |
+| 2 Preheating | 85 | 64,036 | 90 | 64,284 |
+| 3 Homogenization | 89 | 63,928 | 91 | 68,376 |
+| 4 UHT | 95 | 73,368 | 97 | 73,428 |
+| 5 Flash cooling | 87 | 71,284 | 88 | 71,340 |
+| 6 Aseptic tank | 76 | 62,092 | 76 | 62,092 |
+| 7 Filling | 91 | 66,824 | 92 | 67,052 |
+| 8 Packaging | 97 | 73,446 | 99 | 77,562 |
+| 9 Quarantine & QA | 117 | 89,688 | 130 | 90,456 |
+| 10 Warehouse | 128 | 77,992 | 137 | 83,916 |
+
+The overview holds at 188 draw calls, the `scene` lane's figure, a little over half the budget of 350; at 1440 × 900 every stop matches the `scene` lane's table. At 1280 × 720 some stops take in a few more machines than in that table (stage 9: 130 draw calls, 121 before). That table was measured on the `scene` lane's branch, before the `ui` lane's panels and event-log card were merged; the layout around the 3D view, and so the part of the plant each stage camera frames at this size, has changed since. In the first frames at 1280 × 720 the overview read 189 draw calls and 83,198 triangles before the Kenney pieces and vehicles settled.
+
+Frame rates are again left out: other lanes' builds and browser tests shared the 4 cores (load average 18 to 19), and the readings (1 to 4 fps) measure that, not the scene. **The 60 fps exit criterion stays open** until it is measured on a real GPU ([To do on a real GPU](#to-do-on-a-real-gpu)).
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.
