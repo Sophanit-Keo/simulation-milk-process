@@ -218,7 +218,7 @@
     {
       "timeS": 22200,
       "kind": "bad",
-      "message": "UHT at 138.9 °C gives B* 0.93, below 1: diverting to the reject tank"
+      "message": "UHT set point 138.9 °C gives B* 0.93, below 1: diverting to the reject tank"
     },
     {
       "timeS": 22200,

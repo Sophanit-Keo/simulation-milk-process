@@ -152,10 +152,13 @@ export function createMockSim(config: PlantConfig): Sim {
     const tankHigh = levelFrac > tank.throttleAboveFrac;
     if (tankHigh || levelFrac < 1 - tank.throttleAboveFrac) statuses[6] = worst(statuses[6], 'warn');
 
-    // 4: hold, F0, B* and divert limit follow the live flow (R6). Noise stays inside displayNoiseC (R4);
-    // a red stage 4 is the temperature-drop fault, so B* falls below 1. An episode overrides the random
-    // status: a divert episode runs at the fault temperature, a clean stops the UHT flow.
+    // 4: hold, F0, B* and divert limit follow the live flow (R6). Noise stays inside displayNoiseC (R4).
+    // An episode overrides the random status: a divert episode runs at the fault temperature, so B* falls
+    // below 1, and a clean stops the UHT flow. A set point under the limit diverts too.
     const episode = episodeAt(timeS);
+    // Only a divert episode diverts, and it always cleans afterwards as the live model does; a random red
+    // stage 4 would divert and go straight back to production, so the random status stops at amber.
+    if (statuses[4] === 'bad') statuses[4] = 'warn';
     const cleaningNow = episode.mode === 'cip' || episode.mode === 'sterilize' || episode.mode === 'aic';
     const nominalLph = uht.capacityLph * (tankHigh ? tank.throttledFlowFrac : 1);
     const flowLph = cleaningNow ? 0 : nominalLph;
@@ -193,6 +196,8 @@ export function createMockSim(config: PlantConfig): Sim {
     // 3: an amber or red homogenizer has lost pressure, and the outlet runs cooler with it.
     const pressureFrac = { idle: 1, ok: 1, warn: 0.85, bad: 0.5 }[statuses[3]];
     values[3].stage1Bar = (values[3].stage1Bar + 3 * wave(timeS, minToS(11), 5)) * pressureFrac;
+    // A stopped homogenizer (in a clean) builds no pressure.
+    if (flowLph <= 0) values[3].stage1Bar = values[3].stage2Bar = 0;
     values[3].inletTempC = values[2].deaeratorTempC;
     values[3].outletTempC = homogenizerOutletC(
       values[3].inletTempC,

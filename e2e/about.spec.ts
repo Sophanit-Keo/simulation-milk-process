@@ -1,11 +1,15 @@
 // "About this model" (src/ui/about.ts): the top bar opens a modal with the text of src/data/about.md,
 // and while it is open the keys belong to the dialog, not to the sim.
 import { expect, test } from './fixtures';
-import { waitForClock } from './helpers';
+import { railButton, waitForClock } from './helpers';
 
 test('About opens a labelled modal with the About text and closes on Escape or Close, giving focus back', async ({ page }) => {
   await page.goto('/');
   await waitForClock(page);
+  // A stage selected first, so Escape flying to the whole plant would show.
+  await railButton(page, 4).click();
+  const panelTitle = page.getByTestId('panel-title');
+  await expect(panelTitle).toHaveText('UHT Treatment');
   const open = page.getByTestId('about');
   const dialog = page.getByRole('dialog', { name: 'About this model' });
 
@@ -15,10 +19,11 @@ test('About opens a labelled modal with the About text and closes on Escape or C
   await expect(dialog.getByRole('heading', { name: 'When the plant diverts' })).toBeVisible();
   await expect(dialog.getByRole('link', { name: 'plant.json' })).toHaveAttribute('href', /^https:\/\//);
 
-  // Escape closes the dialog and leaves the camera where it was (no "Whole plant" flight).
+  // Escape closes the dialog and leaves the selection and camera where they were (no "Whole plant" flight).
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(open).toBeFocused();
+  await expect(panelTitle).toHaveText('UHT Treatment');
 
   await open.click();
   await expect(dialog).toBeVisible();

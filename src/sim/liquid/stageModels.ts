@@ -1,7 +1,7 @@
 // The stage 1–6 physics as pure functions of plant.json and the live flows, shared by the live
 // model (liquidLine.ts) and the ?mock sim. Litres are treated as kilograms throughout (sim
 // assumption, as in H3), so L/h × kJ/(kg·K) × K gives kJ/h, and L/s gives kJ/s = kW.
-import { lphToLps, type PlantConfig } from '../../contracts';
+import { fracToPct, lphToLps, type PlantConfig } from '../../contracts';
 import { hydraulicPowerKw, surplusCreamFrac } from '../formulas';
 
 /** Stage 1: the raw milk the separator needs for standardizedLph of target-fat milk, and the cream left over (H3, H4). */
@@ -32,7 +32,7 @@ export function globuleUm(config: PlantConfig, stage1Bar: number): number {
 /** Stage 3: a 0–100 creaming-risk score, 0 up to creamingOkUm and rising linearly to 100 at creamingFullUm. */
 export function creamingRiskPct(config: PlantConfig, sizeUm: number): number {
   const { creamingOkUm, creamingFullUm } = config.homogenizer;
-  return 100 * Math.min(1, Math.max(0, (sizeUm - creamingOkUm) / (creamingFullUm - creamingOkUm)));
+  return fracToPct(Math.min(1, Math.max(0, (sizeUm - creamingOkUm) / (creamingFullUm - creamingOkUm))));
 }
 
 /** Stage 3: power drawn = hydraulic power at the total pressure (both stages) ÷ efficiency (H8). */

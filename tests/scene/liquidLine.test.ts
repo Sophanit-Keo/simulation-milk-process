@@ -378,7 +378,7 @@ describe('liquidLine', () => {
     expect(needle1.rotation.y).toBeCloseTo(needleAngleRad(100, GAUGE_FULL_SCALE_BAR.stage1), 9);
   });
 
-  it('puffs steam at the injector while producing, and none in a divert or a clean', () => {
+  it('puffs steam at the injector while heating milk (producing or diverting), and none in a clean', () => {
     const { machines } = build();
     const injector = byId(machines, 'steam-injector');
     const steam = node(injector, 'steam') as THREE.InstancedMesh;
@@ -390,11 +390,36 @@ describe('liquidLine', () => {
     const phase = injector.debugState?.().phase;
     injector.update({ ...snapshot, paused: true }, 0.05);
     expect(injector.debugState?.().phase).toBe(phase);
-    for (const mode of ['divert', 'cip', 'sterilize', 'aic'] as const) {
+    const diverting = structuredClone(snapshot);
+    diverting.liquid.uhtMode = 'divert';
+    injector.update(diverting, 0.05);
+    expect(steam.visible, 'divert').toBe(true);
+    for (const mode of ['cip', 'sterilize', 'aic'] as const) {
       const other = structuredClone(snapshot);
       other.liquid.uhtMode = mode;
       injector.update(other, 0.05);
       expect(steam.visible, mode).toBe(false);
+    }
+  });
+
+  it('never steps the steam or bubbles by half their copy spacing, so a slow frame at ×10,000 neither freezes nor reverses them', () => {
+    const { machines } = build();
+    const snapshot = { ...staticSnapshot(), speed: 10_000 as const };
+    for (const [id, name] of [
+      ['steam-injector', 'steam'],
+      ['deaerator', 'bubbles'],
+    ] as const) {
+      const machine = byId(machines, id);
+      const spacing = 1 / (node(machine, name) as THREE.InstancedMesh).count;
+      // 0.1 s is the longest frame main.ts passes on (10 fps or slower).
+      for (const frameS of [0.1, 1 / 15, 0.05]) {
+        machine.update(snapshot, frameS);
+        const before = Number(machine.debugState?.().phase);
+        machine.update(snapshot, frameS);
+        const stepFrac = (Number(machine.debugState?.().phase) - before + 1) % 1;
+        expect(stepFrac, `${name} at ${frameS} s frames`).toBeGreaterThan(0);
+        expect(stepFrac, `${name} at ${frameS} s frames`).toBeLessThan(spacing / 2);
+      }
     }
   });
 

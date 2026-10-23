@@ -89,30 +89,40 @@ test.describe('set-point sliders', () => {
     await expect(slider).toBeFocused();
     await expect(slider).toHaveValue('150');
 
-    // Five steps of 2 °C (Page Down) and five of 0.1 °C: 139.5 °C.
+    // Five steps of 2 °C (Page Down) and four of 0.1 °C: 139.6 °C, whose lowest noisy reading (139.3 °C)
+    // stays over the 139.22 °C limit, so the live sim never diverts and logs nothing else here.
     for (let press = 0; press < 5; press++) await page.keyboard.press('PageDown');
-    for (let press = 0; press < 5; press++) await page.keyboard.press('ArrowLeft');
-    await expect(page.getByTestId('setpoint-uhtSetpointC-value')).toHaveText('139.5 °C');
+    for (let press = 0; press < 4; press++) await page.keyboard.press('ArrowLeft');
+    await expect(page.getByTestId('setpoint-uhtSetpointC-value')).toHaveText('139.6 °C');
     await afterHudUpdates(page);
-    await expect.poll(() => valueRow(page, 'setpointC')).toBe('Set point 139.5 °C');
-    const entries = await logEntries(page);
-    expect(entries[0]?.text).toBe('UHT set point set to 139.5 °C');
+    await expect.poll(() => valueRow(page, 'setpointC')).toBe('Set point 139.6 °C');
+    const texts = (await logEntries(page)).map(({ text }) => text);
+    expect(texts).toContain('UHT set point set to 139.6 °C');
+    expect(texts.filter((text) => text.includes('diverting'))).toEqual([]);
   });
 
   test('the sterility card turns red on B* below 1, not on F0 below 5 min (D4)', async ({ page }) => {
     await openStage(page, '/', 4);
     const card = page.locator('#kpis [data-kpi="sterility"]');
     await uhtSlider(page).focus();
-    // 139.5 °C at 4 s: F0 about 4.6 min, under its target, but B* about 1.06.
+    // 139.6 °C at 4 s: the reading spans 139.3–139.9 °C, so B* stays at 1.02 or more and the plant never
+    // diverts, while F0 reads under its 5 min target most of the time (under 139.85 °C, H23).
     await page.keyboard.press('End');
     for (let press = 0; press < 5; press++) await page.keyboard.press('PageDown');
-    for (let press = 0; press < 5; press++) await page.keyboard.press('ArrowLeft');
-    await expect(card.locator('[data-kpi-value]')).toHaveText(/^F0 4\.\d\d · B\* 1\.0\d$/);
-    await expect(card).not.toHaveAttribute('data-s');
-    // 139.0 °C: B* about 0.9, under-processed.
-    for (let press = 0; press < 5; press++) await page.keyboard.press('ArrowLeft');
-    await expect(card.locator('[data-kpi-value]')).toHaveText(/B\* 0\.\d\d$/);
+    for (let press = 0; press < 4; press++) await page.keyboard.press('ArrowLeft');
+    const sterility = async () => {
+      const text = (await card.locator('[data-kpi-value]').innerText()).replace(/\s+/g, ' ');
+      const match = /^F0 (\d+\.\d\d) · B\* (\d+\.\d\d)$/.exec(text);
+      return match ? { f0Min: Number(match[1]), bStar: Number(match[2]), red: (await card.getAttribute('data-s')) === 'bad' } : null;
+    };
+    await expect.poll(async () => {
+      const now = await sterility();
+      return now !== null && now.f0Min < 5 && now.bStar >= 1 && !now.red;
+    }, { message: 'F0 under 5 min with B* at 1 or more, and the card not red' }).toBe(true);
+    // 139.0 °C: B* about 0.9, under-processed; the plant diverts and the card turns red.
+    for (let press = 0; press < 6; press++) await page.keyboard.press('ArrowLeft');
     await expect(card).toHaveAttribute('data-s', 'bad');
+    await expect.poll(async () => (await sterility())?.bStar ?? 9).toBeLessThan(1);
   });
 
   test('a mouse drag is not undone by the HUD while held, and sends one set point when let go', async ({ page }) => {
@@ -187,7 +197,23 @@ test.describe('the event log', () => {
     await railButton(page, 3).click();
     await homogenizerSlider(page).focus();
     await page.keyboard.press('Home');
-    for (let press = 0; press < 29; press++) await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => (await logEntries(page))[0]?.text).toBe('Homogenizer stage 1 pressure set to 100 bar');
+    // A new entry is added on top: the entries already there stay the same nodes, so a screen reader hears
+    // only the new one (a log that redrew itself would announce everything again).
+    await page.evaluate(() => {
+      const newest = document.querySelector('#log [data-testid="event-log"] > li') as HTMLElement & { probe?: boolean };
+      newest.probe = true;
+    });
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(async () => (await logEntries(page))[0]?.text).toBe('Homogenizer stage 1 pressure set to 105 bar');
+    expect(
+      await page.evaluate(() => {
+        const items = [...document.querySelectorAll('#log [data-testid="event-log"] > li')] as (HTMLElement & { probe?: boolean })[];
+        return items.findIndex((li) => li.probe === true);
+      }),
+      'the earlier entry is still the same node, one place down',
+    ).toBe(1);
+    for (let press = 0; press < 28; press++) await page.keyboard.press('ArrowRight');
     await afterHudUpdates(page);
     await expect.poll(async () => (await logEntries(page))[0]?.text).toBe('Homogenizer stage 1 pressure set to 245 bar');
     const entries = await logEntries(page);
@@ -251,9 +277,16 @@ test('the one-screen layout holds with the stage 4 panel and the log, at 1280 ×
       await page.setViewportSize({ width, height });
       const layout = await page.evaluate(() => {
         const box = (selector: string) => document.querySelector(selector)?.getBoundingClientRect().toJSON() as DOMRect;
+        const rail = document.querySelector('#rail') as HTMLElement;
         return {
           across: document.documentElement.scrollWidth > window.innerWidth,
           down: document.documentElement.scrollHeight > window.innerHeight,
+          // The top bar on one row: its parts (centred, of different heights) all overlap vertically.
+          barParts: [...document.querySelectorAll('#bar > *')].map((part) => {
+            const { top, bottom } = part.getBoundingClientRect();
+            return { top, bottom };
+          }),
+          railOverflowPx: rail.scrollHeight - rail.clientHeight,
           rail: box('#rail'),
           log: box('#log'),
           view: box('.view'),
@@ -263,6 +296,10 @@ test('the one-screen layout holds with the stage 4 panel and the log, at 1280 ×
       const size = `${width} × ${height} (${colorScheme})`;
       expect(layout.across, `scrolls sideways at ${size}`).toBe(false);
       expect(layout.down, `scrolls down at ${size}`).toBe(false);
+      const lowestTop = Math.max(...layout.barParts.map((part) => part.top));
+      const highestBottom = Math.min(...layout.barParts.map((part) => part.bottom));
+      expect(lowestTop, `the top bar takes one row at ${size}`).toBeLessThan(highestBottom);
+      expect(layout.railOverflowPx, `the rail shows all ten stages without scrolling at ${size}`).toBeLessThanOrEqual(0);
       expect(layout.log.top, `the log sits under the rail at ${size}`).toBeGreaterThanOrEqual(layout.rail.bottom);
       expect(layout.log.bottom, `the log ends with the 3D view at ${size}`).toBeCloseTo(layout.view.bottom, 0);
       expect(layout.log.height, `the log has room for entries at ${size}`).toBeGreaterThanOrEqual(110);

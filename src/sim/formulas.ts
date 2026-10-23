@@ -1,6 +1,6 @@
 // The core formulas of plan 06, as pure functions. Names carry their units (D6);
 // every unit conversion here goes through units.ts.
-import { lphToLps, sToMin } from '../contracts';
+import { lphToLps, lpsBarToKw, sToMin } from '../contracts';
 
 /** Share of cream to mix back into skim milk to reach the target fat. */
 export function creamShareFrac(targetFatPct: number, skimFatPct: number, creamFatPct: number): number {
@@ -52,12 +52,9 @@ export function oeeFrac(availabilityFrac: number, performanceFrac: number, quali
   return availabilityFrac * performanceFrac * qualityFrac;
 }
 
-/** One litre per second against one bar is 0.001 m³/s × 100,000 Pa = 100 W. */
-const KW_PER_LPS_BAR = 0.1;
-
 /** Hydraulic power of a pump pushing flowLph against a pressure rise of bar (H8: 10,000 L/h at 200 bar is 55.556 kW). */
 export function hydraulicPowerKw(flowLph: number, bar: number): number {
-  return lphToLps(flowLph) * bar * KW_PER_LPS_BAR;
+  return lpsBarToKw(lphToLps(flowLph), bar);
 }
 
 /**

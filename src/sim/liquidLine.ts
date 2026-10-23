@@ -4,14 +4,15 @@
 //
 // Step size: the flows are constant between two events (a mode timer running out, a clean falling
 // due, the aseptic tank's level crossing a throttle or filler threshold, a tank filling up, the silo
-// calling for a tanker), so a step is cut at each such event and the levels are exact whatever the
-// step. The lags (preheater, air content, mixing-tank level control) are integrated exactly
+// calling for a tanker, a tanker running empty), so a step is cut at each such event and the levels are
+// exact at any step the clock takes (checkPlantConfig caps clock.fastStepS at 60 s). The lags (preheater, air content, mixing-tank level control) are integrated exactly
 // (formulas.ts, lagToward). The display noise is drawn once per step.
 import {
   fracToPct,
   lphToLps,
   lpsToLph,
   sToH,
+  sToMin,
   type Kpis,
   type LiquidSnapshot,
   type LogKind,
@@ -145,7 +146,7 @@ function timeToReachS(levelL: number, rateLps: number, targetL: number): number 
 }
 
 const formatL = (litres: number): string => Math.round(litres).toLocaleString('en-US');
-const formatMin = (seconds: number): string => `${Math.round(seconds / 60)} min`;
+const formatMin = (seconds: number): string => `${Math.round(sToMin(seconds))} min`;
 
 export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidLineOptions = {}): LiquidLine {
   const { standardization: std, preheating, homogenizer, uht, flashCooling, asepticTank: tank, cleaning, product } = config;
@@ -223,6 +224,8 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     at(timeToReachS(state.rejectL, lphToLps(flows.divertLph), uht.rejectTankL));
     // The silo's tanker threshold: exact while the mixing tank sits on its target, close otherwise.
     if (state.tankerLeftL <= 0) at(timeToReachS(state.siloL, -lphToLps(flows.rawLph), tankerBelowL));
+    // A tanker running empty changes the silo's inflow.
+    else at(state.tankerLeftL / lphToLps(std.tankerUnloadLph));
     return soonestS;
   }
 
@@ -291,20 +294,24 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
   }
 
   /**
-   * In production, divert when B* falls below 1 (D4), decided on the noisy reading at the holding-tube
-   * outlet. The reading scatters around the set point, the temperature the milk really has, so a set point
-   * under the divert limit diverts at once too, even in a step whose noise lifts the reading over it.
-   * Noise alone still never diverts: at 140 °C the lowest reading gives B* 1.11 (H21).
+   * In production, divert when B* falls below 1 (D4), for the noisy reading at the holding-tube outlet or
+   * for the set point. The reading scatters around the set point, the temperature the milk really has, so
+   * a set point under the divert limit diverts at once too, even in a step whose noise lifts the reading
+   * over it. Noise alone still never diverts: at 140 °C the lowest reading gives B* 1.11 (H21).
    */
   function checkDivert(nowS: number, setpoints: Readonly<Setpoints>, flows: LiquidFlows, log: LiquidLog): void {
     if (state.mode !== 'production' || flows.uhtLph <= 0) return;
     const holdS = holdTimeS(tubeL, flows.uhtLph);
-    const readingC = Math.min(setpoints.uhtSetpointC + state.noiseC, setpoints.uhtSetpointC);
-    const bStarNow = bStar(readingC, holdS);
-    if (bStarNow >= 1) return;
+    const setpointC = setpoints.uhtSetpointC;
+    const readingC = setpointC + state.noiseC;
+    const bySetpoint = bStar(setpointC, holdS) < 1;
+    if (!bySetpoint && bStar(readingC, holdS) >= 1) return;
     enterMode('divert', uht.divertBeforeCleaningS);
     state.divertCount += 1;
-    log(nowS, 'bad', `UHT at ${readingC.toFixed(1)} °C gives B* ${bStarNow.toFixed(2)}, below 1: diverting to the reject tank`);
+    // Say which number diverted, rounded down so it never reads "B* 1.00, below 1".
+    const [what, tempC] = bySetpoint ? ['set point', setpointC] : ['reading', readingC];
+    const bStarText = (Math.floor(bStar(tempC, holdS) * 100) / 100).toFixed(2);
+    log(nowS, 'bad', `UHT ${what} ${tempC.toFixed(1)} °C gives B* ${bStarText}, below 1: diverting to the reject tank`);
   }
 
   /** Switches whose threshold the last cut landed on, then mode changes whose time has come. */
@@ -373,6 +380,9 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       doneS += cutS;
       applyEvents(startS + doneS, log);
     }
+    // A mode change or throttle switch on the step's last instant must not leave production showing a
+    // B* under 1 until the next step: check once more at the end.
+    checkDivert(endS, setpoints, flowsNow(setpoints, endS), log);
     // Floating-point slack only; the cuts above keep every level inside its tank.
     state.asepticL = Math.min(tank.capacityL, Math.max(0, state.asepticL));
     state.rejectL = Math.min(uht.rejectTankL, Math.max(0, state.rejectL));
@@ -383,10 +393,12 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     const { uhtLph } = flows;
 
     const deaeratorTempC = state.preheatTempC - preheating.deaeratorDropC;
-    const stage1Bar = setpoints.homogenizerStage1Bar;
-    const totalBar = stage1Bar + homogenizer.stage2Bar;
+    // A stopped homogenizer builds no pressure; the globule size and creaming risk stay those of its set point.
+    const stage1Bar = uhtLph > 0 ? setpoints.homogenizerStage1Bar : 0;
+    const stage2Bar = uhtLph > 0 ? homogenizer.stage2Bar : 0;
+    const totalBar = stage1Bar + stage2Bar;
     const outletTempC = homogenizerOutletC(deaeratorTempC, totalBar, homogenizer.barPerDegreeC);
-    const globule = globuleUm(config, stage1Bar);
+    const globule = globuleUm(config, setpoints.homogenizerStage1Bar);
     const creamingRisk = creamingRiskPct(config, globule);
 
     // The holding-tube outlet reads the set point plus noise while product or AIC water runs at
@@ -423,7 +435,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       },
       3: {
         stage1Bar,
-        stage2Bar: homogenizer.stage2Bar,
+        stage2Bar,
         inletTempC: deaeratorTempC,
         outletTempC,
         globuleUm: globule,

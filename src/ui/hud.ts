@@ -28,8 +28,8 @@ export interface MainHud extends Hud {
  * Not a rail button the mouse clicked (stageRail.ts): the other buttons hand focus back after a click.
  */
 const SPACE_TAKERS = 'button, input, select, textarea, summary, [contenteditable]:not([contenteditable="false"])';
-/** Focus in one of these keeps digits for itself. */
-const TEXT_TAKERS = 'input, select, textarea, [contenteditable]:not([contenteditable="false"])';
+/** Focus in one of these keeps digits and Escape for itself; a range slider takes neither. */
+const TEXT_TAKERS = 'input:not([type="range"]), select, textarea, [contenteditable]:not([contenteditable="false"])';
 
 /**
  * The one-screen HUD (plan 08) in the app root of index.html: the top bar (#bar), the stage

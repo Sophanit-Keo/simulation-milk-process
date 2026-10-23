@@ -95,9 +95,9 @@ test('a UHT set point under the divert limit diverts within one step: red lamp, 
   expect(divertS - setS).toBeLessThanOrEqual(plantConfig.clock.baseStepS);
   const divertEntry = page.locator('#log [data-testid="event-log"] > li', { hasText: 'diverting to the reject tank' }).first();
   await expect(divertEntry).toHaveAttribute('data-kind', 'bad');
-  // The reading the divert was decided on: the set point, or less by up to the ±0.3 °C noise (D4, H88).
+  // 138.0 °C is under the limit, so the set point itself diverts, whatever the noise does (D4, H88).
   await expect(divertEntry.locator('.log-text')).toHaveText(
-    /^UHT at 13(7\.[7-9]|8\.0) °C gives B\* 0\.\d\d, below 1: diverting to the reject tank$/,
+    /^UHT set point 138\.0 °C gives B\* 0\.\d\d, below 1: diverting to the reject tank$/,
   );
 
   // The stage 4 panel shows the divert, with a red lamp, and the reject tank fills.

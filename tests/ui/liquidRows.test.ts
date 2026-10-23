@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { UHT_MODES, type LiquidSnapshot } from '../../src/contracts';
 import { createSim } from '../../src/sim';
 import { divertLimitC } from '../../src/sim/formulas';
-import { DERIVED_ROWS, fillersText, marginText, STATE_ROWS, throttleText, uhtModeText } from '../../src/ui/liquidRows';
+import { DERIVED_ROWS, feedText, fillersText, marginText, STATE_ROWS, supplyText, throttleText, uhtModeText } from '../../src/ui/liquidRows';
 import { plantConfig } from '../helpers/plantConfig';
 
 const liquid = (): LiquidSnapshot => createSim(plantConfig).snapshot().liquid;
@@ -43,6 +43,18 @@ describe('throttleText and fillersText', () => {
   it('reads full flow in green, and the throttle in amber', () => {
     expect(throttleText({ throttled: false })).toEqual({ text: 'Full flow', status: 'ok' });
     expect(throttleText({ throttled: true })).toEqual({ text: 'Throttled · tank high', status: 'warn' });
+  });
+
+  it('stage 4\'s feed keeps flowing while diverting and stops for a clean; stage 6 gets nothing in either', () => {
+    for (const throttled of [false, true]) {
+      expect(feedText({ throttled, uhtMode: 'divert' })).toEqual(throttleText({ throttled }));
+      expect(supplyText({ throttled, uhtMode: 'production' })).toEqual(throttleText({ throttled }));
+    }
+    for (const uhtMode of ['cip', 'sterilize', 'aic'] as const) {
+      expect(feedText({ throttled: false, uhtMode })).toEqual({ text: 'Stopped · no milk', status: 'idle' });
+      expect(supplyText({ throttled: false, uhtMode })).toEqual({ text: 'No inflow · cleaning', status: 'warn' });
+    }
+    expect(supplyText({ throttled: false, uhtMode: 'divert' })).toEqual({ text: 'No inflow · diverting', status: 'warn' });
   });
 
   it('counts the running fillers, and says when they wait for product', () => {
@@ -87,6 +99,11 @@ describe('marginText (stage 4, R6)', () => {
 
   it('goes negative below the limit, where the plant diverts', () => {
     expect(marginText({ tempC: 139, divertLimitC: divertLimitC(4) })).toBe('-0.22 °C');
+  });
+
+  it('shows a dash while no milk flows through the holding tube (a clean), whatever the lye or hot water reads', () => {
+    expect(marginText({ tempC: 75, divertLimitC: divertLimitC(4), flowLph: 0 })).toBe('—');
+    expect(marginText({ tempC: setpointC, divertLimitC: divertLimitC(4), flowLph: 16_000 })).toBe('+0.78 °C');
   });
 
   it('shows a dash when either reading is missing', () => {

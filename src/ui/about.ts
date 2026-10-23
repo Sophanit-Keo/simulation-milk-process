@@ -1,4 +1,4 @@
-// "About this model": a button at the end of the top bar opens a modal dialog with the text
+// "About this model": a button next to the plant's name in the top bar opens a modal dialog with the text
 // `process` keeps in src/data/about.md (phase 3 card: the plant-type mix, R5, and the accepted
 // simplifications). The native <dialog> traps focus, closes on Escape and gives focus back.
 import aboutText from '../data/about.md?raw';
@@ -52,7 +52,7 @@ export interface About {
 }
 
 export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
-  const open = el('button', 'btn', 'About');
+  const open = el('button', 'link about-open', 'About');
   open.type = 'button';
   open.dataset.testid = 'about';
   open.title = 'About this model: what it shows, its simplifications and sources';
@@ -84,7 +84,16 @@ export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
     { signal },
   );
 
-  bar.append(open);
+  // On the title's row, where the brand's subtitle leaves room, so the bar stays one row at 1280 px.
+  const title = bar.querySelector('.brand h1');
+  let titleRow: HTMLElement | null = null;
+  if (title) {
+    titleRow = el('div', 'brand-title');
+    title.replaceWith(titleRow);
+    titleRow.append(title, open);
+  } else {
+    bar.append(open);
+  }
   document.body.append(dialog);
 
   return {
@@ -92,6 +101,8 @@ export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
       if (dialog.open) dialog.close();
       dialog.remove();
       open.remove();
+      const title = titleRow?.firstElementChild;
+      if (titleRow && title) titleRow.replaceWith(title);
     },
   };
 }

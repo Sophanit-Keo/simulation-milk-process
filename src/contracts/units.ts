@@ -8,6 +8,8 @@
  *   Ms                 milliseconds (browser timestamps: performance.now, requestAnimationFrame)
  *   L, Lph, Lps        litres, litres per hour, litres per second
  *   C, Bar, Kw         degrees Celsius, bar, kilowatts
+ *   Um                 micrometres (fat-globule size)
+ *   KjPerKg, KjPerKgK  kilojoules per kilogram (latent heat), per kilogram and kelvin (specific heat)
  *   Pct, Frac          percent (0–100), fraction (0–1)
  *   Packs, Trays, Pallets, PacksPerH    counts and count rates
  *   PerPack            a probability (0–1) per pack, such as failurePerPack
@@ -37,3 +39,6 @@ export const pctToFrac = (pct: number): number => pct / 100;
 
 export const degToRad = (deg: number): number => (deg * Math.PI) / 180;
 export const radToDeg = (rad: number): number => (rad * 180) / Math.PI;
+
+/** Power of a flow of flowLps litres per second against a pressure rise of bar: 1 L/s at 1 bar is 0.001 m³/s × 100,000 Pa = 100 W. */
+export const lpsBarToKw = (flowLps: number, bar: number): number => flowLps * bar * 0.1;

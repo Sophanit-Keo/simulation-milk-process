@@ -44,9 +44,9 @@ export function createKpiStrip(root: HTMLElement): KpiStrip {
         slot.value.replaceChildren(...runs.map((run) => (run.small ? el('small', '', run.text) : run.text)));
       }
       for (const [id, node] of subs) setText(node, kpiSubText(id, snapshot.kpis));
-      // Sterility is the one KPI with a hard limit: it turns red on B* alone, never on F0 (D4).
+      // Sterility is the one KPI with a hard limit: it turns red on B* or a divert, never on F0 (D4).
       const sterility = slots.get('sterility');
-      if (sterility) setAttr(sterility.card, 'data-s', sterilityStatus(snapshot.kpis.bStar));
+      if (sterility) setAttr(sterility.card, 'data-s', sterilityStatus(snapshot.kpis.bStar, snapshot.stages[4].status));
     },
     dispose() {
       for (const slot of slots.values()) {
