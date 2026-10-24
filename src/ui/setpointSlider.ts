@@ -1,4 +1,4 @@
-import type { Command, SetpointKey, Snapshot, StageId } from '../contracts';
+import { SETPOINT_RANGES, type Command, type SetpointKey, type Snapshot, type StageId } from '../contracts';
 import { el, setAttr, setText } from './dom';
 import { formatNumber, withUnit } from './format';
 import type { PanelPart } from './stagePanel';
@@ -20,8 +20,8 @@ export interface SetpointSpec {
 
 /** The set points plan 08 puts in the panel: the UHT temperature (stage 4) and the homogenizer pressure (stage 3). */
 export const SETPOINT_SLIDERS: Readonly<Partial<Record<StageId, SetpointSpec>>> = {
-  3: { key: 'homogenizerStage1Bar', label: 'First-stage pressure', unit: 'bar', min: 100, max: 250, step: 5, decimals: 0 },
-  4: { key: 'uhtSetpointC', label: 'UHT set point', unit: '°C', min: 130, max: 150, step: 0.1, decimals: 1, follow: 'setpointC' },
+  3: { key: 'homogenizerStage1Bar', label: 'First-stage pressure', unit: 'bar', ...SETPOINT_RANGES.homogenizerStage1Bar, step: 5, decimals: 0 },
+  4: { key: 'uhtSetpointC', label: 'UHT set point', unit: '°C', ...SETPOINT_RANGES.uhtSetpointC, step: 0.1, decimals: 1, follow: 'setpointC' },
 };
 
 /** The nearest value on the slider's steps, inside its range, without float dust (130 + 99 × 0.1 is 139.9, not 139.90000000000001). */
@@ -62,6 +62,8 @@ export function createSetpointSlider(
   const output = el('output', 'sp-value');
   output.htmlFor.add(id);
   output.dataset.testid = `${id}-value`;
+  // An <output> is a live region; the slider already speaks its value (aria-valuetext), so say it once.
+  output.setAttribute('aria-hidden', 'true');
   head.append(label, output);
 
   const input = el('input', 'sp-range');
@@ -103,9 +105,18 @@ export function createSetpointSlider(
     },
     { signal },
   );
-  // On the document: the pointer may be let go of anywhere once the drag has left the slider.
+  // On the document: the pointer may be let go of anywhere once the drag has left the slider. A drag that
+  // ends where it began fires no change event, so the move it left pending is dropped here too (a change
+  // that does follow comes in the same task and still sends its value).
   for (const type of ['pointerup', 'pointercancel'] as const) {
-    input.ownerDocument.addEventListener(type, () => void (held = false), { signal });
+    input.ownerDocument.addEventListener(
+      type,
+      () => {
+        held = false;
+        pending = null;
+      },
+      { signal },
+    );
   }
   input.addEventListener(
     'keydown',

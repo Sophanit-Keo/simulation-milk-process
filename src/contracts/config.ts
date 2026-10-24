@@ -29,7 +29,7 @@ export interface PlantConfig {
     fatPct: number;
     packVolumeL: number;
     shelfLifeDays: number;
-    /** Specific heat of milk, for heat recovered, steam injected and condenser load; litres count as kilograms (sim assumption, phase 3; sources give 3.9–4.0). */
+    /** Specific heat of milk, for heat recovered, steam injected and condenser load; litres count as kilograms (sim assumption, phase 3, between whole milk's 3.77 and skim's 3.98–4.02). */
     cpKjPerKgK: number;
   };
   /** Stage 1. */
@@ -47,13 +47,13 @@ export interface PlantConfig {
     mixTankCapacityL: number;
     /** Level the mixing tank opens at, and holds by level control while the UHT plant draws from it. */
     mixTankStartFrac: number;
-    /** Level the separator fills the mixing tank to while the UHT plant makes nothing (sim assumption, phase 3). */
+    /** Level the separator fills the mixing tank to while the UHT plant stops for a clean (sim assumption, phase 3). */
     mixTankIdleFrac: number;
     /** Time constant of the mixing tank's level control (sim assumption, phase 3). */
     mixTankLagS: number;
     /** Raw milk one tanker unloads into the silo (sim assumption, phase 3; road tankers carry about 25,000–30,000 L). */
     tankerL: number;
-    /** Unloading rate of a tanker; above the most raw milk the separator draws, so the silo never runs dry (sim assumption, phase 3). */
+    /** Unloading rate of a tanker; above the raw milk drawn at full UHT flow (H3), so the silo never runs dry (sim assumption, phase 3). */
     tankerUnloadLph: number;
     /** A tanker starts unloading when the silo falls below this share of its capacity (sim assumption, phase 3). */
     tankerBelowFrac: number;
@@ -224,6 +224,8 @@ const POSITIVE_KEYS = [
 // tiny step means millions of steps per jump, and far out in time a step stops moving the clock at all.
 const MIN_BASE_STEP_S = 0.01;
 const MAX_START_DAYS = 36_500;
+// Plan 06 and D8: the fast step is 10–60 s. Much longer steps can drain the silo inside one cut of the liquid line.
+const MAX_FAST_STEP_S = 60;
 
 const INTEGER_KEYS = [
   'seed',
@@ -264,18 +266,21 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   if (!isSpeed(clock.defaultSpeed)) fail('clock.defaultSpeed must be one of the speed presets');
   if (clock.fastStepS < clock.baseStepS) fail('clock.fastStepS must be at least clock.baseStepS');
   if (clock.baseStepS < MIN_BASE_STEP_S) fail(`clock.baseStepS must be at least ${MIN_BASE_STEP_S} s`);
+  if (clock.fastStepS > MAX_FAST_STEP_S) fail(`clock.fastStepS must be at most ${MAX_FAST_STEP_S} s`);
   if (clock.startTimeS > dayToS(MAX_START_DAYS)) fail(`clock.startTimeS must be at most ${MAX_START_DAYS} days`);
   // At most one shift change per step; a batch that rounds away to nothing would never stop changing shifts.
   if (quality.batchS < clock.fastStepS) fail('quality.batchS must be at least clock.fastStepS');
   if (!(std.skimFatPct < product.fatPct && product.fatPct < std.creamFatPct)) fail('product fat must lie between skim and cream fat');
   if (std.rawMilkFatPct < product.fatPct) fail('raw-milk fat must be at least the product fat, or there is no cream to remove');
+  // At or above the cream fat the separator would need endless (or negative) raw milk.
+  if (!(std.rawMilkFatPct < std.creamFatPct)) fail('raw-milk fat must be below the cream fat');
   if (!(0 < tank.resumeBelowFrac && tank.resumeBelowFrac < tank.throttleAboveFrac && tank.throttleAboveFrac <= 1)) {
     fail('aseptic tank needs 0 < resumeBelowFrac < throttleAboveFrac ≤ 1');
   }
   if (std.siloStartFrac > 1 || std.mixTankStartFrac > 1 || std.mixTankIdleFrac > 1) {
     fail('silo and mixing-tank start and idle fractions must lie in 0–1');
   }
-  // A tanker arriving at the threshold must fit, and must outpace the separator's most raw milk, or the silo runs dry.
+  // A tanker arriving at the threshold must fit, and must outpace the raw milk drawn at full UHT flow, or the silo runs dry.
   if (std.tankerBelowFrac * std.siloCapacityL + std.tankerL > std.siloCapacityL) {
     fail('standardization: a tanker unloading at tankerBelowFrac would overfill the silo');
   }

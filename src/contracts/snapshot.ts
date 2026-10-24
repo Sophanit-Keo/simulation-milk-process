@@ -42,7 +42,8 @@ export interface Kpis {
 }
 
 /**
- * What the UHT plant is doing (contracts v2, phase 3). Stages 1–5 run as one line, so this is their mode too.
+ * What the UHT plant is doing (contracts v2, phase 3): stages 2–5. Stage 1 runs on its own buffer, the mixing tank,
+ * which its separator refills while the UHT plant cleans.
  * After a divert the plant flushes and cleans (`cip`), then re-sterilizes before it makes product again;
  * an intermediate clean (`aic`) runs every so many hours of production while the aseptic tank feeds the fillers.
  */
@@ -68,7 +69,7 @@ export interface LiquidSnapshot {
   throttled: boolean;
   /** Fillers drawing from the aseptic tank now (phase 3: a stub at the set filler rate, phase 4 the fillers). */
   fillersRunning: number;
-  /** True while the aseptic tank is below its low limit and the fillers wait for product. */
+  /** True from the aseptic tank falling below its stop level until it is back above the restart level (150 L and 500 L). */
   fillersStarved: boolean;
   /** Sterile-air pressure over the product in the aseptic tank. */
   headspaceBar: number;

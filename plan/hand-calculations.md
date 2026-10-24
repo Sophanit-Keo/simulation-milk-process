@@ -14,7 +14,7 @@ Formulas, from [Simulation model](06-simulation-model.md#core-formulas):
 
 ## Formulas
 
-Pure functions, tested from phase 1 ([D10](DECISIONS.md#d10-formula-tests-in-phase-1)), except the rows marked *phase 3*. H2–H5 (the stage 1 mass balance) and H8 (homogenizer power) have no pure function yet, so phase 3 tests them against the stage 1 and stage 3 models. H20 and H23 are tested through `divertLimitC` and `f0Min`.
+Pure functions, tested from phase 1 ([D10](DECISIONS.md#d10-formula-tests-in-phase-1)), except the rows marked *phase 3*. H2–H5 (the stage 1 mass balance) and H8 (homogenizer power) are tested through `surplusCreamFrac` and `hydraulicPowerKw` (phase 3) and against the stage 1 and stage 3 models. H20 and H23 are tested through `divertLimitC` and `f0Min`.
 
 | # | What | Formula with inputs | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
@@ -132,7 +132,7 @@ How the flows move once phases 3 and 4 make them live, for the tests that follow
 
 ## Phase 3 acceptance runs
 
-These runs check the live stage 1–6 model against the rows above. `qa` automates them, and `process` signs them off for the [phase-3 exit checklist](agent-plan/phase-3-liquid-line.md#exit-checklist). Four runs follow the phase-3 card: (a) a normal run, H76–H87; (b) set 139 °C, which must divert, H88–H91; (c) throttle to 50%, H92–H93; (d) an intermediate clean covered by the buffer, H94. H95 and H96 check mass balance and step size. Values the hand calculations don't give yet (air content, heat recovered, globule size, creaming risk, power, steam, condenser load, headspace pressure) wait for the keys `sim` adds to [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults), and get rows in the next round.
+These runs check the live stage 1–6 model against the rows above. `qa` automates them, and `process` signs them off for the [phase-3 exit checklist](agent-plan/phase-3-liquid-line.md#exit-checklist). Four runs follow the phase-3 card: (a) a normal run, H76–H87; (b) set 139 °C, which must divert, H88–H91; (c) throttle to 50%, H92–H93; (d) an intermediate clean covered by the buffer, H94. H95 and H96 check mass balance and step size. The values the hand calculations don't give a row of their own (air content, heat recovered, globule size, creaming risk, power, steam, condenser load, headspace pressure) are worked from the [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults) keys and checked in `tests/sim/acceptanceQa.test.ts`.
 
 How to run them:
 
@@ -140,7 +140,7 @@ How to run them:
 - **Time.** t is sim time since the plant opened, `snapshot.timeS` − 21,600 (day 1, 06:00). "At t = 0" means before the first step.
 - **Stepping.** At the default ×10, each `step(0.1)` advances exactly 1 s. After `dispatch({ type: 'setSpeed', speed: 1000 })`, each `step(0.1)` advances 100 s in 1 s steps; at ×10,000 it advances 1,000 s in 10 s steps (`clock.fastStepS`). A step never crosses a shift change (t = 28,800, 57,600 and 86,400 s), and those lie on every step grid used here.
 - **Set points.** `dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value })` takes effect on the next step.
-- **Crossings.** The model sees a level cross a threshold at the end of the step in which it crosses, so a switch can come up to one step after the exact time. Time tolerances below allow for that at 1 s steps, and level tolerances for the one-step overshoot (at most 4.44 L at full flow).
+- **Crossings.** The model cuts each step at a threshold crossing and switches at the exact time, so levels and switch times are the same at any step size up to the 60 s cap. A snapshot shows the switch at the end of the step in which it happened; time tolerances below allow for that.
 
 ### Normal run, at the defaults
 
@@ -186,7 +186,7 @@ How to run them:
 | # | What | How | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
 | H95 | Mass balance over 24 h | H76–H87's run, and H88's divert run, each for 24 h (t = 0 to 86,400 s) at ×1,000 | Litres drawn from the silo = litres to the fillers + litres sent to the reject tank (`divertedL`, not its level, which may be emptied) + surplus cream + change in mixing-tank contents + change in aseptic-tank contents. Steam drops out, since the flash vessel removes what it added. Without faults: fillers 360,000 L, aseptic tank +1,142.86 L, reject 0; if the mixing tank ends at its start level, 366,158.73 L drawn and 5,015.87 L of cream | 0.1% of the litres drawn | H3, H31–H35, H60 |
-| H96 | 1 s and 60 s steps agree | H87's run at 1 s steps (×1,000), and again with `clock.fastStepS` = 60 at ×10,000 | At t = 86,400 s, every tank level, `divertedL`, litres drawn from the silo and litres to the fillers within 1% of the 1 s run; the same number of throttles (1), cleans (2) and diverts (0). Context: the 60 s run sees each crossing up to a step late (throttle at t = 28,860 s, full flow again at 31,980 s), so its aseptic tank ends near 11,067 L, 0.7% under 11,142.86 L | ±1% | H57; [D8](DECISIONS.md#d8-clock) |
+| H96 | 1 s and 60 s steps agree | H87's run at 1 s steps (×1,000), and again with `clock.fastStepS` = 60 at ×10,000 | At t = 86,400 s, every tank level, `divertedL`, litres drawn from the silo and litres to the fillers within 1% of the 1 s run; the same number of throttles (1), cleans (2) and diverts (0). Context: the model switches at the exact crossing at either step (throttle at t = 28,800 s, full flow again at 31,885.7 s), so the 60 s run ends at the same 11,142.86 L | ±1% | H57; [D8](DECISIONS.md#d8-clock) |
 
 ## Checks against the plan and the review
 

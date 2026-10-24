@@ -10,13 +10,13 @@ How 3D models and textures get into the plant: where files go, the rules every m
 | `public/models/kenney/` | Kit pieces, unmodified, plus the `Textures/colormap.png` they point to and the kit's `License.txt` | Yes, from phase 2 |
 | `public/models/vehicles/` | `truck.glb`, `forklift.glb`: our own, made by `assets/scripts/make-vehicles.mjs` | Yes, from phase 2 |
 | `public/textures/` | Textures that code applies: `carton.png`, `tray.png`, `pallet.png`, made by `assets/scripts/make-textures.mjs` | Yes, from phase 2 |
-| `assets/source/` | Blender sources (`.blend`) for our own models, under 20 MB each | Yes, from phase 3 |
+| `assets/source/` | Blender sources (`.blend`) for our own models, under 20 MB each, if any are made by hand (the phase 3 block-outs come from `make-heroes.mjs`) | When there are any |
 | [`assets/hero-specs.md`](hero-specs.md) | Specs for the four hero models: size, origin, named moving nodes, budgets | Yes |
 | `assets/scripts/` | The GLB checks, the vehicle, hero and texture generators, and their tests | Yes |
 | `assets/screenshots/` | Small fit-check screenshots of the heroes in the scene (each under 150 kB) | Yes, from phase 3 |
 | [`assets/LICENSES.md`](LICENSES.md) | One row for every file in `public/models/` and `public/textures/` | Yes |
 
-## What is committed now (phase 2)
+## What is committed now (phases 2 and 3)
 
 | What | Files | Size | Status |
 |---|---|---|---|

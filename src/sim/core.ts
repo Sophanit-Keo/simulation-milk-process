@@ -3,6 +3,7 @@
 import {
   CONTRACT_VERSION,
   isSpeed,
+  SETPOINT_RANGES,
   type Command,
   type Kpis,
   type LinePoint,
@@ -91,12 +92,18 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
     }
   };
 
+  const rangeOf = (key: SetpointKey): { min: number; max: number } =>
+    key === 'fillerRatePacksPerH' ? { min: 0, max: config.fillers.maxRatePacksPerH } : SETPOINT_RANGES[key];
+
   function setSetpoint(key: SetpointKey, value: number): void {
     const text = SETPOINT_TEXT[key] as (typeof SETPOINT_TEXT)[SetpointKey] | undefined;
     if (!text) {
       log.add(clock.timeS, 'warn', `Unknown set point "${key}" ignored`);
     } else if (!Number.isFinite(value)) {
       log.add(clock.timeS, 'warn', `${text.name} not changed: ${value} is not a number`);
+    } else if (!(value >= rangeOf(key).min && value <= rangeOf(key).max)) {
+      const { min, max } = rangeOf(key);
+      log.add(clock.timeS, 'warn', `${text.name} not changed: ${value} ${text.unit} is outside ${min}–${max} ${text.unit}`);
     } else {
       setpoints[key] = value;
       log.add(clock.timeS, 'info', `${text.name} set to ${value} ${text.unit}`);

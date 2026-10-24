@@ -80,7 +80,8 @@ export function withUnit(number: string, unit: string): string {
  */
 export function formatValue(value: number | undefined, info: Pick<StageValueInfo, 'unit' | 'decimals' | 'scale'>): string {
   if (value === undefined) return NO_VALUE;
-  // A display scale written next to the value in stages.json, not a unit conversion (those live in units.ts).
+  // A display scale written next to the value in stages.json: ×100 for a fraction in %, 1 ÷ 3,600 for seconds
+  // in hours. JSON can't call units.ts, so tests/contracts/stages.test.ts pins each scale to its constant there.
   return withUnit(formatNumber(value * (info.scale ?? 1), info.decimals), info.unit);
 }
 
@@ -129,11 +130,14 @@ export function formatKpi(id: KpiId, kpis: Kpis): KpiText {
 }
 
 /**
- * The sterility card's status, from B* alone (D4): below 1 the milk is under-processed and the plant
- * diverts. Not from F0: with the ±0.3 °C display noise, F0 dips under its 5 min target at a safe 139.8 °C.
- * A B* of 0 means the model gives none (nothing in the holding tube), which is not a fault.
+ * The sterility card's status, from B* (D4): below 1 the milk is under-processed and the plant diverts.
+ * Not from F0: with the ±0.3 °C display noise, F0 dips under its 5 min target at a safe 139.8 °C.
+ * A B* of 0 means the model gives none (nothing in the holding tube), which is not a fault. A red
+ * stage 4 (diverting) turns it red too: a set point under the limit diverts even in a step whose
+ * noise lifts the shown reading, and with it B*, over 1.
  */
-export function sterilityStatus(bStar: number): Extract<Status, 'bad'> | null {
+export function sterilityStatus(bStar: number, uhtStatus?: Status): Extract<Status, 'bad'> | null {
+  if (uhtStatus === 'bad') return 'bad';
   return Number.isFinite(bStar) && bStar > 0 && bStar < 1 ? 'bad' : null;
 }
 

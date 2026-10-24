@@ -28,7 +28,9 @@ export function createSim(config: PlantConfig, options: SimOptions = {}): Sim {
       const live = liquidLine.view(core.setpoints, core.timeS);
       const { values } = plant;
       for (const id of LIQUID_STAGE_IDS) values[id] = live.values[id];
-      const statusOf = (id: StageId): Status => (id <= 6 ? live.statuses[id as keyof typeof live.statuses] : 'ok');
+      // Stage 7 stands idle while the fillers wait for product (a low aseptic tank); 8–10 are static until phase 4.
+      const statusOf = (id: StageId): Status =>
+        id <= 6 ? live.statuses[id as keyof typeof live.statuses] : id === 7 && live.liquid.fillersRunning === 0 ? 'idle' : 'ok';
       const line = linePoints(values, live.flows);
       return core.snapshot(toStages(values, statusOf), { ...plant.kpis, ...live.kpis }, line, live.liquid);
     },

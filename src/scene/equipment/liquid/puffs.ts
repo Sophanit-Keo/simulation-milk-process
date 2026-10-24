@@ -39,6 +39,8 @@ export interface Puffs {
 
 /** A frame advances the cycle by at most this much, so a slow frame doesn't make the copies jump. */
 const MAX_PHASE_STEP = 0.2;
+/** ...and by under half the spacing between two copies, so the stream never seems to stand or run back. */
+const MAX_COPY_STEP_FRAC = 0.45;
 /** The slowest pace, as a share of full pace, for a stream that runs at all. */
 const MIN_PACE_FRAC = 1 / 3;
 
@@ -65,7 +67,9 @@ export function createPuffs(builder: MachineBuilder, name: string, material: Liq
       mesh.visible = shown > 0;
       if (!mesh.visible) return;
       const pace = MIN_PACE_FRAC + (1 - MIN_PACE_FRAC) * shown;
-      phase = advancePhase(phase, (pace * dtS) / spec.cycleS, MAX_PHASE_STEP, 1);
+      // The copies sit 1 ÷ count of a cycle apart, so the picture repeats that often: a step of half that or
+      // more would look still or backwards (the wagon-wheel effect) on a slow frame.
+      phase = advancePhase(phase, (pace * dtS) / spec.cycleS, Math.min(MAX_PHASE_STEP, MAX_COPY_STEP_FRAC / spec.count), 1);
       for (let i = 0; i < spec.count; i++) {
         const t = (phase + i / spec.count) % 1;
         const radiusM = spec.envelope === 'swell' ? spec.radiusM * shown * Math.sin(Math.PI * t) : spec.radiusM;

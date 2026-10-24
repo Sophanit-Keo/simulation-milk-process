@@ -32,6 +32,18 @@ export function throttleText(liquid: Pick<LiquidSnapshot, 'throttled'>): StateTe
   return liquid.throttled ? { text: 'Throttled · tank high', status: 'warn' } : { text: 'Full flow', status: 'ok' };
 }
 
+/** Stage 4's feed: milk still flows while diverting, none while the plant cleans or re-sterilizes. */
+export function feedText(liquid: Pick<LiquidSnapshot, 'throttled' | 'uhtMode'>): StateText {
+  if (liquid.uhtMode === 'production' || liquid.uhtMode === 'divert') return throttleText(liquid);
+  return { text: 'Stopped · no milk', status: 'idle' };
+}
+
+/** What reaches the aseptic tank from the UHT plant (stage 6): product, or nothing while it diverts or cleans. */
+export function supplyText(liquid: Pick<LiquidSnapshot, 'throttled' | 'uhtMode'>): StateText {
+  if (liquid.uhtMode === 'production') return throttleText(liquid);
+  return { text: liquid.uhtMode === 'divert' ? 'No inflow · diverting' : 'No inflow · cleaning', status: 'warn' };
+}
+
 /** The fillers' draw on the aseptic tank: how many run, or that they wait for product. */
 export function fillersText(liquid: Pick<LiquidSnapshot, 'fillersRunning' | 'fillersStarved'>): StateText {
   if (liquid.fillersStarved) return { text: 'Waiting · tank low', status: 'warn' };
@@ -53,10 +65,10 @@ export interface StateRow {
 export const STATE_ROWS: Readonly<Partial<Record<StageId, readonly StateRow[]>>> = {
   4: [
     { key: 'uhtMode', label: 'UHT plant', read: uhtModeText },
-    { key: 'throttle', label: 'Feed', read: throttleText },
+    { key: 'throttle', label: 'Feed', read: feedText },
   ],
   6: [
-    { key: 'throttle', label: 'UHT plant', read: throttleText },
+    { key: 'throttle', label: 'UHT plant', read: supplyText },
     { key: 'fillers', label: 'Fillers', read: fillersText },
   ],
 };
@@ -72,11 +84,13 @@ export interface DerivedRow {
 /**
  * How far the holding-tube outlet runs above the divert limit, e.g. "+0.78 °C" at full flow and 140 °C.
  * The limit follows the hold, and the hold the flow (R6), so throttling to half flow widens the margin to
- * about 3.9 °C; below 0 the plant diverts.
+ * about 3.9 °C. A reading under the limit diverts; so does a set point under it, even while the noise lifts
+ * the reading, and the margin, a little over. With no milk in the tube (a clean) there is no margin.
  */
 export function marginText(values: Readonly<Record<string, number>>): string {
-  const { tempC, divertLimitC } = values;
+  const { tempC, divertLimitC, flowLph } = values;
   if (tempC === undefined || divertLimitC === undefined) return NO_VALUE;
+  if (flowLph !== undefined && !(flowLph > 0)) return NO_VALUE;
   return withUnit(formatSigned(tempC - divertLimitC, 2), '°C');
 }
 

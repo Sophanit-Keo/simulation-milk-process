@@ -145,6 +145,16 @@ button {
   margin-right: auto;
   min-width: 0;
 }
+.brand-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+/* About sits on the title's row as a small text button (src/ui/about.ts). */
+.about-open {
+  padding: 2px 4px;
+  font-size: 13px;
+}
 .brand h1 {
   margin: 0;
   font: 700 21px/1.05 var(--font-label);

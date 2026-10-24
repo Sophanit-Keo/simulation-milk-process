@@ -140,10 +140,12 @@ describe('steam and vapour', () => {
     expect(flowFrac(2 * CAPACITY_LPH)).toBe(1);
   });
 
-  it('puffs steam at the injector only while producing, less when throttled', () => {
+  it('puffs steam at the injector while heating milk (producing or diverting), less when throttled', () => {
     expect(steamFrac(inMode('production'))).toBe(1);
     expect(steamFrac(inMode('production', CAPACITY_LPH * plantConfig.asepticTank.throttledFlowFrac))).toBe(0.5);
-    for (const mode of ['divert', 'cip', 'sterilize', 'aic'] as const) expect(steamFrac(inMode(mode)), mode).toBe(0);
+    // Diverting still heats the milk; a clean or re-sterilizing does not.
+    expect(steamFrac(inMode('divert'))).toBe(1);
+    for (const mode of ['cip', 'sterilize', 'aic'] as const) expect(steamFrac(inMode(mode)), mode).toBe(0);
     expect(steamFrac(inMode('production', 0))).toBe(0);
   });
 

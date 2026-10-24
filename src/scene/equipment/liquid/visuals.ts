@@ -72,11 +72,13 @@ export function heatGlowFrac(tempC: number): number {
 }
 
 /**
- * Steam at the injector (0–1): the share of full flow while the plant produces, nothing in any other mode
+ * Steam at the injector (0–1): the share of full flow while milk is heated, in production and while
+ * diverting (the plant still heats the milk it sends to reject); nothing while it cleans or re-sterilizes,
  * or with no flow through the holding tube.
  */
 export function steamFrac(snapshot: Snapshot): number {
-  if (uhtModeOf(snapshot) !== 'production') return 0;
+  const mode = uhtModeOf(snapshot);
+  if (mode !== 'production' && mode !== 'divert') return 0;
   return flowFrac(lineFlowLph(snapshot, 'holdingTube'));
 }
 

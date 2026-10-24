@@ -296,6 +296,13 @@ describe('sterilityStatus (the sterility card, D4)', () => {
     expect(sterilityStatus(0)).toBeNull();
     expect(sterilityStatus(Number.NaN)).toBeNull();
   });
+
+  it('turns red while stage 4 is red (diverting), even when the noisy reading puts B* over 1', () => {
+    expect(sterilityStatus(1.02, 'bad')).toBe('bad');
+    expect(sterilityStatus(0, 'bad')).toBe('bad');
+    expect(sterilityStatus(1.02, 'warn')).toBeNull();
+    expect(sterilityStatus(1.19, 'ok')).toBeNull();
+  });
 });
 
 describe('the KPI strip at the values a live run reaches', () => {
