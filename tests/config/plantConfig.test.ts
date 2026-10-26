@@ -90,6 +90,19 @@ describe('numbers that follow from plant.json', () => {
   it('a full truck stays within its payload: 22 pallets × about 1.1 t ≤ 25 t (R3)', () => {
     expect(config.warehouse.palletsPerTruck * PALLET_T).toBeLessThanOrEqual(TRUCK_PAYLOAD_T);
   });
+
+  it('the plant opens on day 8 at 06:00 after a week of batches, with two days of released stock (D11, H44)', () => {
+    expect(config.clock.startTimeS).toBe(dayToS(7) + hToS(6));
+    expect(config.quality.historyDays).toBe(config.quality.incubationDays);
+    expectWithin(config.warehouse.startStockPallets / ((dayToS(1) / config.warehouse.truckEveryS) * config.warehouse.palletsPerTruck), 2.0, 0.01);
+  });
+
+  it('a batch change queues 250 packs a line at 7,500 packs/h, which the packer clears at up to 30% over 8,000/h in about 5 min (D9, D14)', () => {
+    const queuedPacks = config.fillers.ratePacksPerH * sToH(config.packaging.batchChangeS);
+    expect(queuedPacks).toBe(250);
+    const clearH = queuedPacks / (config.fillers.maxRatePacksPerH * (1 + config.packaging.catchUpFrac) - config.fillers.ratePacksPerH);
+    expectWithin(clearH * 60, 5.17, 0.01);
+  });
 });
 
 describe('checkPlantConfig catches a broken copy', () => {
@@ -168,6 +181,16 @@ describe('checkPlantConfig catches a broken copy', () => {
     ['a zero mixing-tank lag', (copy: PlantConfig) => (copy.standardization.mixTankLagS = 0), /mixTankLagS must be greater than 0/],
     ['a zero clean interval, which would clean forever', (copy: PlantConfig) => (copy.cleaning.aicEveryProductionS = 0), /aicEveryProductionS must be greater than 0/],
     ['a zero steam latent heat', (copy: PlantConfig) => (copy.uht.steamLatentKjPerKg = 0), /steamLatentKjPerKg must be greater than 0/],
+    // Phase 4: rules that keep the discrete model working.
+    ['a seal check that rejects every pack', (copy: PlantConfig) => (copy.fillers.rejectFrac = 1), /rejectFrac must be below 1/],
+    ['a failure chance per pack above 1', (copy: PlantConfig) => (copy.quality.failurePerPack = 1.5), /failurePerPack must lie in 0–1/],
+    ['a batch change as long as a batch', (copy: PlantConfig) => (copy.packaging.batchChangeS = copy.quality.batchS), /batchChangeS must be shorter/],
+    ['a batch change with no catch-up speed to clear its queue', (copy: PlantConfig) => (copy.packaging.catchUpFrac = 0), /catchUpFrac must be greater than 0/],
+    ['history older than one incubation', (copy: PlantConfig) => (copy.quality.historyDays = 8), /historyDays must not exceed/],
+    ['a fractional day of history', (copy: PlantConfig) => (copy.quality.historyDays = 6.5), /historyDays must be a whole number/],
+    ['a fractional opening stock', (copy: PlantConfig) => (copy.warehouse.startStockPallets = 633.5), /startStockPallets must be a whole number/],
+    ['no dock doors', (copy: PlantConfig) => (copy.warehouse.dockDoors = 0), /dockDoors must be greater than 0/],
+    ['a batch too big for its SSCC serials', (copy: PlantConfig) => (copy.quality.batchS = 500 * 3_600), /SSCC serial range/],
   ])('%s', (_label, change, problem) => {
     expect(problemsWith(change).join('\n')).toMatch(problem);
   });

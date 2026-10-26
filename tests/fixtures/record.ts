@@ -14,12 +14,12 @@ import type { Command, PlantConfig, Snapshot, Speed } from '../../src/contracts'
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
 
-export type FixtureName = 'production' | 'divert' | 'throttled';
+export type FixtureName = 'production' | 'divert' | 'throttled' | 'fillerDown' | 'quarantineFull';
 
 export interface FixtureSpec {
   /** What the snapshot shows, for the file's readers. */
   description: string;
-  /** Sim seconds after the plant opens (21,600 s, day 1 06:00) at which the snapshot is taken. */
+  /** Sim seconds after the plant opens (626,400 s, day 8 06:00, D11) at which the snapshot is taken. */
   atS: number;
   /** Commands sent at given sim seconds after opening, in order; the clock runs at `speed` in between. */
   commands: { atS: number; command: Command }[];
@@ -47,9 +47,27 @@ export const FIXTURES: Readonly<Record<FixtureName, FixtureSpec>> = {
   },
   throttled: {
     description:
-      'Throttled: the aseptic tank passed 90% at 8 h (H33), so the UHT plant runs at 50% (8,000 L/h, 8 s hold, ' +
-      'B* 2.37, H15); 8.5 h after opening, before it falls back to 60% at 8 h 51 min (H34).',
-    atS: 30_600,
+      'Throttled: the aseptic tank passed 90% at about 5 h 38 min, sooner than the 8 h of H33 because filler B ' +
+      'broke down at 4 h 42 min, so the UHT plant runs at 50% (8,000 L/h, 8 s hold, B* 2.37, H15); 6 h 7 min ' +
+      'after opening, before it falls back to 60% about 51 min after the throttle (H34).',
+    atS: 22_000,
+    commands: [],
+    speed: 1_000,
+  },
+  fillerDown: {
+    description:
+      'Filler down: filler B broke down 4 h 42 min after opening (day 8, 10:41) and is in repair, about 7 min ' +
+      'left; filler A runs, so stage 7 is red, the packs line B stands empty and the tank gains 8,500 L/h.',
+    atS: 17_400,
+    commands: [],
+    speed: 1_000,
+  },
+  quarantineFull: {
+    description:
+      'Quarantine full: a minute before the first shift change and release (day 8, 13:59), with the 42 batches ' +
+      'of the opening history on hold (D11) and both fillers’ batches about to close at about 58 pallets each, ' +
+      'some 2,570 pallets in all (H49: 2,520 to 2,640).',
+    atS: 28_740,
     commands: [],
     speed: 1_000,
   },
@@ -63,8 +81,9 @@ export function recordFixture(name: FixtureName, config: PlantConfig = plantConf
   const sinceOpenS = () => sim.snapshot().timeS - openS;
   sim.dispatch({ type: 'setSpeed', speed: spec.speed });
   const runTo = (targetS: number) => {
-    // Whole frames, and a shorter last one, so the run lands on the target without overshooting it.
-    while (sinceOpenS() < targetS) sim.step(Math.min(FRAME_S, (targetS - sinceOpenS()) / spec.speed));
+    // Whole frames, and a shorter last one, so the run lands on the target, or (once a step cut short at
+    // an event has moved the steps off whole seconds) within one step after it.
+    while (sinceOpenS() < targetS) sim.step(Math.min(FRAME_S, Math.max(targetS - sinceOpenS(), 1e-6) / spec.speed));
   };
   for (const { atS, command } of spec.commands) {
     runTo(atS);

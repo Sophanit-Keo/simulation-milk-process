@@ -95,9 +95,9 @@ describe('createSim: snapshot', () => {
     expect(snap.paused).toBe(false);
   });
 
-  it('opens running at its set points: all 10 stages ok', () => {
+  it('opens running at its set points: every stage ok, but stage 9 amber with its batches on hold (D11)', () => {
     const snap = createSim(plantConfig).snapshot();
-    for (const id of STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe('ok');
+    for (const id of STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe(id === 9 ? 'warn' : 'ok');
   });
 
   it('writes the first log entry at creation', () => {
@@ -271,9 +271,11 @@ describe('createSim: clock', () => {
   });
 });
 
-describe('createSim: shift changes', () => {
+// The core's shift grid, through createMockSim: its queue holds only the shift changes, while createSim's
+// also holds the packs model's breakdowns, batch changes, releases and trucks (sim/packs.test.ts).
+describe('the core: shift changes', () => {
   it('queues the first one at 14:00 on day 1, and nextEvent jumps there and runs it', () => {
-    const sim = createSim(dayOneConfig());
+    const sim = createMockSim(dayOneConfig());
     expect(sim.snapshot().nextEventS).toBe(50_400);
 
     sim.dispatch({ type: 'nextEvent' });
@@ -286,21 +288,25 @@ describe('createSim: shift changes', () => {
   });
 
   it('nextEvent keeps walking the shifts: 22:00, then 06:00 on day 2', () => {
-    const sim = createSim(dayOneConfig());
-    sim.dispatch({ type: 'nextEvent' });
-    sim.dispatch({ type: 'nextEvent' });
+    const sim = createMockSim(dayOneConfig());
+    // The mock logs its status windows too, so the shift changes are read after each jump, before they scroll away.
+    const shiftsS: number[] = [];
+    const jump = () => {
+      sim.dispatch({ type: 'nextEvent' });
+      shiftsS.unshift(...sim.snapshot().log.filter((entry) => isShiftChange(entry.message) && !shiftsS.includes(entry.timeS)).map((entry) => entry.timeS));
+    };
+    jump();
+    jump();
     expect(sim.snapshot().timeS).toBe(79_200);
-    sim.dispatch({ type: 'nextEvent' });
+    jump();
     const snap = sim.snapshot();
     expect(snap.timeS).toBe(108_000);
     expect(snap.nextEventS).toBe(136_800);
-    expect(snap.log.filter((entry) => isShiftChange(entry.message)).map((entry) => entry.timeS)).toEqual([
-      108_000, 79_200, 50_400,
-    ]);
+    expect(shiftsS).toEqual([108_000, 79_200, 50_400]);
   });
 
   it('nextEvent works while paused, and the sim stays paused', () => {
-    const sim = createSim(dayOneConfig());
+    const sim = createMockSim(dayOneConfig());
     sim.dispatch({ type: 'pause', paused: true });
     sim.dispatch({ type: 'nextEvent' });
     const snap = sim.snapshot();
@@ -310,7 +316,7 @@ describe('createSim: shift changes', () => {
 
   it('first queues the next shift boundary after the shipped start time', () => {
     const { startTimeS } = plantConfig.clock;
-    expect(createSim(plantConfig).snapshot().nextEventS).toBe(nextShiftChangeS(startTimeS));
+    expect(createMockSim(plantConfig).snapshot().nextEventS).toBe(nextShiftChangeS(startTimeS));
   });
 
   it.each([
@@ -322,7 +328,7 @@ describe('createSim: shift changes', () => {
   ])('keeps shift changes on 06:00, 14:00 and 22:00 when the sim opens on %s', (_label, startTimeS, firstS) => {
     const config = copyConfig();
     config.clock.startTimeS = startTimeS;
-    const sim = createSim(config);
+    const sim = createMockSim(config);
     expect(sim.snapshot().nextEventS).toBe(firstS);
     sim.dispatch({ type: 'nextEvent' });
     expect(sim.snapshot().nextEventS).toBe(firstS + config.quality.batchS);
@@ -331,7 +337,7 @@ describe('createSim: shift changes', () => {
   it('takes the shift grid from quality.firstShiftStartS: 07:00 gives 07:00, 15:00 and 23:00', () => {
     const config = dayOneConfig();
     config.quality.firstShiftStartS = hToS(7);
-    const sim = createSim(config);
+    const sim = createMockSim(config);
     const runS: number[] = [];
     for (let i = 0; i < 3; i++) {
       runS.push(sim.snapshot().nextEventS ?? Number.NaN);
@@ -357,22 +363,23 @@ describe('createSim: shift changes', () => {
   });
 
   it('never runs the clock past a due event without running it (2 days at x10,000)', () => {
-    const sim = createSim(dayOneConfig());
+    const sim = createMockSim(dayOneConfig());
     sim.dispatch({ type: 'setSpeed', speed: 10_000 });
+    const runS = new Set<number>();
     for (let frame = 0; frame < 173; frame++) {
       sim.step(FRAME_S); // 1,000 sim seconds, as 100 steps of 10 s
       const snap = sim.snapshot();
       expect(snap.nextEventS, `at ${snap.timeS}`).toBe(nextShiftChangeS(snap.timeS));
+      for (const entry of snap.log) if (isShiftChange(entry.message)) runS.add(entry.timeS);
     }
     const snap = sim.snapshot();
     expect(snap.timeS).toBe(194_600); // day 3, 06:03:20
     // The steps land on every boundary, so each shift change is logged at its own time.
-    const runS = snap.log.filter((entry) => isShiftChange(entry.message)).map((entry) => entry.timeS).reverse();
-    expect(runS).toEqual([50_400, 79_200, 108_000, 136_800, 165_600, 194_400]);
+    expect([...runS].sort((a, b) => a - b)).toEqual([50_400, 79_200, 108_000, 136_800, 165_600, 194_400]);
   });
 
   it('runs 30 days at x10,000 in 0.1 s frames with finite values and one pending shift change', () => {
-    const sim = createSim(plantConfig);
+    const sim = createMockSim(plantConfig);
     sim.dispatch({ type: 'setSpeed', speed: 10_000 });
     const startS = plantConfig.clock.startTimeS;
     const frameCount = dayToS(30) / 1_000; // 1,000 sim seconds per frame
@@ -387,7 +394,38 @@ describe('createSim: shift changes', () => {
     const snap = sim.snapshot();
     expect(snap.timeS).toBe(startS + dayToS(30));
     expect(snap.log).toHaveLength(LOG_LIMIT); // 90 shift changes were logged; the cap keeps the newest 50
-    expect(isShiftChange(snap.log[0].message)).toBe(true);
+  });
+});
+
+describe('createSim: the event queue', () => {
+  it('nextEvent jumps to the earliest queued event, whatever it is, and runs it', () => {
+    const sim = createSim(plantConfig);
+    for (let jump = 0; jump < 20; jump++) {
+      const { nextEventS, timeS } = sim.snapshot();
+      if (nextEventS === null) expect.fail('the queue is empty');
+      expect(nextEventS, `jump ${jump}`).toBeGreaterThan(timeS);
+      sim.dispatch({ type: 'nextEvent' });
+      expect(sim.snapshot().timeS, `jump ${jump}`).toBe(nextEventS);
+    }
+  });
+
+  it('never leaves an event due without running it, and runs every shift change at its own time (30 days at x10,000)', () => {
+    const sim = createSim(plantConfig);
+    sim.dispatch({ type: 'setSpeed', speed: 10_000 });
+    const startS = plantConfig.clock.startTimeS;
+    const frameCount = dayToS(30) / 1_000;
+    const shiftsS = new Set<number>();
+    for (let frame = 1; frame <= frameCount; frame++) {
+      sim.step(FRAME_S);
+      const snap = sim.snapshot();
+      if (frame % 100 === 0 || frame === frameCount) expectWellFormed(snap);
+      if (!(snap.nextEventS !== null && snap.nextEventS > snap.timeS)) expect.fail(`frame ${frame} at ${snap.timeS}: next event ${snap.nextEventS}`);
+      for (const entry of snap.log) if (isShiftChange(entry.message)) shiftsS.add(entry.timeS);
+    }
+    expect(sim.snapshot().timeS).toBe(startS + dayToS(30));
+    const expected: number[] = [];
+    for (let shiftS = nextShiftChangeS(startS); shiftS <= startS + dayToS(30); shiftS += plantConfig.quality.batchS) expected.push(shiftS);
+    expect([...shiftsS].sort((a, b) => a - b)).toEqual(expected);
   });
 });
 
@@ -445,11 +483,14 @@ describe('createSim: commands', () => {
     expect(snap.timeS).toBe(before.timeS);
   });
 
-  it('setQaResult logs that QA results arrive in phase 4', () => {
+  it('setQaResult on a batch that is not in quarantine changes nothing and logs why', () => {
     const sim = createSim(plantConfig);
-    const logBefore = sim.snapshot().log.length;
+    const before = sim.snapshot();
     sim.dispatch({ type: 'setQaResult', batchId: 1, result: 'fail' });
-    expect(sim.snapshot().log.length).toBe(logBefore + 1);
+    const snap = sim.snapshot();
+    expect(snap.log.length).toBe(before.log.length + 1);
+    expect(snap.log[0]).toMatchObject({ kind: 'warn', message: 'QA result for batch 1 not applied: it is not in quarantine' });
+    expect(snap.packs).toEqual(before.packs);
   });
 
   it('keeps its speed when sent one that is not a preset (a RangeError, if it throws)', () => {
@@ -483,8 +524,8 @@ const SCRIPT: (Command | number)[] = [
   ...Array<number>(20).fill(0.05),
 ];
 
-function replay(sim: Sim): string[] {
-  return SCRIPT.map((input) => {
+function replay(sim: Sim, script: readonly (Command | number)[] = SCRIPT): string[] {
+  return script.map((input) => {
     if (typeof input === 'number') sim.step(input);
     else sim.dispatch(input);
     return JSON.stringify(sim.snapshot());
@@ -515,12 +556,18 @@ describe('createMockSim', () => {
     }
   });
 
-  it('has the same clock and commands as createSim', () => {
+  it('has the same clock and commands as createSim (nextEvent aside: it jumps to each sim’s own queue)', () => {
     const pick = (json: string) => {
-      const { timeS, speed, paused, nextEventS } = JSON.parse(json) as Snapshot;
-      return { timeS, speed, paused, nextEventS };
+      const { timeS, speed, paused } = JSON.parse(json) as Snapshot;
+      return { timeS, speed, paused };
     };
-    expect(replay(createMockSim(plantConfig)).map(pick)).toEqual(replay(createSim(plantConfig)).map(pick));
+    const script = SCRIPT.filter((input) => typeof input === 'number' || input.type !== 'nextEvent');
+    const mock = replay(createMockSim(plantConfig), script).map(pick);
+    const live = replay(createSim(plantConfig), script).map(pick);
+    expect(mock.map(({ speed, paused }) => ({ speed, paused }))).toEqual(live.map(({ speed, paused }) => ({ speed, paused })));
+    // A step cut short to land on an event leaves the rest of the frame's time for the next frame, so the
+    // clocks may stand up to one step apart; createSim queues many more events than the mock.
+    mock.forEach(({ timeS }, i) => expect(Math.abs(timeS - (live[i]?.timeS ?? Number.NaN)), `input ${i}`).toBeLessThanOrEqual(plantConfig.clock.fastStepS));
   });
 
   it('has stage values and KPIs that change within 5 s of real time at the default speed', () => {
@@ -534,7 +581,7 @@ describe('createMockSim', () => {
     expect(seen.size).toBeGreaterThan(1);
   });
 
-  it('shows an occasional warn or bad status (3 days at x10,000, sampled every 100 s)', () => {
+  it('shows an occasional warn or bad status (3 days at x10,000, sampled every 100 s; stage 9 is amber while batches are on hold)', () => {
     const sim = createMockSim(plantConfig);
     sim.dispatch({ type: 'setSpeed', speed: 10_000 });
     let alarmed = 0;
@@ -542,7 +589,7 @@ describe('createMockSim', () => {
     for (let frame = 0; frame < frameCount; frame++) {
       sim.step(0.01); // 100 sim seconds in 10 s steps
       const { stages } = sim.snapshot();
-      if (STAGE_IDS.some((id) => stages[id].status === 'warn' || stages[id].status === 'bad')) alarmed++;
+      if (STAGE_IDS.some((id) => id !== 9 && (stages[id].status === 'warn' || stages[id].status === 'bad'))) alarmed++;
     }
     expect(alarmed, 'frames with a warn or bad stage').toBeGreaterThan(0);
     expect(alarmed, 'frames with a warn or bad stage').toBeLessThan(frameCount);

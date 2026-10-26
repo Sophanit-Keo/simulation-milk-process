@@ -1,15 +1,16 @@
 // The phase 3 acceptance runs of plan/hand-calculations.md (H76–H96), run through createSim as the
-// rows describe: copyConfig(), only the named keys changed, seed 81006, t = snapshot.timeS − 21,600.
+// rows describe: phase3Config() (day 1 06:00, no filler breakdowns), only the named keys changed, seed 81006,
+// t = snapshot.timeS − 21,600.
 import { describe, expect, it } from 'vitest';
 import type { PlantConfig, Sim, Snapshot } from '../../src/contracts';
 import { createSim } from '../../src/sim';
 import type { LiquidLine } from '../../src/sim/liquidLine';
 import { expectWithin } from '../helpers/expectWithin';
-import { copyConfig } from '../helpers/plantConfig';
+import { phase3Config } from '../helpers/plantConfig';
 
 const OPEN_S = 21_600;
 const quiet = (change: (config: PlantConfig) => void = () => {}): PlantConfig => {
-  const config = copyConfig();
+  const config = phase3Config();
   config.uht.displayNoiseC = 0;
   change(config);
   return config;
@@ -156,7 +157,7 @@ describe('set 139 °C: divert (H88–H91)', () => {
   });
 
   it('H88: with the default noise, 138.9 °C diverts on the first step', () => {
-    const sim = createSim(copyConfig());
+    const sim = createSim(phase3Config());
     sim.dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value: 138.9 });
     sim.step(0.1);
     expect(sim.snapshot().liquid.uhtMode).toBe('divert');
@@ -178,7 +179,7 @@ describe('set 139 °C: divert (H88–H91)', () => {
 });
 
 function withStart(frac: number): PlantConfig {
-  const config = copyConfig();
+  const config = phase3Config();
   config.asepticTank.startFrac = frac;
   return config;
 }
@@ -235,10 +236,10 @@ describe('step size (H96)', () => {
       });
       return { throttles, cleans, diverts: run.line.state.divertCount };
     };
-    const fine = start(copyConfig(), 1_000);
+    const fine = start(phase3Config(), 1_000);
     const coarse = start(
       (() => {
-        const config = copyConfig();
+        const config = phase3Config();
         config.clock.fastStepS = 60;
         return config;
       })(),

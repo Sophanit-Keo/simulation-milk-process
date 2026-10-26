@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "seed": 81006,
   "clock": {
-    "startTimeS": 21600,
+    "startTimeS": 626400,
     "defaultSpeed": 10,
     "baseStepS": 1,
     "fastStepS": 10,
@@ -95,12 +95,14 @@
     "mtbfMeanS": 28800,
     "repairFixedS": 120,
     "repairRandomMeanS": 720,
-    "tempC": 20
+    "tempC": 20,
+    "rejectFrac": 0.002
   },
   "packaging": {
     "packsPerTray": 12,
     "traysPerPallet": 84,
-    "catchUpFrac": 0.3
+    "catchUpFrac": 0.3,
+    "batchChangeS": 120
   },
   "quality": {
     "batchS": 28800,
@@ -109,11 +111,16 @@
     "samplesAfterStop": 2,
     "incubationTempC": 55,
     "incubationDays": 7,
-    "failurePerPack": 0.0002
+    "failurePerPack": 0.0002,
+    "historyDays": 7,
+    "blockedHoldS": 86400
   },
   "warehouse": {
     "tempC": 25,
     "palletsPerTruck": 22,
-    "truckEveryS": 6000
+    "truckEveryS": 6000,
+    "startStockPallets": 634,
+    "truckLoadS": 1200,
+    "dockDoors": 3
   }
 }

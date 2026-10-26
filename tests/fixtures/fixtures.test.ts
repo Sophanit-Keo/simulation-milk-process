@@ -1,5 +1,5 @@
 // The recorded snapshot fixtures (tests/fixtures/record.ts): each one still matches what createSim
-// records now, keeps every contracts v2 shape rule, and shows the state it is named for. With
+// records now, keeps every contracts v3 shape rule, and shows the state it is named for. With
 // RECORD_FIXTURES=1 the files are written first, so the comparison then passes and git shows the diff.
 import { describe, expect, it } from 'vitest';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../../src/contracts';
 import stagesJson from '../../src/data/stages.json';
 import { expectWithin } from '../helpers/expectWithin';
+import { expectPacksMatchKpis, expectWellFormedPacks } from '../helpers/packsShape';
 import { plantConfig } from '../helpers/plantConfig';
 import { FIXTURES, loadFixture, recordFixture, writeFixture, type FixtureName } from './record';
 
@@ -59,10 +60,18 @@ function differences(recorded: unknown, stored: unknown, path = '$', found: stri
   return found;
 }
 
-/** Every shape rule of contracts v2 (src/contracts/snapshot.ts) that a consumer may rely on. */
-function expectContractsV2(snap: Snapshot, where: string): void {
+/** The per-stage keys agreed for phase 4 (contracts v3), on top of the phase 2 keys. */
+const PHASE_4_KEYS: Readonly<Record<7 | 8 | 9 | 10, readonly string[]>> = {
+  7: ['runningCount', 'packsPerH', 'oeePct', 'packsMade', 'packsRejected'],
+  8: ['queuePacks', 'traysMade', 'palletsMade'],
+  9: ['batchesOnHold', 'palletsInQuarantine', 'nextReleaseS', 'batchesReleased', 'batchesBlocked', 'samplesTaken'],
+  10: ['palletsInStock', 'daysOfCover', 'trucksAtDock', 'nextTruckS', 'trucksShipped', 'orderFillPct'],
+};
+
+/** Every shape rule of contracts v3 (src/contracts/snapshot.ts, packs.ts) that a consumer may rely on. */
+function expectContracts(snap: Snapshot, where: string): void {
   expect(snap.version, `${where}: version`).toBe(CONTRACT_VERSION);
-  expect(CONTRACT_VERSION).toBe(2);
+  expect(CONTRACT_VERSION).toBe(3);
   expect(Number.isFinite(snap.timeS), `${where}: timeS`).toBe(true);
   expect(isSpeed(snap.speed), `${where}: speed ${snap.speed}`).toBe(true);
   expect(typeof snap.paused, `${where}: paused`).toBe('boolean');
@@ -77,9 +86,10 @@ function expectContractsV2(snap: Snapshot, where: string): void {
       if (!Number.isFinite(value)) expect.fail(`${where}: stage ${id} ${key} is ${value}`);
     }
   }
-  for (const [id, keys] of Object.entries(PHASE_3_KEYS)) {
+  for (const [id, keys] of [...Object.entries(PHASE_3_KEYS), ...Object.entries(PHASE_4_KEYS)]) {
     for (const key of keys) expect(snap.stages[Number(id) as 1].values, `${where}: stage ${id}`).toHaveProperty([key]);
   }
+  expectWellFormedPacks(snap, plantConfig, where);
   // Every row the info panel shows (stages.json) has its value in the snapshot.
   for (const stage of parseStages(stagesJson)) {
     for (const { key } of stage.values) expect(snap.stages[stage.id].values, `${where}: stage ${stage.id} row`).toHaveProperty([key]);
@@ -138,6 +148,8 @@ function expectConsistent(snap: Snapshot, where: string): void {
   expectWithin(snap.stages[1].values.mixTankLevelPct, (100 * tanks.mixTank.levelL) / tanks.mixTank.capacityL, 1e-9);
   expect(snap.line.holdingTube.flowLph, where).toBe(snap.stages[4].values.flowLph);
   expect(snap.line.divert.flowLph + snap.line.flashVessel.flowLph, where).toBe(snap.line.holdingTube.flowLph);
+  expectPacksMatchKpis(snap, where);
+  expect(snap.liquid.fillersRunning, where).toBe(snap.stages[7].values.runningCount);
 }
 
 describe.each(NAMES)('fixture snapshot-%s.json', (name) => {
@@ -149,10 +161,14 @@ describe.each(NAMES)('fixture snapshot-%s.json', (name) => {
     expect(differences(recorded, stored)).toEqual([]);
   });
 
-  it('keeps every contracts v2 shape rule, and its tanks, stage values and KPIs agree', () => {
-    expectContractsV2(stored, name);
+  it('keeps every contracts v3 shape rule, and its tanks, stage values and KPIs agree', () => {
+    expectContracts(stored, name);
     expectConsistent(stored, name);
-    expect(stored.timeS).toBe(plantConfig.clock.startTimeS + FIXTURES[name].atS);
+    // A step cut short to land on a breakdown shifts the steps after it off whole seconds, so the recording
+    // may stop up to one step past its time (recordFixture).
+    const atS = plantConfig.clock.startTimeS + FIXTURES[name].atS;
+    expect(stored.timeS).toBeGreaterThanOrEqual(atS);
+    expect(stored.timeS).toBeLessThan(atS + plantConfig.clock.baseStepS);
     expect(stored.speed).toBe(10);
     expect(stored.paused).toBe(false);
   });
@@ -209,9 +225,40 @@ describe('each fixture shows the state it is named for', () => {
     expect(snap.line.silo.flowLph).toBeCloseTo(8_111.11, 2);
     expect(snap.liquid.tanks.asepticTank.levelL).toBeGreaterThan(12_000);
     expect(snap.liquid.tanks.asepticTank.levelL).toBeLessThan(18_000);
-    expect(snap.log.find((entry) => /UHT plant throttled/.test(entry.message))).toMatchObject({
-      kind: 'warn',
-      timeS: plantConfig.clock.startTimeS + 28_800,
-    });
+    const throttle = snap.log.find((entry) => /UHT plant throttled/.test(entry.message));
+    expect(throttle?.kind).toBe('warn');
+    // Within the 51 min a throttle lasts at least (H34): it is still on.
+    expect(snap.timeS - (throttle?.timeS ?? Number.NaN)).toBeLessThan(51.43 * 60);
+  });
+
+  it('fillerDown: filler B in repair with time left, filler A running, stage 7 red, half the draw, line B empty of new packs', () => {
+    const snap = loadFixture('fillerDown');
+    const [a, b] = snap.packs.fillers;
+    expect(a).toMatchObject({ name: 'A', state: 'running', packsPerH: 7_500, breakdowns: 0 });
+    expect(b).toMatchObject({ name: 'B', state: 'repair', packsPerH: 0, breakdowns: 1 });
+    expect(b?.stateRemainingS).toBeGreaterThan(0);
+    expect(snap.stages[7].status).toBe('bad');
+    expect(snap.stages[7].values.runningCount).toBe(1);
+    expect(snap.liquid.fillersRunning).toBe(1);
+    expect(snap.line.filler.flowLph).toBe(7_500);
+    expect(snap.kpis.packsPerH).toBe(7_500);
+    expect(snap.packs.packaging.lanes[1]?.packerState).toBe('idle');
+    expect(snap.log.find((entry) => /Filler B broke down/.test(entry.message))?.kind).toBe('bad');
+  });
+
+  it('quarantineFull: 42 batches on hold and two filling, about 2,570 pallets, none released or blocked yet', () => {
+    const snap = loadFixture('quarantineFull');
+    const { batches } = snap.packs;
+    expect(batches.filter((batch) => batch.status === 'hold')).toHaveLength(42);
+    expect(batches.filter((batch) => batch.status === 'filling')).toHaveLength(2);
+    const pallets = batches.reduce((sum, batch) => sum + batch.pallets, 0);
+    // H49: 2,520 pallets on hold just after a release at full rate, up to 2,640 before the next; fewer after breakdowns.
+    expect(pallets).toBeGreaterThan(2_450);
+    expect(pallets).toBeLessThanOrEqual(2_640);
+    expect(snap.stages[9].values.palletsInQuarantine).toBe(pallets);
+    expect(snap.stages[9].status).toBe('warn');
+    expect(snap.kpis).toMatchObject({ batchesOnHold: 42, batchesReleased: 0, batchesBlocked: 0 });
+    // The first release is due at the shift change a minute later (H50, D11: day 8, 14:00).
+    expect(snap.stages[9].values.nextReleaseS).toBe(60);
   });
 });

@@ -197,7 +197,8 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
 
   /** Flows that hold until the next event. The mixing tank's inflow is its rate right now. */
   function flowsNow(setpoints: Readonly<Setpoints>, timeS: number): LiquidFlows {
-    const fillersRunning = state.fillersStarved ? 0 : fillers.readyCount(timeS);
+    // Ready fillers draw unless the tank starves them or their rate is set to 0 (stopped).
+    const fillersRunning = state.fillersStarved || !(setpoints.fillerRatePacksPerH > 0) ? 0 : fillers.readyCount(timeS);
     const fillerLph = fillers.drawLph(fillersRunning, setpoints.fillerRatePacksPerH);
     let uhtLph = producing() ? nominalUhtLph() : 0;
     // A full aseptic tank takes only what the fillers draw; a full reject tank takes nothing.
@@ -376,13 +377,20 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       const flows = flowsNow(setpoints, nowS);
       const leftS = dtS - doneS;
       const cutS = cuts < MAX_CUTS_PER_STEP ? Math.min(leftS, nextEventS(flows)) : leftS;
+      // Whether the tank fed the fillers in this cut: a starving or refilling switch comes at its end.
+      const fed = !state.fillersStarved;
       advance(cutS, flows);
       doneS += cutS;
-      applyEvents(startS + doneS, log);
+      // The last cut ends on the step's end exactly, where the packs model and the event queue meet it.
+      const cutEndS = doneS >= dtS - TIME_EPS_S ? endS : startS + doneS;
+      fillers.ran?.(cutS, cutEndS, fed, setpoints.fillerRatePacksPerH);
+      applyEvents(cutEndS, log);
     }
     // A mode change or throttle switch on the step's last instant must not leave production showing a
     // B* under 1 until the next step: check once more at the end.
     checkDivert(endS, setpoints, flowsNow(setpoints, endS), log);
+    // And a tank that starved or fed the fillers again on that instant shows in their states at once.
+    fillers.ran?.(0, endS, !state.fillersStarved, setpoints.fillerRatePacksPerH);
     // Floating-point slack only; the cuts above keep every level inside its tank.
     state.asepticL = Math.min(tank.capacityL, Math.max(0, state.asepticL));
     state.rejectL = Math.min(uht.rejectTankL, Math.max(0, state.rejectL));
