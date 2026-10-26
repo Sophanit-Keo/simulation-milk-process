@@ -37,6 +37,7 @@ const hud = createHud(appRoot, dispatch, bus, stages, {
     homogenizerStage1Bar: config.homogenizer.stage1Bar,
     fillerRatePacksPerH: config.fillers.ratePacksPerH,
   },
+  setpointMax: { fillerRatePacksPerH: config.fillers.maxRatePacksPerH },
 });
 
 // ?debug adds the lil-gui panel, loaded on demand so neither it nor lil-gui is in the main bundle.

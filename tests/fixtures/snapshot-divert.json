@@ -91,6 +91,8 @@
         "runningCount": 2,
         "packsPerH": 15000,
         "oeePct": 93.58695652173911,
+        "oeeAPct": 93.58695652173911,
+        "oeeBPct": 93.58695652173911,
         "packsMade": 2874,
         "packsRejected": 4,
         "tempC": 20

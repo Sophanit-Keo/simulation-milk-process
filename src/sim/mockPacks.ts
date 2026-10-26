@@ -212,6 +212,7 @@ export function mockPacks(config: PlantConfig, input: MockPacksInput): MockPacks
       runningCount: running,
       packsPerH: running * ratePacksPerH,
       oeePct,
+      ...Object.fromEntries(fillers.map((filler) => [`oee${filler.name}Pct`, filler.oeePct])),
       packsMade,
       packsRejected: fillers.reduce((sum, filler) => sum + filler.packsRejected, 0),
       tempC: spec.tempC,

@@ -6,7 +6,8 @@ import { plantConfig } from '../helpers/plantConfig';
 
 const uht = SETPOINT_SLIDERS[4];
 const homogenizer = SETPOINT_SLIDERS[3];
-if (!uht || !homogenizer) throw new Error('stages 4 and 3 need their sliders');
+const filler = SETPOINT_SLIDERS[7];
+if (!uht || !homogenizer || !filler) throw new Error('stages 4, 3 and 7 need their sliders');
 
 describe('SETPOINT_SLIDERS', () => {
   it('puts the UHT set point in stage 4: 130–150 °C in 0.1 °C steps, following the sim', () => {
@@ -17,18 +18,24 @@ describe('SETPOINT_SLIDERS', () => {
     expect(homogenizer).toMatchObject({ key: 'homogenizerStage1Bar', unit: 'bar', min: 100, max: 250, step: 5, decimals: 0 });
   });
 
-  it('has no other sliders before the fillers arrive (phase 4)', () => {
-    expect(Object.keys(SETPOINT_SLIDERS).sort()).toEqual(['3', '4']);
+  it('puts the filler rate in stage 7 (plan 08: filler speed): 0, a stop, to the 8,000 packs/h machine maximum, following the sim', () => {
+    expect(filler).toMatchObject({ key: 'fillerRatePacksPerH', unit: 'packs/h', min: 0, max: plantConfig.fillers.maxRatePacksPerH, step: 100, decimals: 0, follow: 'ratePacksPerH' });
+  });
+
+  it('has no other sliders', () => {
+    expect(Object.keys(SETPOINT_SLIDERS).sort()).toEqual(['3', '4', '7']);
   });
 
   it("covers plant.json's set points, on a step", () => {
     expect(snapToStep(plantConfig.uht.setpointC, uht)).toBe(plantConfig.uht.setpointC);
     expect(snapToStep(plantConfig.homogenizer.stage1Bar, homogenizer)).toBe(plantConfig.homogenizer.stage1Bar);
+    expect(snapToStep(plantConfig.fillers.ratePacksPerH, filler)).toBe(plantConfig.fillers.ratePacksPerH);
   });
 
   it('follows a stage value the sim reports', () => {
-    const values = createSim(plantConfig).snapshot().stages[4].values;
-    expect(values[uht.follow ?? '']).toBe(plantConfig.uht.setpointC);
+    const { stages } = createSim(plantConfig).snapshot();
+    expect(stages[4].values[uht.follow ?? '']).toBe(plantConfig.uht.setpointC);
+    expect(stages[7].values[filler.follow ?? '']).toBe(plantConfig.fillers.ratePacksPerH);
   });
 });
 

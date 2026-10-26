@@ -1,11 +1,13 @@
 import { SPEEDS, type Command, type Hud, type SetpointKey, type Snapshot, type StageInfo, type ViewBus } from '../contracts';
 import { createAbout } from './about';
+import { createBatchList } from './batchList';
 import { onPress } from './dom';
 import { createEventLog } from './eventLog';
 import { createKpiStrip } from './kpiStrip';
 import { createSetpointSlider, SETPOINT_SLIDERS } from './setpointSlider';
 import { createStagePanel, type PanelPart } from './stagePanel';
 import { createStageRail } from './stageRail';
+import { createStockList } from './stockList';
 import { createTopBar, speedKey } from './topBar';
 import { createTrendChart, TREND_CHARTS } from './trendChart';
 import { createTrendHistory } from './trends';
@@ -13,6 +15,8 @@ import { createTrendHistory } from './trends';
 export interface HudOptions {
   /** The set points the sim starts from (plant.json), for a slider whose stage reports no set point of its own. */
   setpoints?: Partial<Record<SetpointKey, number>>;
+  /** A slider's top where plant.json sets it: the filler rate's machine maximum. */
+  setpointMax?: Partial<Record<SetpointKey, number>>;
 }
 
 /** The HUD, plus the way into the sim it uses, for other controls (the ?debug panel) to share. */
@@ -76,13 +80,24 @@ export function createHud(
     dispatch(command);
   };
 
+  // The batch picked last, from the batch list or a block in the 3D view (selectBatch on the bus).
+  let selectedBatch: number | null = null;
+
   const history = createTrendHistory();
   const panelParts = (stage: StageInfo['id'], host: HTMLElement): PanelPart[] => {
     const built: PanelPart[] = [];
     const chart = TREND_CHARTS[stage];
     if (chart) built.push(createTrendChart(host, stage, chart, history));
-    const slider = SETPOINT_SLIDERS[stage];
-    if (slider) built.push(createSetpointSlider(host, stage, slider, send, () => sentSetpoints[slider.key]));
+    const spec = SETPOINT_SLIDERS[stage];
+    if (spec) {
+      const max = options.setpointMax?.[spec.key];
+      const slider = max !== undefined && max > spec.min ? { ...spec, max } : spec;
+      built.push(createSetpointSlider(host, stage, slider, send, () => sentSetpoints[slider.key]));
+    }
+    if (stage === 9) {
+      built.push(createBatchList(host, { selected: () => selectedBatch, onSelect: (batchId) => bus.emit({ type: 'selectBatch', batchId }), dispatch: send }));
+    }
+    if (stage === 10) built.push(createStockList(host));
     return built;
   };
 
@@ -102,6 +117,16 @@ export function createHud(
     } else if (event.type === 'overview') {
       rail.clear();
       panel.clear();
+    } else if (event.type === 'selectBatch') {
+      selectedBatch = event.batchId;
+      // A batch lives in quarantine: its stage 9 panel lists it, picked, whichever stage was shown. A pick in
+      // the list itself leaves the panel where it is scrolled to.
+      if (panel.stage !== 9) {
+        rail.select(9);
+        panel.show(9, lastSnapshot);
+      } else if (lastSnapshot) {
+        panel.update(lastSnapshot);
+      }
     }
   });
 

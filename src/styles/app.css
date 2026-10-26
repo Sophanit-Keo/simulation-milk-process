@@ -605,6 +605,140 @@ kbd {
   color: var(--muted);
 }
 
+/* Stage 9's batch list and the picked batch, stage 10's dock and stock (batchList.ts, stockList.ts). */
+.batches,
+.stock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.batch-rows,
+.pallet-rows,
+.stock-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* The list scrolls inside the panel, so the picked batch below it stays in reach. */
+.batch-rows {
+  max-height: 240px;
+  overflow: auto;
+}
+.batch-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-areas: 'lamp name pallets' '. due due';
+  column-gap: 8px;
+  row-gap: 1px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+.batch-row:hover {
+  border-color: var(--line);
+}
+.batch-row[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.batch-row .lamp {
+  grid-area: lamp;
+  width: 8px;
+  height: 8px;
+}
+.b-name {
+  grid-area: name;
+  font-weight: 600;
+}
+.b-pallets {
+  grid-area: pallets;
+  font: 500 12.5px/1.35 var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.b-due {
+  grid-area: due;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.batch-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.batch-head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.batch-head .lamp {
+  width: 9px;
+  height: 9px;
+}
+.b-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+.batch-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.qa-override {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.qa-button[data-result='fail'] {
+  border-color: var(--bad);
+}
+.pallet-rows {
+  max-height: 200px;
+  overflow: auto;
+  font: 500 12px/1.35 var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.pallet-rows li {
+  display: grid;
+  grid-template-columns: 2.4em minmax(0, 1fr);
+  gap: 8px;
+}
+.p-no-small {
+  color: var(--muted);
+  text-align: right;
+}
+.stock-rows li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 13px;
+}
+.stock-rows .lamp {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+.stock-rows .tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Event log under the rail. The card keeps the size the grid gives it and the list scrolls inside, so
    new entries move nothing else on screen. */
 .log-card {

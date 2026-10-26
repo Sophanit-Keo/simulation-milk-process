@@ -207,6 +207,8 @@ export function createPacksLine(config: PlantConfig, rng: Rng, scheduler: Schedu
           runningCount: running,
           packsPerH,
           oeePct,
+          // Each filler's OEE too, keyed by its name: oeeAPct, oeeBPct.
+          ...Object.fromEntries(fillerSnapshots.map((filler) => [`oee${filler.name}Pct`, filler.oeePct])),
           packsMade: fillerSnapshots.reduce((sum, filler) => sum + filler.packsMade, 0),
           packsRejected: fillerSnapshots.reduce((sum, filler) => sum + filler.packsRejected, 0),
           tempC: fillerSpec.tempC,

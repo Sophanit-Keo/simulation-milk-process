@@ -1,4 +1,4 @@
-import { dayToS, hToS, minToS, sToDay, sToH, sToMin, type Kpis, type StageValueInfo, type Status } from '../contracts';
+import { dayToS, hToS, minToS, sToDay, sToH, sToMin, type FillerSnapshot, type Kpis, type StageValueInfo, type Status } from '../contracts';
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
@@ -67,6 +67,24 @@ export function formatDuration(durationS: number): string {
   if (minutes >= 10) return `${minutes} min`;
   if (minutes > 0) return `${minutes} min ${pad2(seconds)} s`;
   return `${seconds} s`;
+}
+
+/**
+ * A stretch of sim time counted in days as well, for incubations and destruction dates: "6 d 23 h" from a
+ * day on, "5 h 10 min" below it, as formatDuration below that. Rounds up, like formatDuration.
+ */
+export function formatLongDuration(durationS: number): string {
+  if (!Number.isFinite(durationS) || durationS < 0) return NO_VALUE;
+  const wholeH = Math.ceil(sToH(durationS));
+  if (wholeH < 24) return formatDuration(durationS);
+  const days = Math.floor(wholeH / 24);
+  return `${days} d ${pad2(wholeH - 24 * days)} h`;
+}
+
+/** The day of a sim time, as dates on the packs and pallet labels read: "day 190". */
+export function formatDay(timeS: number): string {
+  if (!Number.isFinite(timeS)) return NO_VALUE;
+  return `day ${Math.floor(sToDay(timeS)) + 1}`;
 }
 
 /** A number and its unit, separated by a space ("140.0 °C", "52 %"); a plain count has no unit. */
@@ -139,6 +157,12 @@ export function formatKpi(id: KpiId, kpis: Kpis): KpiText {
 export function sterilityStatus(bStar: number, uhtStatus?: Status): Extract<Status, 'bad'> | null {
   if (uhtStatus === 'bad') return 'bad';
   return Number.isFinite(bStar) && bStar > 0 && bStar < 1 ? 'bad' : null;
+}
+
+/** Each filler's OEE for the OEE card (index.html, data-kpi-fillers), short to fit it: "A 91 · B 90 %"; "—" with no fillers. */
+export function fillerOeeText(fillers: readonly Pick<FillerSnapshot, 'name' | 'oeePct'>[] | undefined): string {
+  if (!fillers || fillers.length === 0) return NO_VALUE;
+  return withUnit(fillers.map((filler) => `${filler.name} ${formatNumber(filler.oeePct)}`).join(' · '), '%');
 }
 
 /** formatKpi as one line of text, e.g. "F0 5.17 · B* 1.19": what the slot's [data-kpi-value] reads. */

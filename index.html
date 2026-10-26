@@ -58,15 +58,15 @@
   <!-- A labelled region, not <footer>: at the top level a footer is the page's contentinfo landmark.
        The eight cards of the plan 08 wireframe; the other KPIs of plan 06 are the small [data-kpi-sub]
        values in the card they belong with, so every KPI of the snapshot is on screen. A card with two
-       holds them in a .k-pair, on one line where the strip has room (app.css). Contracts v1 has one
-       OEE, the whole plant's, and the card says so; OEE per filler comes with the fillers in phase 4. -->
+       holds them in a .k-pair, on one line where the strip has room (app.css). The OEE card shows the
+       plant's OEE, the mean of the fillers', and each filler's under it (contracts v3). -->
   <section id="kpis" class="kpis" aria-label="Plant KPIs">
     <dl class="kpi-grid">
       <div class="kpi card" data-kpi="uht"><dt class="k-l">UHT flow</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="diverted">—</dd></div>
       <div class="kpi card" data-kpi="sterility"><dt class="k-l">Sterility</dt><dd class="k-v" data-kpi-value>—</dd></div>
       <div class="kpi card" data-kpi="tank"><dt class="k-l">Aseptic tank</dt><dd class="k-v" data-kpi-value>—</dd></div>
       <div class="kpi card" data-kpi="packs"><dt class="k-l">Packs</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s k-pair"><span data-kpi-sub="trays">—</span><span data-kpi-sub="pallets">—</span></dd></div>
-      <div class="kpi card" data-kpi="oee"><dt class="k-l">OEE</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s">whole plant</dd></div>
+      <div class="kpi card" data-kpi="oee"><dt class="k-l">OEE <span class="unit">fillers</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-fillers>—</dd></div>
       <div class="kpi card" data-kpi="hold"><dt class="k-l">On hold <span class="unit">batches</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s k-pair"><span data-kpi-sub="released">—</span><span data-kpi-sub="blocked">—</span></dd></div>
       <div class="kpi card" data-kpi="stock"><dt class="k-l">Stock <span class="unit">pallets</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="cover">—</dd></div>
       <div class="kpi card" data-kpi="trucks"><dt class="k-l">Trucks <span class="unit">shipped</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="fill">—</dd></div>
