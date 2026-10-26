@@ -5,15 +5,20 @@ import { STAGE_IDS, type Snapshot, type StageId } from '../../src/contracts';
 import * as at from '../../src/scene/equipment/packs/layout';
 import { CARTON_SIZE_M, TRAY_SIZE_M, cartonPlaces, trayPlaces } from '../../src/scene/equipment/packs/tokens';
 import type { VehicleSizeM } from '../../src/scene/equipment/packs/vehicles';
-import { packsLine, rackLoadsShown } from '../../src/scene/equipment/packsLine';
+import { createTokenStream } from '../../src/scene/equipment/packs/belts';
+import { CARTON_PITCH_M, LINE_A_START_M, LINE_B_START_M, TRAY_PITCH_M } from '../../src/scene/equipment/packs/tokens';
+import { PALLETS_PER_RACK_PLACE, packsLine, rackLoadsShown } from '../../src/scene/equipment/packsLine';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
 
 // The packs line's grey boxes (stages 7–10), checked without WebGL: three.js objects work in Node.
 
-/** The module adds light panels and amber floor markings to the shared set, and the QA lab its lamp. */
-const MAX_OWN_MATERIALS = 3;
+/**
+ * The module adds light panels and amber floor markings to the shared set, the QA lab its lamp, and the
+ * quarantine its block lamps and the plate under a picked block (phase 4).
+ */
+const MAX_OWN_MATERIALS = 5;
 /** The lane's budget is about 150 draw calls for stages 7–10, shadow pass included. */
 const DRAW_CALL_BUDGET = 150;
 
@@ -232,7 +237,7 @@ describe('packsLine', () => {
     expect(node(byId(machines, 'palletizer'), 'arm')).toBeInstanceOf(THREE.Group);
   });
 
-  it('uses the shared materials, adding at most three of its own', () => {
+  it('uses the shared materials, adding at most five of its own', () => {
     const { ctx, machines } = build();
     const shared = new Set<THREE.Material>(Object.values(ctx.materials));
     const own = new Set<THREE.Material>();
@@ -272,7 +277,7 @@ describe('packsLine', () => {
     }
   });
 
-  it('fills the racks with the snapshot’s stock, empty on the static plant and capped at the places', () => {
+  it('fills the racks with the snapshot’s stock, a place for every 5 pallets, empty without stock and capped at the places', () => {
     const { machines } = build();
     const racks = byId(machines, 'racks');
     const loads = node(racks, 'loads') as THREE.InstancedMesh;
@@ -280,17 +285,16 @@ describe('packsLine', () => {
     const places = at.rackSlots().length;
     const shown = (): number[] => [loads.count, pallets.count];
 
-    // Before the first snapshot and on the static plant (0 pallets in stock), the racks stand empty
-    // and draw nothing.
+    // Before the first snapshot the racks stand empty and draw nothing; the plant opens with 634 pallets (D11).
     expect(shown()).toEqual([0, 0]);
     expect(loads.visible || pallets.visible).toBe(false);
     const snapshot = staticSnapshot();
-    expect(snapshot.kpis.palletsInStock).toBe(0);
+    expect(snapshot.kpis.palletsInStock).toBe(634);
     racks.update(snapshot, 0.016);
-    expect(shown()).toEqual([0, 0]);
+    expect(shown()).toEqual([127, 127]);
 
     const withStock = (palletsInStock: number): Snapshot => ({ ...snapshot, kpis: { ...snapshot.kpis, palletsInStock } });
-    racks.update(withStock(213), 0.016);
+    racks.update(withStock(1_065), 0.016);
     expect(shown()).toEqual([213, 213]);
     expect(loads.visible && pallets.visible).toBe(true);
     // The bounds are refitted, so culling and picking see every pallet shown, the last one included.
@@ -304,20 +308,24 @@ describe('packsLine', () => {
     pallets.getMatrixAt(0, first);
     expect(new THREE.Vector3().setFromMatrixPosition(first).y).toBeCloseTo(at.RACK_PALLET.heightM / 2, 6);
 
-    racks.update(withStock(5_000), 0.016); // more stock than places: every place full
+    racks.update(withStock(10_000), 0.016); // more stock than the 1,920 the places stand for: every place full
     expect(shown()).toEqual([places, places]);
     racks.update(withStock(12.6), 0.016);
-    expect(shown()).toEqual([13, 13]);
+    expect(shown()).toEqual([3, 3]);
     racks.update(withStock(0), 0.016);
     expect(shown()).toEqual([0, 0]);
     expect(loads.visible).toBe(false);
   });
 
-  it('counts the pallets to show from the stock KPI', () => {
+  it('counts the places to fill from the stock KPI: one for every 5 pallets, rounded up (g1-checklist, defect 4)', () => {
+    expect(PALLETS_PER_RACK_PLACE).toBe(5);
     expect(rackLoadsShown(0, 384)).toBe(0);
-    expect(rackLoadsShown(210, 384)).toBe(210);
-    expect(rackLoadsShown(634, 384)).toBe(384);
+    expect(rackLoadsShown(210, 384)).toBe(42);
+    expect(rackLoadsShown(634, 384)).toBe(127);
+    expect(rackLoadsShown(1_920, 384)).toBe(384);
+    expect(rackLoadsShown(2_500, 384)).toBe(384);
     expect(rackLoadsShown(-3, 384)).toBe(0);
+    expect(rackLoadsShown(210, 384, 1)).toBe(210);
     expect(rackLoadsShown(undefined, 384)).toBe(0);
   });
 
@@ -387,10 +395,17 @@ describe('packsLine', () => {
     for (const ctx of [makeContext(), makeContext(kitModels)]) {
       const { machines } = build(ctx);
       await settle();
+      // The places the moving tokens start on (packs/belts.ts): a line's places, but for the last, which
+      // would run past the line's end as the belt moves.
       const cartons = cartonPlaces();
+      const slots = (line: readonly (readonly [number, number, number])[], startM: number, pitchM: number) => createTokenStream(line, startM, pitchM, 0).slots;
+      const startPlaces = [
+        ...cartons.a.slice(0, slots(at.LINE_A, LINE_A_START_M, CARTON_PITCH_M)),
+        ...cartons.b.slice(0, slots(at.LINE_B, LINE_B_START_M, CARTON_PITCH_M)),
+      ];
       const tokens: [string, string, StageId, THREE.InstancedMesh, { atM: readonly number[]; headingRad: number }[], readonly number[]][] = [
-        ['cartons', 'pack-conveyors', 7, node(byId(machines, 'pack-conveyors'), 'cartons') as THREE.InstancedMesh, [...cartons.a, ...cartons.b], CARTON_SIZE_M],
-        ['trays', 'tray-conveyor', 8, node(byId(machines, 'tray-conveyor'), 'trays') as THREE.InstancedMesh, trayPlaces(), TRAY_SIZE_M],
+        ['cartons', 'pack-conveyors', 7, node(byId(machines, 'pack-conveyors'), 'cartons') as THREE.InstancedMesh, startPlaces, CARTON_SIZE_M],
+        ['trays', 'tray-conveyor', 8, node(byId(machines, 'tray-conveyor'), 'trays') as THREE.InstancedMesh, trayPlaces().slice(0, slots(at.TRAY_LINE, 0, TRAY_PITCH_M)), TRAY_SIZE_M],
       ];
       for (const [name, ownerId, stage, mesh, places, sizeM] of tokens) {
         expect(mesh, name).toBeInstanceOf(THREE.InstancedMesh);
@@ -436,34 +451,54 @@ describe('packsLine', () => {
     }
   });
 
-  it('empties line B while filler B stands, and both lines while no filler runs', () => {
+  it('moves the cartons along both lines, empties line B from its start while filler B stands, and fills it again', () => {
     const { machines } = build();
     const conveyors = byId(machines, 'pack-conveyors');
     const mesh = node(conveyors, 'cartons') as THREE.InstancedMesh;
-    const { a, b } = cartonPlaces();
+    const slotsA = createTokenStream(at.LINE_A, LINE_A_START_M, CARTON_PITCH_M, 0).slots;
+    const slotsB = createTokenStream(at.LINE_B, LINE_B_START_M, CARTON_PITCH_M, 0).slots;
+    const state = () => conveyors.debugState?.() ?? {};
+    const position = (i: number) => new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().fromArray(mesh.instanceMatrix.array, 16 * i));
     const snapshot = staticSnapshot();
-    conveyors.update(snapshot, 0.016);
-    expect(mesh.count).toBe(a.length + b.length);
+    expect(state()).toEqual({ cartonsA: slotsA, cartonsB: slotsB });
 
-    const oneDown = structuredClone(snapshot);
-    oneDown.line.filler.flowLph /= 2;
-    conveyors.update(oneDown, 0.016);
-    expect(mesh.count).toBe(a.length);
-    // The copies left are line A's: every one stands on filler A's line (z −17.5, then x 34).
-    for (let i = 0; i < mesh.count; i++) {
-      const matrix = new THREE.Matrix4();
-      mesh.getMatrixAt(i, matrix);
-      const local = new THREE.Vector3().setFromMatrixPosition(matrix).add(conveyors.object.position);
-      expect(Math.abs(local.z - at.FILLER_Z_M.a) < 1e-6 || Math.abs(local.x - 34) < 1e-6, `carton ${i}`).toBe(true);
-    }
+    // Both running: every carton moves on along its line, and both lines stay full.
+    const before = position(0);
+    conveyors.update(snapshot, 0.1);
+    expect(position(0).distanceTo(before)).toBeGreaterThan(0);
+    expect(state()).toEqual({ cartonsA: slotsA, cartonsB: slotsB });
+    // Paused, nothing moves.
+    const paused = { ...snapshot, paused: true };
+    const still = position(0);
+    conveyors.update(paused, 0.1);
+    expect(position(0).distanceTo(still)).toBe(0);
 
-    oneDown.line.filler.flowLph = 0;
-    conveyors.update(oneDown, 0.016);
-    expect(mesh.count).toBe(0);
-    expect(mesh.visible).toBe(false);
-    conveyors.update(snapshot, 0.016);
-    expect(mesh.count).toBe(a.length + b.length);
-    expect(mesh.visible).toBe(true);
+    // Filler B broken down: line B runs empty from its start, line A stays full.
+    const bDown = structuredClone(snapshot);
+    const fillerB = bDown.packs.fillers[1];
+    if (!fillerB) throw new Error('no filler B');
+    fillerB.state = 'repair';
+    conveyors.update(bDown, 1);
+    const draining = state();
+    expect(draining.cartonsA).toBe(slotsA);
+    expect(draining.cartonsB).toBeLessThan(slotsB);
+    expect(draining.cartonsB).toBeGreaterThan(0);
+    conveyors.update(bDown, 100); // long enough for the whole line to run off
+    expect(state()).toEqual({ cartonsA: slotsA, cartonsB: 0 });
+    // Line B's places are empty: zero scale, so nothing is drawn or picked there.
+    for (let i = slotsA; i < slotsA + slotsB; i++) expect(new THREE.Matrix4().fromArray(mesh.instanceMatrix.array, 16 * i).determinant(), `carton ${i}`).toBe(0);
+
+    // Running again, it fills from its start.
+    conveyors.update(snapshot, 1);
+    expect(state().cartonsB).toBeGreaterThan(0);
+    expect(state().cartonsB).toBeLessThan(slotsB);
+
+    // A snapshot without Snapshot.packs (contracts v2) still stops filler B by the flow the fillers draw.
+    const v2 = structuredClone(snapshot) as Partial<Snapshot> & Snapshot;
+    delete (v2 as Partial<Snapshot>).packs;
+    v2.line.filler.flowLph /= 2;
+    conveyors.update(v2, 100);
+    expect(state()).toEqual({ cartonsA: slotsA, cartonsB: 0 });
   });
 
   it('prints the cartons, trays and pallets once the textures load, with no extra draw', async () => {
@@ -543,20 +578,24 @@ describe('packsLine', () => {
     await settle();
     expect(empty.ctx.requested).toEqual(expect.arrayContaining(['vehicles/truck.glb', 'vehicles/forklift.glb']));
     for (const id of ['truck', 'forklift-1', 'forklift-2']) expect(node(byId(empty.machines, id), 'grey-box')).toBeDefined();
+    // A grey truck at each of the three doors, hidden until the sim docks one there.
+    const doors = node(byId(empty.machines, 'truck'), 'trucks').children;
+    expect(doors.map((truck) => truck.name)).toEqual(['truck-1', 'truck-2', 'truck-3']);
+    for (const truck of doors) expect(truck.getObjectByName('grey-box'), truck.name).toBeDefined();
 
     // Stand-ins that lie along x, at a different scale and off-centre, as a downloaded model might.
     const box = (x: number, y: number, z: number) => () =>
       new THREE.Mesh(new THREE.BoxGeometry(x, y, z).translate(5, 3, -2), new THREE.MeshStandardMaterial());
     const { machines } = build(makeContext({ 'vehicles/truck.glb': box(33, 8, 5), 'vehicles/forklift.glb': box(70, 50, 30) }));
     await settle();
-    const fits: [string, at.FloorPointM, VehicleSizeM][] = [
-      ['truck', [at.DOOR_X_M[1], at.DOCKED_TAIL_Z_M + at.TRUCK_SIZE_M.lengthM / 2], at.TRUCK_SIZE_M],
-      ['forklift-1', [-30, 10.6], at.FORKLIFT_SIZE_M],
+    const fits: [string, THREE.Object3D, at.FloorPointM, VehicleSizeM][] = [
+      ['truck', node(byId(machines, 'truck'), 'truck-2'), [at.DOOR_X_M[1], at.DOCKED_TAIL_Z_M + at.TRUCK_SIZE_M.lengthM / 2], at.TRUCK_SIZE_M],
+      ['forklift-1', byId(machines, 'forklift-1').object, [-24, 10.6], at.FORKLIFT_SIZE_M],
     ];
-    for (const [id, centreM, size] of fits) {
-      const machine = byId(machines, id);
-      expect(machine.object.getObjectByName('grey-box'), id).toBeUndefined();
-      const bounds = worldBox(machine);
+    for (const [id, object, centreM, size] of fits) {
+      expect(object.getObjectByName('grey-box'), id).toBeUndefined();
+      object.updateMatrixWorld(true);
+      const bounds = new THREE.Box3().setFromObject(object);
       const sizeM = bounds.getSize(new THREE.Vector3());
       const centre = bounds.getCenter(new THREE.Vector3());
       expect(bounds.min.y, id).toBeCloseTo(0, 6);
@@ -574,7 +613,9 @@ describe('packsLine', () => {
 
   it('sizes the grey vehicles to the boxes their models are fitted to', () => {
     const { machines } = build();
-    const truck = worldBox(byId(machines, 'truck')).getSize(new THREE.Vector3());
+    const truckObject = node(byId(machines, 'truck'), 'truck-2');
+    truckObject.updateMatrixWorld(true);
+    const truck = new THREE.Box3().setFromObject(truckObject).getSize(new THREE.Vector3());
     expect(truck.z).toBeCloseTo(at.TRUCK_SIZE_M.lengthM, 1);
     expect(truck.y).toBeCloseTo(at.TRUCK_SIZE_M.heightM, 1);
     expect(truck.x).toBeLessThanOrEqual(at.TRUCK_SIZE_M.widthM + 1e-6);
@@ -592,11 +633,12 @@ describe('packsLine', () => {
     ['tray-conveyor', '1,250 trays/h'],
     ['palletizer', '84 trays/pallet'],
     ['pallet-conveyor', '0 pallets'],
-    ['quarantine', 'hold 7 d'],
+    ['quarantine', `${staticSnapshot().stages[9].values.palletsInQuarantine?.toLocaleString('en-US')} pallets`],
     ['qa-lab', '55 °C'],
-    ['racks', '22 per truck'],
+    ['racks', '634 pallets'],
     ['docks', '0 trucks out'],
-  ])('labels %s "%s" on the static plant', (id, text) => {
+    ['truck', 'none at the dock'],
+  ])('labels %s "%s" as the plant opens', (id, text) => {
     const { machines } = build();
     expect(byId(machines, id).labelText(staticSnapshot())).toBe(text);
   });
@@ -612,6 +654,10 @@ describe('packsLine', () => {
     }
     expect(byId(machines, 'filler-a').labelText(partial)).toBe('');
     expect(byId(machines, 'quarantine').labelText(partial)).toBe('');
+    // And a contracts v2 snapshot, without Snapshot.packs, reads as before.
+    const v2 = { ...partial, packs: undefined } as unknown as Snapshot;
+    for (const machine of machines) expect(() => machine.update(v2, 0.016), machine.id).not.toThrow();
+    expect(byId(machines, 'truck').labelText(v2)).toBe('');
   });
 
   it('stands each filler where the product pipe from the aseptic tank ends', () => {
@@ -650,10 +696,28 @@ describe('packsLine', () => {
     }
   });
 
-  it('stops filler B, and only B, when the fillers draw one filler’s worth of milk', () => {
+  it('shows each filler’s own state from the packs model, and stands a filler that does not run', () => {
     const { machines } = build();
     const snapshot = staticSnapshot();
+    const [a, b] = [byId(machines, 'filler-a'), byId(machines, 'filler-b')];
     const oneDown = structuredClone(snapshot);
+    const fillerB = oneDown.packs.fillers[1];
+    if (!fillerB) throw new Error('no filler B');
+    fillerB.state = 'repair';
+    expect(a.labelText(oneDown)).toBe('running · 7,500/h');
+    expect(b.labelText(oneDown)).toBe('broken down');
+    b.update(oneDown, 0.2);
+    expect(node(b, 'reel').rotation.z).toBe(0);
+    fillerB.state = 'cleaning';
+    expect(b.labelText(oneDown)).toBe('re-sterilizing');
+    fillerB.state = 'starved';
+    expect(b.labelText(oneDown)).toBe('waiting for milk');
+  });
+
+  it('without the packs model (contracts v2), stops filler B, and only B, when the fillers draw one filler’s worth of milk', () => {
+    const { machines } = build();
+    const { packs: _packs, ...v2 } = staticSnapshot();
+    const oneDown = structuredClone(v2) as Snapshot;
     oneDown.line.filler.flowLph /= 2;
     const [a, b] = [byId(machines, 'filler-a'), byId(machines, 'filler-b')];
     expect(a.labelText(oneDown)).toBe('running · 7,500/h');
@@ -744,9 +808,14 @@ describe('packsLine', () => {
 
     machines.slice(0, -1).forEach((machine) => machine.dispose());
     // The unit shapes and the module's materials stay while one fixture still uses them (the QA lab's
-    // lamp material is its own, and goes with it).
-    const lampMaterial = (node(byId(machines, 'qa-lab'), 'lamps') as THREE.Mesh).material;
-    expect([...own].some((material) => material !== lampMaterial && disposed.has(material))).toBe(false);
+    // lamp material and the quarantine's block lamps and plate are their fixtures' own, and go with them).
+    const quarantine = byId(machines, 'quarantine');
+    const fixtureOwn = new Set([
+      (node(byId(machines, 'qa-lab'), 'lamps') as THREE.Mesh).material,
+      (node(quarantine, 'quarantine-lamps') as THREE.Mesh).material,
+      (node(quarantine, 'quarantine-mark') as THREE.Mesh).material,
+    ]);
+    expect([...own].some((material) => !fixtureOwn.has(material) && disposed.has(material))).toBe(false);
     machines.at(-1)?.dispose();
     machines.forEach((machine) => machine.dispose()); // a second dispose() is harmless
 

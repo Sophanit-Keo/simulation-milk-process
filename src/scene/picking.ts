@@ -8,6 +8,14 @@ import type { StageId } from '../contracts';
 export interface PickTarget {
   readonly object: THREE.Object3D;
   readonly stage: StageId;
+  /** The batch a hit on one of its meshes picks, if any (a quarantine block, contracts v3). */
+  batchAt?(object: THREE.Object3D, instanceId: number | undefined): number | null;
+}
+
+/** What a click picked: a stage, and a batch when it hit one. */
+export interface Pick {
+  stage: StageId;
+  batchId: number | null;
 }
 
 /** A press that moves further than this is a drag, not a click (the preview allowed 6 px). */
@@ -28,6 +36,8 @@ const EDGE_NDC = 0.96;
 export interface Picker {
   /** The stage whose machine is under a client-pixel point, or null. */
   stageAt(clientX: number, clientY: number): StageId | null;
+  /** The stage, and the batch if a quarantine block is hit, under a client-pixel point; null for nothing. */
+  pickAt(clientX: number, clientY: number): Pick | null;
   /** Client pixels of a point on one of the stage's machines that a click would pick, or null if none shows. */
   stageScreenPoint(stage: StageId): { x: number; y: number } | null;
   /** Once per frame: updates the hover cursor if the pointer moved. */
@@ -39,38 +49,39 @@ export interface PickerOptions {
   canvas: HTMLCanvasElement;
   camera: THREE.Camera;
   targets: readonly PickTarget[];
-  /** A click landed on a machine. */
-  onPick(stage: StageId): void;
+  /** A click landed on a machine; batchId is the batch when it landed on a quarantine block, else null. */
+  onPick(stage: StageId, batchId: number | null): void;
   /** The viewer started to orbit, pan or zoom. */
   onTakeCamera(): void;
 }
 
 export function createPicker({ canvas, camera, targets, onPick, onTakeCamera }: PickerOptions): Picker {
-  const stageOf = new Map<THREE.Object3D, StageId>(targets.map(({ object, stage }) => [object, stage]));
+  const targetOf = new Map<THREE.Object3D, PickTarget>(targets.map((target) => [target.object, target]));
   const roots = targets.map(({ object }) => object);
   const raycaster = new THREE.Raycaster();
   const ndc = new THREE.Vector2();
 
-  /** The stage owning an object: the target it sits in, or null if it is in none or is hidden. */
-  const owner = (object: THREE.Object3D): StageId | null => {
+  /** The target owning an object, or null if it is in none or is hidden. */
+  const owner = (object: THREE.Object3D): PickTarget | null => {
     for (let node: THREE.Object3D | null = object; node; node = node.parent) {
       if (!node.visible) return null; // the raycaster ignores visibility, so hidden parts must not catch clicks
-      const stage = stageOf.get(node);
-      if (stage !== undefined) return stage;
+      const target = targetOf.get(node);
+      if (target !== undefined) return target;
     }
     return null;
   };
 
-  const stageAtNdc = (x: number, y: number): StageId | null => {
+  const pickAtNdc = (x: number, y: number): Pick | null => {
     ndc.set(x, y);
     raycaster.setFromCamera(ndc, camera);
     for (const hit of raycaster.intersectObjects(roots, true)) {
       if (!(hit.object instanceof THREE.Mesh)) continue; // lines and points have loose hit tests
-      const stage = owner(hit.object);
-      if (stage !== null) return stage;
+      const target = owner(hit.object);
+      if (target !== null) return { stage: target.stage, batchId: target.batchAt?.(hit.object, hit.instanceId) ?? null };
     }
     return null;
   };
+  const stageAtNdc = (x: number, y: number): StageId | null => pickAtNdc(x, y)?.stage ?? null;
 
   const toNdc = (clientX: number, clientY: number): [number, number] | null => {
     const rect = canvas.getBoundingClientRect();
@@ -78,10 +89,11 @@ export function createPicker({ canvas, camera, targets, onPick, onTakeCamera }: 
     return [((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1];
   };
 
-  const stageAt = (clientX: number, clientY: number): StageId | null => {
+  const pickAt = (clientX: number, clientY: number): Pick | null => {
     const point = toNdc(clientX, clientY);
-    return point ? stageAtNdc(...point) : null;
+    return point ? pickAtNdc(...point) : null;
   };
+  const stageAt = (clientX: number, clientY: number): StageId | null => pickAt(clientX, clientY)?.stage ?? null;
 
   // Press and hover state. Only the gesture's first pointer can click; a second one makes it a pinch.
   let press: { id: number; x: number; y: number; dragged: boolean } | null = null;
@@ -123,8 +135,8 @@ export function createPicker({ canvas, camera, targets, onPick, onTakeCamera }: 
     hover = { x: event.clientX, y: event.clientY };
     hoverDirty = true;
     if (!clicked) return;
-    const stage = stageAt(event.clientX, event.clientY);
-    if (stage !== null) onPick(stage);
+    const pick = pickAt(event.clientX, event.clientY);
+    if (pick) onPick(pick.stage, pick.batchId);
   };
   const onPointerUp = (event: PointerEvent): void => endPress(event, true);
   const onPointerCancel = (event: PointerEvent): void => endPress(event, false);
@@ -150,6 +162,7 @@ export function createPicker({ canvas, camera, targets, onPick, onTakeCamera }: 
 
   return {
     stageAt,
+    pickAt,
     stageScreenPoint(stage) {
       const rect = canvas.getBoundingClientRect();
       // Normally a no-op (the last render did it); it matters only for a call before the first frame.

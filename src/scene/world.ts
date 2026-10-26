@@ -127,14 +127,18 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
     flight.cancel();
   };
   const pickTargets: PickTarget[] = [
-    ...equipmentHost.equipment.map(({ object, stage }) => ({ object, stage })),
+    ...equipmentHost.equipment.map((item) => ({ object: item.object, stage: item.stage, batchAt: item.batchAt?.bind(item) })),
     ...pipes.pickTargets,
   ];
   const picker = createPicker({
     canvas,
     camera,
     targets: pickTargets,
-    onPick: (stage) => bus.emit({ type: 'selectStage', stage }),
+    onPick: (stage, batchId) => {
+      bus.emit({ type: 'selectStage', stage });
+      // A block in quarantine picks its batch too: the panel lists the batch's pallets (contracts v3).
+      if (batchId !== null) bus.emit({ type: 'selectBatch', batchId });
+    },
     onTakeCamera: takeCamera,
   });
 
@@ -146,9 +150,12 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
       flight.flyTo(event.stage);
     } else if (event.type === 'overview') {
       labels.select(null);
+      for (const item of equipmentHost.equipment) item.selectBatch?.(null);
       flight.flyHome(overviewPosition(), overviewTarget);
       // As in the preview, the overview refits the window again until the viewer takes the camera.
       cameraTaken = false;
+    } else if (event.type === 'selectBatch') {
+      for (const item of equipmentHost.equipment) item.selectBatch?.(event.batchId);
     }
   });
 

@@ -89,6 +89,11 @@ export function createEquipmentLabels(equipment: readonly Equipment[], labelRoot
     },
     updateDetail(cameraPosition) {
       for (const label of labels) {
+        const nowM = label.item.labelAnchorNowM?.();
+        if (nowM) {
+          label.object.position.set(...nowM);
+          label.anchor.set(...nowM);
+        }
         const compact = !label.selected && cameraPosition.distanceTo(label.anchor) > FULL_LABEL_WITHIN_M;
         if (compact === label.compact) continue;
         label.compact = compact;
