@@ -499,7 +499,10 @@ kbd {
 }
 
 /* A state in words with its lamp ("● Diverting to reject · 2 min 30 s left"). Unlike a number it may
-   wrap, and the lamp stays with its first line. */
+   wrap, and the lamp stays with its first line; the label keeps its width and the words wrap instead. */
+.val-state {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
 .val-state dd {
   display: inline-flex;
   align-items: baseline;

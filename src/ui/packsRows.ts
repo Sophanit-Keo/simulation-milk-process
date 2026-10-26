@@ -50,12 +50,19 @@ export function palletText(lane: PackLaneSnapshot | undefined, traysPerPallet: n
   return { text: `${formatNumber(lane.palletTrays)}${of} trays · batch ${lane.batchId}`, status: lane.palletTrays > 0 ? 'ok' : 'idle' };
 }
 
-/** The newest pallet's label code: "(00) 3 0614141 000054012 6", and which pallet it is. */
+/** The newest pallet: "Batch 54 · pallet 12". */
 export function lastPalletText(packs: Pick<PacksSnapshot, 'packaging'>): StateText {
   const pallet = packs.packaging.lastPallet;
   if (!pallet) return { text: 'None yet', status: 'idle' };
+  return { text: `Batch ${pallet.batchId} · pallet ${pallet.palletNo}`, status: 'ok' };
+}
+
+/** The newest pallet's label code: "(00) 3 0614141 000054012 6". */
+export function lastSsccText(packs: Pick<PacksSnapshot, 'packaging'>): StateText {
+  const pallet = packs.packaging.lastPallet;
+  if (!pallet) return { text: NO_VALUE, status: 'idle' };
   try {
-    return { text: `${formatSscc(ssccFor(pallet.batchId, pallet.palletNo))} · batch ${pallet.batchId}, pallet ${pallet.palletNo}`, status: 'ok' };
+    return { text: formatSscc(ssccFor(pallet.batchId, pallet.palletNo)), status: 'ok' };
   } catch {
     return { text: NO_VALUE, status: 'idle' };
   }

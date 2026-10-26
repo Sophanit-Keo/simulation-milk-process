@@ -6,7 +6,7 @@ import { createSim } from '../../src/sim';
 import { BATCH_LAMP, BATCH_STATUS_TEXT, batchDueText, palletLines } from '../../src/ui/batchList';
 import { fillerOeeText, formatDay, formatLongDuration } from '../../src/ui/format';
 import { PANEL_STATE_ROWS } from '../../src/ui/panelRows';
-import { dockText, fillerText, lastPalletText, nextPickText, packerText, palletText } from '../../src/ui/packsRows';
+import { dockText, fillerText, lastPalletText, lastSsccText, nextPickText, packerText, palletText } from '../../src/ui/packsRows';
 import { stockText, truckText } from '../../src/ui/stockList';
 import { plantConfig } from '../helpers/plantConfig';
 
@@ -112,12 +112,12 @@ describe('pallet labels', () => {
     expect(new Set(lines.map((line) => line.sscc)).size).toBe(60);
   });
 
-  it('names the newest pallet by its SSCC, batch and number', () => {
-    expect(lastPalletText({ packaging: { lanes: [], traysMade: 0, palletsMade: 1, packsSampled: 0, lastPallet: { batchId: 54, palletNo: 1, atS: 0 } } })).toEqual({
-      text: '(00) 3 0614141 000054001 4 · batch 54, pallet 1',
-      status: 'ok',
-    });
-    expect(lastPalletText({ packaging: { lanes: [], traysMade: 0, palletsMade: 0, packsSampled: 0, lastPallet: null } }).text).toBe('None yet');
+  it('names the newest pallet by its batch and number, and gives its SSCC', () => {
+    const packaging = { lanes: [], traysMade: 0, palletsMade: 1, packsSampled: 0, lastPallet: { batchId: 54, palletNo: 1, atS: 0 } };
+    expect(lastPalletText({ packaging })).toEqual({ text: 'Batch 54 · pallet 1', status: 'ok' });
+    expect(lastSsccText({ packaging })).toEqual({ text: '(00) 3 0614141 000054001 4', status: 'ok' });
+    expect(lastPalletText({ packaging: { ...packaging, palletsMade: 0, lastPallet: null } }).text).toBe('None yet');
+    expect(lastSsccText({ packaging: { ...packaging, palletsMade: 0, lastPallet: null } }).text).toBe('—');
   });
 });
 
@@ -167,7 +167,7 @@ describe('PANEL_STATE_ROWS', () => {
     expect(PANEL_STATE_ROWS[4]?.map((row) => row.key)).toEqual(['uhtMode', 'throttle']);
     expect(PANEL_STATE_ROWS[6]?.map((row) => row.key)).toEqual(['throttle', 'fillers']);
     expect(PANEL_STATE_ROWS[7]?.map((row) => row.key)).toEqual(['fillerA', 'fillerB']);
-    expect(PANEL_STATE_ROWS[8]?.map((row) => row.key)).toEqual(['packerA', 'packerB', 'palletA', 'palletB', 'lastPallet']);
+    expect(PANEL_STATE_ROWS[8]?.map((row) => row.key)).toEqual(['packerA', 'packerB', 'palletA', 'palletB', 'lastPallet', 'lastSscc']);
     expect(PANEL_STATE_ROWS[10]?.map((row) => row.key)).toEqual(['nextPick', 'dock']);
     for (const stage of [1, 2, 3, 5, 9] as const) expect(PANEL_STATE_ROWS[stage], `stage ${stage}`).toBeUndefined();
   });
@@ -177,7 +177,7 @@ describe('PANEL_STATE_ROWS', () => {
     const read = (stage: 7 | 8 | 10) => PANEL_STATE_ROWS[stage]?.map((row) => row.read(snap).text);
     const [a, b] = snap.packs.fillers;
     expect(read(7)).toEqual([`Running · batch ${a?.batchId}`, `Running · batch ${b?.batchId}`]);
-    expect(read(8)).toEqual(['Running', 'Running', `0 of 84 trays · batch ${a?.batchId}`, `0 of 84 trays · batch ${b?.batchId}`, 'None yet']);
+    expect(read(8)).toEqual(['Running', 'Running', `0 of 84 trays · batch ${a?.batchId}`, `0 of 84 trays · batch ${b?.batchId}`, 'None yet', '—']);
     expect(read(10)?.[1]).toBe('No truck at the dock');
   });
 });

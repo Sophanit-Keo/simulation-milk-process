@@ -1,6 +1,6 @@
 import type { Snapshot, StageId } from '../contracts';
 import { STATE_ROWS as LIQUID_STATE_ROWS, type StateRow, type StateText } from './liquidRows';
-import { dockText, fillerText, lastPalletText, nextPickText, packerText, palletText } from './packsRows';
+import { dockText, fillerText, lastPalletText, lastSsccText, nextPickText, packerText, palletText } from './packsRows';
 
 /** A state row of the info panel, read from the whole snapshot. */
 export interface PanelStateRow {
@@ -33,6 +33,7 @@ export const PANEL_STATE_ROWS: Readonly<Partial<Record<StageId, readonly PanelSt
       read: (snapshot: Snapshot) => palletText(snapshot.packs?.packaging.lanes[index], traysPerPallet(snapshot)),
     })),
     { key: 'lastPallet', label: 'Newest pallet', read: (snapshot) => (snapshot.packs ? lastPalletText(snapshot.packs) : { text: '—', status: 'idle' }) },
+    { key: 'lastSscc', label: 'Its SSCC', read: (snapshot) => (snapshot.packs ? lastSsccText(snapshot.packs) : { text: '—', status: 'idle' }) },
   ],
   10: [
     { key: 'nextPick', label: 'Next pick', read: (snapshot) => (snapshot.packs ? nextPickText(snapshot.packs.warehouse) : { text: '—', status: 'idle' }) },
