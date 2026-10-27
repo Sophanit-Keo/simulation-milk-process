@@ -1,11 +1,13 @@
+import type { ScenarioId } from './commands';
 import type { PacksSnapshot } from './packs';
+import type { ScenariosSnapshot } from './scenarios';
 import type { LinePointId, Speed, StageId, Status } from './stages';
 
 /**
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
- * v0 week 1, v1 at G1, v2 at week 6, v3 at G2. From v3 on, fields may only be added.
+ * v0 week 1, v1 at G1, v2 at week 6, v3 at G2, v4 in phase 5 (scenarios). From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 3;
+export const CONTRACT_VERSION = 4;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -97,6 +99,10 @@ export interface LogEntry {
   timeS: number;
   kind: LogKind;
   message: string;
+  /** The scenario that caused it, if one did (contracts v4). */
+  scenario?: ScenarioId;
+  /** Why it happened, one or two sentences, for the scenario log (contracts v4). */
+  why?: string;
 }
 
 /** One plain-object picture of the plant, built once per frame; the 3D view and the UI read only this. */
@@ -115,6 +121,8 @@ export interface Snapshot {
   liquid: LiquidSnapshot;
   /** Stages 7–10: fillers, packaging, batches in quarantine, warehouse and trucks (contracts v3). */
   packs: PacksSnapshot;
+  /** The fault scenarios triggered so far, and those that cannot start now (contracts v4). */
+  scenarios: ScenariosSnapshot;
   kpis: Kpis;
   /** Newest first, capped in length by the sim. */
   log: readonly LogEntry[];

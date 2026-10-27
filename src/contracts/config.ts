@@ -198,6 +198,27 @@ export interface PlantConfig {
     /** Dock doors; a truck that finds them all taken waits in the yard (the layout has three). */
     dockDoors: number;
   };
+  /** How each fault scenario plays out once triggered (phase 5, D15; plan 06, fault scenarios). */
+  scenarios: {
+    /** UHT temperature drop: the outlet falls from the set point toward uht.faultTempC with this time constant (sim assumption, the preview's 15 s). */
+    steamFaultLagS: number;
+    /** Filler breakdown: the repair a triggered breakdown takes, before re-sterilizing (fillers.repairFixedS) (sim assumption). */
+    fillerRepairS: number;
+    /** Sterile-air filter failure: the deviation lasts until the filter is replaced (sim assumption). */
+    filterReplaceS: number;
+    /** Chance per sample that a batch filled during the deviation spoils in incubation (sim assumption, R10's clusters). */
+    filterFailurePerPack: number;
+    /** Homogenizer pressure loss: stage 1 falls to this until repaired (D13: globules 1.84 µm, creaming risk 84%). */
+    homogenizerFaultBar: number;
+    homogenizerRepairS: number;
+    /** A batch filled from milk at this creaming risk or more fails the sensory check when its incubation ends (sim assumption). */
+    sensoryFailAbovePct: number;
+    /** Demand spike: extra trucks, the first at the trigger and then one every spikeEveryS (sim assumption). */
+    spikeTrucks: number;
+    spikeEveryS: number;
+    /** Late trucks: no truck comes for this long after the trigger; the ones due meanwhile then arrive together (sim assumption). */
+    lateTruckDelayS: number;
+  };
 }
 
 // Durations, rates and sizes the model divides by or steps with; zero would stall or divide by zero.
@@ -237,6 +258,13 @@ const POSITIVE_KEYS = [
   'warehouse.palletsPerTruck',
   'warehouse.truckEveryS',
   'warehouse.dockDoors',
+  'scenarios.steamFaultLagS',
+  'scenarios.fillerRepairS',
+  'scenarios.filterReplaceS',
+  'scenarios.homogenizerRepairS',
+  'scenarios.spikeTrucks',
+  'scenarios.spikeEveryS',
+  'scenarios.lateTruckDelayS',
 ] as const;
 
 // Floors and ceilings that keep the clock workable. "Next event" ignores the per-frame step cap, so a
@@ -256,6 +284,7 @@ const INTEGER_KEYS = [
   'warehouse.palletsPerTruck',
   'warehouse.startStockPallets',
   'warehouse.dockDoors',
+  'scenarios.spikeTrucks',
   'clock.maxStepsPerFrame',
 ] as const;
 
@@ -336,5 +365,10 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   if (sToH(quality.batchS) * fillers.maxRatePacksPerH > MAX_PALLETS_PER_BATCH * packsPerPallet) {
     fail(`a batch at the machine maximum must fit ${MAX_PALLETS_PER_BATCH} pallets, the SSCC serial range per batch`);
   }
+  // Phase 5: the scenarios must be faults, and their chances real chances.
+  const { scenarios } = config;
+  if (!(scenarios.homogenizerFaultBar < homogenizer.stage1Bar)) fail('scenarios.homogenizerFaultBar must be below homogenizer.stage1Bar');
+  if (!(scenarios.filterFailurePerPack <= 1)) fail('scenarios.filterFailurePerPack must lie in 0–1');
+  if (!(scenarios.sensoryFailAbovePct <= 100)) fail('scenarios.sensoryFailAbovePct must lie in 0–100');
   return problems;
 }

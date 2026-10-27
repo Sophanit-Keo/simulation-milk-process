@@ -2,6 +2,7 @@ export * from './commands';
 export * from './config';
 export * from './modules';
 export * from './packs';
+export * from './scenarios';
 export * from './snapshot';
 export * from './sscc';
 export * from './stages';

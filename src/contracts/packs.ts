@@ -91,6 +91,15 @@ export const BATCH_STATUSES: readonly BatchStatus[] = ['filling', 'hold', 'relea
 /** The QA lab's override for a batch (setQaResult), or `pending` while its samples decide. */
 export type QaResult = 'pending' | 'pass' | 'fail';
 
+/**
+ * Why a batch is under investigation (contracts v4): it was filled while the aseptic tank's sterile-air filter
+ * had failed (a higher chance that a sample spoils), or from milk homogenized at too low a pressure (a
+ * sensory check for a cream layer when its incubation ends).
+ */
+export type BatchFlag = 'sterileAir' | 'creaming';
+
+export const BATCH_FLAGS: readonly BatchFlag[] = ['sterileAir', 'creaming'];
+
 export interface BatchSnapshot {
   id: number;
   /** The filler that made it: 'A' or 'B'. */
@@ -114,6 +123,10 @@ export interface BatchSnapshot {
   /** Samples owed to the incubators: 1 per 30 min of its shift, plus 2 after each restart. */
   samples: number;
   qaResult: QaResult;
+  /** Why it is under investigation, if it is (contracts v4). */
+  flags: BatchFlag[];
+  /** Creaming risk of the milk it was filled from, if a homogenizer pressure loss reached it; else 0 (contracts v4). */
+  creamingRiskPct: number;
 }
 
 /** Released pallets of one batch in the warehouse. */
