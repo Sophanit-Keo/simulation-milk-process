@@ -156,7 +156,7 @@ describe('the warehouse', () => {
 
 describe("the OEE card's filler line", () => {
   it('gives each filler its OEE, short enough for the card', () => {
-    expect(fillerOeeText([{ name: 'A', oeePct: 91.2 }, { name: 'B', oeePct: 89.6 }])).toBe('A 91 · B 90 %');
+    expect(fillerOeeText([{ name: 'A', oeePct: 91.2 }, { name: 'B', oeePct: 89.6 }])).toBe('A 91 · B 90');
     expect(fillerOeeText([])).toBe('—');
     expect(fillerOeeText(undefined)).toBe('—');
   });

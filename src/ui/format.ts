@@ -159,10 +159,13 @@ export function sterilityStatus(bStar: number, uhtStatus?: Status): Extract<Stat
   return Number.isFinite(bStar) && bStar > 0 && bStar < 1 ? 'bad' : null;
 }
 
-/** Each filler's OEE for the OEE card (index.html, data-kpi-fillers), short to fit it: "A 91 · B 90 %"; "—" with no fillers. */
+/**
+ * Each filler's OEE for the OEE card (index.html, data-kpi-fillers): "A 91 · B 90", in the % of the mean
+ * above it, short enough for the card's narrowest column ("A 100 · B 100"); "—" with no fillers.
+ */
 export function fillerOeeText(fillers: readonly Pick<FillerSnapshot, 'name' | 'oeePct'>[] | undefined): string {
   if (!fillers || fillers.length === 0) return NO_VALUE;
-  return withUnit(fillers.map((filler) => `${filler.name} ${formatNumber(filler.oeePct)}`).join(' · '), '%');
+  return fillers.map((filler) => `${filler.name} ${formatNumber(filler.oeePct)}`).join(' · ');
 }
 
 /** formatKpi as one line of text, e.g. "F0 5.17 · B* 1.19": what the slot's [data-kpi-value] reads. */
