@@ -1,39 +1,45 @@
 // Tests for make-heroes.mjs and the GLBs it wrote to public/models/hero/:
 //   node --test assets/scripts/make-heroes.test.mjs
-// Phase 5 swaps each hero in for its grey box with no code change (assets/hero-specs.md), so each
-// model must keep the grey box's size round the machine origin, stay under its label, carry every
-// moving node the scene drives at its rest position with its origin on its joint, keep the moving
-// parts in their envelope through their whole travel, and meet the budget. The committed files must
-// be what the script writes, byte for byte.
+// Each hero replaces its grey box with no code change (assets/hero-specs.md), so each model must keep
+// the grey box's size round the machine origin, stay under its label, carry every moving node the scene
+// drives at its rest position with its origin on its joint, keep the moving parts in their envelope
+// through their whole travel, and meet the budget. Since phase 5 the AO is baked into the vertex colours
+// and the geometry is meshopt-compressed, losslessly. The committed files must be what the script
+// writes, byte for byte.
 
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { NodeIO } from '@gltf-transform/core';
+import { EXTMeshoptCompression } from '@gltf-transform/extensions';
+import { MeshoptDecoder } from 'meshoptimizer';
 import * as THREE from 'three';
 import { parseGlb, summarize } from './glb-stats.mjs';
-import { buildAsepticFiller, buildHomogenizer, buildPalletizer, buildSeparator, HERO_SPECS, heroGlbs, LIQUID_END_Z_M } from './make-heroes.mjs';
+import { AO, bakeAo, compress, HERO_BUILDERS, HERO_SPECS, heroGlbs, LIQUID_END_Z_M } from './make-heroes.mjs';
+import { toGlb } from './make-vehicles.mjs';
 
 const HERO_DIR = fileURLToPath(new URL('../../public/models/hero/', import.meta.url));
 const MM = 0.001;
 /** How far the outer size may differ from the grey box's (hero-specs.md, rule 5). */
 const SIZE_TOLERANCE = 0.05;
 
-const BUILDERS = {
-  separator: buildSeparator,
-  homogenizer: buildHomogenizer,
-  asepticFiller: buildAsepticFiller,
-  palletizer: buildPalletizer,
-};
-
 const generated = await heroGlbs();
 
 /** A fresh model with its world matrices up to date. */
 function build(key) {
-  const model = BUILDERS[key]();
+  const model = HERO_BUILDERS[key]();
   model.updateMatrixWorld(true);
   return model;
+}
+
+/** A second build of each model with its AO baked, made once: the bake takes a second or two a model. */
+const bakedModels = new Map();
+function baked(key) {
+  if (!bakedModels.has(key)) bakedModels.set(key, bakeAo(build(key)));
+  return bakedModels.get(key);
 }
 
 /** World bounds of an object and everything under it, from the vertices (a turned box would overstate them). */
@@ -88,14 +94,15 @@ for (const [key, spec] of Object.entries(HERO_SPECS)) {
       assert.ok(model.matrix.equals(new THREE.Matrix4()), 'the scene root has no transform');
     });
 
-    it('meets the budget and the asset rules glb-stats checks; the only warning is the expected off-centre origin', () => {
+    it('meets the budget and the asset rules glb-stats checks; the only warnings are the expected off-centre origin and meshopt', () => {
       assert.ok(summary.triangles.budgeted <= 30000, `${summary.triangles.budgeted} triangles`);
       assert.ok(summary.meshes.length <= 10, `${summary.meshes.length} meshes (draw calls)`);
       assert.ok(summary.materials.length <= 3, `${summary.materials.length} materials`);
       assert.equal(summary.images.length, 0);
       assert.equal(summary.animations.length, 0);
-      assert.deepEqual(summary.extensionsRequired, []);
-      for (const warning of summary.warnings) assert.match(warning, /^footprint centre is at /);
+      assert.deepEqual(summary.extensionsRequired, ['EXT_meshopt_compression']);
+      assert.ok(generated[spec.file].length <= 2 * 1024 * 1024, `${generated[spec.file].length} bytes, over 2 MB`);
+      for (const warning of summary.warnings) assert.match(warning, /^footprint centre is at |^required extensions need loader support: EXT_meshopt_compression$/);
       const glass = summary.materials.filter((m) => m.alphaMode !== 'OPAQUE');
       assert.deepEqual(glass.map((m) => m.alphaMode), key === 'asepticFiller' ? ['BLEND'] : [], 'glass only on the filler');
     });
@@ -116,8 +123,7 @@ for (const [key, spec] of Object.entries(HERO_SPECS)) {
     });
 
     it('is the file committed in public/models/hero/, and a rerun writes the same bytes', async () => {
-      const again = await heroGlbs();
-      assert.deepEqual(again[spec.file], generated[spec.file]);
+      assert.deepEqual(await compress(await toGlb(baked(key))), generated[spec.file]);
       assert.deepEqual(new Uint8Array(readFileSync(join(HERO_DIR, spec.file))), generated[spec.file], 'rerun make-heroes.mjs');
     });
   });
@@ -283,5 +289,117 @@ describe('moving nodes sit on their joints and stay in their envelope through th
     c1.position.z += 0.1;
     c2.position.z -= 0.1;
     assert.ok(boxOf(c2).min.z - boxOf(c1).max.z > 0.1, 'closed clamps leave room for a tray');
+  });
+});
+
+/** The vertex colours of each vertex-coloured mesh, by mesh name. */
+function colours(model) {
+  const out = new Map();
+  model.traverse((o) => {
+    if (o.isMesh && o.material.vertexColors) out.set(o.name, Array.from(o.geometry.getAttribute('color').array));
+  });
+  return out;
+}
+
+/** How much light the bake leaves the vertex of `meshName` nearest `pointM` among those facing `normal` (0–1). */
+function aoAt(key, meshName, pointM, normal) {
+  const plain = build(key).getObjectByName(meshName);
+  const shaded = baked(key).getObjectByName(meshName);
+  const position = plain.geometry.getAttribute('position');
+  const normals = plain.geometry.getAttribute('normal');
+  const want = new THREE.Vector3(...normal);
+  const point = new THREE.Vector3(...pointM);
+  const v = new THREE.Vector3();
+  let best = -1;
+  let bestM = Infinity;
+  for (let i = 0; i < position.count; i++) {
+    if (v.fromBufferAttribute(normals, i).dot(want) < 0.99) continue;
+    const distanceM = v.fromBufferAttribute(position, i).distanceTo(point);
+    if (distanceM < bestM) [best, bestM] = [i, distanceM];
+  }
+  assert.ok(bestM < AO_NEAR_M, `a vertex of ${meshName} within ${AO_NEAR_M} m of ${pointM} (nearest ${bestM.toFixed(3)} m)`);
+  return shaded.geometry.getAttribute('color').getX(best) / plain.geometry.getAttribute('color').getX(best);
+}
+const AO_NEAR_M = 0.1;
+
+describe('the baked ambient occlusion', () => {
+  for (const key of Object.keys(HERO_SPECS)) {
+    it(`${key}: darkens corners and contacts, by AO.strength at most, and leaves open faces nearly as they were`, () => {
+      const plain = colours(build(key));
+      const shaded = colours(baked(key));
+      const ratios = [];
+      for (const [name, before] of plain) {
+        const after = shaded.get(name);
+        assert.equal(after.length, before.length, name);
+        for (let i = 0; i < before.length; i++) ratios.push(after[i] / before[i]);
+      }
+      assert.ok(Math.min(...ratios) >= 1 - AO.strength - 1e-6, `darkest ${Math.min(...ratios).toFixed(3)}`);
+      assert.ok(Math.max(...ratios) <= 1 + 1e-6, `lightest ${Math.max(...ratios).toFixed(3)}`);
+      const share = (test) => ratios.filter(test).length / ratios.length;
+      assert.ok(share((r) => r < 0.8) > 0.05, `${(100 * share((r) => r < 0.8)).toFixed(1)}% of vertices in shade`);
+      assert.ok(share((r) => r > 0.95) > 0.2, `${(100 * share((r) => r > 0.95)).toFixed(1)}% of vertices in the open`);
+    });
+  }
+
+  it('shades a face where it meets another and where it meets the floor, not in the middle', () => {
+    // The homogenizer's crankcase, -x side, standing on the base frame (y 0.2) and open at mid-height.
+    assert.ok(aoAt('homogenizer', 'body_paint', [-1.1, 0.2, -0.4], [-1, 0, 0]) < 0.8, 'crankcase foot');
+    assert.ok(aoAt('homogenizer', 'body_paint', [-1.1, 0.75, -0.4], [-1, 0, 0]) > 0.95, 'crankcase side');
+    // The filler's plinth, recessed under the cabinet: in shade between the floor and the cabinet's overhang.
+    assert.ok(aoAt('asepticFiller', 'body_matte', [0, 0, 1.05], [0, 0, 1]) < 0.7, 'plinth at the floor');
+    assert.ok(aoAt('asepticFiller', 'body_paint', [0, 1.3, 1.1], [0, 0, 1]) > 0.95, 'cabinet door');
+  });
+
+  it('lets nothing that moves shade the static body, and nothing static shade what moves', () => {
+    for (const key of Object.keys(HERO_SPECS)) {
+      const whole = colours(baked(key));
+      const still = build(key);
+      for (const child of [...still.children]) if (!child.name.startsWith('body')) still.remove(child);
+      for (const [name, body] of colours(bakeAo(still))) assert.deepEqual(whole.get(name), body, `${key} ${name}`);
+      for (const { name } of HERO_SPECS[key].nodes) {
+        const alone = build(key).getObjectByName(name);
+        const world = alone.matrixWorld.clone();
+        alone.removeFromParent();
+        for (const child of [...alone.children]) alone.remove(child);
+        world.decompose(alone.position, alone.quaternion, alone.scale);
+        assert.deepEqual(colours(bakeAo(alone)).get(name), whole.get(name), `${key} ${name}`);
+      }
+    }
+  });
+});
+
+/** The bytes under a typed array, to compare two arrays fast and without a diff of thousands of numbers. */
+const bytesOf = (array) => Buffer.from(array.buffer, array.byteOffset, array.byteLength);
+
+/** The triangles of an index list, each turned to start at its lowest index: meshopt may rotate a triangle, keeping its winding. */
+function triangles(indices) {
+  const out = [];
+  for (let k = 0; k < indices.length; k += 3) {
+    const [a, b, c] = indices.slice(k, k + 3);
+    out.push(a <= b && a <= c ? [a, b, c] : b <= c ? [b, c, a] : [c, a, b]);
+  }
+  return out.join(' ');
+}
+
+describe('the compression', () => {
+  it('is lossless: every file decodes to the nodes, vertices, triangles and baked colours the script built', async () => {
+    await MeshoptDecoder.ready;
+    const io = new NodeIO().registerExtensions([EXTMeshoptCompression]).registerDependencies({ 'meshopt.decoder': MeshoptDecoder });
+    for (const [key, spec] of Object.entries(HERO_SPECS)) {
+      const [packed, plain] = await Promise.all([io.readBinary(generated[spec.file]), io.readBinary(await toGlb(baked(key)))]).then((docs) => docs.map((d) => d.getRoot()));
+      const nodes = (root) => root.listNodes().map((n) => [n.getName(), n.getTranslation(), n.getRotation(), n.getScale(), n.listChildren().map((c) => c.getName())]);
+      assert.deepEqual(nodes(packed), nodes(plain), `${spec.file} nodes`);
+      const [packedMeshes, plainMeshes] = [packed.listMeshes(), plain.listMeshes()];
+      assert.equal(packedMeshes.length, plainMeshes.length);
+      packedMeshes.forEach((mesh, m) => {
+        const [p, q] = [mesh.listPrimitives()[0], plainMeshes[m].listPrimitives()[0]];
+        assert.equal(p.getMaterial()?.getName(), q.getMaterial()?.getName());
+        assert.deepEqual(p.listSemantics(), q.listSemantics());
+        for (const semantic of q.listSemantics()) {
+          assert.ok(bytesOf(p.getAttribute(semantic).getArray()).equals(bytesOf(q.getAttribute(semantic).getArray())), `${spec.file} mesh ${m} ${semantic}`);
+        }
+        assert.ok(triangles(p.getIndices().getArray()) === triangles(q.getIndices().getArray()), `${spec.file} mesh ${m} triangles`);
+      });
+    }
   });
 });

@@ -6,7 +6,7 @@ How 3D models and textures get into the plant: where files go, the rules every m
 
 | Path | What | In git |
 |---|---|---|
-| `public/models/hero/` | The four hero models, `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb`: phase-3 block-outs made by `assets/scripts/make-heroes.mjs`, replaced by the final models in phase 5 | Yes, from phase 3 |
+| `public/models/hero/` | The four hero models, `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb`, made by `assets/scripts/make-heroes.mjs`: block-outs in phase 3, final since phase 5 (faces cut for the AO, AO baked into the vertex colours, meshopt-compressed) | Yes, from phase 3 |
 | `public/models/kenney/` | Kit pieces, unmodified, plus the `Textures/colormap.png` they point to and the kit's `License.txt` | Yes, from phase 2 |
 | `public/models/vehicles/` | `truck.glb`, `forklift.glb`: our own, made by `assets/scripts/make-vehicles.mjs` | Yes, from phase 2 |
 | `public/textures/` | Textures that code applies: `carton.png`, `tray.png`, `pallet.png`, made by `assets/scripts/make-textures.mjs` | Yes, from phase 2 |
@@ -23,8 +23,8 @@ How 3D models and textures get into the plant: where files go, the rules every m
 | Kenney Factory Kit pieces | 12 GLBs in `public/models/kenney/` + `Textures/colormap.png` | 253 KB | CC0. Six are placed as conveyors and rollers (stages 7–8); six are spares. [LICENSES.md](LICENSES.md) lists each. |
 | Truck and forklift | `public/models/vehicles/truck.glb`, `forklift.glb` | 139 KB + 78 KB | Own work (no CC0 kit has them, see [Vehicles](#vehicles)). They replace the grey boxes at the docks. |
 | Token textures | `public/textures/carton.png`, `tray.png`, `pallet.png` | 8, 19, 35 KB | Own work, brand-free. Printed on the static tokens since G1: the cartons on both pack lines, the trays on the tray line, and the pallets at the palletizer and in the racks. Phase 4 moves the same tokens. See [Token textures](#token-textures). |
-| Hero specs | [`hero-specs.md`](hero-specs.md) | | Separator, homogenizer, aseptic filler, palletizer. The models follow in phases 3–5. |
-| Hero block-outs (phase 3) | `public/models/hero/separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` | 123, 149, 80, 67 KB | Own work, plain grey, at the grey boxes' size with every moving node the scene drives. Since phase 4 the scene loads them behind `?heroes` (`src/scene/equipment/heroes.ts`); the grey boxes stay the default until phase 5. See [hero-specs.md](hero-specs.md#phase-3-block-outs). |
+| Hero specs | [`hero-specs.md`](hero-specs.md) | | Separator, homogenizer, aseptic filler, palletizer. The models came in phases 3–5. |
+| Hero models (phase 5) | `public/models/hero/separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` | 113, 134, 131, 54 KB | Own work, plain grey, at the grey boxes' size with every moving node the scene drives; AO baked into the vertex colours and the geometry meshopt-compressed. The scene loads them by default since phase 5 (`src/scene/equipment/heroes.ts`); `?greybox` keeps the grey boxes. See [hero-specs.md](hero-specs.md#phase-5-final-models). |
 
 Vite copies `public/` to the build as it is. Load files through the base URL, so the same code works in dev and on Vercel (`/`) and on GitHub Pages (`/simulation-milk-process/`):
 
@@ -65,7 +65,11 @@ Check a model's triangles with `node assets/scripts/glb-stats.mjs <file> --max-t
 
 ## Baked ambient occlusion (heroes)
 
-With one shadow-casting light, the contact shadows inside a machine come from a bake. For each hero:
+With one shadow-casting light, the contact shadows inside a machine come from a bake.
+
+**The heroes we have (phase 5)** are made in code, with no UVs or textures, so their AO goes into the vertex colours instead of an occlusion texture: `make-heroes.mjs` cuts every face into cells of 0.12 m or less (`AO_CELL_M`) so a face has vertices to shade across, then `bakeAo()` casts 32 cosine-weighted rays from each vertex over the hemisphere about its normal (a fixed Fibonacci set, so every run gives the same bytes), each looking 0.4 m. A ray blocked at distance t takes 1 − t/0.4 of its share; full occlusion takes 85% of the light (`AO`). The floor (y 0) blocks too, and the glass neither blocks nor takes shade. Each rigid body shades only itself: the static `body_*` meshes as one, each moving node on its own, so no shadow is left where a moving part no longer is. glTF's `COLOR_0` is linear, so the factor multiplies the colour as light would. It darkens direct light as well as ambient, which a texture in the occlusion slot would not; at 0.85 the corners stay readable.
+
+**A hero modelled in Blender** bakes its AO to a texture instead:
 
 1. Give the model one UV map with no overlaps (a second UV map is not needed; three.js reads the occlusion map from the UV set glTF names).
 2. Bake ambient occlusion in Cycles (128 samples or more) to a 1024² image.
@@ -74,6 +78,8 @@ With one shadow-casting light, the contact shadows inside a machine come from a 
 ## Compression (phase 5)
 
 Leave GLBs uncompressed until phase 5, so they stay easy to inspect. Then:
+
+**Done for the heroes in phase 5:** `make-heroes.mjs` writes each model with GLTFExporter, then compresses its geometry with glTF-Transform's `EXT_meshopt_compression` (`compress()`, required, method `quantize` with no quantization step), so the files are lossless: every position, normal, colour, node transform and name decodes as it was built, and only the triangles' starting vertex may turn (same winding), which `make-heroes.test.mjs` checks. The files shrink to 31–40% (separator 285 → 113 KB, homogenizer 339 → 134 KB, filler 428 → 131 KB, palletizer 135 → 54 KB). Quantizing (`KHR_mesh_quantization`) would shrink them further but moves the scale into the node transforms, which the moving nodes must not have (scale 1, hero-specs.md). The dev dependencies are `@gltf-transform/core` and `@gltf-transform/extensions` 4.5.1 and `meshoptimizer` 1.3.0, pinned. The app's loader (`src/scene/equipmentHost.ts`) sets three's `MeshoptDecoder`; the models have no textures, so KTX2 is not needed yet. The vehicles and the Kenney pieces stay uncompressed (under 140 KB each).
 
 - **Geometry:** meshopt (`EXT_meshopt_compression`). three.js' decoder is plain JavaScript (`three/addons/libs/meshopt_decoder.module.js`), so there is nothing extra to host. Draco also works but needs its wasm decoder copied to `public/`.
 - **Textures:** KTX2 / Basis Universal (`KHR_texture_basisu`): UASTC for normal maps, ETC1S for base colour and ORM. This cuts GPU memory, not just download size. `KTX2Loader` needs `three/examples/jsm/libs/basis/` copied to `public/` and `detectSupport(renderer)`.
@@ -102,9 +108,9 @@ For every model we make, including any the developer models by hand:
 | `node assets/scripts/glb-stats.mjs <file.glb> [--max-triangles N] [--json]` | Parses the GLB header and JSON chunk, then prints the node tree, meshes and primitives, triangles per mesh and in total, world bounds in metres, materials, textures, and the sizes of embedded images (PNG, JPEG, WebP, KTX2). It warns about the rules above that it can check from the file. Exit 1 if over `--max-triangles`, 2 for an unreadable file. It treats the file as untrusted data: it only parses it, never opens the URIs it names, and escapes its strings before printing them. It has no dependencies. |
 | `node assets/scripts/glb-load-check.mjs <file.glb>... [--port 5186] [--shots <dir>]` | Loads each GLB with GLTFLoader at the pinned three.js in Playwright's Chromium and renders it once. Fails on a load error, a 404 (a missing texture, say) or any console error. It serves only three.js and each model's own folder, on 127.0.0.1:5186, and stops when done. Needs `npm ci`. |
 | `node assets/scripts/make-vehicles.mjs [--out <dir>]` | Builds the truck and the forklift from boxes and cylinders with three.js and writes them with GLTFExporter to `public/models/vehicles/`. Same bytes on every run. |
-| `node assets/scripts/make-heroes.mjs [--out <dir>]` | Builds the four hero block-outs the same way, round each machine origin from [hero-specs.md](hero-specs.md), and writes them to `public/models/hero/`. Same bytes on every run. |
+| `node assets/scripts/make-heroes.mjs [--out <dir>]` | Builds the four hero models the same way, round each machine origin from [hero-specs.md](hero-specs.md), with their faces cut for the AO, bakes the AO into the vertex colours, compresses the geometry with meshopt and writes them to `public/models/hero/`. About 4 s. Same bytes on every run. |
 | `node assets/scripts/make-textures.mjs [--out <dir>]` | Draws the carton, tray and pallet prints as SVG and renders them to PNG in Playwright's Chromium, into `public/textures/`. The page loads nothing from the network. Same bytes on every run with the pinned Playwright. |
-| `npm run test:assets` | Runs every `assets/scripts/*.test.mjs` with Node's test runner, also in `npm run check` and CI: `glb-stats` on GLBs built in memory (including broken and hostile ones), `glb-load-check`'s server, URL filter and command line, the vehicles (size, facing, nodes, budget, and that the committed files match the script), the hero block-outs (size and envelope, node names and rest positions, budget, nozzles, the moving parts seen from their stage camera and kept in their envelope through their travel, and the committed files byte for byte) and the textures (size and budget). |
+| `npm run test:assets` | Runs every `assets/scripts/*.test.mjs` with Node's test runner, also in `npm run check` and CI: `glb-stats` on GLBs built in memory (including broken and hostile ones), `glb-load-check`'s server, URL filter and command line, the vehicles (size, facing, nodes, budget, and that the committed files match the script), the hero models (size and envelope, node names and rest positions, budget, nozzles, the moving parts seen from their stage camera and kept in their envelope through their travel, the baked AO, the lossless compression, and the committed files byte for byte) and the textures (size and budget). |
 
 ## Kenney kits: phase-1 check (2026-10-12)
 
