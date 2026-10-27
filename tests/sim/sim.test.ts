@@ -472,13 +472,14 @@ describe('createSim: commands', () => {
     expect(snap.log.length).toBe(logBefore + 2);
   });
 
-  it('triggerScenario logs a warning that fault scenarios arrive in phase 5, and changes nothing else', () => {
+  it('triggerScenario starts the run and logs it, and changes no stage before the next step (scenarios.ts, phase 5)', () => {
     const sim = createSim(plantConfig);
     const before = sim.snapshot();
     sim.dispatch({ type: 'triggerScenario', id: 'uhtTempDrop' });
     const snap = sim.snapshot();
     expect(snap.log.length).toBe(before.log.length + 1);
-    expect(snap.log[0].kind).toBe('warn');
+    expect(snap.log[0]).toMatchObject({ kind: 'warn', message: 'Steam supply dips: the UHT outlet falls toward 135.5 °C' });
+    expect(snap.scenarios.runs.map((run) => run.id)).toEqual(['uhtTempDrop']);
     expect(snap.stages).toEqual(before.stages);
     expect(snap.timeS).toBe(before.timeS);
   });

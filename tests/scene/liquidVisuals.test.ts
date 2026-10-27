@@ -5,6 +5,7 @@ import {
   GAUGE_FULL_SCALE_BAR,
   heatGlowFrac,
   needleAngleRad,
+  STEAM_DIP_FRAC,
   steamFrac,
   tankFillFrac,
   uhtModeOf,
@@ -147,6 +148,15 @@ describe('steam and vapour', () => {
     expect(steamFrac(inMode('divert'))).toBe(1);
     for (const mode of ['cip', 'sterilize', 'aic'] as const) expect(steamFrac(inMode(mode)), mode).toBe(0);
     expect(steamFrac(inMode('production', 0))).toBe(0);
+  });
+
+  it('only sputters while the steam supply dips (the UHT temperature drop scenario), until its run stops acting', () => {
+    const dip = inMode('divert');
+    const run = { run: 1, id: 'uhtTempDrop' as const, variant: null, startedS: 0, endedS: null, following: true, summary: 'Diverting', log: [] };
+    dip.scenarios = { runs: [run], unavailable: {} };
+    expect(steamFrac(dip)).toBe(STEAM_DIP_FRAC);
+    dip.scenarios = { runs: [{ ...run, endedS: 180 }], unavailable: {} };
+    expect(steamFrac(dip)).toBe(1);
   });
 
   it('sizes the flash vessel’s vapour from stage 5’s waterRemovedLph', () => {

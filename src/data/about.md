@@ -35,6 +35,23 @@ So the quarantine holds a week of output, about 2,500 pallets. A truck comes eve
 
 A plant that started empty would release nothing for a week: the first batch would leave quarantine on day 8, and every truck until then would find no stock. So the model opens on day 8 at 06:00 with a week of history: 42 batches on hold and 634 pallets in stock, two days of cover ([D11](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d11-opening-state)).
 
+## Fault scenarios
+
+The Scenarios menu in the top bar starts six faults, alone or together, and Reset puts them right. Each one plays out through the plant's own rules, so what it causes downstream is the model's answer, not a recording:
+
+- UHT temperature drop: the steam supply dips and the outlet falls toward 135.5 °C. Within 3 s B* is below 1 and the plant diverts, then cleans and re-sterilizes for 113 min while the fillers drain the aseptic tank.
+- Filler breakdown: a jammed sealing jaw stops a filler for an hour. The aseptic tank takes the milk it no longer draws until it is 90% full, and then the UHT plant drops to half flow.
+- Sterile-air filter failure: a process deviation at the aseptic tank. The batches filled until the filter is replaced, 2 h later, stay under investigation and are judged with a 5% chance per sample of a spoiled one.
+- Failed incubation: the oldest batch on hold fails at once. It is blocked, and destroyed a day later.
+- Homogenizer pressure loss: an hour at 50 bar leaves the fat globules too large. The batches filled meanwhile fail the sensory check a week later, when their incubation ends.
+- Demand spike or late trucks: twelve extra trucks in an hour run the stock down and queue in the yard; or no truck comes for nearly 7 hours, then four arrive at once.
+
+A banner over the 3D view follows the newest scenario, and its log lists every step with why it happened. The sizes of the faults are fixed sim assumptions ([D15](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d15-phase-5-fault-scenario-defaults)).
+
+## The guided tour
+
+Tour, at the top of the stage list, flies the camera through the ten stages in order, 18 s at each, about 3 minutes in all, with two lines on what happens there. A click on a stage or the plant, Escape, or Stop ends it.
+
 ## Accepted simplifications
 
 - Milk moves as plug flow, with no pressure drop, viscosity effects or fouling.
@@ -42,6 +59,8 @@ A plant that started empty would release nothing for a week: the first batch wou
 - One product and one pack size.
 - Cleaning is a timed machine state, not liquid moving through the pipes.
 - Failures follow simple random rates, not real plant data.
+- The fault scenarios are scripted, each with one fixed size and duration.
+- The machines are simplified models made in code, shaded with baked ambient occlusion, not drawings of real equipment.
 - A full CIP runs only after a divert; real plants also clean at the end of each production run.
 - Demand is a truck of 22 pallets at a fixed interval, standing in for random daily orders.
 - Packs, trays and pallets are counts. The 3D view moves a sample of them, not every pack.

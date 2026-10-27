@@ -7,7 +7,12 @@
 //
 // The plant opens on day 8 with a week of batches on hold and released stock from before them (D11):
 // history() makes them, each from one shift of a filler's breakdowns drawn as the live fillers draw them.
-import { dayToS, sToH, type BatchSnapshot, type BatchStatus, type PlantConfig, type QaResult } from '../../contracts';
+//
+// Two fault scenarios put batches under investigation (phase 5): those filled while the sterile-air filter
+// is down spoil with scenarios.filterFailurePerPack per sample instead; those filled from milk homogenized at
+// too low a pressure fail a sensory check for a cream layer when their incubation ends. The failed
+// incubation scenario fails the oldest batch on hold at once.
+import { dayToS, sToH, type BatchFlag, type BatchSnapshot, type BatchStatus, type PlantConfig, type QaResult } from '../../contracts';
 import type { QueuedEvent } from '../eventQueue';
 import { formatDayTime } from '../log';
 import type { Rng } from '../rng';
@@ -36,6 +41,9 @@ export interface Batch {
   /** Restarts of its filler during its shift, each owing after-stop samples. */
   restarts: number;
   qaResult: QaResult;
+  /** Why it is under investigation (phase 5), and the creaming risk of its milk if that is one reason. */
+  flags: Set<BatchFlag>;
+  creamingRiskPct: number;
 }
 
 /** A batch of released pallets as the warehouse receives it. */
@@ -69,6 +77,15 @@ export interface Quality {
   /** At a shift change: each filler's batch closes and goes on hold, and a new one opens. */
   changeShift(atS: number): void;
   setQaResult(batchId: number, result: 'pass' | 'fail', atS: number): void;
+  /**
+   * Starts or ends an investigation (phase 5): while one runs, every batch filling, and every batch that opens,
+   * carries its flag. Starting returns the ids of the batches it flagged now.
+   */
+  setInvestigation(flag: BatchFlag, active: boolean, creamingRiskPct?: number): number[];
+  /** The batch on hold whose incubation ends first, or undefined if none is on hold. */
+  oldestOnHold(): Batch | undefined;
+  /** A sample of the batch spoiled (failed incubation scenario): blocked at once. */
+  failIncubation(batchId: number, atS: number): void;
   onEvent(event: QueuedEvent): boolean;
   /** The batches in quarantine, oldest first. */
   quarantine(): Batch[];
@@ -115,6 +132,8 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
   const shelfLifeS = dayToS(product.shelfLifeDays);
   const samplesPerShift = Math.round(q.batchS / q.sampleEveryS);
   const batches = new Map<number, Batch>();
+  /** Investigations under way, with the creaming risk for 'creaming'. */
+  const investigations = new Map<BatchFlag, number>();
   let nextId = 1;
   let released = 0;
   let blocked = 0;
@@ -137,9 +156,18 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
       samples: 0,
       restarts: 0,
       qaResult: 'pending',
+      flags: new Set(),
+      creamingRiskPct: 0,
     };
     batches.set(batch.id, batch);
     return batch;
+  }
+
+  function flag(batch: Batch, which: BatchFlag, creamingRiskPct: number): boolean {
+    if (batch.flags.has(which)) return false;
+    batch.flags.add(which);
+    if (which === 'creaming') batch.creamingRiskPct = Math.max(batch.creamingRiskPct, creamingRiskPct);
+    return true;
   }
 
   /** Puts a finished batch's packs on pallets: full ones and a part-full last one (D1). */
@@ -201,7 +229,7 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
   function block(batch: Batch, atS: number, why: string): void {
     batch.status = 'blocked';
     blocked += 1;
-    scheduler.log(atS, 'bad', `Batch ${batch.id} ${why}: ${formatPallets(batch.pallets)} blocked`);
+    scheduler.log(atS, 'bad', `Batch ${batch.id} ${why}: ${formatPallets(batch.pallets)} blocked`, { topic: 'batchBlocked', batchId: batch.id });
     // A batch still filling keeps its pallets in quarantine until it closes, then they wait their time like the rest.
     if (batch.endS <= atS) scheduleDestruction(batch, atS);
   }
@@ -210,7 +238,10 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
     batch.status = 'released';
     released += 1;
     batches.delete(batch.id);
-    scheduler.log(atS, 'ok', `Batch ${batch.id} passed incubation: ${formatPallets(batch.pallets)} released to the warehouse`);
+    scheduler.log(atS, 'ok', `Batch ${batch.id} passed incubation: ${formatPallets(batch.pallets)} released to the warehouse`, {
+      topic: 'batchReleased',
+      batchId: batch.id,
+    });
     hooks.onRelease({ batchId: batch.id, pallets: batch.pallets, bestBeforeS: batch.bestBeforeS }, atS);
   }
 
@@ -256,10 +287,22 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
               atS,
               'info',
               `Batch ${batch.id} (filler ${fillerName(batch)}) closed: ${formatPallets(batch.pallets)} on hold until ${formatDayTime(batch.releaseAtS)}`,
+              { topic: 'batchClosed', batchId: batch.id },
             );
           }
         }
-        openBatchIds[filler] = newBatch(filler, atS, atS + q.batchS, 'filling').id;
+        const opened = newBatch(filler, atS, atS + q.batchS, 'filling');
+        openBatchIds[filler] = opened.id;
+        // A batch that opens while an investigation runs is filled from the same suspect milk.
+        for (const [which, riskPct] of investigations) {
+          if (!flag(opened, which, riskPct)) continue;
+          const why = which === 'sterileAir' ? 'the sterile-air filter is down' : `the homogenizer is down (creaming risk ${Math.round(riskPct)}%)`;
+          scheduler.log(atS, 'warn', `Batch ${opened.id} (filler ${fillerName(opened)}) opened while ${why}: under investigation`, {
+            topic: 'batchFlagged',
+            batchId: opened.id,
+            flag: which,
+          });
+        }
       }
     },
     setQaResult(batchId, result, atS) {
@@ -273,20 +316,51 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
       if (result === 'fail') block(batch, atS, 'failed a QA sample');
       else scheduler.log(atS, 'ok', `QA passed batch ${batch.id}: released when its incubation ends, ${formatDayTime(batch.releaseAtS)}`);
     },
+    setInvestigation(which, active, creamingRiskPct = 0) {
+      if (!active) {
+        investigations.delete(which);
+        return [];
+      }
+      investigations.set(which, creamingRiskPct);
+      const flagged: number[] = [];
+      for (const id of openBatchIds) {
+        const batch = batches.get(id);
+        if (batch && batch.status !== 'blocked' && flag(batch, which, creamingRiskPct)) flagged.push(id);
+      }
+      return flagged;
+    },
+    oldestOnHold() {
+      let oldest: Batch | undefined;
+      for (const batch of batches.values()) if (batch.status === 'hold' && (!oldest || batch.releaseAtS < oldest.releaseAtS)) oldest = batch;
+      return oldest;
+    },
+    failIncubation(batchId, atS) {
+      const batch = batches.get(batchId);
+      if (!batch || batch.status !== 'hold') return;
+      batch.qaResult = 'fail';
+      block(batch, atS, 'failed incubation: a blown pack at the incubator check');
+    },
     onEvent(event) {
       if (event.type !== QUALITY_EVENTS.incubationOver && event.type !== QUALITY_EVENTS.destroyed) return false;
       const batch = batches.get((event.payload as BatchPayload).batchId);
       if (!batch) return true;
       if (event.type === QUALITY_EVENTS.incubationOver) {
         if (batch.status !== 'hold') return true;
-        const failChance = 1 - (1 - q.failurePerPack) ** batch.samples;
+        // A batch filled while the sterile-air filter was down spoils far more often (R10: spoilage comes in clusters).
+        const perPack = batch.flags.has('sterileAir') ? config.scenarios.filterFailurePerPack : q.failurePerPack;
+        const failChance = 1 - (1 - perPack) ** batch.samples;
         // Drawn for every batch, overridden or not, so a QA override doesn't shift the draws after it.
         const spoiled = rng.chance(failChance);
-        if (batch.qaResult === 'pass' || !spoiled) release(batch, event.timeS);
-        else block(batch, event.timeS, `failed incubation (a sample of ${batch.samples} spoiled)`);
+        const creamed = batch.flags.has('creaming') && batch.creamingRiskPct >= config.scenarios.sensoryFailAbovePct;
+        if (batch.qaResult === 'pass' || (!spoiled && !creamed)) release(batch, event.timeS);
+        else if (spoiled) block(batch, event.timeS, `failed incubation (a sample of ${batch.samples} spoiled)`);
+        else block(batch, event.timeS, `failed the sensory check: a cream layer (creaming risk ${Math.round(batch.creamingRiskPct)}%)`);
       } else if (batch.status === 'blocked') {
         batches.delete(batch.id);
-        scheduler.log(event.timeS, 'warn', `Batch ${batch.id}: ${formatPallets(batch.pallets)} left quarantine for destruction`);
+        scheduler.log(event.timeS, 'warn', `Batch ${batch.id}: ${formatPallets(batch.pallets)} left quarantine for destruction`, {
+          topic: 'batchDestroyed',
+          batchId: batch.id,
+        });
         hooks.onDestroyed(batch.pallets, event.timeS);
       }
       return true;
@@ -306,6 +380,8 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
         lastPalletPacks: batch.lastPalletPacks,
         samples: batch.samples,
         qaResult: batch.qaResult,
+        flags: [...batch.flags],
+        creamingRiskPct: batch.creamingRiskPct,
       })),
   };
 }

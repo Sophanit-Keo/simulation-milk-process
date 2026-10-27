@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -122,5 +122,17 @@
     "startStockPallets": 634,
     "truckLoadS": 1200,
     "dockDoors": 3
+  },
+  "scenarios": {
+    "steamFaultLagS": 15,
+    "fillerRepairS": 3600,
+    "filterReplaceS": 7200,
+    "filterFailurePerPack": 0.05,
+    "homogenizerFaultBar": 50,
+    "homogenizerRepairS": 3600,
+    "sensoryFailAbovePct": 50,
+    "spikeTrucks": 12,
+    "spikeEveryS": 300,
+    "lateTruckDelayS": 24000
   }
 }

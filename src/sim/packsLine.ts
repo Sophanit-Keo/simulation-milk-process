@@ -10,9 +10,9 @@ import type { BatchSnapshot, Kpis, PacksSnapshot, PlantConfig, Status } from '..
 import type { Setpoints } from './core';
 import type { QueuedEvent } from './eventQueue';
 import type { FillerSupply } from './fillerStub';
-import { createFillers } from './packs/filler';
+import { createFillers, type Fillers } from './packs/filler';
 import { createPackaging } from './packs/packaging';
-import { createQuality } from './packs/quality';
+import { createQuality, type Quality } from './packs/quality';
 import type { Scheduler } from './packs/types';
 import { createWarehouse, type Warehouse } from './packs/warehouse';
 import type { Rng } from './rng';
@@ -78,6 +78,8 @@ export interface PacksLine {
   onEvent(event: QueuedEvent, setpoints: Readonly<Setpoints>): boolean;
   setQaResult(batchId: number, result: 'pass' | 'fail', atS: number): void;
   view(setpoints: Readonly<Setpoints>, timeS: number): PacksView;
+  /** The fillers, the batches and the warehouse, which the fault scenarios act on (scenarios.ts, phase 5). */
+  readonly parts: { readonly fillers: Fillers; readonly quality: Quality; readonly warehouse: Warehouse };
 }
 
 export function createPacksLine(config: PlantConfig, rng: Rng, scheduler: Scheduler, openS: number): PacksLine {
@@ -160,6 +162,7 @@ export function createPacksLine(config: PlantConfig, rng: Rng, scheduler: Schedu
 
   return {
     fillers,
+    parts: { fillers: units, quality, warehouse },
     get totals() {
       return totals();
     },

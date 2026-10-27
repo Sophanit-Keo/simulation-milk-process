@@ -241,12 +241,21 @@ for (const path of ['/', '/?mock']) {
       await expect(page.getByTestId('pause'), 'a jump leaves the clock running').toHaveAttribute('aria-pressed', 'false');
     });
 
-    test('the scenario menu is there but disabled until phase 5', async ({ page }) => {
+    test('the scenario menu opens from the top bar and Escape closes it, giving focus back; on the mock every fault is unavailable', async ({ page }) => {
       await page.goto(path);
+      await waitForClock(page);
       const menu = page.getByTestId('scenario-menu');
-      await expect(menu).toBeVisible();
-      await expect(menu).toBeDisabled();
-      await expect(menu).toHaveAttribute('title', 'Fault scenarios arrive in phase 5');
+      const faults = page.locator('#scenario-menu-list [role="menuitem"][data-scenario]');
+      await menu.click();
+      await expect(menu).toHaveAttribute('aria-expanded', 'true');
+      await expect(faults).toHaveCount(7);
+      // The live model can start every fault as it opens; the mock snapshot plays none (e2e/scenarios.spec.ts).
+      const disabled = await faults.evaluateAll((items) => items.map((item) => item.getAttribute('aria-disabled') === 'true'));
+      expect(disabled).toEqual(Array(7).fill(path === '/?mock'));
+      await page.keyboard.press('Escape');
+      await expect(menu).toHaveAttribute('aria-expanded', 'false');
+      await expect(faults.first()).toBeHidden();
+      await expect(menu).toBeFocused();
     });
   });
 }

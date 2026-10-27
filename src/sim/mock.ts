@@ -11,6 +11,7 @@ import {
   hToS,
   minToS,
   pctToFrac,
+  SCENARIO_IDS,
   sToH,
   STAGE_IDS,
   type Kpis,
@@ -19,6 +20,7 @@ import {
   type LiquidSnapshot,
   type PacksSnapshot,
   type PlantConfig,
+  type ScenariosSnapshot,
   type Sim,
   type StageId,
   type Status,
@@ -96,6 +98,12 @@ interface MockState extends MockPulse {
   line: Record<LinePointId, LinePoint>;
   liquid: LiquidSnapshot;
 }
+
+/** The mock plays no fault scenarios: the menu shows each one, unavailable, and why. A fresh object each snapshot. */
+const mockScenarios = (): ScenariosSnapshot => ({
+  runs: [],
+  unavailable: Object.fromEntries(SCENARIO_IDS.map((id) => [id, 'The mock snapshot plays no fault scenarios'])),
+});
 
 export function createMockSim(config: PlantConfig): Sim {
   const { asepticTank: tank, uht, fillers } = config;
@@ -354,7 +362,7 @@ export function createMockSim(config: PlantConfig): Sim {
     dispatch: (command) => core.dispatch(command),
     snapshot() {
       const { values, kpis, shown, line, liquid, packs } = stateAt(core.timeS);
-      return core.snapshot(toStages(values, (id) => shown[id]), kpis, line, liquid, packs);
+      return core.snapshot(toStages(values, (id) => shown[id]), kpis, line, liquid, packs, mockScenarios());
     },
   };
 }

@@ -1,14 +1,17 @@
 import { SPEEDS, type Command, type Hud, type SetpointKey, type Snapshot, type StageInfo, type ViewBus } from '../contracts';
 import { createAbout } from './about';
 import { createBatchList } from './batchList';
-import { onPress } from './dom';
+import { el, onPress } from './dom';
 import { createEventLog } from './eventLog';
 import { createKpiStrip } from './kpiStrip';
+import { createScenarioLog } from './scenarioLog';
+import { createScenarioMenu } from './scenarioMenu';
 import { createSetpointSlider, SETPOINT_SLIDERS } from './setpointSlider';
 import { createStagePanel, type PanelPart } from './stagePanel';
 import { createStageRail } from './stageRail';
 import { createStockList } from './stockList';
 import { createTopBar, speedKey } from './topBar';
+import { createTour } from './tour';
 import { createTrendChart, TREND_CHARTS } from './trendChart';
 import { createTrendHistory } from './trends';
 
@@ -64,6 +67,7 @@ export function createHud(
     return node;
   };
   const barRoot = part('#bar');
+  const viewRoot = part('.view');
   const railRoot = part('#rail');
   const logRoot = part('#log');
   const panelRoot = part('#panel');
@@ -102,6 +106,14 @@ export function createHud(
   };
 
   const bar = createTopBar(barRoot, send, signal);
+  const scenarioLog = createScenarioLog(viewRoot, signal);
+  const scenarioMenu = createScenarioMenu({
+    dispatch: send,
+    onStarted: (stage) => bus.emit({ type: 'selectStage', stage }),
+    onOpenLog: () => scenarioLog.open(),
+    signal,
+  });
+  barRoot.append(scenarioMenu.root);
   const about = createAbout(barRoot, signal);
   const rail = createStageRail(railRoot, stages, (stage) => bus.emit({ type: 'selectStage', stage }), signal);
   const log = createEventLog(logRoot);
@@ -135,6 +147,16 @@ export function createHud(
   const overview = railRoot.querySelector<HTMLButtonElement>('button[data-testid="overview"]');
   if (overview) onPress(overview, () => bus.emit({ type: 'overview' }), signal);
 
+  // The guided tour starts from the rail head too, before "Whole plant": it walks the rail's stages in order.
+  const tourButton = el('button', 'link tour-open', 'Tour');
+  tourButton.type = 'button';
+  tourButton.dataset.testid = 'tour';
+  tourButton.title = 'Guided tour: stages 1 to 10 with a caption each, about 3 minutes';
+  tourButton.setAttribute('aria-pressed', 'false');
+  if (overview) overview.before(tourButton);
+  else railRoot.querySelector('.rail-head')?.append(tourButton);
+  const tour = createTour({ bus, stages, view: viewRoot, button: tourButton, signal });
+
   const doc = root.ownerDocument;
   doc.addEventListener(
     'keydown',
@@ -167,6 +189,9 @@ export function createHud(
       lastSnapshot = snapshot;
       history.record(snapshot);
       bar.update(snapshot);
+      scenarioMenu.update(snapshot);
+      scenarioLog.update(snapshot);
+      tour.update(performance.now());
       rail.update(snapshot);
       log.update(snapshot);
       panel.update(snapshot);
@@ -178,6 +203,10 @@ export function createHud(
       listeners.abort();
       stopListening();
       bar.dispose();
+      scenarioMenu.dispose();
+      scenarioLog.dispose();
+      tour.dispose();
+      tourButton.remove();
       about.dispose();
       rail.dispose();
       log.dispose();

@@ -34,7 +34,7 @@ export interface EquipmentContext {
   loadTexture?(path: string): Promise<Texture>;
   /**
    * Optional: swap the hero machines' grey boxes (separator, homogenizer, fillers, palletizer) for their
-   * models in public/models/hero once those load (heroes.ts). Off by default until phase 5; ?heroes turns it on.
+   * models in public/models/hero once those load (heroes.ts). On in the app since phase 5; ?greybox turns it off.
    */
   readonly heroModels?: boolean;
 }

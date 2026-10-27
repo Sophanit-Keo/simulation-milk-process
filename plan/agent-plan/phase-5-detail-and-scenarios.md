@@ -34,10 +34,21 @@ Swap the four hero models in for their grey boxes, make all six fault scenarios 
 
 ## Exit checklist
 
-- [ ] All four hero models are in place, and 60 fps holds.
-- [ ] All six scenarios start from the menu, show their visual reaction, and log what happened.
-- [ ] The guided tour runs about 3 minutes, with captions.
-- [ ] Scenario tests pass, and the same seed gives the same log.
+- [ ] All four hero models are in place, and 60 fps holds. *(In place; 60 fps needs a real GPU.)*
+- [x] All six scenarios start from the menu, show their visual reaction, and log what happened.
+- [x] The guided tour runs about 3 minutes, with captions.
+- [x] Scenario tests pass, and the same seed gives the same log.
+
+**Status (2026-10-27, all lanes):**
+
+- **`process`.** A script for each scenario, [H104–H110](../hand-calculations.md#phase-5-scenario-scripts): trigger, state changes and KPIs with their sim times, what the viewer sees, and why. The ten scenario keys and the rules without a key are [D15](../DECISIONS.md#d15-phase-5-fault-scenario-defaults); the [default settings](../06-simulation-model.md#default-settings) and the fault table follow. The tour captions (two lines a stage, `src/data/stages.json`) are final, and the About text gained the fault scenarios, the tour and two simplifications.
+- **`lead`.** Contracts v4, additive only: `triggerScenario` with a variant and `resetScenarios`, the snapshot's `scenarios` (runs and why a scenario cannot start), log entries' `scenario` and `why`, batches' `flags` and `creamingRiskPct`. `plant.json` schema 6 with the `scenarios` section. New pinned dev dependencies for the hero compression: `@gltf-transform/core`, `@gltf-transform/extensions` 4.5.1 and `meshoptimizer` 1.3.0 (D15).
+- **`sim`.** `src/sim/scenarios.ts`: all six behind `triggerScenario`, each run claiming the log entries it causes and saying why, followed until its consequences are over; Reset puts every running fault right. The steam dip lags the outlet toward 135.5 °C and cuts the step at the divert-limit crossing.
+- **`qa`.** `tests/sim/scenarios.test.ts` runs every script (H104–H110, the 8 s hold too), the resets, the reasons a scenario cannot start and the same seed giving the same log. In the browser, `e2e/scenarios.spec.ts` starts a filler breakdown from the menu and follows it through the banner, the event log, the scenario log and Reset, checks the mock's menu, and starts and stops the tour three ways; the smoke test loads the heroes by default and none with `?greybox`. The whole suite passes but for `shell.spec.ts`'s pixel-ratio test, which fails the same way since the phase 3 merge on this machine's Chromium 153. Perf with the heroes: 207 draw calls and 232,346 triangles at the overview ([perf baseline](../../tests/perf/baseline.md#phase-5-hero-models)).
+- **`assets`.** The four heroes finished in `assets/scripts/make-heroes.mjs`: faces cut into 0.2 m cells, AO baked into the vertex colours, geometry meshopt-compressed losslessly. 2,048 to 6,252 triangles and 43 to 97 KB each, node names and rest transforms unchanged ([hero-specs.md](../../assets/hero-specs.md#phase-5-final-models), licences in [LICENSES.md](../../assets/LICENSES.md)).
+- **`scene`.** The heroes load by default with three's meshopt decoder (`?greybox` keeps the grey boxes). Fault visuals: the divert valve's lamp and the reject tank as before, the steam injector sputters while the steam dips, the homogenizer's needle drops to 50 bar, the batches under investigation blink in quarantine and the blocked ones turn red, trucks queue in the yard beside the docks. The tour flies to each stage and orbits slowly while its caption shows (not with reduced motion).
+- **`ui`.** The Scenarios menu in the top bar (each fault, or why it cannot start now; Reset; the scenario log), the banner over the 3D view, the scenario log dialog with every step and its why, the tour's caption with its progress and Stop, the stage 6 sterile-air row and the batch list's investigation fact. The pipe-colour legend sits over the 3D view.
+- **Open.** 60 fps needs a real GPU ([To do on a real GPU](../../tests/perf/baseline.md#to-do-on-a-real-gpu)); the developer reviews D15 and its deviations (per-vertex AO, no KTX2).
 
 ## Watch for
 

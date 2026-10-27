@@ -1,6 +1,7 @@
 // Builds every equipment module into the scene and owns the materials they share. world.ts adds
 // picking, labels and status lamps around the machines (equipmentLabels.ts, picking.ts).
 import * as THREE from 'three';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { Snapshot } from '../contracts';
 import { EQUIPMENT_FACTORIES, type Equipment, type EquipmentContext, type EquipmentFactory, type MaterialName } from './equipment';
@@ -68,7 +69,8 @@ export function createEquipmentHost(
 
   // One load per file; every caller gets its own clone of the loaded scene, which shares the file's
   // geometries, materials and textures. The host owns those and frees them.
-  const loader = new GLTFLoader();
+  // The hero models' geometry is meshopt-compressed (assets/README.md, "Compression"); the decoder is plain JS.
+  const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   const loads = new Map<string, Promise<THREE.Object3D>>();
   const loadModel = (path: string): Promise<THREE.Object3D> => {
     let load = loads.get(path);

@@ -61,6 +61,8 @@ export function createEventLog(root: HTMLElement): EventLog {
     if (entry.timeS >= 0) time.dateTime = `PT${Math.floor(entry.timeS)}S`;
     // Spaces keep "Warning day 1 · 06:00 UHT plant throttled" apart in the item's text; the grid ignores them.
     li.append(lamp, ' ', time, ' ', el('span', 'log-text', entry.message));
+    // What a fault scenario caused says why (contracts v4); the scenario log shows it in full.
+    if (entry.why) li.title = entry.why;
     return li;
   }
 

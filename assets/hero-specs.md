@@ -159,7 +159,7 @@ The Blender checklist in [README.md](README.md#export-checklist-blender) applies
 | 2 | This spec. |
 | 3 | Block-outs: the bounds, the named nodes at their rest positions, no detail. `scene` can test the swap with them. Done: see [Phase 3 block-outs](#phase-3-block-outs). |
 | 4 | First-pass GLBs with materials. |
-| 5 | Final models, baked AO, compression; `scene` swaps them in. |
+| 5 | Final models, baked AO, compression; `scene` swaps them in. Done: see [Phase 5 final models](#phase-5-final-models). |
 
 ## Phase 3 block-outs
 
@@ -201,7 +201,7 @@ Screenshots (hero with the grey box as a red wireframe, from close by; and the h
 
 ### What `scene` needs for the swap (phase 5)
 
-**Phase 4:** done behind a flag. With `?heroes` in the URL, `src/scene/equipment/heroes.ts` follows steps 1–4 below: it loads each model into its machine's root (filler B mirrored), hides the grey parts it replaces and keeps the ones it leaves out (the homogenizer's needles, the palletizer's pallet and load), points the update code at the model's `bowl`, `piston_1` to `piston_3`, `reel`, `jaws` and `arm`, and turns shadows on for every mesh but the glass. A model that lacks one of those nodes is left out with a console warning, and the grey box stays. Without the flag nothing loads, so the grey boxes stay the default until phase 5 makes the swap permanent. `tests/scene/heroes.test.ts` checks the swap, and `e2e/smoke.spec.ts` that the four files load in the app without errors.
+**Phase 5:** the swap is the default; `?greybox` in the URL keeps the grey boxes (for comparison, or on a machine where the models are too heavy). **Phase 4:** done behind a flag. With `?heroes` in the URL, `src/scene/equipment/heroes.ts` follows steps 1–4 below: it loads each model into its machine's root (filler B mirrored), hides the grey parts it replaces and keeps the ones it leaves out (the homogenizer's needles, the palletizer's pallet and load), points the update code at the model's `bowl`, `piston_1` to `piston_3`, `reel`, `jaws` and `arm`, and turns shadows on for every mesh but the glass. A model that lacks one of those nodes is left out with a console warning, and the grey box stays. Without the flag nothing loads, so the grey boxes stay the default until phase 5 makes the swap permanent. `tests/scene/heroes.test.ts` checks the swap, and `e2e/smoke.spec.ts` that the four files load in the app without errors.
 
 1. **Load and place.** `ctx.loadModel('hero/<file>')` into the machine's root group, as is: no offset, rotation or scale, except filler B, which takes `scale.z = -1`. The second filler should be a clone of the first load (`loadModel` already returns clones of one load).
 2. **Hide the grey parts and drop their node names.** With the grey box and the hero both in the root, `root.getObjectByName('bowl')` (and `piston_N`, `reel`, `jaws`, `arm`) finds the **grey** node first, because the grey children come first. Either remove the grey parts from the root or look the nodes up in the loaded scene (`hero.getObjectByName(...)`), then point the existing update code at those nodes. The update code then works unchanged: it writes only `bowl.rotation.y`, `piston_N.position.z`, `reel.rotation.z`, `jaws.position.y` and `arm.rotation.y`.
@@ -214,4 +214,23 @@ Not done in the block-outs, for phase 4 and 5:
 
 - `arm_lift`'s rod is 0.73 m long and its top is hidden in the boom's head, so it stays in the head only for the first 0.20 m of lift. Lowering the full 1.20 m needs a telescopic rod (a second node under `arm_lift`) or a longer rod above the boom, which would break the 2.57 m height limit.
 - `jaw_1` and `jaw_2`, and `arm_wrist` and the clamps, are in place but not driven yet.
-- No textures, UVs or baked AO yet (phase 4 and 5), and no `.blend` sources: the models come from the script.
+- No textures, UVs or `.blend` sources: the models come from the script. Phase 5 bakes their AO into the vertex colours instead (below).
+
+## Phase 5 final models
+
+The block-outs above, finished in the same script for the swap: every box face cut into a grid and every cylinder into rings of 0.2 m or less, the AO baked into the vertex colours, and the geometry meshopt-compressed (README, [Baked ambient occlusion](README.md#baked-ambient-occlusion-heroes) and [Compression](README.md#compression-phase-5)). Shapes, sizes, materials, node names and rest transforms are the block-outs', so everything in [Phase 3 block-outs](#phase-3-block-outs) still holds; only the triangle counts and file sizes change.
+
+| File | Triangles (block-out) | Vertices | Meshes (draw calls), materials | Size, compressed (uncompressed) |
+|---|---|---|---|---|
+| `separator.glb` | 4,592 (1,944) | 4,709 | 3, 2 | 82.7 KB (195.9 KB) |
+| `homogenizer.glb` | 5,060 (2,328) | 5,439 | 5, 2 | 97.3 KB (226.5 KB) |
+| `aseptic-filler.glb` | 6,252 (1,116) | 5,174 | 7, 3 | 79.7 KB (220.5 KB) |
+| `palletizer.glb` | 2,048 (964) | 2,254 | 7, 2 | 42.7 KB (98.9 KB) |
+
+All four are within the budgets: at most 6,252 of 30,000 triangles, 7 of 20 meshes (under the 10 draw calls aimed for), 3 of 8 materials, and 97 KB of 2 MB. With the filler drawn twice the heroes come to 24,204 triangles a pass, 16,736 more than the block-outs (7,468), and the shadow pass draws them again. The first cut, 0.12 m cells, gave 49,964 a pass and took the overview to 280,986 triangles a frame, close to the 300,000 the README plans for; at 0.2 m the stage cameras show the same shading, since the AO varies over 0.4 m, for half the triangles ([perf baseline](../tests/perf/baseline.md#phase-5-hero-models)).
+
+What the AO shows: contact shading where the cabinets, crankcase and frames stand on their plinths and where those meet the floor, under the filler's control panel and outfeed hood, between the homogenizer's tie rods and in the gap round its pistons, under the separator's hood rim and in the corners of the palletizer's base. The moving parts shade only themselves (the bowl's lock ring and bolts, the reel's hub and bar), so the spin, stroke and swing leave no shadow behind.
+
+**Deviations from the plan**, for `lead`: the AO is per vertex, not a 1024² ORM texture, because the models have no UVs; and there is no KTX2 step, because they have no textures. A Blender hero would follow the README's texture bake and the Blender checklist instead.
+
+`glb-load-check` loads all four in Chromium with three's meshopt decoder: OK, no console errors. `make-heroes.test.mjs` also checks the bake (darker in corners and at the floor, never by more than 85%, open faces nearly untouched, no shade cast between bodies) and that the compressed files decode to exactly what the script built.

@@ -15,6 +15,7 @@ import {
 import stagesJson from '../../src/data/stages.json';
 import { expectWithin } from '../helpers/expectWithin';
 import { expectPacksMatchKpis, expectWellFormedPacks } from '../helpers/packsShape';
+import { expectWellFormedScenarios } from '../helpers/scenariosShape';
 import { plantConfig } from '../helpers/plantConfig';
 import { FIXTURES, loadFixture, recordFixture, writeFixture, type FixtureName } from './record';
 
@@ -68,10 +69,10 @@ const PHASE_4_KEYS: Readonly<Record<7 | 8 | 9 | 10, readonly string[]>> = {
   10: ['palletsInStock', 'daysOfCover', 'trucksAtDock', 'nextTruckS', 'trucksShipped', 'orderFillPct'],
 };
 
-/** Every shape rule of contracts v3 (src/contracts/snapshot.ts, packs.ts) that a consumer may rely on. */
+/** Every shape rule of contracts v4 (src/contracts/snapshot.ts, packs.ts, scenarios.ts) that a consumer may rely on. */
 function expectContracts(snap: Snapshot, where: string): void {
   expect(snap.version, `${where}: version`).toBe(CONTRACT_VERSION);
-  expect(CONTRACT_VERSION).toBe(3);
+  expect(CONTRACT_VERSION).toBe(4);
   expect(Number.isFinite(snap.timeS), `${where}: timeS`).toBe(true);
   expect(isSpeed(snap.speed), `${where}: speed ${snap.speed}`).toBe(true);
   expect(typeof snap.paused, `${where}: paused`).toBe('boolean');
@@ -90,6 +91,7 @@ function expectContracts(snap: Snapshot, where: string): void {
     for (const key of keys) expect(snap.stages[Number(id) as 1].values, `${where}: stage ${id}`).toHaveProperty([key]);
   }
   expectWellFormedPacks(snap, plantConfig, where);
+  expectWellFormedScenarios(snap, where);
   // Every row the info panel shows (stages.json) has its value in the snapshot.
   for (const stage of parseStages(stagesJson)) {
     for (const { key } of stage.values) expect(snap.stages[stage.id].values, `${where}: stage ${stage.id} row`).toHaveProperty([key]);

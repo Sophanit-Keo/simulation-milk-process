@@ -38,6 +38,11 @@ const SUN_DISTANCE_M = 120;
 const SHADOW_MAP_PX = 2048;
 /** Soft shadow edge in shadow-map texels. three r186 dropped PCFSoftShadowMap; PCFShadowMap with a radius replaces it. */
 const SHADOW_RADIUS = 3;
+/**
+ * During the guided tour the camera drifts round each stop once it has landed (OrbitControls' autoRotate,
+ * in its units of 2π/60 rad/s): 0.25 is 1.5° a second, about 25° over the tour's 18 s at a stop.
+ */
+const TOUR_ORBIT_SPEED = 0.25;
 
 /**
  * The 3D view: renderer, camera, orbit controls, one shadow-casting light, the floor and zones, the
@@ -46,7 +51,7 @@ const SHADOW_RADIUS = 3;
  * An overview event (the rail's "Whole plant") flies it back to the whole plant.
  */
 export interface WorldOptions {
-  /** Load the hero models in place of their grey boxes (?heroes, until phase 5 makes it the default). */
+  /** Load the hero models in place of their grey boxes (the app's default since phase 5; off with ?greybox). */
   heroModels?: boolean;
 }
 
@@ -127,9 +132,16 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
   const labels = createEquipmentLabels(equipmentHost.equipment, labelScene);
   const flight = createCameraFlight(scene, camera, controls, host);
 
+  // The guided tour (src/ui/tour.ts) drives the stops through selectStage; between flies the camera drifts.
+  let touring = false;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  controls.autoRotateSpeed = TOUR_ORBIT_SPEED;
+
   const takeCamera = (): void => {
     cameraTaken = true;
     flight.cancel();
+    // The viewer took the camera: the tour ends where it is.
+    if (touring) bus.emit({ type: 'tour', on: false });
   };
   const pickTargets: PickTarget[] = [
     ...equipmentHost.equipment.map((item) => ({ object: item.object, stage: item.stage, batchAt: item.batchAt?.bind(item) })),
@@ -161,6 +173,8 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
       cameraTaken = false;
     } else if (event.type === 'selectBatch') {
       for (const item of equipmentHost.equipment) item.selectBatch?.(event.batchId);
+    } else if (event.type === 'tour') {
+      touring = event.on;
     }
   });
 
@@ -247,7 +261,12 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
         cameraPositionM: () => camera.position.toArray(),
         info: () => renderer.info.render,
         equipmentIds: () => equipmentHost.equipment.map((item) => item.id),
-        equipmentState: (id) => equipmentHost.equipment.find((item) => item.id === id)?.debugState?.() ?? null,
+        equipmentState: (id) => {
+          const item = equipmentHost.equipment.find((one) => one.id === id);
+          const state = item?.debugState?.() ?? null;
+          // A hero machine also says once its model has swapped in (heroes.ts names it `<root>-hero`).
+          return item?.object.getObjectByName(`${item.object.name}-hero`) ? { ...state, hero: true } : state;
+        },
         pipeState: () => pipes.state(),
       })
     : null;
@@ -258,6 +277,7 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
     update(snapshot, realDtS) {
       picker.update();
       flight.update(realDtS); // before the controls, which then apply their limits and damping
+      controls.autoRotate = touring && !flight.flying && flight.focusStage !== null && !reducedMotion.matches;
       controls.update(realDtS);
       equipmentHost.update(snapshot, realDtS);
       // Paused means the plant's time stands still: the milk stops flowing with it (motionDtS is 0).

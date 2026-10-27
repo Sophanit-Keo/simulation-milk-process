@@ -2,7 +2,8 @@
 // not broken down, its rate is above 0 and the aseptic tank feeds it. Its time to the next breakdown is
 // random (exponential, D2) and counts only while it runs; a breakdown takes it into repair (the random part
 // of the repair time), then into cleaning, re-sterilizing its aseptic zone (the fixed part, D14), then it
-// runs again. Breakdowns, repairs and cleanings are queued events, so each happens at its own time.
+// runs again. Breakdowns, repairs and cleanings are queued events, so each happens at its own time. The
+// filler breakdown scenario (phase 5) breaks one down on demand, with a fixed repair time.
 //
 // Packs are whole: each filler carries the fraction of the pack it is forming from one cut of the liquid
 // line to the next, and the seal check rejects an even share of them (fillers.rejectFrac).
@@ -27,6 +28,8 @@ export interface FillerUnit {
   /** 'none' while it can run; 'repair' or 'cleaning' after a breakdown, until downUntilS. */
   down: 'none' | 'repair' | 'cleaning';
   downUntilS: number;
+  /** The queued event that ends the repair or cleaning now under way, so a stale one is ignored. */
+  downSeq: number;
   /** Whether it ran in the last cut of the liquid line, and whether the tank fed it then. */
   running: boolean;
   fed: boolean;
@@ -64,6 +67,10 @@ export interface Fillers {
   reconcile(nowS: number, ratePacksPerH: number): void;
   /** A queued filler event; false if the event is not a filler's. */
   onEvent(event: QueuedEvent, ratePacksPerH: number): boolean;
+  /** Breaks a filler down now with a repair of repairS, then re-sterilizing (filler breakdown scenario); false if it is down already. */
+  breakDownNow(index: number, nowS: number, repairS: number, ratePacksPerH: number): boolean;
+  /** Ends a repair now (a scenario reset): the filler goes on to re-sterilizing. False if it is not under repair. */
+  endRepairNow(index: number, nowS: number, ratePacksPerH: number): boolean;
   state(unit: FillerUnit, ratePacksPerH: number): FillerState;
   snapshot(unit: FillerUnit, nowS: number, openS: number, ratePacksPerH: number, batchId: number): FillerSnapshot;
 }
@@ -77,6 +84,7 @@ export function createFillers(config: PlantConfig, rng: Rng, scheduler: Schedule
     name: FILLER_NAMES[index] ?? String(index + 1),
     down: 'none',
     downUntilS: 0,
+    downSeq: -1,
     // The plant opens running (D8), so the first run is not a restart.
     running: true,
     fed: true,
@@ -111,14 +119,28 @@ export function createFillers(config: PlantConfig, rng: Rng, scheduler: Schedule
     unit.fault = scheduler.schedule<FillerPayload>(dueS, FILLER_EVENTS.fault, { filler: unit.index });
   }
 
-  function breakDown(unit: FillerUnit, nowS: number): void {
-    unit.fault = null;
+  /** Into repair for repairS (a random draw, D2, unless a scenario gives one), then into cleaning. */
+  function breakDown(unit: FillerUnit, nowS: number, repairS = rng.exponential(spec.repairRandomMeanS)): void {
+    cancelFault(unit);
     unit.breakdowns += 1;
     unit.down = 'repair';
-    const repairS = rng.exponential(spec.repairRandomMeanS);
     unit.downUntilS = nowS + repairS;
-    scheduler.schedule<FillerPayload>(unit.downUntilS, FILLER_EVENTS.repaired, { filler: unit.index });
-    scheduler.log(nowS, 'bad', `Filler ${unit.name} broke down: repair about ${formatMin(repairS + spec.repairFixedS)} with re-sterilizing`);
+    unit.downSeq = scheduler.schedule<FillerPayload>(unit.downUntilS, FILLER_EVENTS.repaired, { filler: unit.index }).seq;
+    scheduler.log(nowS, 'bad', `Filler ${unit.name} broke down: repair about ${formatMin(repairS + spec.repairFixedS)} with re-sterilizing`, {
+      topic: 'fillerDown',
+      filler: unit.index,
+    });
+  }
+
+  /** Repaired: re-sterilizing its aseptic zone for the fixed part of the repair (D14). */
+  function startCleaning(unit: FillerUnit, nowS: number): void {
+    unit.down = 'cleaning';
+    unit.downUntilS = nowS + spec.repairFixedS;
+    unit.downSeq = scheduler.schedule<FillerPayload>(unit.downUntilS, FILLER_EVENTS.cleaned, { filler: unit.index }).seq;
+    scheduler.log(nowS, 'info', `Filler ${unit.name} repaired: re-sterilizing its aseptic zone for ${formatMin(spec.repairFixedS)}`, {
+      topic: 'fillerRepaired',
+      filler: unit.index,
+    });
   }
 
   return {
@@ -161,18 +183,32 @@ export function createFillers(config: PlantConfig, rng: Rng, scheduler: Schedule
           if (event.seq === unit.fault?.seq && unit.down === 'none' && unit.toFailureRunS <= TIME_EPS_S) breakDown(unit, nowS);
           break;
         case FILLER_EVENTS.repaired:
-          unit.down = 'cleaning';
-          unit.downUntilS = nowS + spec.repairFixedS;
-          scheduler.schedule<FillerPayload>(unit.downUntilS, FILLER_EVENTS.cleaned, { filler: unit.index });
-          scheduler.log(nowS, 'info', `Filler ${unit.name} repaired: re-sterilizing its aseptic zone for ${formatMin(spec.repairFixedS)}`);
+          // A repair a reset ended early has its event cancelled; any other stale one is ignored too.
+          if (event.seq === unit.downSeq && unit.down === 'repair') startCleaning(unit, nowS);
           break;
         case FILLER_EVENTS.cleaned:
+          if (event.seq !== unit.downSeq || unit.down !== 'cleaning') break;
           unit.down = 'none';
           unit.downUntilS = nowS;
           unit.toFailureRunS = rng.exponential(spec.mtbfMeanS);
-          scheduler.log(nowS, 'ok', `Filler ${unit.name} sterile: running again`);
+          scheduler.log(nowS, 'ok', `Filler ${unit.name} sterile: running again`, { topic: 'fillerSterile', filler: unit.index });
           break;
       }
+      reconcileUnit(unit, nowS, ratePacksPerH);
+      return true;
+    },
+    breakDownNow(index, nowS, repairS, ratePacksPerH) {
+      const unit = units[index];
+      if (!unit || unit.down !== 'none') return false;
+      breakDown(unit, nowS, repairS);
+      reconcileUnit(unit, nowS, ratePacksPerH);
+      return true;
+    },
+    endRepairNow(index, nowS, ratePacksPerH) {
+      const unit = units[index];
+      if (!unit || unit.down !== 'repair') return false;
+      scheduler.cancel(unit.downSeq);
+      startCleaning(unit, nowS);
       reconcileUnit(unit, nowS, ratePacksPerH);
       return true;
     },

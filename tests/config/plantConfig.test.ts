@@ -191,6 +191,13 @@ describe('checkPlantConfig catches a broken copy', () => {
     ['a fractional opening stock', (copy: PlantConfig) => (copy.warehouse.startStockPallets = 633.5), /startStockPallets must be a whole number/],
     ['no dock doors', (copy: PlantConfig) => (copy.warehouse.dockDoors = 0), /dockDoors must be greater than 0/],
     ['a batch too big for its SSCC serials', (copy: PlantConfig) => (copy.quality.batchS = 500 * 3_600), /SSCC serial range/],
+    // Phase 5: the scenarios must be faults, and their chances real chances.
+    ['a homogenizer fault at the set pressure', (copy: PlantConfig) => (copy.scenarios.homogenizerFaultBar = 200), /homogenizerFaultBar must be below/],
+    ['a filter-failure spoil chance above 1', (copy: PlantConfig) => (copy.scenarios.filterFailurePerPack = 1.2), /filterFailurePerPack must lie in 0–1/],
+    ['a sensory limit above 100%', (copy: PlantConfig) => (copy.scenarios.sensoryFailAbovePct = 120), /sensoryFailAbovePct must lie in 0–100/],
+    ['a fractional number of extra trucks', (copy: PlantConfig) => (copy.scenarios.spikeTrucks = 2.5), /spikeTrucks must be a whole number/],
+    ['a zero steam lag', (copy: PlantConfig) => (copy.scenarios.steamFaultLagS = 0), /steamFaultLagS must be greater than 0/],
+    ['a zero filler repair', (copy: PlantConfig) => (copy.scenarios.fillerRepairS = 0), /fillerRepairS must be greater than 0/],
   ])('%s', (_label, change, problem) => {
     expect(problemsWith(change).join('\n')).toMatch(problem);
   });

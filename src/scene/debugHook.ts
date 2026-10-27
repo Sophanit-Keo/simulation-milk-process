@@ -23,7 +23,7 @@ export interface SceneDebug {
   /**
    * What a machine shows now (Equipment.debugState), e.g. { fillFrac: 0.5 } for a tank or
    * { diverting: true, lamp: 'bad', flagRad: -1.57 } for the divert valve; null for an unknown id or a
-   * machine that reports nothing.
+   * machine that reports nothing. A hero machine adds hero: true once its model has swapped in.
    */
   equipmentState(id: string): EquipmentState | null;
   /** The pipes: whether the divert route is lit, and each line point's stripe offset in metres. */

@@ -3,7 +3,8 @@
 // with InstancedMesh.setColorAt (amber on hold, red blocked, green while the batch still fills). A batch keeps
 // its block from its first pallet until it leaves: blocks sit on a grid of 4 rows of 12 (D1's phase 2 note
 // asks for a denser grid than the preview's 28), and batch n takes place (n − 1) mod 48, so the grid fills in
-// order like a ring and never shuffles. A click on a block picks its batch.
+// order like a ring and never shuffles. A click on a block picks its batch. A batch under investigation (a
+// fault scenario, phase 5) blinks its lamp until it is judged.
 import * as THREE from 'three';
 import type { BatchSnapshot, BatchStatus } from '../../../contracts';
 import { QUARANTINE, QUARANTINE_ROW_Z_M, type FloorPointM } from './layout';
@@ -28,6 +29,9 @@ const MARK_Y_M = 0.05;
 const STATUS_COLOR: Record<BatchStatus, number> = { filling: 0x1f8f57, hold: 0xa87400, released: 0x1f8f57, blocked: 0xc63a2b };
 /** How far a pallet's tint goes from the carton's white toward its lamp colour: enough to read, not a wall of paint. */
 const TINT_FRAC = 0.6;
+/** A batch under investigation blinks its lamp: lit, then pale, each half of this many real seconds. */
+export const INVESTIGATION_BLINK_S = 1;
+const _pale = new THREE.Color(STATUS_COLOR.hold).lerp(new THREE.Color(0xffffff), 0.75);
 
 /** The centre of block place `place` on the floor: rows from the back (z 4.6) forward, columns west to east. */
 export function blockCentreM(place: number): FloorPointM {
@@ -66,13 +70,14 @@ export interface QuarantineBlocks {
   /** A plate under the picked batch's block. */
   readonly mark: THREE.Mesh;
   /** Shows the batches; only the blocks whose batch, status or pallets changed are rewritten. */
-  update(batches: readonly BatchSnapshot[]): void;
+  /** The batches in quarantine; realDtS moves the blink of those under investigation on. */
+  update(batches: readonly BatchSnapshot[], realDtS?: number): void;
   /** The batch a hit on the pallets or lamps picks. */
   batchAt(object: THREE.Object3D, instanceId: number | undefined): number | null;
   select(batchId: number | null): void;
   /** Tops of the blocks, by batch, for the moving pallets to aim at. */
   blockTopM(batchId: number): [xM: number, yM: number, zM: number];
-  state(): { blocks: number; pallets: number; blocked: number; selected: number | null };
+  state(): { blocks: number; pallets: number; blocked: number; investigated: number; selected: number | null };
   dispose(): void;
 }
 
@@ -120,9 +125,10 @@ export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphere
     mesh.boundingSphere = bounds.getBoundingSphere(new THREE.Sphere());
   }
 
-  /** What each place shows now: its batch, status and pallets. */
-  const shown: ({ batchId: number; status: BatchStatus; pallets: number } | null)[] = Array.from({ length: BLOCK_PLACES }, () => null);
+  /** What each place shows now: its batch, status, pallets, and whether it is under investigation. */
+  const shown: ({ batchId: number; status: BatchStatus; pallets: number; flagged: boolean } | null)[] = Array.from({ length: BLOCK_PLACES }, () => null);
   let selected: number | null = null;
+  let blinkS = 0;
 
   function writeBlock(place: number, batch: BatchSnapshot | null): void {
     const centreM = blockCentreM(place);
@@ -164,7 +170,7 @@ export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphere
     pallets,
     lamps,
     mark,
-    update(batches) {
+    update(batches, realDtS = 0) {
       const byPlace = new Map<number, BatchSnapshot>();
       // The newest batch wins a place, should more than 48 be in quarantine at once (a long incubation).
       for (const batch of batches) byPlace.set(blockPlaceOf(batch.id), batch);
@@ -172,12 +178,24 @@ export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphere
       for (let place = 0; place < BLOCK_PLACES; place++) {
         const batch = byPlace.get(place) ?? null;
         const was = shown[place];
-        if (batch && was && was.batchId === batch.id && was.status === batch.status && was.pallets === batch.pallets) continue;
+        // A batch's flags are read as a whole: older snapshots (contracts v3) have none.
+        const flagged = (batch?.flags?.length ?? 0) > 0 && batch?.status !== 'blocked';
+        if (batch && was && was.batchId === batch.id && was.status === batch.status && was.pallets === batch.pallets && was.flagged === flagged) continue;
         if (!batch && !was) continue;
         writeBlock(place, batch);
-        shown[place] = batch && { batchId: batch.id, status: batch.status, pallets: batch.pallets };
+        shown[place] = batch && { batchId: batch.id, status: batch.status, pallets: batch.pallets, flagged };
         changed = true;
       }
+      // Investigated batches blink on real time, paused or not: it is a cue to look, not the plant moving.
+      blinkS = (blinkS + Math.max(0, realDtS)) % INVESTIGATION_BLINK_S;
+      const lit = blinkS < INVESTIGATION_BLINK_S / 2;
+      let blinking = false;
+      shown.forEach((entry, place) => {
+        if (!entry?.flagged) return;
+        lamps.setColorAt(place, lit ? _color.setHex(STATUS_COLOR[entry.status]) : _pale);
+        blinking = true;
+      });
+      if (blinking && lamps.instanceColor) lamps.instanceColor.needsUpdate = true;
       if (!changed) return;
       pallets.instanceMatrix.needsUpdate = true;
       lamps.instanceMatrix.needsUpdate = true;
@@ -206,6 +224,7 @@ export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphere
         blocks: entries.length,
         pallets: entries.reduce((sum, entry) => sum + Math.min(entry?.pallets ?? 0, PALLETS_PER_BLOCK), 0),
         blocked: entries.filter((entry) => entry?.status === 'blocked').length,
+        investigated: entries.filter((entry) => entry?.flagged).length,
         selected: mark.visible ? selected : null,
       };
     },

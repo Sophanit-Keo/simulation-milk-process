@@ -93,6 +93,11 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | Random seed | 81006 (mulberry32), so every run repeats | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Sim clock | Day 8 at 06:00, ×10; 1 s steps, 10 s steps above ×1,000 | Sim assumption ([D8](DECISIONS.md#d8-clock), [D11](DECISIONS.md#d11-opening-state)) |
 | Opening state | A week of history: 42 batches on hold (about 2,450 pallets) and 634 pallets of released stock | Sim assumption ([D11](DECISIONS.md#d11-opening-state)) |
+| Steam dip (UHT temperature drop) | The outlet falls to 135.5 °C with a 15 s time constant; diverts 2.84 s after the trigger at full flow | Sim assumption ([D15](DECISIONS.md#d15-phase-5-fault-scenario-defaults)) |
+| Filler breakdown from the menu | 60 min of repair, then 2 min re-sterilizing | Sim assumption ([D15](DECISIONS.md#d15-phase-5-fault-scenario-defaults)) |
+| Sterile-air filter failure | Replaced after 2 h; batches filled meanwhile judged with a 5% chance per sample of a spoiled one | Sim assumption ([D15](DECISIONS.md#d15-phase-5-fault-scenario-defaults), [R10](REVIEW.md#r10-rare-qa-failures)) |
+| Homogenizer pressure loss | Stage 1 at 50 bar for 1 h (creaming risk 84%); the sensory check blocks a batch at 50% risk or more | Sim assumption ([D15](DECISIONS.md#d15-phase-5-fault-scenario-defaults)) |
+| Demand spike; late trucks | 12 extra trucks, one every 5 min; or no truck for 6 h 40 min, then the 4 due together | Sim assumption ([D15](DECISIONS.md#d15-phase-5-fault-scenario-defaults)) |
 
 > **Decided:** a batch is one filler for one 8-hour shift ([D1](DECISIONS.md#d1-batch-size)), the eleven missing defaults are set ([D2](DECISIONS.md#d2-missing-defaults)), and a truck carries 22 pallets every 100 min ([D3](DECISIONS.md#d3-truck-payload)). Each stays Proposed until the developer approves it in the [decision log](DECISIONS.md). [Hand calculations](hand-calculations.md) lists the expected values QA tests against.
 
@@ -106,12 +111,14 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 
 | Scenario | Trigger | Plant reaction | What the viewer sees |
 |---|---|---|---|
-| UHT temperature drop | Steam supply dips, B\* < 1 at the holding-tube outlet | Divert to reject for 3 min, then CIP 80 min and sterilize 30 min at 125 °C or more (113 min out); fillers drain the tank | Valve light turns red, reject tank fills, tank level falls |
-| Filler breakdown | Random, from time between failures | Tank level rises; at high level the UHT plant drops to 50% | Filler lamp red, carton flow stops, level climbs |
-| Sterile-air filter failure | Manual trigger | Process deviation; tank contents put on hold | Tank lamp amber, batch marked for investigation |
-| Failed incubation | Sample fails (chance rises after a filter failure) | Batch blocked, pallets pulled for destruction | Pallet lamps in quarantine turn red |
+| UHT temperature drop | Steam supply dips, B\* < 1 at the holding-tube outlet | Divert to reject for 3 min, then CIP 80 min and sterilize 30 min at 125 °C or more (113 min out); fillers drain the tank | Valve light turns red, steam at the injector sputters, reject tank fills, tank level falls |
+| Filler breakdown | Random, from time between failures, or from the menu | Tank level rises; at high level the UHT plant drops to 50% | Filler lamp red, carton flow stops, level climbs |
+| Sterile-air filter failure | Manual trigger | Process deviation; tank contents put on hold | Tank lamp amber, batch marked for investigation, its lamp blinking in quarantine |
+| Failed incubation | Sample fails (chance rises after a filter failure), or from the menu | Batch blocked, pallets pulled for destruction | Pallet lamps in quarantine turn red |
 | Homogenizer pressure loss | Manual trigger | Creaming-risk score rises; QA sensory check fails days later | Gauge needle drops, delayed QA failure |
-| Demand spike or late truck | Manual or random | Stock runs down, or the dock backs up | Rack fill colours change, trucks queue |
+| Demand spike or late truck | Manual | Stock runs down, or the dock backs up | Rack fill colours change, trucks queue in the yard |
+
+Every scenario starts from the **Scenarios** menu in the top bar, which also resets them; a banner over the 3D view and the scenario log say what happened and why. The scripts, with their expected values and timings, are [H104–H110](hand-calculations.md#phase-5-scenario-scripts), and their keys [D15](DECISIONS.md#d15-phase-5-fault-scenario-defaults).
 
 > **Review note:** at 0.02% per pack, a random failed incubation shows up only about once every 50 simulated days, so demos will rely on the manual trigger. See [R10](REVIEW.md#r10-rare-qa-failures).
 

@@ -9,9 +9,13 @@ import {
   type LinePoint,
   type LinePointId,
   type LiquidSnapshot,
+  type LogEntry,
   type LogKind,
   type PacksSnapshot,
   type PlantConfig,
+  type ScenarioId,
+  type ScenariosSnapshot,
+  type ScenarioVariant,
   type SetpointKey,
   type Snapshot,
   type StageId,
@@ -19,7 +23,7 @@ import {
 } from '../contracts';
 import { Clock, type StepHandler } from './clock';
 import { EventQueue, type QueuedEvent } from './eventQueue';
-import { createLog, formatDayTime } from './log';
+import { createLog, formatDayTime, type LogTag, type LogWriter } from './log';
 
 export type Setpoints = Record<SetpointKey, number>;
 
@@ -39,26 +43,36 @@ export interface CoreOptions {
   onEvent?: (event: QueuedEvent) => boolean;
   /** A setQaResult command, for the model that keeps the batches; without one the core logs that it can't apply it. */
   onQaResult?: (batchId: number, result: 'pass' | 'fail') => void;
+  /** A triggerScenario command (phase 5); without one the core logs that this sim has no scenarios. */
+  onScenario?: (id: ScenarioId, variant: ScenarioVariant | undefined) => void;
+  /** A resetScenarios command (phase 5). */
+  onResetScenarios?: () => void;
+  /**
+   * Every log entry before it is kept, with what it is about: returns the scenario that caused it and why, if
+   * one did (phase 5). The scenarios gather their logs here.
+   */
+  annotateLog?: (entry: LogEntry, tag: LogTag | undefined) => Pick<LogEntry, 'scenario' | 'why'> | undefined;
 }
 
 export interface SimCore {
   readonly timeS: number;
   /** Live set points: plant.json values until a setSetpoint command changes one. */
   readonly setpoints: Readonly<Setpoints>;
-  log(timeS: number, kind: LogKind, message: string): void;
+  log: LogWriter;
   /** Queues an event for the discrete model; it runs through onEvent when it falls due. */
   schedule<P>(timeS: number, type: string, payload: P): QueuedEvent<P>;
   /** Removes a queued event; false if it already ran or was cancelled. */
   cancel(seq: number): boolean;
   step(realDtS: number): void;
   dispatch(command: Command): void;
-  /** Wraps the caller's stages, KPIs, liquid line and packs with the clock, queue and log state. */
+  /** Wraps the caller's stages, KPIs, liquid line, packs and scenarios with the clock, queue and log state. */
   snapshot(
     stages: Record<StageId, StageSnapshot>,
     kpis: Kpis,
     line: Record<LinePointId, LinePoint>,
     liquid: LiquidSnapshot,
     packs: PacksSnapshot,
+    scenarios: ScenariosSnapshot,
   ): Snapshot;
 }
 
@@ -74,7 +88,13 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
 
   const clock = new Clock({ ...clockSteps, speed: defaultSpeed });
   const queue = new EventQueue();
-  const log = createLog();
+  const simLog = createLog();
+  const log = {
+    add(timeS: number, kind: LogKind, message: string, tag?: LogTag): void {
+      simLog.add(timeS, kind, message, options.annotateLog?.({ timeS, kind, message }, tag));
+    },
+    entries: () => simLog.entries(),
+  };
   const setpoints: Setpoints = {
     uhtSetpointC: config.uht.setpointC,
     homogenizerStage1Bar: config.homogenizer.stage1Bar,
@@ -147,7 +167,12 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
         setSetpoint(command.key, command.value);
         return;
       case 'triggerScenario':
-        log.add(clock.timeS, 'warn', `Scenario "${command.id}" not started: fault scenarios arrive in phase 5`);
+        if (options.onScenario) options.onScenario(command.id, command.variant);
+        else log.add(clock.timeS, 'warn', `Scenario "${command.id}" not started: this sim has no fault scenarios`);
+        return;
+      case 'resetScenarios':
+        if (options.onResetScenarios) options.onResetScenarios();
+        else log.add(clock.timeS, 'info', 'No scenarios to reset: this sim has none');
         return;
       case 'setQaResult':
         if (options.onQaResult) options.onQaResult(command.batchId, command.result);
@@ -169,7 +194,7 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       return clock.timeS;
     },
     setpoints,
-    log: (timeS, kind, message) => log.add(timeS, kind, message),
+    log: (timeS, kind, message, tag) => log.add(timeS, kind, message, tag),
     schedule: (timeS, type, payload) => queue.schedule(timeS, type, payload),
     cancel: (seq) => queue.cancel(seq),
     step: (realDtS) => {
@@ -178,7 +203,7 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       clock.advance(realDtS, onStep, () => queue.peek()?.timeS);
     },
     dispatch,
-    snapshot: (stages, kpis, line, liquid, packs) => ({
+    snapshot: (stages, kpis, line, liquid, packs, scenarios) => ({
       version: CONTRACT_VERSION,
       timeS: clock.timeS,
       speed: clock.speed,
@@ -188,6 +213,7 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       line,
       liquid,
       packs,
+      scenarios,
       kpis,
       log: log.entries(),
     }),

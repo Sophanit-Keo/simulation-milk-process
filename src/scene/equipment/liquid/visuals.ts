@@ -79,8 +79,14 @@ export function heatGlowFrac(tempC: number): number {
 export function steamFrac(snapshot: Snapshot): number {
   const mode = uhtModeOf(snapshot);
   if (mode !== 'production' && mode !== 'divert') return 0;
-  return flowFrac(lineFlowLph(snapshot, 'holdingTube'));
+  const frac = flowFrac(lineFlowLph(snapshot, 'holdingTube'));
+  // While the steam supply dips (the UHT temperature drop scenario, phase 5) the injector only sputters.
+  const dipping = snapshot.scenarios?.runs.some((run) => run.id === 'uhtTempDrop' && run.endedS === null) ?? false;
+  return dipping ? frac * STEAM_DIP_FRAC : frac;
 }
+
+/** The puffs' size while the steam supply dips: a sputter, against full steam at full flow. */
+export const STEAM_DIP_FRAC = 0.3;
 
 /**
  * The flash vessel's vapour at full size. Water removed equals steam injected: about a tenth of the milk

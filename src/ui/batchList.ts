@@ -42,6 +42,13 @@ export function palletLines(batch: Pick<BatchSnapshot, 'id' | 'pallets' | 'lastP
   }));
 }
 
+/** Why a batch is under investigation, in words: "sterile-air filter failure; creaming risk 84%". */
+export function investigationText(batch: Pick<BatchSnapshot, 'flags' | 'creamingRiskPct'>): string {
+  return batch.flags
+    .map((flag) => (flag === 'sterileAir' ? 'sterile-air filter failure' : `creaming risk ${formatNumber(batch.creamingRiskPct)}%`))
+    .join('; ');
+}
+
 export interface BatchListOptions {
   /** The batch picked last (the view bus's selectBatch), or null. */
   selected(): number | null;
@@ -115,7 +122,9 @@ export function createBatchList(host: HTMLElement, options: BatchListOptions): P
       setText(existing.pallets, `${formatNumber(batch.pallets)} pallets`);
       setText(existing.due, batchDueText(batch, snapshot.timeS));
       setAttr(existing.button, 'aria-pressed', batch.id === selected ? 'true' : 'false');
-      setAttr(existing.button, 'title', `${BATCH_STATUS_TEXT[batch.status]}: batch ${batch.id}, filler ${batch.filler}`);
+      const investigation = batch.flags.length > 0 ? ` · under investigation: ${investigationText(batch)}` : '';
+      setAttr(existing.button, 'title', `${BATCH_STATUS_TEXT[batch.status]}: batch ${batch.id}, filler ${batch.filler}${investigation}`);
+      setAttr(existing.button, 'data-investigation', batch.flags.length > 0 ? batch.flags.join(' ') : null);
     }
   }
 
@@ -132,7 +141,7 @@ export function createBatchList(host: HTMLElement, options: BatchListOptions): P
     const batch = snapshot.packs?.batches.find((each) => each.id === id);
     const packsPerPallet = snapshot.stages[8]?.values.packsPerPallet ?? 0;
     // Rebuilt only when what it lists changes; the countdown in it is the only text that moves.
-    const key = batch ? `${batch.id}|${batch.status}|${batch.pallets}|${batch.lastPalletPacks}|${batch.samples}|${batch.qaResult}` : `none|${id}`;
+    const key = batch ? `${batch.id}|${batch.status}|${batch.pallets}|${batch.lastPalletPacks}|${batch.samples}|${batch.qaResult}|${batch.flags.join()}` : `none|${id}`;
     if (key !== shownDetail) {
       shownDetail = key;
       if (!batch) {
@@ -156,6 +165,8 @@ export function createBatchList(host: HTMLElement, options: BatchListOptions): P
         fact('Best before', formatDay(batch.bestBeforeS));
         fact('Samples', formatNumber(batch.samples));
         fact('QA result', batch.qaResult === 'pending' ? 'Pending incubation' : batch.qaResult === 'pass' ? 'Passed (override)' : 'Failed');
+        // A fault scenario put it under investigation (contracts v4).
+        if (batch.flags.length > 0) fact('Investigation', investigationText(batch), 'batch-investigation');
         // A blocked batch's releaseAtS is when its pallets leave for destruction; the list row counts it down.
         fact(batch.status === 'blocked' ? 'Destruction' : 'Release', formatSimTime(batch.releaseAtS), 'batch-due');
         const parts: HTMLElement[] = [head, facts];
