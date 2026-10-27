@@ -1,5 +1,5 @@
-import type { LiquidSnapshot, StageId, Status, UhtMode } from '../contracts';
-import { formatDuration, formatSigned, NO_VALUE, withUnit } from './format';
+import type { CleaningStepId, LiquidSnapshot, StageId, Status, UhtMode } from '../contracts';
+import { formatDuration, formatNumber, formatSigned, NO_VALUE, withUnit } from './format';
 
 /** A state the panel shows in words with a lamp, such as "Diverting · 2 min 30 s left". */
 export interface StateText {
@@ -25,6 +25,29 @@ export function uhtModeText(liquid: Pick<LiquidSnapshot, 'uhtMode' | 'modeRemain
   if (!mode) return { text: NO_VALUE, status: 'idle' };
   if (liquid.uhtMode === 'production' || !(liquid.modeRemainingS > 0)) return mode;
   return { text: `${mode.text} · ${formatDuration(liquid.modeRemainingS)} left`, status: mode.status };
+}
+
+/** Each cleaning step in words (phase 7): the CIP's handbook steps, and the AIC's water that pushes the milk out. */
+export const CLEANING_STEP_TEXT: Readonly<Record<CleaningStepId, string>> = {
+  preRinse: 'Pre-rinse',
+  lye: 'Lye (NaOH)',
+  rinse: 'Rinse',
+  acid: 'Acid (HNO₃)',
+  postRinse: 'Post-rinse',
+  cooling: 'Gradual cooling',
+  displace: 'Water displaces milk',
+};
+
+/**
+ * The cleaning step under way (contracts v5): "Lye (NaOH), 75 °C · 2 of 6 · 29 min left", an AIC step with no
+ * temperature of its own. "None" while the plant makes product, diverts or re-sterilizes, or from an older snapshot.
+ */
+export function cleaningText(liquid: Pick<LiquidSnapshot, 'cleaning'>): StateText {
+  const cleaning = liquid.cleaning;
+  if (!cleaning) return { text: 'None', status: 'idle' };
+  const name = CLEANING_STEP_TEXT[cleaning.step] ?? cleaning.step;
+  const temp = cleaning.tempC === null ? '' : `, ${withUnit(formatNumber(cleaning.tempC), '°C')}`;
+  return { text: `${name}${temp} · ${cleaning.stepIndex + 1} of ${cleaning.stepCount} · ${formatDuration(cleaning.stepRemainingS)} left`, status: 'warn' };
 }
 
 /** The UHT plant's feed: full flow, or held back while the aseptic tank is high (90% on, 60% off). */
@@ -65,6 +88,7 @@ export interface StateRow {
 export const STATE_ROWS: Readonly<Partial<Record<StageId, readonly StateRow[]>>> = {
   4: [
     { key: 'uhtMode', label: 'UHT plant', read: uhtModeText },
+    { key: 'cleaning', label: 'Cleaning step', read: cleaningText },
     { key: 'throttle', label: 'Feed', read: feedText },
   ],
   6: [
