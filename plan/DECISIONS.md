@@ -20,6 +20,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D12](#d12-conveyor-models) | Kenney Factory Kit for conveyors | — | Proposed |
 | [D13](#d13-phase-3-liquid-line-defaults) | Silo and mixing-tank sizes and the 21 liquid-line keys of schema 4 | — | Proposed |
 | [D14](#d14-phase-4-packs-to-trucks-defaults) | The 8 packs-to-trucks keys of schema 5 and the rules without a key | — | Proposed |
+| [D15](#d15-phase-5-fault-scenario-defaults) | The 10 fault-scenario keys of schema 6, the scenario rules, and the heroes' AO and compression | [R10](REVIEW.md#r10-rare-qa-failures) | Proposed |
 
 ## D1. Batch size
 
@@ -242,6 +243,34 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Why:** each value is a sim assumption chosen so the plant shows what the plan describes at the default speeds, and none moves a hand-calculated count: the batch change and catch-up keep every pallet of a batch on its own pallets, the rejects and samples come out of the batch's packs, and the trucks keep D3's 316.8 pallets a day. The [Phase 4 acceptance runs](hand-calculations.md#phase-4-acceptance-runs) (H97–H103) and the 60-day run check the model against them.
 - **What it changes:** the five keys above and D11's three, all already in `plant.json`, and the matching rows in [default settings](06-simulation-model.md#default-settings).
 
+
+## D15. Phase 5 fault-scenario defaults
+
+- **Status:** Proposed
+- **Date:** 2026-10-27
+- **Review note:** [R10](REVIEW.md#r10-rare-qa-failures) ([Phase 5](agent-plan/phase-5-detail-and-scenarios.md))
+- **Decision:** the keys `sim` added to `plant.json` for the six fault scenarios (schema 6, section `scenarios`), the rules they follow without a key, and, for `lead`, how the hero models were finished.
+
+| Setting | Default | `plant.json` key | Basis |
+|---|---|---|---|
+| Steam dip | The outlet falls to the fault temperature with a 15 s time constant | `scenarios.steamFaultLagS` = 15 | Sim assumption: fast enough to divert within 3 s at the 4 s hold ([H104](hand-calculations.md#phase-5-scenario-scripts)), slow enough to see the outlet fall |
+| Filler breakdown (menu) | 60 min of repair, then the 2 min re-sterilizing | `scenarios.fillerRepairS` = 3,600 | Sim assumption: long enough that the tank reaches 90% and the plant throttles (H105). The random breakdowns keep D2's mean of 12 min |
+| Sterile-air filter | Replaced 2 h after it fails | `scenarios.filterReplaceS` = 7,200 | Sim assumption: about the time to fit and integrity-test a new filter cartridge |
+| Spoil chance after a filter failure | 5% per sample | `scenarios.filterFailurePerPack` = 0.05 | Sim assumption, 250 times the 0.02% per pack: a batch of 16 samples then fails 56% of the time, so the scenario shows both outcomes over a few tries ([R10](REVIEW.md#r10-rare-qa-failures)) |
+| Homogenizer fault | Stage 1 falls to 50 bar for 1 h | `scenarios.homogenizerFaultBar` = 50, `scenarios.homogenizerRepairS` = 3,600 | Sim assumption: below the 100 bar slider minimum, so the creaming risk (84%) is beyond anything a viewer can set ([D13](#d13-phase-3-liquid-line-defaults)'s globule rule) |
+| Sensory check | Fails a batch whose creaming risk is 50% or more | `scenarios.sensoryFailAbovePct` = 50 | Sim assumption: half-way along D13's 1–2 µm creaming scale |
+| Demand spike | 12 extra trucks, one every 5 min | `scenarios.spikeTrucks` = 12, `scenarios.spikeEveryS` = 300 | Sim assumption: a day's 14.4 trucks (H41) in an hour, so the yard fills and the stock drops by 264 pallets, 0.8 days of cover |
+| Late trucks | No truck for 24,000 s (6 h 40 min), then the 4 due arrive together | `scenarios.lateTruckDelayS` = 24,000 | Sim assumption: four regular intervals (D3), one more truck than the 3 doors take |
+
+- **Rules with no key:**
+  - **Triggers** come from the menu as `triggerScenario` (contracts v4); demand spike and late trucks are one scenario, `demandSpikeOrLateTruck`, with a variant. Filler breakdowns and failed incubations also happen at random, from D2's time between failures and the 0.02% per pack; the menu runs them on demand. A scenario that cannot start now says why in the menu and in the event log ("Scenario not started: …"), and starts nothing.
+  - **Runs** (`src/sim/scenarios.ts`): each trigger opens a run that claims the plant's own log entries it caused (the divert, the CIP, the fillers' stop, the throttle, the verdicts, each truck) and adds a *why* to each; the run follows its consequences until they are over (back in production and the fillers running again; the last extra truck gone), so its log reads as one story. The 12 newest runs are kept.
+  - **Reset** puts every running fault right at once: the steam supply, the filter and the homogenizer are restored, a repair ends (the 2 min re-sterilizing still follows) and the extra trucks still to come are cancelled; held-up trucks arrive now. What the faults caused runs its course: a divert still cleans and re-sterilizes, flagged batches stay under investigation until their verdict.
+  - **Batches under investigation** carry the fault as a flag (`sterileAir`, `creaming`, contracts v4) and blink their lamp in quarantine until they are judged at the end of their incubation; batches started while the fault acts are flagged too.
+  - **Random numbers:** the scenarios draw from the packs stream (D14), so the same seed and the same triggers at the same sim times give the same scenario log.
+- **Hero models (`assets`, for `lead`):** the plan's AO bake and compression, adapted to models made in code. The AO is baked per vertex into the vertex colours (32 rays a vertex over 0.4 m, up to 85% darker, each rigid body shading only itself), not into a 1024² ORM texture, because the models have no UVs or textures; so there is no KTX2 step either. The geometry is meshopt-compressed losslessly with glTF-Transform (new pinned dev dependencies: `@gltf-transform/core`, `@gltf-transform/extensions` 4.5.1, `meshoptimizer` 1.3.0), without quantization, which would put a scale on the moving nodes. The app loads the heroes by default; `?greybox` keeps the grey boxes ([assets/hero-specs.md](../assets/hero-specs.md#phase-5-final-models)).
+- **Why:** each value is a sim assumption chosen so a scenario plays out visibly within a few minutes at the default speeds, and none moves a phase 3 or 4 count when no scenario runs: the scenario keys act only while a scenario does. The [Phase 5 scenario scripts](hand-calculations.md#phase-5-scenario-scripts) (H104–H110) check them.
+- **What it changes:** the ten keys above in `plant.json` (schema 6), contracts v4's additive fields (the scenario runs, log entries' `scenario` and `why`, batches' `flags` and `creamingRiskPct`), and the matching rows in [default settings](06-simulation-model.md#default-settings).
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →
