@@ -579,8 +579,10 @@ describe('packsLine', () => {
     expect(empty.ctx.requested).toEqual(expect.arrayContaining(['vehicles/truck.glb', 'vehicles/forklift.glb']));
     for (const id of ['truck', 'forklift-1', 'forklift-2']) expect(node(byId(empty.machines, id), 'grey-box')).toBeDefined();
     // A grey truck at each of the three doors, hidden until the sim docks one there.
-    const doors = node(byId(empty.machines, 'truck'), 'trucks').children;
+    const doors = node(byId(empty.machines, 'truck'), 'trucks').children.filter((child) => child.name !== 'yard');
     expect(doors.map((truck) => truck.name)).toEqual(['truck-1', 'truck-2', 'truck-3']);
+    // And four spots in the yard, for trucks that find every door taken (phase 5).
+    expect(node(byId(empty.machines, 'truck'), 'yard').children.map((truck) => truck.name)).toEqual(['yard-1', 'yard-2', 'yard-3', 'yard-4']);
     for (const truck of doors) expect(truck.getObjectByName('grey-box'), truck.name).toBeDefined();
 
     // Stand-ins that lie along x, at a different scale and off-centre, as a downloaded model might.
@@ -641,6 +643,26 @@ describe('packsLine', () => {
   ])('labels %s "%s" as the plant opens', (id, text) => {
     const { machines } = build();
     expect(byId(machines, id).labelText(staticSnapshot())).toBe(text);
+  });
+
+  it('parks trucks that find every door taken in the yard, up to its four spots, and counts them on the label', () => {
+    const { machines } = build();
+    const trucks = byId(machines, 'truck');
+    const snapshot = staticSnapshot();
+    const truck = (id: number, door: number) => ({ id, door, state: door < 0 ? ('waiting' as const) : ('loading' as const), arrivedS: 0, remainingS: 0, pallets: 22 });
+    snapshot.packs.warehouse.trucks = [truck(1, 0), truck(2, 1), truck(3, 2), truck(4, -1), truck(5, -1)];
+    trucks.update(snapshot, 0.1);
+    const parked = node(trucks, 'yard').children;
+    expect(parked.filter((each) => each.visible).map((each) => each.name)).toEqual(['yard-1', 'yard-2']);
+    expect(trucks.labelText(snapshot)).toBe('1 loading · 2 in the yard');
+    expect(trucks.debugState?.().yard).toBe(2);
+    snapshot.packs.warehouse.trucks = [...snapshot.packs.warehouse.trucks, ...[6, 7, 8].map((id) => truck(id, -1))];
+    trucks.update(snapshot, 0.1);
+    expect(parked.every((each) => each.visible)).toBe(true);
+    expect(trucks.labelText(snapshot)).toBe('1 loading · 5 in the yard');
+    snapshot.packs.warehouse.trucks = [];
+    trucks.update(snapshot, 0.1);
+    expect(parked.some((each) => each.visible)).toBe(false);
   });
 
   it('shows no label value, rather than NaN, when the snapshot lacks it', () => {

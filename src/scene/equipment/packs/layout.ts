@@ -144,6 +144,11 @@ export const DOOR_X_M = [-54, -46, -38] as const;
 export const DOOR_Z_M = 19.15;
 /** A docked truck's tail stands this far out, in front of the door (preview truck at z 19.5). */
 export const DOCKED_TAIL_Z_M = 19.6;
+/**
+ * Where trucks wait in the yard when every door is taken (phase 5: the demand spike and late trucks), side
+ * by side on the apron east of the doors, level with the docked ones. More than these show as a number.
+ */
+export const YARD_X_M = [-30, -26.5, -23, -19.5] as const;
 
 /** Outer sizes the vehicle models are fitted to: length × height × width. */
 export const TRUCK_SIZE_M = { lengthM: 16.5, heightM: 4.0, widthM: 2.55 } as const;

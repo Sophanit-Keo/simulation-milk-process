@@ -594,8 +594,8 @@ function quarantine(kit: Kit, blocks: QuarantineBlocks): Equipment {
         const days = labelValue(stageValue(s, 9, 'incubationDays'), 0, 'd');
         return days && `hold ${days}`;
       },
-      update(s) {
-        if (s.packs) blocks.update(s.packs.batches);
+      update(s, realDtS) {
+        if (s.packs) blocks.update(s.packs.batches, realDtS);
       },
       batchAt: (object, instanceId) => blocks.batchAt(object, instanceId),
       selectBatch: (batchId) => blocks.select(batchId),
@@ -877,6 +877,18 @@ function trucks(kit: Kit, ctx: EquipmentContext): Equipment {
     root.add(fixture.object);
     return { fixture, door, phase: 'away', driveS: 0, shownId: null };
   });
+  // Trucks waiting in the yard park side by side east of the doors; they come and go without driving.
+  const yard = new THREE.Group();
+  yard.name = 'yard';
+  const yardTrucks = at.YARD_X_M.map((xM, slot) => {
+    const parked = buildVehicle(kit, ctx, { id: `yard-${slot + 1}`, modelPath: 'vehicles/truck.glb', size: at.TRUCK_SIZE_M }, greyTruck, life);
+    place(parked.object, [xM, dockedAtM(0)[1]], [0, 1]);
+    parked.object.visible = false;
+    yard.add(parked.object);
+    return parked;
+  });
+  root.add(yard);
+  let inYard = 0;
   const roadZ = (bay: Bay, frac: number): number => dockedAtM(bay.door)[1] + TRUCK_ROAD_M * frac;
   const drive = (bay: Bay, s: Snapshot, realDtS: number): void => {
     const targetId = s.packs?.warehouse.trucks.find((truck) => truck.door === bay.door)?.id ?? null;
@@ -913,6 +925,7 @@ function trucks(kit: Kit, ctx: EquipmentContext): Equipment {
     object: root,
     dispose: () => {
       for (const bay of bays) bay.fixture.dispose();
+      for (const parked of yardTrucks) parked.dispose();
     },
     release: () => {},
   };
@@ -925,16 +938,21 @@ function trucks(kit: Kit, ctx: EquipmentContext): Equipment {
       labelAnchorM: [at.DOOR_X_M[1], at.TRUCK_SIZE_M.heightM + 0.4, dockedAtM(1)[1]],
       labelText(s) {
         const first = s.packs?.warehouse.trucks.find((truck) => truck.door >= 0);
-        if (!first) return s.packs ? 'none at the dock' : '';
-        return first.state === 'loading' ? `${first.id} loading` : `${first.id} waiting for stock`;
+        const waiting = s.packs?.warehouse.trucks.filter((truck) => truck.door < 0).length ?? 0;
+        const yardText = waiting > 0 ? ` · ${waiting} in the yard` : '';
+        if (!first) return s.packs ? `none at the dock${yardText}` : '';
+        return `${first.state === 'loading' ? `${first.id} loading` : `${first.id} waiting for stock`}${yardText}`;
       },
       update(s, realDtS) {
         for (const bay of bays) drive(bay, s, realDtS);
+        inYard = s.packs?.warehouse.trucks.filter((truck) => truck.door < 0).length ?? 0;
+        yardTrucks.forEach((parked, slot) => (parked.object.visible = slot < inYard));
       },
       debugState: () => ({
         shown: bays.filter((bay) => bay.phase !== 'away').length,
         docked: bays.filter((bay) => bay.phase === 'docked').length,
         doors: bays.map((bay) => bay.shownId ?? '-').join(','),
+        yard: inYard,
       }),
     },
     life,
