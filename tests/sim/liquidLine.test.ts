@@ -344,12 +344,19 @@ describe('divert, clean and re-sterilize (H35, H36, H62)', () => {
     expectWithin(snap.kpis.divertedL, 16_000 / 3_600, 1e-9);
   });
 
-  it('cleaning shows: nothing flows through stages 2–5, stage 4 amber, the holding tube at lye then sterilizing temperature', () => {
+  it('cleaning shows: nothing flows through stages 2–5, stage 4 amber, the holding tube at each CIP step\'s temperature then sterilizing', () => {
     const run = startLiquid(plantConfig);
     divertOnce(run, 139);
-    run.run(180 + minToS(40));
+    // 5 min into the CIP: the warm-water pre-rinse (phase 7, H111).
+    run.run(180 + minToS(5));
     let view = run.line.view(run.setpoints, run.timeS);
+    expect(view.liquid.cleaning).toMatchObject({ program: 'cip', step: 'preRinse', fluid: 'water', stepIndex: 0, stepCount: 6, tempC: 45 });
+    expect(view.values[4].tempC).toBe(45);
+    // 30 min in: the lye.
+    run.run(minToS(25));
+    view = run.line.view(run.setpoints, run.timeS);
     expect(view.liquid.uhtMode).toBe('cip');
+    expect(view.liquid.cleaning).toMatchObject({ step: 'lye', fluid: 'lye', stepIndex: 1 });
     expect(view.values[4].tempC).toBe(plantConfig.cleaning.cipTempC);
     expect(view.statuses).toMatchObject({ 2: 'idle', 3: 'idle', 4: 'warn', 5: 'idle' });
     expect(view.flows.uhtLph).toBe(0);
@@ -358,11 +365,12 @@ describe('divert, clean and re-sterilize (H35, H36, H62)', () => {
     expectWithin(view.values[4].divertLimitC, 139.224, 0.001);
     // The preheater has lagged down to the lye temperature.
     expectWithin(view.values[2].preheatTempC, plantConfig.cleaning.cipTempC, 0.01);
-    run.run(minToS(50));
+    run.run(minToS(60));
     view = run.line.view(run.setpoints, run.timeS);
     expect(view.liquid.uhtMode).toBe('sterilize');
+    expect(view.liquid.cleaning).toBeNull();
     expect(view.values[4].tempC).toBeGreaterThanOrEqual(plantConfig.uht.sterilizeTempC);
-    // 1 s + 3 min + 40 min + 50 min after the divert began, 113 min in all.
+    // 1 s + 3 min + 90 min after the divert began, 113 min in all.
     expect(view.liquid.modeRemainingS).toBe(OUT_AFTER_DIVERT_S - (1 + 180 + minToS(90)));
   });
 

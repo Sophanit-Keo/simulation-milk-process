@@ -153,6 +153,7 @@ export function staticLiquid(config: PlantConfig): LiquidSnapshot {
     headspaceBar: tank.maxHeadspaceBar,
     productionSinceCleanS: 0,
     divertCount: 0,
+    cleaning: null,
     tanks: {
       silo: tankLevel(std.siloCapacityL, std.siloStartFrac),
       mixTank: tankLevel(std.mixTankCapacityL, std.mixTankStartFrac),

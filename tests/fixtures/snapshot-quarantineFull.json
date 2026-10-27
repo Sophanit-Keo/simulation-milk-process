@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "timeS": 655140,
   "speed": 10,
   "paused": false,
@@ -199,6 +199,7 @@
     "headspaceBar": 2.663713388477643,
     "productionSinceCleanS": 28740,
     "divertCount": 0,
+    "cleaning": null,
     "tanks": {
       "silo": {
         "levelL": 40454.678609210976,

@@ -72,7 +72,7 @@ const PHASE_4_KEYS: Readonly<Record<7 | 8 | 9 | 10, readonly string[]>> = {
 /** Every shape rule of contracts v4 (src/contracts/snapshot.ts, packs.ts, scenarios.ts) that a consumer may rely on. */
 function expectContracts(snap: Snapshot, where: string): void {
   expect(snap.version, `${where}: version`).toBe(CONTRACT_VERSION);
-  expect(CONTRACT_VERSION).toBe(4);
+  expect(CONTRACT_VERSION).toBe(5);
   expect(Number.isFinite(snap.timeS), `${where}: timeS`).toBe(true);
   expect(isSpeed(snap.speed), `${where}: speed ${snap.speed}`).toBe(true);
   expect(typeof snap.paused, `${where}: paused`).toBe('boolean');
@@ -112,6 +112,14 @@ function expectContracts(snap: Snapshot, where: string): void {
   }
   expect(Number.isInteger(liquid.fillersRunning) && Number.isInteger(liquid.divertCount), `${where}: whole counts`).toBe(true);
   expect(liquid.uhtMode === 'production' ? liquid.modeRemainingS === 0 : liquid.modeRemainingS > 0, `${where}: modeRemainingS`).toBe(true);
+  // Contracts v5: the cleaning step, present exactly while the plant runs a CIP or an AIC.
+  const cleaning = liquid.cleaning ?? null;
+  expect(cleaning !== null, `${where}: cleaning while ${liquid.uhtMode}`).toBe(liquid.uhtMode === 'cip' || liquid.uhtMode === 'aic');
+  if (cleaning) {
+    expect(cleaning.program, `${where}: cleaning.program`).toBe(liquid.uhtMode);
+    expect(cleaning.stepIndex >= 0 && cleaning.stepIndex < cleaning.stepCount, `${where}: cleaning.stepIndex`).toBe(true);
+    expect(cleaning.stepRemainingS >= 0 && cleaning.stepRemainingS <= liquid.modeRemainingS + 1e-6, `${where}: cleaning.stepRemainingS`).toBe(true);
+  }
   expect(Object.keys(liquid.tanks).sort(), `${where}: tanks`).toEqual(['asepticTank', 'mixTank', 'rejectTank', 'silo']);
   for (const [name, { levelL, capacityL }] of Object.entries(liquid.tanks)) {
     if (!(capacityL > 0 && levelL >= 0 && levelL <= capacityL)) expect.fail(`${where}: ${name} holds ${levelL} of ${capacityL} L`);
