@@ -51,7 +51,7 @@ const TOUR_ORBIT_SPEED = 0.25;
  * An overview event (the rail's "Whole plant") flies it back to the whole plant.
  */
 export interface WorldOptions {
-  /** Load the hero models in place of their grey boxes (?heroes, until phase 5 makes it the default). */
+  /** Load the hero models in place of their grey boxes (the app's default since phase 5; off with ?greybox). */
   heroModels?: boolean;
 }
 
@@ -261,7 +261,12 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
         cameraPositionM: () => camera.position.toArray(),
         info: () => renderer.info.render,
         equipmentIds: () => equipmentHost.equipment.map((item) => item.id),
-        equipmentState: (id) => equipmentHost.equipment.find((item) => item.id === id)?.debugState?.() ?? null,
+        equipmentState: (id) => {
+          const item = equipmentHost.equipment.find((one) => one.id === id);
+          const state = item?.debugState?.() ?? null;
+          // A hero machine also says once its model has swapped in (heroes.ts names it `<root>-hero`).
+          return item?.object.getObjectByName(`${item.object.name}-hero`) ? { ...state, hero: true } : state;
+        },
         pipeState: () => pipes.state(),
       })
     : null;

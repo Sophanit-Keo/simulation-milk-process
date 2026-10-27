@@ -1,5 +1,5 @@
-// The hero models behind ?heroes (src/scene/equipment/heroes.ts): without the flag nothing loads and the grey
-// boxes stay; with it, each hero machine takes its model into its root, hides the grey parts the model
+// The hero models (src/scene/equipment/heroes.ts), on by default since phase 5: with the flag off (?greybox)
+// nothing loads and the grey boxes stay; with it on, each hero machine takes its model into its root, hides the grey parts the model
 // replaces, keeps the ones it leaves out, and drives the model's moving nodes with the same writes.
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -64,7 +64,7 @@ const snapshot = (): Snapshot => createSim(plantConfig).snapshot();
 
 afterEach(() => vi.restoreAllMocks());
 
-describe('hero models (?heroes)', () => {
+describe('hero models (off with ?greybox)', () => {
   it('loads none without the flag: the grey boxes stay', async () => {
     const ctx = makeContext(false);
     const machines = build(ctx);

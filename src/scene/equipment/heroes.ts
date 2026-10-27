@@ -1,8 +1,9 @@
-// The four hero machines' first-pass models (the assets lane's block-outs in public/models/hero), loaded only
-// behind the ?heroes flag: the grey boxes stay the default until phase 5 (phase 4 card). Once a model loads it
-// goes into the machine's root as it is, filler B's mirrored along z; the grey parts it replaces are hidden,
-// and the machine's update code is pointed at the model's moving nodes. Those carry the grey nodes' names and
-// rest transforms (assets/hero-specs.md, "What scene needs for the swap"), so the same writes drive them.
+// The four hero machines' models (public/models/hero, made by assets/scripts/make-heroes.mjs with baked AO and
+// meshopt geometry), loaded by default since phase 5; with ?greybox, or until a model arrives, the grey box
+// shows. Once a model loads it goes into the machine's root as it is, filler B's mirrored along z; the grey
+// parts it replaces are hidden, and the machine's update code is pointed at the model's moving nodes. Those
+// carry the grey nodes' names and rest transforms (assets/hero-specs.md, "What scene needs for the swap"), so
+// the same writes drive them.
 import * as THREE from 'three';
 import type { EquipmentContext } from './types';
 
