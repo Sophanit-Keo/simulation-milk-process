@@ -1,7 +1,7 @@
 // The shape rules of contracts v3 (src/contracts/packs.ts) that the 3D view and the panels rely on, checked
 // the same way for both sims and every recorded fixture.
 import { expect } from 'vitest';
-import { BATCH_STATUSES, FILLER_STATES, PACKER_STATES, TRUCK_STATES, type PlantConfig, type Snapshot } from '../../src/contracts';
+import { BATCH_FLAGS, BATCH_STATUSES, FILLER_STATES, PACKER_STATES, TRUCK_STATES, type PlantConfig, type Snapshot } from '../../src/contracts';
 
 const isCount = (value: unknown): boolean => Number.isInteger(value) && (value as number) >= 0;
 const isNonNegative = (value: unknown): boolean => typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -54,6 +54,11 @@ export function expectWellFormedPacks(snap: Snapshot, config: PlantConfig, where
     // Every pallet but the last holds a full 1,008 packs (D1).
     if (batch.pallets > 0) expect(batch.packs, `${at} packs`).toBe((batch.pallets - 1) * packsPerPallet + batch.lastPalletPacks);
     else expect(batch.packs, `${at} packs`).toBe(0);
+    // Contracts v4: why it is under investigation, each reason once; a creaming risk only with that reason.
+    for (const flag of batch.flags) expect(BATCH_FLAGS, `${at} flag`).toContain(flag);
+    expect(new Set(batch.flags).size, `${at} flags`).toBe(batch.flags.length);
+    if (!isNonNegative(batch.creamingRiskPct) || batch.creamingRiskPct > 100) expect.fail(`${at} creamingRiskPct is ${batch.creamingRiskPct}`);
+    if (!batch.flags.includes('creaming')) expect(batch.creamingRiskPct, `${at} creamingRiskPct without the flag`).toBe(0);
     if (batch.status === 'filling') expect(batch.endS, `${at} still filling`).toBeGreaterThan(snap.timeS);
     if (batch.status === 'hold') expect(batch.releaseAtS, `${at} release`).toBeGreaterThan(snap.timeS);
   }

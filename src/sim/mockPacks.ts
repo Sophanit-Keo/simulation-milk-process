@@ -145,6 +145,8 @@ export function mockPacks(config: PlantConfig, input: MockPacksInput): MockPacks
         lastPalletPacks: pallets > 0 ? lastPalletPacks : 0,
         samples: Math.round(q.batchS / q.sampleEveryS) + q.samplesAfterStop * Math.floor(hash(id, 4) * 3),
         qaResult: blocked ? 'fail' : 'pending',
+        flags: [],
+        creamingRiskPct: 0,
       });
     }
   }

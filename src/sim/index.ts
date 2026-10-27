@@ -7,6 +7,7 @@ import { createCore } from './core';
 import { createLiquidLine, LIQUID_STAGE_IDS, type LiquidLine, type LiquidLineOptions } from './liquidLine';
 import { createPacksLine, PACKS_STAGE_IDS, type PacksLine } from './packsLine';
 import { createRng, type Rng } from './rng';
+import { createScenarios, type Scenarios } from './scenarios';
 import { linePoints, staticPlant, toStages } from './staticPlant';
 
 export interface SimOptions extends Omit<LiquidLineOptions, 'fillers'> {
@@ -29,19 +30,32 @@ export const packsSeed = (seed: number): number => Math.imul(seed ^ 0x5bd1e995, 
 
 export function createSim(config: PlantConfig, options: SimOptions = {}): Sim {
   // The core first, so the packs model can queue its opening events; the hooks reach the models once built.
-  const models: { liquid?: LiquidLine; packs?: PacksLine } = {};
+  const models: { liquid?: LiquidLine; packs?: PacksLine; scenarios?: Scenarios } = {};
   const core = createCore(config, {
     onStep(dtS, timeS) {
       models.liquid?.step(dtS, timeS, core.setpoints, core.log);
       models.packs?.afterStep(timeS, core.setpoints);
+      models.scenarios?.afterStep(timeS);
     },
-    onEvent: (event) => models.packs?.onEvent(event, core.setpoints) ?? false,
+    onEvent: (event) => (models.packs?.onEvent(event, core.setpoints) || models.scenarios?.onEvent(event)) ?? false,
     onQaResult: (batchId, result) => models.packs?.setQaResult(batchId, result, core.timeS),
+    onScenario: (id, variant) => models.scenarios?.trigger(id, variant, core.timeS),
+    onResetScenarios: () => models.scenarios?.reset(core.timeS),
+    annotateLog: (entry, tag) => models.scenarios?.annotate(entry, tag),
   });
   const packs = createPacksLine(config, options.packsRng ?? createRng(packsSeed(config.seed)), core, core.timeS);
   const liquid = createLiquidLine(config, options.rng ?? createRng(config.seed), { fillers: packs.fillers });
   models.liquid = liquid;
   models.packs = packs;
+  const scenarios = createScenarios(config, {
+    liquid,
+    packs,
+    setpoints: core.setpoints,
+    schedule: (timeS, type, payload) => core.schedule(timeS, type, payload),
+    cancel: (seq) => core.cancel(seq),
+    log: core.log,
+  });
+  models.scenarios = scenarios;
   options.onLiquidLine?.(liquid);
   options.onPacksLine?.(packs);
   return {
@@ -55,8 +69,16 @@ export function createSim(config: PlantConfig, options: SimOptions = {}): Sim {
       for (const id of LIQUID_STAGE_IDS) values[id] = live.values[id];
       for (const id of PACKS_STAGE_IDS) values[id] = discrete.values[id];
       const statuses = { ...live.statuses, ...discrete.statuses };
+      scenarios.adjustStatuses(statuses);
       const line = linePoints(values, live.flows);
-      return core.snapshot(toStages(values, (id) => statuses[id]), { ...plant.kpis, ...live.kpis, ...discrete.kpis }, line, live.liquid, discrete.packs);
+      return core.snapshot(
+        toStages(values, (id) => statuses[id]),
+        { ...plant.kpis, ...live.kpis, ...discrete.kpis },
+        line,
+        live.liquid,
+        discrete.packs,
+        scenarios.snapshot(core.timeS),
+      );
     },
   };
 }

@@ -7,6 +7,10 @@
 // calling for a tanker, a tanker running empty), so a step is cut at each such event and the levels are
 // exact at any step the clock takes (checkPlantConfig caps clock.fastStepS at 60 s). The lags (preheater, air content, mixing-tank level control) are integrated exactly
 // (formulas.ts, lagToward). The display noise is drawn once per step.
+//
+// Two fault scenarios act here (phase 5, scenarios.ts): a steam dip, which lets the holding-tube outlet fall
+// toward uht.faultTempC until the plant diverts (a step is cut at the instant it crosses the divert limit),
+// and a homogenizer pressure loss, which holds stage 1 at a low pressure.
 import {
   fracToPct,
   lphToLps,
@@ -15,13 +19,13 @@ import {
   sToMin,
   type Kpis,
   type LiquidSnapshot,
-  type LogKind,
   type PlantConfig,
   type Status,
   type UhtMode,
 } from '../contracts';
 import type { Setpoints } from './core';
 import { createFillerStub, type FillerSupply } from './fillerStub';
+import type { LogWriter } from './log';
 import { bStar, creamShareFrac, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, lagToward, surplusCreamFrac, tubeVolumeL } from './formulas';
 import {
   condenserKw,
@@ -67,6 +71,10 @@ export interface LiquidState {
   airPct: number;
   /** Display noise on the holding-tube reading, drawn once per step, within ±uht.displayNoiseC (D4). */
   noiseC: number;
+  /** When the steam supply dipped (the UHT temperature drop scenario), or null while it is normal. */
+  steamFaultSinceS: number | null;
+  /** Stage 1 pressure a homogenizer fault holds it at, or null while the homogenizer works. */
+  homogenizerFaultBar: number | null;
 }
 
 /** Litres and seconds summed since the plant opened, for the mass balance and the long-run checks. */
@@ -120,7 +128,7 @@ export interface LiquidView {
   kpis: Pick<Kpis, 'uhtFlowLph' | 'f0Min' | 'bStar' | 'divertedL' | 'tankLevelPct' | 'packsPerH'>;
 }
 
-export type LiquidLog = (timeS: number, kind: LogKind, message: string) => void;
+export type LiquidLog = LogWriter;
 
 export interface LiquidLine {
   readonly state: Readonly<LiquidState>;
@@ -129,6 +137,18 @@ export interface LiquidLine {
   step(dtS: number, endS: number, setpoints: Readonly<Setpoints>, log: LiquidLog): void;
   /** The stage values, statuses, line flows and liquid snapshot for the current state. */
   view(setpoints: Readonly<Setpoints>, timeS: number): LiquidView;
+  /**
+   * The steam supply dips from nowS (UHT temperature drop): the outlet falls toward uht.faultTempC, and the
+   * plant diverts once B* falls below 1. The steam comes back when the divert ends. False, and nothing
+   * happens, unless the UHT plant is in production with steam normal.
+   */
+  startSteamFault(nowS: number): boolean;
+  /** Steam back before the divert (a reset): the outlet is at its set point again. */
+  endSteamFault(): void;
+  /** Holds stage 1 at `bar` (homogenizer pressure loss), or lets it follow its set point again with null. */
+  setHomogenizerFault(bar: number | null): void;
+  /** Stage 1 pressure the homogenizer runs at: the set point, or the lower one a fault holds it at. */
+  stage1Bar(setpoints: Readonly<Setpoints>): number;
 }
 
 export interface LiquidLineOptions {
@@ -174,6 +194,8 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     preheatTempC: preheating.preheatTempC,
     airPct: preheating.deaeratedAirPct,
     noiseC: 0,
+    steamFaultSinceS: null,
+    homogenizerFaultBar: null,
   };
   const totals: LiquidTotals = {
     rawDrawnL: 0,
@@ -192,6 +214,31 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
   /** UHT flow the plant runs at in production or divert: full capacity, or the throttled share. */
   const nominalUhtLph = (): number => uht.capacityLph * (state.throttled ? tank.throttledFlowFrac : 1);
   const producing = (): boolean => state.mode === 'production' || state.mode === 'divert';
+  /**
+   * The milk's temperature at the holding-tube outlet, before display noise: the set point, or during a steam
+   * dip a first-order fall from it toward the fault temperature (never above the set point).
+   */
+  function milkOutletC(nowS: number, setpointC: number): number {
+    if (state.steamFaultSinceS === null) return setpointC;
+    const targetC = Math.min(setpointC, uht.faultTempC);
+    return targetC + (setpointC - targetC) * Math.exp(-Math.max(0, nowS - state.steamFaultSinceS) / config.scenarios.steamFaultLagS);
+  }
+
+  /** Time from nowS until a falling outlet reaches the divert limit at holdS: Infinity without a steam dip, or if it never does. */
+  function timeToDivertLimitS(nowS: number, setpointC: number, holdS: number): number {
+    if (state.steamFaultSinceS === null || state.mode !== 'production') return Infinity;
+    const targetC = Math.min(setpointC, uht.faultTempC);
+    const limitC = divertLimitC(holdS);
+    if (!(limitC > targetC)) return Infinity;
+    if (setpointC <= limitC) return 0;
+    const crossS = state.steamFaultSinceS + config.scenarios.steamFaultLagS * Math.log((setpointC - targetC) / (limitC - targetC));
+    return crossS - nowS;
+  }
+
+  /** Stage 1 pressure the homogenizer runs at: the set point, or the lower one a fault holds it at. */
+  const stage1BarNow = (setpoints: Readonly<Setpoints>): number =>
+    state.homogenizerFaultBar === null ? setpoints.homogenizerStage1Bar : Math.min(state.homogenizerFaultBar, setpoints.homogenizerStage1Bar);
+
   /** The level the mixing tank's level control steers to: hold while the UHT plant draws, fill up while it doesn't. */
   const mixTargetL = (uhtLph: number): number => std.mixTankCapacityL * (uhtLph > 0 ? std.mixTankStartFrac : std.mixTankIdleFrac);
 
@@ -213,10 +260,15 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
   }
 
   /** Time until the next event that changes a flow, with the flows constant until then. */
-  function nextEventS(flows: LiquidFlows): number {
+  function nextEventS(flows: LiquidFlows, nowS: number, setpoints: Readonly<Setpoints>): number {
     let soonestS = Infinity;
     const at = (s: number) => (soonestS = Math.min(soonestS, Math.max(0, s)));
     if (TIMED_MODES.has(state.mode)) at(state.modeRemainingS);
+    // A falling outlet crossing the divert limit; one already on it is caught by checkDivert at the cut's start.
+    if (flows.uhtLph > 0) {
+      const crossS = timeToDivertLimitS(nowS, setpoints.uhtSetpointC, holdTimeS(tubeL, flows.uhtLph));
+      if (crossS > TIME_EPS_S) at(crossS);
+    }
     if (state.mode === 'production') at(cleaning.aicEveryProductionS - state.productionSinceCleanS);
     const netLps = lphToLps(flows.productLph - flows.fillerLph);
     at(timeToReachS(state.asepticL, netLps, state.throttled ? resumeBelowL : throttleAboveL));
@@ -299,70 +351,79 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
    * for the set point. The reading scatters around the set point, the temperature the milk really has, so
    * a set point under the divert limit diverts at once too, even in a step whose noise lifts the reading
    * over it. Noise alone still never diverts: at 140 °C the lowest reading gives B* 1.11 (H21).
+   * During a steam dip the milk is no longer at the set point: its falling outlet temperature diverts once it
+   * reaches the limit, at the instant the step was cut for (or a noisy reading under the limit, earlier).
    */
   function checkDivert(nowS: number, setpoints: Readonly<Setpoints>, flows: LiquidFlows, log: LiquidLog): void {
     if (state.mode !== 'production' || flows.uhtLph <= 0) return;
     const holdS = holdTimeS(tubeL, flows.uhtLph);
     const setpointC = setpoints.uhtSetpointC;
-    const readingC = setpointC + state.noiseC;
-    const bySetpoint = bStar(setpointC, holdS) < 1;
-    if (!bySetpoint && bStar(readingC, holdS) >= 1) return;
+    const milkC = milkOutletC(nowS, setpointC);
+    const readingC = milkC + state.noiseC;
+    const steamDip = state.steamFaultSinceS !== null;
+    // The crossing time is computed, so it gets floating-point slack; a set point is compared as it is.
+    const byMilk = steamDip ? milkC <= divertLimitC(holdS) + 1e-9 : bStar(setpointC, holdS) < 1;
+    if (!byMilk && bStar(readingC, holdS) >= 1) return;
     enterMode('divert', uht.divertBeforeCleaningS);
     state.divertCount += 1;
     // Say which number diverted, rounded down so it never reads "B* 1.00, below 1".
-    const [what, tempC] = bySetpoint ? ['set point', setpointC] : ['reading', readingC];
-    const bStarText = (Math.floor(bStar(tempC, holdS) * 100) / 100).toFixed(2);
-    log(nowS, 'bad', `UHT ${what} ${tempC.toFixed(1)} °C gives B* ${bStarText}, below 1: diverting to the reject tank`);
+    const [what, tempC] = byMilk ? [steamDip ? 'outlet' : 'set point', milkC] : ['reading', readingC];
+    const bStarText = (Math.floor(Math.min(bStar(tempC, holdS), 0.999) * 100) / 100).toFixed(2);
+    log(nowS, 'bad', `UHT ${what} ${tempC.toFixed(1)} °C gives B* ${bStarText}, below 1: diverting to the reject tank`, { topic: 'divert' });
   }
 
   /** Switches whose threshold the last cut landed on, then mode changes whose time has come. */
   function applyEvents(nowS: number, log: LiquidLog): void {
     if (!state.throttled && state.asepticL >= throttleAboveL - LEVEL_EPS_L) {
       state.throttled = true;
-      log(nowS, 'warn', `Aseptic tank above ${fracToPct(tank.throttleAboveFrac)}%: UHT plant throttled to ${fracToPct(tank.throttledFlowFrac)}%`);
+      log(nowS, 'warn', `Aseptic tank above ${fracToPct(tank.throttleAboveFrac)}%: UHT plant throttled to ${fracToPct(tank.throttledFlowFrac)}%`, {
+        topic: 'throttled',
+      });
     } else if (state.throttled && state.asepticL <= resumeBelowL + LEVEL_EPS_L) {
       state.throttled = false;
-      log(nowS, 'ok', `Aseptic tank below ${fracToPct(tank.resumeBelowFrac)}%: UHT plant back to full flow`);
+      log(nowS, 'ok', `Aseptic tank below ${fracToPct(tank.resumeBelowFrac)}%: UHT plant back to full flow`, { topic: 'unthrottled' });
     }
     if (!state.fillersStarved && state.asepticL <= tank.fillersStopBelowL + LEVEL_EPS_L) {
       state.fillersStarved = true;
-      log(nowS, 'warn', `Aseptic tank below ${formatL(tank.fillersStopBelowL)} L: fillers stopped, waiting for product`);
+      log(nowS, 'warn', `Aseptic tank below ${formatL(tank.fillersStopBelowL)} L: fillers stopped, waiting for product`, { topic: 'fillersStarved' });
     } else if (state.fillersStarved && state.asepticL >= tank.fillersRestartAboveL - LEVEL_EPS_L) {
       state.fillersStarved = false;
-      log(nowS, 'ok', `Aseptic tank back above ${formatL(tank.fillersRestartAboveL)} L: fillers running again`);
+      log(nowS, 'ok', `Aseptic tank back above ${formatL(tank.fillersRestartAboveL)} L: fillers running again`, { topic: 'fillersFed' });
     }
     if (state.tankerLeftL <= 0 && state.siloL <= tankerBelowL + LEVEL_EPS_L) state.tankerLeftL = std.tankerL;
 
     if (TIMED_MODES.has(state.mode) && state.modeRemainingS <= TIME_EPS_S) {
       switch (state.mode) {
         case 'divert':
+          // A steam dip lasts as long as the divert: the steam is back by the time the line is flushed.
+          state.steamFaultSinceS = null;
           if (cleaning.cipAfterDivert) {
             enterMode('cip', cleaning.cipS);
-            log(nowS, 'warn', `Full CIP started after the divert: ${formatMin(cleaning.cipS)}`);
+            log(nowS, 'warn', `Full CIP started after the divert: ${formatMin(cleaning.cipS)}`, { topic: 'cipStart' });
           } else {
             enterMode('production', 0);
-            log(nowS, 'ok', 'Divert over: UHT plant back in production');
+            log(nowS, 'ok', 'Divert over: UHT plant back in production', { topic: 'productionResumed' });
           }
           break;
         case 'cip':
           enterMode('sterilize', uht.sterilizeS);
-          log(nowS, 'info', `CIP done: sterilizing at ${uht.sterilizeTempC} °C for ${formatMin(uht.sterilizeS)}`);
+          log(nowS, 'info', `CIP done: sterilizing at ${uht.sterilizeTempC} °C for ${formatMin(uht.sterilizeS)}`, { topic: 'sterilizeStart' });
           break;
         case 'sterilize':
           enterMode('production', 0);
           state.productionSinceCleanS = 0;
-          log(nowS, 'ok', 'UHT plant sterile: back in production');
+          log(nowS, 'ok', 'UHT plant sterile: back in production', { topic: 'productionResumed' });
           break;
         case 'aic':
           enterMode('production', 0);
           state.productionSinceCleanS = 0;
-          log(nowS, 'ok', 'Intermediate clean done: back in production');
+          log(nowS, 'ok', 'Intermediate clean done: back in production', { topic: 'aicDone' });
           break;
       }
     }
     if (state.mode === 'production' && state.productionSinceCleanS >= cleaning.aicEveryProductionS - TIME_EPS_S) {
       enterMode('aic', cleaning.aicS);
-      log(nowS, 'info', `Intermediate clean (AIC) started: ${formatMin(cleaning.aicS)}, the aseptic tank feeds the fillers`);
+      log(nowS, 'info', `Intermediate clean (AIC) started: ${formatMin(cleaning.aicS)}, the aseptic tank feeds the fillers`, { topic: 'aicStart' });
     }
   }
 
@@ -376,7 +437,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       checkDivert(nowS, setpoints, flowsNow(setpoints, nowS), log);
       const flows = flowsNow(setpoints, nowS);
       const leftS = dtS - doneS;
-      const cutS = cuts < MAX_CUTS_PER_STEP ? Math.min(leftS, nextEventS(flows)) : leftS;
+      const cutS = cuts < MAX_CUTS_PER_STEP ? Math.min(leftS, nextEventS(flows, nowS, setpoints)) : leftS;
       // Whether the tank fed the fillers in this cut: a starving or refilling switch comes at its end.
       const fed = !state.fillersStarved;
       advance(cutS, flows);
@@ -401,19 +462,26 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     const { uhtLph } = flows;
 
     const deaeratorTempC = state.preheatTempC - preheating.deaeratorDropC;
-    // A stopped homogenizer builds no pressure; the globule size and creaming risk stay those of its set point.
-    const stage1Bar = uhtLph > 0 ? setpoints.homogenizerStage1Bar : 0;
+    // A stopped homogenizer builds no pressure; the globule size and creaming risk stay those of the pressure
+    // it runs at, its set point or a fault's.
+    const runningBar = stage1BarNow(setpoints);
+    const stage1Bar = uhtLph > 0 ? runningBar : 0;
     const stage2Bar = uhtLph > 0 ? homogenizer.stage2Bar : 0;
     const totalBar = stage1Bar + stage2Bar;
     const outletTempC = homogenizerOutletC(deaeratorTempC, totalBar, homogenizer.barPerDegreeC);
-    const globule = globuleUm(config, setpoints.homogenizerStage1Bar);
+    const globule = globuleUm(config, runningBar);
     const creamingRisk = creamingRiskPct(config, globule);
 
-    // The holding-tube outlet reads the set point plus noise while product or AIC water runs at
-    // sterilizing heat, the lye during a full CIP and the hot water while re-sterilizing.
+    // The holding-tube outlet reads the milk's temperature plus noise while product or AIC water runs at
+    // sterilizing heat (the set point, or lower during a steam dip), the lye during a full CIP and the hot
+    // water while re-sterilizing.
     const setpointC = setpoints.uhtSetpointC;
     const tempC =
-      state.mode === 'cip' ? cleaning.cipTempC : state.mode === 'sterilize' ? uht.sterilizeTempC : setpointC + state.noiseC;
+      state.mode === 'cip'
+        ? cleaning.cipTempC
+        : state.mode === 'sterilize'
+          ? uht.sterilizeTempC
+          : milkOutletC(timeS, setpointC) + state.noiseC;
     // With nothing flowing there is no hold and no sterilizing effect; the limit shown is the one production restarts at.
     const holdS = uhtLph > 0 ? holdTimeS(tubeL, uhtLph) : 0;
     const f0 = uhtLph > 0 ? f0Min(tempC, holdS) : 0;
@@ -481,7 +549,8 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     const statuses: LiquidView['statuses'] = {
       1: flowing(flows.rawLph),
       2: flowing(uhtLph),
-      3: uhtLph <= 0 ? 'idle' : creamingRisk > 0 ? 'warn' : 'ok',
+      // A pressure fault is red, as a breakdown; a set point low enough to risk creaming amber.
+      3: uhtLph <= 0 ? 'idle' : state.homogenizerFaultBar !== null ? 'bad' : creamingRisk > 0 ? 'warn' : 'ok',
       4: uhtStatus,
       5: flowing(flows.productLph),
       6: state.throttled || state.fillersStarved ? 'warn' : 'ok',
@@ -521,5 +590,22 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     };
   }
 
-  return { state, totals, step, view };
+  return {
+    state,
+    totals,
+    step,
+    view,
+    startSteamFault(nowS) {
+      if (state.mode !== 'production' || state.steamFaultSinceS !== null) return false;
+      state.steamFaultSinceS = nowS;
+      return true;
+    },
+    endSteamFault() {
+      state.steamFaultSinceS = null;
+    },
+    setHomogenizerFault(bar) {
+      state.homogenizerFaultBar = bar;
+    },
+    stage1Bar: (setpoints) => stage1BarNow(setpoints),
+  };
 }

@@ -62,7 +62,9 @@ export function startPacks(config: PlantConfig, options: { speed?: Speed; packsR
     openS,
     t,
     runTo(tS, each) {
-      while (t() < tS) {
+      // Steps cut at queued events leave fractional times; a hair short of the target counts as there, or the
+      // tiny last frames would take millions of turns to add up to a step.
+      while (t() < tS - 1e-6) {
         sim.step(Math.min(config.clock.maxFrameS, Math.max(tS - t(), 1e-6) / speed));
         each?.(sim.snapshot());
       }
