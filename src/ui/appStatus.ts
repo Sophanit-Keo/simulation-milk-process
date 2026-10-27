@@ -6,7 +6,7 @@ import { el } from './dom';
 
 /** Hides index.html's loading note (#loading); safe to call every frame. */
 export function hideLoading(): void {
-  const loading = document.getElementById('loading');
+  const loading = document.querySelector<HTMLElement>('#loading');
   if (loading && !loading.hidden) loading.hidden = true;
 }
 
