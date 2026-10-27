@@ -89,7 +89,8 @@ export function createScenarioLog(view: HTMLElement, signal: AbortSignal): Scena
   let shownRun: number | null = null;
   /** The run seen over last, and when (real time). */
   let over: { run: number; atMs: number } | null = null;
-  let runsKey = '';
+  /** What the dialog last drew; null until it first draws, so an empty log draws its "none yet" line too. */
+  let runsKey: string | null = null;
   let lastSnapshot: Snapshot | null = null;
 
   function renderRuns(runs: readonly ScenarioRunSnapshot[]): void {
