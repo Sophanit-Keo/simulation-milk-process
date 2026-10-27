@@ -60,6 +60,8 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | Fillers | 2 × 7,500 packs/h, 1 L | Below the 8,000/h maximum of the [A3/Flex](https://www.tetrapak.com/solutions/packaging/filling-machines/tetra-pak-a3flex) |
 | Filler time between failures | Random (exponential), mean 8 h of running | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Filler repair time | 2 min + random (exponential), mean 12 min | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| Filler breakdowns | Counted only while a filler runs; the random part of a repair shows as broken down, the 2 min fixed part as re-sterilizing | Sim assumption ([D14](DECISIONS.md#d14-phase-4-packs-to-trucks-defaults)) |
+| Seal-check rejects | 0.2% of packs | Sim assumption ([D14](DECISIONS.md#d14-phase-4-packs-to-trucks-defaults)) |
 | Homogenizer | 200 bar + 30 bar; outlet about 82 °C | 180–250 bar; second stage about 30 bar; 1 °C per 40 bar ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers), [D5](DECISIONS.md#d5-homogenizer-outlet)) |
 | Homogenizer power and globules | 82% efficiency; globules 3.5 µm raw, 0.8 µm at 200 bar, size ∝ (200 bar ÷ pressure)^0.6; creaming risk 0% at 1 µm or less, 100% at 2 µm | 68 kW drawn for 55.6 kW hydraulic; 3.5 µm to below 1 µm ([Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers)); 0.8 µm, the exponent and 2 µm are sim assumptions ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | Holding time | 4 s at full flow | Practical range 4–6 s ([Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk)) |
@@ -82,11 +84,15 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | Quarantine | 7 days at 55 °C (default) or 15 days at 30 °C | [Regulation 853/2004](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX), [D9](DECISIONS.md#d9-other-open-values) |
 | Microbial failure rate | 0.02% of packs | [UHT milk module](https://ebooks.inflibnet.ac.in/ftp04/chapter/uht-milk-and-milk-products/) |
 | Pack, tray, pallet | 1 L; 12 packs; 84 trays | Sim assumptions |
+| Batch change | The packer stops 2 min at each shift change, then catches up at up to 30% over its 8,000 packs/h rating | Sim assumption ([D9](DECISIONS.md#d9-other-open-values), [D14](DECISIONS.md#d14-phase-4-packs-to-trucks-defaults)) |
+| Blocked batch | Kept in quarantine 1 day, then destroyed | Sim assumption ([D14](DECISIONS.md#d14-phase-4-packs-to-trucks-defaults)) |
 | Shelf life | 6 months (182 days) | Six to nine months ([GEA](https://www.gea.com/en/stories/shelf-stable-milk-conscientious-convenience/)) |
 | Truck | 22 pallets, one every 100 min (about 317 pallets a day) | About 24 t, within the 24–25 t payload of a 40 t truck ([D3](DECISIONS.md#d3-truck-payload)) |
+| Truck loading | 20 min at one of 3 dock doors; with every door taken a truck waits in the yard | Sim assumption ([D14](DECISIONS.md#d14-phase-4-packs-to-trucks-defaults)) |
 | Demand | Trucks only; a truck waits at the dock until enough stock is released | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Random seed | 81006 (mulberry32), so every run repeats | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
-| Sim clock | Day 1 at 06:00, ×10; 1 s steps, 10 s steps above ×1,000 | Sim assumption ([D8](DECISIONS.md#d8-clock)) |
+| Sim clock | Day 8 at 06:00, ×10; 1 s steps, 10 s steps above ×1,000 | Sim assumption ([D8](DECISIONS.md#d8-clock), [D11](DECISIONS.md#d11-opening-state)) |
+| Opening state | A week of history: 42 batches on hold (about 2,450 pallets) and 634 pallets of released stock | Sim assumption ([D11](DECISIONS.md#d11-opening-state)) |
 
 > **Decided:** a batch is one filler for one 8-hour shift ([D1](DECISIONS.md#d1-batch-size)), the eleven missing defaults are set ([D2](DECISIONS.md#d2-missing-defaults)), and a truck carries 22 pallets every 100 min ([D3](DECISIONS.md#d3-truck-payload)). Each stays Proposed until the developer approves it in the [decision log](DECISIONS.md). [Hand calculations](hand-calculations.md) lists the expected values QA tests against.
 

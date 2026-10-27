@@ -23,6 +23,18 @@ The holding tube holds 17.8 L, so the holding time is that volume divided by the
 
 The temperature-drop fault therefore falls to 135.5 °C, which diverts at either flow. It is above the EU minimum of 135 °C ([Regulation 853/2004](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX)), so temperature alone is not enough without the holding time.
 
+## From packs to trucks
+
+Each filler makes 7,500 one-litre packs an hour, below its 8,000 maximum, and the seal check rejects 0.2%. Packs go 12 to a tray and 84 trays to a pallet, 1,008 packs. A batch is one filler for one 8-hour shift: about 60 pallets, the last closed part-full so that no pallet mixes two batches. Each filler sends a pack to the QA lab every 30 min and 2 more after each restart, so a batch has at least 16 samples.
+
+A batch waits in quarantine while its samples incubate for 7 days at 55 °C. If none spoils, it is released to the warehouse; if one does, the batch is blocked, kept for a day, then destroyed. With 0.02% of packs failing, about one batch in 300 is blocked, one every 52 days or so. The batch list in the stage 9 panel can pass or fail a batch by hand.
+
+So the quarantine holds a week of output, about 2,500 pallets. A truck comes every 100 min for 22 pallets, about 317 a day, picked earliest best-before first; it waits at the dock if the stock is short. After breakdowns the plant makes about 350 pallets a day, so the stock grows by about 30 a day. Each filler's OEE is availability × performance × quality, about 91% over a long run.
+
+## Why it opens on day 8
+
+A plant that started empty would release nothing for a week: the first batch would leave quarantine on day 8, and every truck until then would find no stock. So the model opens on day 8 at 06:00 with a week of history: 42 batches on hold and 634 pallets in stock, two days of cover ([D11](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d11-opening-state)).
+
 ## Accepted simplifications
 
 - Milk moves as plug flow, with no pressure drop, viscosity effects or fouling.
@@ -32,6 +44,8 @@ The temperature-drop fault therefore falls to 135.5 °C, which diverts at either
 - Failures follow simple random rates, not real plant data.
 - A full CIP runs only after a divert; real plants also clean at the end of each production run.
 - Demand is a truck of 22 pallets at a fixed interval, standing in for random daily orders.
+- Packs, trays and pallets are counts. The 3D view moves a sample of them, not every pack.
+- A truck loads only a full load of released stock, and every pallet holds packs of one batch.
 
 ## Where the numbers come from
 
