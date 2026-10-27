@@ -187,9 +187,10 @@ test.describe('the event log', () => {
     await expect(list).toHaveAttribute('role', 'log');
     await expect(list).toHaveAttribute('aria-live', 'polite');
     await expect(page.getByRole('log', { name: 'What happened' })).toBeVisible();
-    await expect.poll(async () => (await logEntries(page)).at(-1)?.text).toBe('Plant opens: day 1, 06:00');
+    // The plant opens on day 8 after a week of history (D11).
+    await expect.poll(async () => (await logEntries(page)).at(-1)?.text).toBe('Plant opens: day 8, 06:00');
     const first = (await logEntries(page)).at(-1);
-    expect(first).toMatchObject({ kind: 'info', lamp: 'idle', label: 'Note', time: 'day 1 · 06:00' });
+    expect(first).toMatchObject({ kind: 'info', lamp: 'idle', label: 'Note', time: 'day 8 · 06:00' });
 
     const card = page.locator('#log');
     const boxBefore = await card.boundingBox();
@@ -325,7 +326,7 @@ test.describe('the ?debug panel', () => {
       await expect(gui.getByText(name, { exact: true })).toBeVisible();
     }
     // The read-outs refresh with the HUD.
-    await expect(gui.locator('.lil-controller', { hasText: 'Sim time' }).locator('input')).toHaveValue(/^day 1 · \d\d:\d\d$/);
+    await expect(gui.locator('.lil-controller', { hasText: 'Sim time' }).locator('input')).toHaveValue(/^day 8 · \d\d:\d\d$/);
     await expect(gui.locator('.lil-controller', { hasText: 'UHT plant' }).locator('input')).toHaveValue('Production');
   });
 });

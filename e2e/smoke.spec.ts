@@ -33,3 +33,22 @@ test('the mock snapshot (/?mock) loads with no errors and no third-party request
   expect(thirdPartyRequests, 'requests to another origin').toEqual([]);
   expect(pageProblems).toEqual([]);
 });
+
+test('?heroes loads the four hero models in place of their grey boxes, with no errors; without it none loads', async ({ page, pageProblems }) => {
+  const heroFiles = (urls: string[]) => [...new Set(urls.filter((url) => url.includes('/models/hero/')).map((url) => url.split('/').pop()))].sort();
+  const loaded: string[] = [];
+  page.on('response', (response) => {
+    if (response.ok()) loaded.push(response.url());
+  });
+  await page.goto('/');
+  await waitForClock(page);
+  await page.waitForTimeout(SETTLE_MS);
+  expect(heroFiles(loaded), 'hero models loaded without ?heroes').toEqual([]);
+
+  loaded.length = 0;
+  await page.goto('/?heroes');
+  await waitForClock(page);
+  await expect.poll(() => heroFiles(loaded)).toEqual(['aseptic-filler.glb', 'homogenizer.glb', 'palletizer.glb', 'separator.glb']);
+  await page.waitForTimeout(SETTLE_MS);
+  expect(pageProblems).toEqual([]);
+});
