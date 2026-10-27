@@ -125,6 +125,26 @@ Measured on 27 October 2026 by `qa` on the phase 4 branch (after `74323b9`, with
 
 Six draw calls more than phase 3 at the overview: the moving packs, trays and pallets, the quarantine blocks and their lamps, and the trucks are instanced meshes of a draw or two each. The triangles grow by about 83,000, most of them the 2,453 pallets on hold at the opening (one instance of 12 triangles each, drawn in both passes) and the stock in the racks; that is still under the 300,000 a frame the asset budget plans for ([assets/README.md](../../assets/README.md#budgets)). The first frames read 193 draw calls and 165,914 triangles, before the Kenney pieces and vehicles replaced their grey boxes. Software GL gave 3.9 fps at the overview at 1440 × 900 (4.3 at 1280 × 720), against 7.2 in phase 2, with the measurement's own SwiftShader threads the only load (load average 3.9): the triangles cost a CPU renderer more than a GPU. **The G2 item "60 fps with tokens on screen" stays open** until it is measured on a real GPU ([To do on a real GPU](#to-do-on-a-real-gpu)).
 
+### Phase 5: hero models
+
+Measured on 27 October 2026 by `qa` on the phase 5 branch (contracts v4, the fault scenarios, and the four hero models loaded by default: AO baked into the vertex colours, meshopt geometry), same machine and method, a production build served by `vite preview`, on the live sim with no scenario running. As in phase 4 the script ran on the installed Chromium 153 through a local copy with `executablePath`, and that browser's request for `/favicon.ico` is the one console error it reported (exit code 1); the app logged none. 33 machines; within the overview budget.
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **207** | **232,346** | **207** | **232,346** |
+| 1 Standardization | 105 | 129,940 | 105 | 129,940 |
+| 2 Preheating | 101 | 129,708 | 102 | 129,720 |
+| 3 Homogenization | 102 | 126,944 | 102 | 126,944 |
+| 4 UHT | 109 | 136,400 | 111 | 136,636 |
+| 5 Flash cooling | 103 | 129,912 | 103 | 129,912 |
+| 6 Aseptic tank | 92 | 120,720 | 92 | 120,720 |
+| 7 Filling | 106 | 137,576 | 106 | 137,576 |
+| 8 Packaging | 116 | 138,894 | 117 | 139,062 |
+| 9 Quarantine & QA | 133 | 202,888 | 140 | 211,616 |
+| 10 Warehouse | 141 | 146,448 | 151 | 152,444 |
+
+The same build with `?greybox` reads exactly phase 4's figures (overview 194 draw calls and 187,786 triangles at 1440 × 900), so the difference is the heroes': 13 draw calls more at the overview, as each hero mesh draws in the main and the shadow pass (29 meshes, the filler's glass casting no shadow), against the grey boxes' merged parts; and 44,560 triangles more, the heroes' 24,204 a pass drawn twice, less the grey boxes they hide. The first frames read 206 draw calls and 210,474 triangles, before the Kenney pieces and vehicles replaced their grey boxes. A first cut of the heroes with 0.12 m AO cells read 280,986 triangles at the overview, close to the 300,000 a frame the asset budget plans for; the 0.2 m cells shipped give the same shading at the stage cameras for half the triangles ([hero-specs.md](../../assets/hero-specs.md#phase-5-final-models)). Software GL gave 4.1 fps at the overview at 1440 × 900 (4.3 at 1280 × 720) against 4.2 with `?greybox` measured the same way, load average about 4. **The exit item "60 fps holds" stays open** until it is measured on a real GPU ([To do on a real GPU](#to-do-on-a-real-gpu)).
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.
