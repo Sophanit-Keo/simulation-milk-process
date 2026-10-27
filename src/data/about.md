@@ -17,6 +17,12 @@ The model computes the sterilizing effect B* from the temperature at the holding
 
 At 140 °C and a 4 s hold, B* is 1.19 and the divert limit is 139.22 °C. The temperature on screen moves a little, but that noise is capped at ±0.3 °C. The divert check reads both the noisy reading and the set point, so a set point under the limit diverts at once. The lowest reading at 140 °C, 139.7 °C, still gives B* 1.11, so noise alone never diverts. F0 can dip just under 5 min within that band, so the status lamps follow B*, not F0 ([D4](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d4-divert-rule-and-display-noise)).
 
+## Cleaning
+
+A full CIP walks the Dairy Processing Handbook's programme for circuits with heated surfaces: a 10 min pre-rinse with warm water at 45 °C, 30 min of lye at 75 °C, a 5 min rinse, 20 min of acid at 70 °C, a 7 min post-rinse with cold water and 8 min of gradual cooling, 80 min in all ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment)). After every 10 h of production the plant also runs a 30 min intermediate clean (AIC) at the set point, so it stays sterile: water pushes the milk out for 5 min, lye circulates for 20 min and water rinses for 5 min, while the fillers draw on the aseptic tank.
+
+The CIP station behind the flash vessel pumps each fluid at 24,000 L/h, about 2 m/s in the pipes, and lights the lamp of the one it pumps. The pipes from the balance tank to the cooler outlet take that fluid's colour: pale blue water, violet lye, magenta acid. The aseptic tank and the divert line are not in the circuit. The stage 4 panel names the step and the time left in it.
+
 ## Holding time follows the flow
 
 The holding tube holds 17.8 L, so the holding time is that volume divided by the flow: 4 s at full flow (16,000 L/h), 8 s at 50%. At 8 s, B* rises to 2.37, F0 to 10.35 min, and the divert limit falls to 136.06 °C. The stage 4 panel shows this.
@@ -57,7 +63,7 @@ Tour, at the top of the stage list, flies the camera through the ten stages in o
 - Milk moves as plug flow, with no pressure drop, viscosity effects or fouling.
 - Temperatures change in steps with a short lag, not through heat-transfer equations.
 - One product and one pack size.
-- Cleaning is a timed machine state, not liquid moving through the pipes.
+- Cleaning runs its steps on a timer: the fluids colour the pipes and set the temperatures, but they are not part of the liquid balance, and nothing models soil or detergent strength.
 - Failures follow simple random rates, not real plant data.
 - The fault scenarios are scripted, each with one fixed size and duration.
 - The machines are simplified models made in code, shaded with baked ambient occlusion, not drawings of real equipment.

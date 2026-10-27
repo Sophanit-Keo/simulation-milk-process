@@ -20,7 +20,7 @@ The biggest risk is scope: ten stages plus detailed 3D is a lot for one person, 
 - Milk moves as plug flow, with no pressure drop, viscosity effects or fouling.
 - Temperatures change in steps with a short lag, not through heat-transfer equations.
 - One product and one pack size.
-- Cleaning is a timed machine state, not liquid moving through the pipes.
+- Cleaning runs its steps on a timer: the fluids colour the pipes and set the temperatures, but they are not part of the liquid balance, and nothing models soil or detergent strength. ([D16](DECISIONS.md#d16-phase-7-cleaning-programmes))
 - Failures follow simple random rates, not real plant data.
 - A full CIP runs only after a divert (B\* < 1: 3 min divert, 80 min CIP, 30 min sterilizing at 125 °C or more); real plants also clean at the end of each production run ([D2](DECISIONS.md#d2-missing-defaults)).
 - Demand is a truck of 22 pallets at a fixed interval, standing in for random daily orders ([D2](DECISIONS.md#d2-missing-defaults), [D3](DECISIONS.md#d3-truck-payload)).

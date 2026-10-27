@@ -49,7 +49,7 @@ The U shape lets the guided tour follow the product in one loop and keeps quaran
 | Quarantine zone, QA lab | 9 | Floor decals, boxes | Status lamps | Must |
 | Racks, forklifts, trucks | 10 | Instanced racks, CC0 models | Path following | Should |
 | Pipes | All | `TubeGeometry` along curves | Flowing texture, temperature colour | Must |
-| Boiler house, CIP station | 4 | Code: boxes | Status light | Could |
+| Boiler house, CIP station | 4 | Code: boxes | Status light; the CIP station lights the lamp of the fluid it pumps (phase 7) | Could |
 
 Keep cartons and trays brand-free: a plain white brick with an invented logo. Export Blender models as GLB and load them with [GLTFLoader](https://threejs.org/docs/GLTFLoader.html).
 
