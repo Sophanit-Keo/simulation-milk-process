@@ -1,0 +1,48 @@
+{
+  "scenarios": [
+    {
+      "id": "uhtTempDrop",
+      "name": "UHT temperature drop",
+      "stage": 4,
+      "description": "Steam dips: the plant diverts, cleans and re-sterilizes for 113 min while the fillers drain the tank."
+    },
+    {
+      "id": "fillerBreakdown",
+      "name": "Filler breakdown",
+      "stage": 7,
+      "description": "A filler stops for an hour; the aseptic tank fills up and the UHT plant slows down."
+    },
+    {
+      "id": "sterileAirFilterFailure",
+      "name": "Sterile-air filter failure",
+      "stage": 6,
+      "description": "A process deviation: the batches filled meanwhile are held for investigation."
+    },
+    {
+      "id": "failedIncubation",
+      "name": "Failed incubation",
+      "stage": 9,
+      "description": "A blown pack at the incubator check blocks the oldest batch on hold."
+    },
+    {
+      "id": "homogenizerPressureLoss",
+      "name": "Homogenizer pressure loss",
+      "stage": 3,
+      "description": "Stage 1 falls to 50 bar for an hour; a week later the sensory check finds cream."
+    },
+    {
+      "id": "demandSpikeOrLateTruck",
+      "variant": "demandSpike",
+      "name": "Demand spike",
+      "stage": 10,
+      "description": "Twelve extra trucks in an hour: stock runs down and trucks queue in the yard."
+    },
+    {
+      "id": "demandSpikeOrLateTruck",
+      "variant": "lateTrucks",
+      "name": "Late trucks",
+      "stage": 10,
+      "description": "No truck for almost 7 hours, then four at once: the dock backs up."
+    }
+  ]
+}

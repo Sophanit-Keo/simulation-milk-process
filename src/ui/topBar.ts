@@ -16,8 +16,8 @@ export interface TopBar {
 
 /**
  * The top bar's controls, after the brand: the sim clock and run state, pause, the five speed
- * presets, next event and the scenario menu (disabled until phase 5). Every button sends a
- * Command; the bar then shows what the snapshot says, so it can never disagree with the sim.
+ * presets and next event; the HUD adds the scenario menu after them (scenarioMenu.ts). Every button
+ * sends a Command; the bar then shows what the snapshot says, so it can never disagree with the sim.
  */
 export function createTopBar(bar: HTMLElement, dispatch: (command: Command) => void, signal: AbortSignal): TopBar {
   const time = el('div', 'sim-time');
@@ -69,13 +69,7 @@ export function createTopBar(bar: HTMLElement, dispatch: (command: Command) => v
   const nextEvent = button('Next event', 'next-event', 'Jump the clock to the next event');
   onPress(nextEvent, () => dispatch({ type: 'nextEvent' }), signal);
 
-  // Present so the bar has its final shape; the fault scenarios behind it arrive in phase 5.
-  const scenarios = button('Scenarios', 'scenario-menu', 'Fault scenarios arrive in phase 5');
-  scenarios.classList.add('btn-menu');
-  scenarios.disabled = true;
-  scenarios.setAttribute('aria-haspopup', 'menu');
-
-  bar.append(time, controls, nextEvent, scenarios);
+  bar.append(time, controls, nextEvent);
 
   // What the bar shows now, so a 4 Hz update only touches the DOM when something changed.
   let shownS: number | null = null;
@@ -143,7 +137,7 @@ export function createTopBar(bar: HTMLElement, dispatch: (command: Command) => v
     pickSpeed,
     dispose() {
       // Listeners go with the AbortSignal the HUD aborts; this removes what the bar added.
-      for (const node of [time, controls, nextEvent, scenarios]) node.remove();
+      for (const node of [time, controls, nextEvent]) node.remove();
     },
   };
 }

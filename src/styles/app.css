@@ -257,6 +257,82 @@ button {
 .link:hover {
   text-decoration: underline;
 }
+/* The tour starts next to "Whole plant", grouped with it on the right of the rail head. */
+.tour-open {
+  margin-left: auto;
+}
+.tour-open[aria-pressed='true'] {
+  text-decoration: underline;
+}
+
+/* The scenario menu (src/ui/scenarioMenu.ts): a list under its button, over the 3D view. */
+.menu-wrap {
+  position: relative;
+}
+.menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(calc(100vh - 90px), 680px);
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-shadow: 0 8px 24px rgba(13, 20, 25, 0.18);
+}
+.menu[hidden] {
+  display: none;
+}
+.menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: 400 13px/1.35 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item strong {
+  font-weight: 600;
+  font-size: 14px;
+}
+.menu-text {
+  color: var(--muted);
+}
+.menu-why:empty {
+  display: none;
+}
+.menu-why {
+  color: var(--warn);
+  font-weight: 600;
+}
+.menu-item:hover:not([aria-disabled='true']),
+.menu-item:focus-visible {
+  background: var(--surface);
+  outline: none;
+}
+.menu-item:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.menu-item[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+.menu-item[aria-disabled='true'] strong,
+.menu-item[aria-disabled='true'] .menu-text {
+  opacity: 0.6;
+}
+.menu-sep {
+  margin: 4px 6px;
+  border-top: 1px solid var(--line);
+}
 
 .stages {
   list-style: none;
@@ -377,6 +453,105 @@ button {
 }
 .swatch.t140 {
   background: var(--t140);
+}
+/* The running scenario (src/ui/scenarioLog.ts) and the tour's caption (src/ui/tour.ts) sit at the top
+   of the 3D view, as cards that take clicks, out of the way of the hint and the legend below. */
+.overlay-scenario,
+.overlay-tour {
+  top: 10px;
+  bottom: auto;
+  left: 10px;
+  max-width: min(460px, calc(100% - 20px));
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 11px;
+  color: var(--ink);
+  font-size: 13px;
+  pointer-events: auto;
+  box-shadow: 0 4px 14px rgba(13, 20, 25, 0.12);
+}
+.overlay-scenario[hidden],
+.overlay-tour[hidden] {
+  display: none;
+}
+/* The tour's caption takes the top of the view while it runs. */
+.view:has(.overlay-tour:not([hidden])) .overlay-scenario {
+  display: none;
+}
+.sc-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.sc-head .lamp {
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+.sc-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sc-summary {
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-hide {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: 600 16px/1 var(--font-ui);
+  cursor: pointer;
+}
+.sc-last {
+  margin: 0;
+  color: var(--muted);
+}
+.sc-open {
+  align-self: flex-start;
+  padding: 2px 0;
+  font-size: 13px;
+}
+.overlay-tour {
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 20px));
+  max-width: none;
+}
+.tour-step {
+  margin: 0;
+  font: 600 12.5px/1.2 var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tour-line {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.tour-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.tour-progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+}
+.tour-stop {
+  align-self: flex-end;
+  padding: 5px 9px;
+  font-size: 13px;
 }
 /* Where the view gets narrow, the legend matters more than the mouse hint. */
 @media (max-width: 1360px) and (min-width: 1101px) {
@@ -995,4 +1170,55 @@ kbd {
   justify-content: flex-end;
   padding: 10px 22px 14px;
   border-top: 1px solid var(--line);
+}
+/* The scenario log: each scenario's steps, oldest first, each with why it happened. */
+.sc-run + .sc-run {
+  margin-top: 18px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.sc-meta {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.sc-entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.sc-entry {
+  display: grid;
+  grid-template-columns: 9px max-content minmax(0, 1fr);
+  grid-template-areas: 'lamp time what' '. . why';
+  column-gap: 8px;
+  align-items: baseline;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.sc-entry .lamp {
+  grid-area: lamp;
+  width: 9px;
+  height: 9px;
+  align-self: center;
+}
+.sc-entry time {
+  grid-area: time;
+  font: 500 12.5px/1.4 var(--font-data);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.sc-what {
+  grid-area: what;
+}
+.sc-why {
+  grid-area: why;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.sc-none {
+  color: var(--muted);
 }
