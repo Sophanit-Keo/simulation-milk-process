@@ -281,7 +281,9 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
       controls.update(realDtS);
       equipmentHost.update(snapshot, realDtS);
       // Paused means the plant's time stands still: the milk stops flowing with it (motionDtS is 0).
-      pipes.update(snapshot.line, motionDtS(snapshot, realDtS), uhtModeOf(snapshot) === 'divert');
+      // While the UHT plant cleans (contracts v5), its pipes carry the step's fluid at the circulation.
+      const cleaning = snapshot.liquid?.cleaning ?? null;
+      pipes.update(snapshot.line, motionDtS(snapshot, realDtS), uhtModeOf(snapshot) === 'divert', cleaning && { fluid: cleaning.fluid, flowLph: cleaning.flowLph });
       // The labels count real time, not realDtS, which counts no frame as longer than maxFrameS: right for the
       // camera (a stall doesn't make it jump), but slow frames would leave the labels behind the rail.
       const nowMs = performance.now();

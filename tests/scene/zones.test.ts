@@ -1,13 +1,17 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EQUIPMENT_FACTORIES, type Equipment, type EquipmentContext, type MaterialName } from '../../src/scene/equipment';
 import * as at from '../../src/scene/equipment/packs/layout';
 import { FULL_LABEL_WITHIN_M } from '../../src/scene/equipmentLabels';
 import { APRON, OVERVIEW, PLANT_BOUNDS, ZONES, overviewDistanceM, type Zone } from '../../src/scene/layout';
 import { stageRangeText, zoneLabelPlacement } from '../../src/scene/zones';
+import { stubTheme } from './browserStubs';
 
 // The zone names and the apron, checked against the plant the overview shows: without WebGL or a DOM,
 // by projecting the label anchors with the overview camera and casting rays into the grey-box plant.
+// The CIP station's lamps read their colours from the theme, which falls back to the light one's.
+
+afterEach(() => vi.unstubAllGlobals());
 
 /** world.ts's camera: vertical field of view. */
 const FOV_DEG = 40;
@@ -112,6 +116,7 @@ describe('zone names', () => {
 
   it.each(REVIEW_VIEWS_PX)('read in full from the overview at $name: in view, apart, clear of every lamp and machine', (view) => {
     const camera = overviewCamera(view.widthPx, view.heightPx);
+    stubTheme();
     const machines = EQUIPMENT_FACTORIES.flatMap((make) => make(makeContext()));
     const scene = new THREE.Scene();
     for (const machine of machines) scene.add(machine.object);

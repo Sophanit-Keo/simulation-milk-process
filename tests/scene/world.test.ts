@@ -119,17 +119,18 @@ describe('the 3D view’s update', () => {
     expect(mocks.labels.refresh, 'one label refresh per frame, as the HUD updates').toHaveBeenCalledTimes(9);
   });
 
-  it('runs the pipes’ stripes on animation time (faster at high speed, still while paused) and lights the divert route while diverting', () => {
-    const at = (changes: Partial<Snapshot>, mode: Snapshot['liquid']['uhtMode'] = 'production'): unknown[] => {
+  it('runs the pipes’ stripes on animation time (faster at high speed, still while paused), lights the divert route while diverting and hands on the cleaning step', () => {
+    const lye = { program: 'cip', step: 'lye', fluid: 'lye', stepIndex: 1, stepCount: 6, stepRemainingS: 600, tempC: 75, flowLph: 24_000 } as const;
+    const at = (changes: Partial<Snapshot>, mode: Snapshot['liquid']['uhtMode'] = 'production', cleaning: Snapshot['liquid']['cleaning'] = null): unknown[] => {
       mocks.pipesUpdate.mockClear();
-      world.update({ ...snapshot, ...changes, liquid: { ...snapshot.liquid, uhtMode: mode } }, 0.02);
+      world.update({ ...snapshot, ...changes, liquid: { ...snapshot.liquid, uhtMode: mode, cleaning } }, 0.02);
       return mocks.pipesUpdate.mock.calls[0];
     };
-    expect(at({ speed: 1 })).toEqual([snapshot.line, 0.02, false]);
+    expect(at({ speed: 1 })).toEqual([snapshot.line, 0.02, false, null]);
     const [, fastDtS] = at({ speed: 10_000 });
     expect(fastDtS).toBeCloseTo(0.02 * MAX_MOTION_RATE, 12);
-    expect(at({ speed: 10_000, paused: true })).toEqual([snapshot.line, 0, false]);
-    expect(at({ speed: 1 }, 'divert')).toEqual([snapshot.line, 0.02, true]);
-    expect(at({ speed: 1 }, 'cip')[2]).toBe(false);
+    expect(at({ speed: 10_000, paused: true })).toEqual([snapshot.line, 0, false, null]);
+    expect(at({ speed: 1 }, 'divert')).toEqual([snapshot.line, 0.02, true, null]);
+    expect(at({ speed: 1 }, 'cip', lye).slice(2)).toEqual([false, { fluid: 'lye', flowLph: 24_000 }]);
   });
 });
