@@ -283,6 +283,21 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
   }
 
   /** The why for a model entry a following run claims, or null if it doesn't claim it. May move the run on. */
+  /**
+   * A batch's verdict settles it for every run waiting on it, though only one run's log tells it: a batch
+   * filled during both the filter failure and the homogenizer fault is judged once. A run whose fault is
+   * over and whose batches are all judged stops following.
+   */
+  function settle(batchId: number): void {
+    for (const run of runs) {
+      if (!run.pending.delete(batchId)) continue;
+      if (run.pending.size === 0 && run.endedS !== null) {
+        run.phase = 'done';
+        run.following = false;
+      }
+    }
+  }
+
   function claim(run: Run, tag: LogTag, timeS: number): string | null {
     switch (run.id) {
       case 'uhtTempDrop':
@@ -356,11 +371,8 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
           return filter ? 'It is filled from the same tank while the filter is down.' : 'It is filled from milk homogenized at too low a pressure.';
         }
         if ((tag.topic !== 'batchReleased' && tag.topic !== 'batchBlocked') || tag.batchId === undefined || !run.pending.has(tag.batchId)) return null;
-        run.pending.delete(tag.batchId);
-        if (run.pending.size === 0 && run.endedS !== null) {
-          run.phase = 'done';
-          run.following = false;
-        }
+        // A batch blocked by the other fault, or by none, is not this run's to explain; settle() still clears it.
+        if (tag.topic === 'batchBlocked' && tag.flag !== (filter ? 'sterileAir' : 'creaming')) return null;
         if (tag.topic === 'batchReleased') {
           return filter
             ? 'Its samples incubated clean despite the higher risk: the batch is safe.'
@@ -556,15 +568,17 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
         return { scenario: tag.scenario, why: tag.why };
       }
       // Oldest first: the run that started a chain of reactions claims them.
-      for (let i = runs.length - 1; i >= 0; i--) {
+      let claimed: Pick<LogEntry, 'scenario' | 'why'> | undefined;
+      for (let i = runs.length - 1; i >= 0 && !claimed; i--) {
         const run = runs[i] as Run;
         if (!run.following) continue;
         const why = claim(run, tag, entry.timeS);
         if (why === null) continue;
         run.log.push({ ...entry, scenario: run.id, why });
-        return { scenario: run.id, why };
+        claimed = { scenario: run.id, why };
       }
-      return undefined;
+      if ((tag.topic === 'batchReleased' || tag.topic === 'batchBlocked') && tag.batchId !== undefined) settle(tag.batchId);
+      return claimed;
     },
     afterStep(nowS) {
       // A truck run ends with its last truck's departure (claim); this catches one left with no truck to leave.
