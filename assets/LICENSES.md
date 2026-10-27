@@ -46,3 +46,16 @@ Copied unmodified from the Factory Kit 3.0 zip's `Models/GLB format/` folder (SH
 | `public/models/hero/homogenizer.glb` (homogenizer, 2.50 × 1.37 × 3.09 m, 5,060 triangles, 97 KB) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-10-18 | The `homogenizer`, stage 3 |
 | `public/models/hero/aseptic-filler.glb` (aseptic filler, 3.53 × 3.56 × 2.73 m, 6,252 triangles, 80 KB) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-10-18 | `filler-a` and, mirrored, `filler-b`, stage 7 |
 | `public/models/hero/palletizer.glb` (palletizer, 3.28 × 2.45 × 1.10 m, 2,048 triangles, 43 KB) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-10-18 | The `palletizer`, stage 8 |
+
+## Fonts and libraries in the bundle
+
+Not assets in `public/`, but third-party work the built app ships; checked on 2026-10-27 (phase 6) against each package's `package.json` at the version `package.json` pins. The About panel credits the fonts, three.js and Chart.js.
+
+| Package | Version | Licence | In the app |
+|---|---|---|---|
+| `@fontsource/barlow`, `@fontsource/barlow-condensed`, `@fontsource/ibm-plex-mono` | 5.3.0 | [SIL OFL 1.1](https://openfontlicense.org) | The UI fonts, bundled by Vite from `src/styles/fonts.css`; no request leaves the site |
+| `three` (with its meshopt decoder, `three/addons/libs/meshopt_decoder.module.js`) | 0.186.1 | MIT | The 3D view; the decoder unpacks the hero models |
+| `chart.js` | 4.5.1 | MIT | The trend charts in the stage panel |
+| `lil-gui` | 0.21.0 | MIT | The debug panel, only with `?debug` and loaded on demand |
+
+Build tools that touch the assets but ship nothing: `@gltf-transform/core` and `@gltf-transform/extensions` 4.5.1 and `meshoptimizer` 1.3.0 (MIT), which compress the hero models in `make-heroes.mjs`.
