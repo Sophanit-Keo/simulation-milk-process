@@ -44,6 +44,23 @@ Make the simulation fast, stable and deployed, then produce the demo video, repo
 - [ ] Every Must item is done, and the status of each Should and Could item is recorded.
 - [ ] The developer signs G3.
 
+**Status (2026-10-27, the agents' part):**
+
+- **Bug bash, ranked by what the demo shows.**
+  1. *Fixed:* two faults on the same batches (the homogenizer fault and the filter failure, as the demo runs them) judged each batch with the first run's why, and the other run waited for a verdict that had already come, showing "verdict day 16" (the destruction date) forever. A blocked verdict now names its cause, and every waiting run settles. Regression test in `tests/sim/scenarios.test.ts`.
+  2. *Fixed:* the empty scenario log opened blank (phase 5 PR).
+  3. *Fixed:* a frame that threw froze the plant without a word; the view now says the simulation stopped, with a Reload button.
+  4. *Open, not a demo risk:* `e2e/shell.spec.ts`'s pixel-ratio test fails on the agents' Chromium 153 (since phase 3). CI's own Chromium has not run it yet (next item).
+  5. *Open, blocks the release:* every CI run on `master` since phase 3 fails within 3 seconds, before its first step, with no log; so the browser tests and the GitHub Pages deploy have never run there, and the deployed link may not exist. A job that never starts points to the account (Actions disabled, or a billing or spending-limit hold) rather than the code. The developer checks the run page, fixes the setting, and re-runs CI on `master`.
+- **`qa`.** `tests/perf/measure.mjs --path 60` is the 60 fps check: a fixed camera path through every stage for 60 s, at ×1 and ×10,000, with the average and the 1% low and a pass at 57 fps and 30 fps ([perf baseline](../../tests/perf/baseline.md)). It needs the target laptop's GPU: run it there with `--headed --channel chrome` and `--channel msedge`. `tests/sim/demoScript.test.ts` replays the demo script and checks every number it quotes.
+- **`sim`.** The bug-bash fix above.
+- **`ui`.** A loading note until the first frame, the stopped state, the in-app list of sources and credits in About. Empty states were already in place (the stage panel, the batch list, the dock, the stock, the scenario log), and every control shows the focus ring.
+- **`assets`.** No new models. The hero GLBs are meshopt-compressed; the vehicles (139 and 78 KB) and the Kenney pieces stay uncompressed, under the 500 KB budget. Every file in `public/` has a row in [LICENSES.md](../../assets/LICENSES.md).
+- **`process`.** The on-screen numbers checked against the review's table ([report, 2.3](../../docs/report.md#23-verification)); the [demo script](../../docs/demo-script.md); the report's technical chapter.
+- **`lead`.** [README](../../README.md) with how to use, run and test; the [report](../../docs/report.md), [slides](../../docs/slides.md) and [video script](../../docs/video-script.md). Tagging `v1.0` and the clean-browser check of the deployed link wait for the developer.
+
+**Scope at G3** ([asset list](../05-layout-and-3d-assets.md#3d-asset-list)): every Must item is built and animated. Should: the standardization skid and the balance tank with its pump are built but static (their valve and impeller animations were not done); the tray-shrink tunnel, the palletizer (a hero model) and the racks, forklifts and trucks are built and move. Could: the stretch wrapper (turns) and the boiler house are built; the CIP station is not, and cleaning stays a timed state of the UHT plant.
+
 ## Afterwards
 
 If the term runs longer, take the roadmap's stretch list one item per week: animated CIP cleaning, a steam and energy model, a switch between direct and indirect UHT, and a mobile layout. Each one follows the same task loop, so it starts with `process` writing the expected numbers.
