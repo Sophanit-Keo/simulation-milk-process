@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Builds the phase-3 block-outs of the four hero models (assets/hero-specs.md) as our own low-poly
-// work, and writes them as GLBs for the phase-5 swap:
+// Builds the four hero models (assets/hero-specs.md) as our own low-poly work, and writes them as the
+// GLBs the scene loads in place of the grey boxes (src/scene/equipment/heroes.ts):
 //
 //   node assets/scripts/make-heroes.mjs [--out public/models/hero]
 //
@@ -10,7 +10,9 @@
 // operator side at +z, at the grey box's size. Every moving node the scene drives is a mesh of its
 // own, named as in the spec, at its rest position with no rotation and scale 1, and its geometry hangs
 // so that the node's origin is on its joint. The colours are plain greys; the filler's aseptic zone is
-// the one glass part. Running it twice writes the same bytes.
+// the one glass part. Since phase 5 the faces are cut into small cells, the ambient occlusion is baked
+// into the vertex colours (bakeAo) and the geometry is meshopt-compressed (compress). Running it twice
+// writes the same bytes.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -115,7 +117,7 @@ function makeMaterials(prefix) {
  * face needs vertices across it for its shading to vary: a box gets a grid on each face, a cylinder rings
  * along its length.
  */
-export const AO_CELL_M = 0.12;
+export const AO_CELL_M = 0.2;
 
 /** How many cells of AO_CELL_M or less cover `lengthM`. */
 const cuts = (lengthM) => Math.max(1, Math.ceil(lengthM / AO_CELL_M - 1e-6));

@@ -218,16 +218,16 @@ Not done in the block-outs, for phase 4 and 5:
 
 ## Phase 5 final models
 
-The block-outs above, finished in the same script for the swap: every box face cut into a grid and every cylinder into rings of 0.12 m or less, the AO baked into the vertex colours, and the geometry meshopt-compressed (README, [Baked ambient occlusion](README.md#baked-ambient-occlusion-heroes) and [Compression](README.md#compression-phase-5)). Shapes, sizes, materials, node names and rest transforms are the block-outs', so everything in [Phase 3 block-outs](#phase-3-block-outs) still holds; only the triangle counts and file sizes change.
+The block-outs above, finished in the same script for the swap: every box face cut into a grid and every cylinder into rings of 0.2 m or less, the AO baked into the vertex colours, and the geometry meshopt-compressed (README, [Baked ambient occlusion](README.md#baked-ambient-occlusion-heroes) and [Compression](README.md#compression-phase-5)). Shapes, sizes, materials, node names and rest transforms are the block-outs', so everything in [Phase 3 block-outs](#phase-3-block-outs) still holds; only the triangle counts and file sizes change.
 
 | File | Triangles (block-out) | Vertices | Meshes (draw calls), materials | Size, compressed (uncompressed) |
 |---|---|---|---|---|
-| `separator.glb` | 8,044 (1,944) | 6,681 | 3, 2 | 113.2 KB (285.4 KB) |
-| `homogenizer.glb` | 9,320 (2,328) | 7,923 | 5, 2 | 134.0 KB (338.7 KB) |
-| `aseptic-filler.glb` | 14,636 (1,116) | 9,933 | 7, 3 | 130.8 KB (427.7 KB) |
-| `palletizer.glb` | 3,328 (964) | 3,054 | 7, 2 | 54.4 KB (134.5 KB) |
+| `separator.glb` | 4,592 (1,944) | 4,709 | 3, 2 | 82.7 KB (195.9 KB) |
+| `homogenizer.glb` | 5,060 (2,328) | 5,439 | 5, 2 | 97.3 KB (226.5 KB) |
+| `aseptic-filler.glb` | 6,252 (1,116) | 5,174 | 7, 3 | 79.7 KB (220.5 KB) |
+| `palletizer.glb` | 2,048 (964) | 2,254 | 7, 2 | 42.7 KB (98.9 KB) |
 
-All four are within the budgets: at most 14,636 of 30,000 triangles, 7 of 20 meshes (under the 10 draw calls aimed for), 3 of 8 materials, and 131 KB of 2 MB. With the filler drawn twice the heroes come to 49,964 triangles a pass, 42,496 more than the block-outs (7,468), and the shadow pass draws them again; that still fits the 300,000 a frame the README plans for.
+All four are within the budgets: at most 6,252 of 30,000 triangles, 7 of 20 meshes (under the 10 draw calls aimed for), 3 of 8 materials, and 97 KB of 2 MB. With the filler drawn twice the heroes come to 24,204 triangles a pass, 16,736 more than the block-outs (7,468), and the shadow pass draws them again. The first cut, 0.12 m cells, gave 49,964 a pass and took the overview to 280,986 triangles a frame, close to the 300,000 the README plans for; at 0.2 m the stage cameras show the same shading, since the AO varies over 0.4 m, for half the triangles ([perf baseline](../tests/perf/baseline.md#phase-5-hero-models)).
 
 What the AO shows: contact shading where the cabinets, crankcase and frames stand on their plinths and where those meet the floor, under the filler's control panel and outfeed hood, between the homogenizer's tie rods and in the gap round its pistons, under the separator's hood rim and in the corners of the palletizer's base. The moving parts shade only themselves (the bowl's lock ring and bolts, the reel's hub and bar), so the spin, stroke and swing leave no shadow behind.
 
