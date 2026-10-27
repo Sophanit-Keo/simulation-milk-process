@@ -59,7 +59,7 @@ vi.mock('../../src/scene/pipes', () => ({
   createPipes: () => ({ pickTargets: [], update: mocks.pipesUpdate, state: () => ({}), applyTheme() {}, dispose() {} }),
 }));
 vi.mock('../../src/scene/zones', () => ({ createZones: () => ({ updateLabels() {}, applyTheme() {}, dispose() {} }) }));
-vi.mock('../../src/scene/picking', () => ({ createPicker: () => ({ update() {}, dispose() {}, stageScreenPoint: () => null }) }));
+vi.mock('../../src/scene/picking', () => ({ createPicker: () => ({ update() {}, dispose() {}, stageScreenPoint: () => null, batchScreenPoint: () => null }) }));
 vi.mock('../../src/scene/theme', () => ({ readSceneColor: () => '#ffffff', watchTheme: () => () => {} }));
 vi.mock('../../src/scene/debugHook', () => ({ debugRequested: () => false, installDebugHook: vi.fn() }));
 

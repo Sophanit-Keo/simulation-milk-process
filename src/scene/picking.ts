@@ -40,6 +40,8 @@ export interface Picker {
   pickAt(clientX: number, clientY: number): Pick | null;
   /** Client pixels of a point on one of the stage's machines that a click would pick, or null if none shows. */
   stageScreenPoint(stage: StageId): { x: number; y: number } | null;
+  /** Client pixels of `pointM`, or a point beside it, where a click would pick `batchId`; null if none does. */
+  batchScreenPoint(pointM: readonly [number, number, number], batchId: number): { x: number; y: number } | null;
   /** Once per frame: updates the hover cursor if the pointer moved. */
   update(): void;
   dispose(): void;
@@ -190,6 +192,20 @@ export function createPicker({ canvas, camera, targets, onPick, onTakeCamera }: 
             return { x, y };
           }
         }
+      }
+      return null;
+    },
+    batchScreenPoint([xM, yM, zM], batchId) {
+      const rect = canvas.getBoundingClientRect();
+      camera.updateMatrixWorld();
+      for (const [fx, fy, fz] of PROBE_OFFSETS) {
+        probe.set(xM + fx, yM + fy, zM + fz).project(camera);
+        if (Math.abs(probe.x) > EDGE_NDC || Math.abs(probe.y) > EDGE_NDC || probe.z > 1) continue;
+        if (pickAtNdc(probe.x, probe.y)?.batchId !== batchId) continue;
+        const x = rect.left + ((probe.x + 1) / 2) * rect.width;
+        const y = rect.top + ((1 - probe.y) / 2) * rect.height;
+        if (document.elementFromPoint(x, y) !== canvas) continue;
+        return { x, y };
       }
       return null;
     },

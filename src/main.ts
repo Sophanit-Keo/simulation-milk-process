@@ -30,7 +30,8 @@ const dispatch = (command: Command): void => {
 };
 // Rail clicks and 3D clicks both select a stage through this bus, so the panel and the camera agree.
 const bus = createViewBus();
-const world = createWorld(viewport, bus);
+// ?heroes swaps the grey boxes of the separator, homogenizer, fillers and palletizer for their first-pass models.
+const world = createWorld(viewport, bus, { heroModels: params.has('heroes') });
 const hud = createHud(appRoot, dispatch, bus, stages, {
   setpoints: {
     uhtSetpointC: config.uht.setpointC,

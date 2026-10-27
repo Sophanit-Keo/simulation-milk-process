@@ -32,6 +32,11 @@ export interface EquipmentContext {
    * Rejects if the file is missing, so callers keep their plain material. Optional: an older host has none.
    */
   loadTexture?(path: string): Promise<Texture>;
+  /**
+   * Optional: swap the hero machines' grey boxes (separator, homogenizer, fillers, palletizer) for their
+   * models in public/models/hero once those load (heroes.ts). Off by default until phase 5; ?heroes turns it on.
+   */
+  readonly heroModels?: boolean;
 }
 
 /** One machine or fixture in the plant, tagged with its stage for picking and status. */
@@ -63,6 +68,8 @@ export interface Equipment {
   batchAt?(object: Object3D, instanceId: number | undefined): number | null;
   /** Optional: marks the batch picked last (the view bus's selectBatch), or none. */
   selectBatch?(batchId: number | null): void;
+  /** Optional: a point on the batch's block, in world metres, for the ?debug hook's batchScreenPoint; null for none. */
+  batchPointM?(batchId: number): PointM | null;
   /** Disposes the module's own geometries and materials (never the shared ones). */
   dispose(): void;
 }

@@ -12,6 +12,7 @@ import type { Snapshot, StageId, Status } from '../../contracts';
 import plantJson from '../../data/plant.json';
 import type { PointM } from '../layout';
 import { motionDtS as busyMotionDtS } from '../motion';
+import { HERO_MODELS, swapInHero } from './heroes';
 import { createTokenStream, PACK_BELT_SPEED_MPS, TRAY_BELT_SPEED_MPS, type TokenStream } from './packs/belts';
 import { FixtureBuilder, type BuiltFixture, type InstanceM } from './packs/builder';
 import { beltPlacements, createKitLoader, greyBelt, greyRollers, repeatPlacements, swapInKit, type KitLoader, type Placement } from './packs/conveyors';
@@ -65,13 +66,13 @@ export const packsLine: EquipmentFactory = (ctx) => {
   const blocks = createQuarantineBlocks(kit.shape('box'), kit.shape('sphere'), kit.material('carton'));
   const traffic = createPalletTraffic(kit.shape('box'), kit.material('wood'), kit.material('carton'));
   return [
-    filler(kit, 'a'),
-    filler(kit, 'b'),
+    filler(kit, ctx, 'a'),
+    filler(kit, ctx, 'b'),
     packConveyors(kit, kitLoader),
     accumulationTable(kit, kitLoader),
     trayShrinkTunnel(kit),
     trayConveyor(kit, kitLoader),
-    palletizer(kit),
+    palletizer(kit, ctx),
     stretchWrapper(kit, traffic),
     palletConveyor(kit, kitLoader, traffic, blocks),
     quarantine(kit, blocks),
@@ -115,6 +116,7 @@ interface MachineSpec {
   debugState?: () => Readonly<Record<string, number | string | boolean>>;
   batchAt?: Equipment['batchAt'];
   selectBatch?: Equipment['selectBatch'];
+  batchPointM?: Equipment['batchPointM'];
   labelAnchorNowM?: Equipment['labelAnchorNowM'];
 }
 
@@ -138,6 +140,7 @@ function machine(fixture: BuiltFixture, spec: MachineSpec, life: Lifetime = life
   if (spec.debugState) equipment.debugState = spec.debugState;
   if (spec.batchAt) equipment.batchAt = spec.batchAt;
   if (spec.selectBatch) equipment.selectBatch = spec.selectBatch;
+  if (spec.batchPointM) equipment.batchPointM = spec.batchPointM;
   if (spec.labelAnchorNowM) equipment.labelAnchorNowM = spec.labelAnchorNowM;
   return equipment;
 }
@@ -228,7 +231,7 @@ const FILLER_LABELS: Record<'starved' | 'stopped' | 'repair' | 'cleaning', strin
   cleaning: 're-sterilizing',
 };
 
-function filler(kit: Kit, which: 'a' | 'b'): Equipment {
+function filler(kit: Kit, ctx: EquipmentContext, which: 'a' | 'b'): Equipment {
   const xM = at.FILLER_X_M;
   const zM = at.FILLER_Z_M[which];
   const index = which === 'a' ? 0 : 1;
@@ -245,17 +248,26 @@ function filler(kit: Kit, which: 'a' | 'b'): Equipment {
   // The spindle casts a shadow only so it merges with the roof's mesh: one draw call fewer.
   b.part('cylLo', 'steelDark', [19.2, 1.0, zM + side * 1.2], [0.08, 0.2, 0.08], { rotationRad: [Math.PI / 2, 0, 0], castShadow: true });
   // Named for the hero model (assets' hero spec): the reel turns about its own axis, along z.
-  const reel = b.group('reel', [19.2, 1.0, zM + side * 1.42]);
+  let reel: THREE.Object3D = b.group('reel', [19.2, 1.0, zM + side * 1.42]);
   b.part('cyl', 'carton', [0, 0, 0], [0.78, 0.34, 0.78], { parent: reel, rotationRad: [Math.PI / 2, 0, 0], castShadow: true });
   b.part('box', 'steelDark', [0, 0, 0], [1.2, 0.1, 0.36], { parent: reel }); // a bar across the reel, so the turn shows
 
   // The sealing jaws close round the bottom of the tube inside the aseptic zone and ride down with it.
   const jawsTopM = 2.6;
-  const jaws = b.group('jaws', [at.FILLER_INLET_M.xM, jawsTopM, zM]);
+  let jaws: THREE.Object3D = b.group('jaws', [at.FILLER_INLET_M.xM, jawsTopM, zM]);
   for (const jawSide of [-1, 1]) b.part('box', 'steelDark', [0, 0, jawSide * 0.18], [0.34, 0.1, 0.08], { parent: jaws });
 
   let jawRad = 0;
-  return machine(b.build(), {
+  const fixture = b.build();
+  const life = lifetime();
+  // Filler B is the mirror image of A, so it takes the one model mirrored along z (assets' hero spec).
+  const swap = { path: HERO_MODELS.filler, nodes: ['reel', 'jaws'] as const, mirrorZ: which === 'b' };
+  swapInHero(ctx, fixture.object, swap, (nodes) => {
+    nodes.reel.rotation.z = reel.rotation.z;
+    nodes.jaws.position.y = jaws.position.y;
+    ({ reel, jaws } = nodes);
+  }, life.isAlive);
+  return machine(fixture, {
     id: `filler-${which}`,
     stage: 7,
     label: `Filler ${which.toUpperCase()}`,
@@ -274,7 +286,7 @@ function filler(kit: Kit, which: 'a' | 'b'): Equipment {
       jawRad = (jawRad + JAW_RAD_PER_S * dtS) % (2 * Math.PI);
       jaws.position.y = jawsTopM - JAW_TRAVEL_M * (0.5 - 0.5 * Math.cos(jawRad));
     },
-  });
+  }, life);
 }
 
 function packConveyors(kit: Kit, loader: KitLoader): Equipment {
@@ -402,13 +414,13 @@ function armRadToward(pointM: at.FloorPointM): number {
   return Math.atan2(-(pointM[1] - at.PALLETIZER_M[2]), pointM[0] - at.PALLETIZER_M[0]);
 }
 
-function palletizer(kit: Kit): Equipment {
+function palletizer(kit: Kit, ctx: EquipmentContext): Equipment {
   const [xM, , zM] = at.PALLETIZER_M;
   const b = new FixtureBuilder(kit, 'palletizer', at.PALLETIZER_M);
   b.part('cyl', 'paint', [xM, 0.3, zM], [0.55, 0.6, 0.55], { castShadow: true }); // base
   b.part('cylLo', 'paint', [xM, 1.45, zM], [0.22, 1.7, 0.22], { castShadow: true }); // column
   // Named for the hero model (assets' hero spec): the arm turns about y on top of the column.
-  const arm = b.group('arm', [xM, at.ARM_HINGE_Y_M, zM]);
+  let arm: THREE.Object3D = b.group('arm', [xM, at.ARM_HINGE_Y_M, zM]);
   b.part('box', 'paint', [1.22, 0, 0], [2.45, 0.2, 0.26], { parent: arm, castShadow: true });
   b.part('cylLo', 'steelDark', [2.45, -0.35, 0], [0.06, 0.6, 0.06], { parent: arm });
   b.part('box', 'steelDark', [2.45, -0.7, 0], [0.55, 0.14, 0.45], { parent: arm, castShadow: true }); // gripper
@@ -430,6 +442,12 @@ function palletizer(kit: Kit): Equipment {
   // The pallet is the fixture's only wooden part, so its merged mesh is the pallet alone.
   const pallet = fixture.object.getObjectByName('palletizer-wood');
   if (pallet instanceof THREE.Mesh) printOn(kit, 'pallet', [pallet], life);
+  // The model is the machine alone: the pallet and its load stay.
+  const swap = { path: HERO_MODELS.palletizer, nodes: ['arm'] as const, keep: [stack, ...(pallet ? [pallet] : [])] };
+  swapInHero(ctx, fixture.object, swap, (nodes) => {
+    nodes.arm.rotation.y = arm.rotation.y;
+    arm = nodes.arm;
+  }, life.isAlive);
   return machine(
     fixture,
     {
@@ -581,6 +599,11 @@ function quarantine(kit: Kit, blocks: QuarantineBlocks): Equipment {
       },
       batchAt: (object, instanceId) => blocks.batchAt(object, instanceId),
       selectBatch: (batchId) => blocks.select(batchId),
+      // Just under the top of its block's pallets, where a click lands on a pallet of the batch.
+      batchPointM: (batchId) => {
+        const [xM, yM, zM] = blocks.blockTopM(batchId);
+        return [xM, yM - 0.1, zM];
+      },
       debugState: () => {
         const { selected, ...counts } = blocks.state();
         return { ...counts, selected: selected ?? -1 };

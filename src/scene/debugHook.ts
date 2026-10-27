@@ -6,6 +6,8 @@ import type { PointM } from './layout';
 export interface SceneDebug {
   /** Client pixels of a point on the stage's equipment that is visible and pickable from the current camera. */
   stageScreenPoint(stage: number): { x: number; y: number } | null;
+  /** Client pixels of a point on a quarantine batch's block that a click would pick (phase 4), or null. */
+  batchScreenPoint(batchId: number): { x: number; y: number } | null;
   /** The stage the camera last landed on, or null. */
   focusStage(): number | null;
   /** The point the camera looks at (the orbit controls' target), in metres: a stage's focusM once it has landed there. */
@@ -41,6 +43,7 @@ const FPS_WINDOW_MS = 1_000;
 
 export interface DebugSources {
   stageScreenPoint(stage: StageId): { x: number; y: number } | null;
+  batchScreenPoint(batchId: number): { x: number; y: number } | null;
   focusStage(): StageId | null;
   cameraTargetM(): PointM;
   cameraPositionM(): PointM;
@@ -64,6 +67,7 @@ export function installDebugHook(sources: DebugSources): DebugHook {
   const frameTimesMs: number[] = [];
   const hook: SceneDebug = {
     stageScreenPoint: (stage) => (STAGE_IDS.includes(stage as StageId) ? sources.stageScreenPoint(stage as StageId) : null),
+    batchScreenPoint: (batchId) => (Number.isInteger(batchId) ? sources.batchScreenPoint(batchId) : null),
     focusStage: () => sources.focusStage(),
     cameraTarget: () => [...sources.cameraTargetM()],
     cameraPosition: () => [...sources.cameraPositionM()],
