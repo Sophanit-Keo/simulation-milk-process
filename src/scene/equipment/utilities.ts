@@ -114,7 +114,8 @@ function cipStation(steel: THREE.Material, dark: THREE.Material): Equipment {
   }
 
   for (const mesh of [body, pump, ...extras]) {
-    mesh.castShadow = !mesh.name.startsWith('cip-station-lamp');
+    // The bands and lamps sit on the tanks, inside their shadow: casting their own would only add draw calls.
+    mesh.castShadow = mesh === body || mesh === pump;
     mesh.receiveShadow = true;
     mesh.updateMatrix();
     mesh.matrixAutoUpdate = false; // nothing in it moves; only the lamps' glow changes

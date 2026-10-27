@@ -168,6 +168,26 @@ The two speeds draw alike: at ×10,000 the sim advances 7 days a minute but the 
 
 At ×10,000 the 60 s covered 7.5 sim days. The sim takes well under 1% of a 16.7 ms frame at every speed; the frame time is the renderer's.
 
+### Phase 7: the CIP station
+
+Measured on 27 October 2026 on the phase 7 branch (contracts v5, the CIP station and the CIP lines), same machine, browser and method as phase 5, on the live sim with no scenario running. 34 machines; within the overview budget; no console errors.
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **221** | **242,154** | **221** | **242,154** |
+| 1 Standardization | 109 | 134,520 | 109 | 134,520 |
+| 2 Preheating | 106 | 136,440 | 107 | 136,452 |
+| 3 Homogenization | 107 | 133,676 | 107 | 133,676 |
+| 4 UHT | 122 | 146,040 | 125 | 146,444 |
+| 5 Flash cooling | 117 | 139,720 | 117 | 139,720 |
+| 6 Aseptic tank | 98 | 127,716 | 100 | 127,932 |
+| 7 Filling | 110 | 142,156 | 110 | 142,156 |
+| 8 Packaging | 120 | 143,474 | 121 | 143,642 |
+| 9 Quarantine & QA | 141 | 212,048 | 148 | 220,776 |
+| 10 Warehouse | 147 | 154,720 | 162 | 161,868 |
+
+14 draw calls more than phase 5 at the overview: the station's steel body and its pump (each in the main and the shadow pass), a band and a lamp per tank (main pass only: they sit on the tanks, inside their shadow; casting their own read 224), and the CIP supply and return lines (both passes). The shadow pass draws the body, the pump and the two lines from any camera, so every stop draws at least 4 more; stages 4 and 5 frame the station itself. Cleaning changes colours and a shader uniform only, not draw calls. Software GL gave 3.0 fps at the overview at 1440 × 900 (3.7 at 1280 × 720), at a load average of about 4.5 against phase 5's 4: not comparable, and not the 60 fps check, which runs on the target laptop.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.
