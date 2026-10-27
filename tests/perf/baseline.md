@@ -145,6 +145,29 @@ Measured on 27 October 2026 by `qa` on the phase 5 branch (contracts v4, the fau
 
 The same build with `?greybox` reads exactly phase 4's figures (overview 194 draw calls and 187,786 triangles at 1440 × 900), so the difference is the heroes': 13 draw calls more at the overview, as each hero mesh draws in the main and the shadow pass (29 meshes, the filler's glass casting no shadow), against the grey boxes' merged parts; and 44,560 triangles more, the heroes' 24,204 a pass drawn twice, less the grey boxes they hide. The first frames read 206 draw calls and 210,474 triangles, before the Kenney pieces and vehicles replaced their grey boxes. A first cut of the heroes with 0.12 m AO cells read 280,986 triangles at the overview, close to the 300,000 a frame the asset budget plans for; the 0.2 m cells shipped give the same shading at the stage cameras for half the triangles ([hero-specs.md](../../assets/hero-specs.md#phase-5-final-models)). Software GL gave 4.1 fps at the overview at 1440 × 900 (4.3 at 1280 × 720) against 4.2 with `?greybox` measured the same way, load average about 4. **The exit item "60 fps holds" stays open** until it is measured on a real GPU ([To do on a real GPU](#to-do-on-a-real-gpu)).
 
+### Phase 6: the 60 fps check and the step time
+
+**The camera path (gate G3).** `node tests/perf/measure.mjs --path 60` adds the G3 check to the usual stops: from the whole plant, a click on every stage in rail order, 6 s at each (the 1.2 s flight included), 60 s in all, once at ×1 and once at ×10,000, with every frame's time noted by a `requestAnimationFrame` loop of the script's own. It reports each run's average fps, its 1% low (the mean fps of the slowest 1% of frames) and its slowest frame, and `pathTargetMet` is true when both runs reach an average of 57 fps (within 5% of a 60 Hz screen, which caps the rate) and a 1% low of 30 fps. On software GL it gives no verdict (`null`), and a miss on a real GPU makes the exit code 1.
+
+Run on 27 October 2026 on this machine (software GL, headless Chromium 153, 1440 × 900, the phase 6 build), only to check that the script works:
+
+| Speed | Frames in 60 s | Average fps | 1% low fps | Slowest frame |
+|---|---:|---:|---:|---:|
+| ×1 | 414 | 5.0 | 2.7 | 400 ms |
+| ×10,000 | 403 | 4.9 | 2.7 | 400 ms |
+
+The two speeds draw alike: at ×10,000 the sim advances 7 days a minute but the scene shows a sample of the packs and pallets, so the frame costs about the same. **The G3 check itself runs on the target laptop**: `npm run build`, then `node tests/perf/measure.mjs --path 60 --headed --channel chrome`, and again with `--channel msedge`.
+
+**The sim's step time.** Headless in Node (`createSim`, the shipped config), 3,600 frames of 1/60 s, step and snapshot timed together as the app's loop runs them:
+
+| Speed | Sim time per frame | Mean | 99th percentile | Slowest |
+|---|---:|---:|---:|---:|
+| ×10 | 0.17 s (1 step of 1 s every 6 frames) | 0.03 ms | 0.15 ms | 2.7 ms |
+| ×1,000 | 16.7 s (17 steps of 1 s) | 0.08 ms | 0.40 ms | 4.5 ms |
+| ×10,000 | 167 s (17 steps of 10 s) | 0.06 ms | 0.26 ms | 1.2 ms |
+
+At ×10,000 the 60 s covered 7.5 sim days. The sim takes well under 1% of a 16.7 ms frame at every speed; the frame time is the renderer's.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.

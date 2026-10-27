@@ -479,6 +479,65 @@ button {
 .view:has(.overlay-tour:not([hidden])) .overlay-scenario {
   display: none;
 }
+/* Loading and stopped (src/ui/appStatus.ts): centred over the view. "Loading the plant…" lets clicks
+   through and goes once the first frame is drawn; the stopped card takes clicks for its Reload button. */
+.overlay-loading,
+.overlay-stopped {
+  top: 50%;
+  bottom: auto;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.overlay-loading {
+  padding: 8px 14px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.overlay-loading[hidden] {
+  display: none;
+}
+.loading-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: loading-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes loading-pulse {
+  from {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-dot {
+    animation: none;
+  }
+}
+.overlay-stopped {
+  z-index: 3;
+  width: min(420px, calc(100% - 20px));
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 14px 16px;
+  color: var(--ink);
+  font-size: 14px;
+  pointer-events: auto;
+  box-shadow: 0 4px 14px rgba(13, 20, 25, 0.12);
+}
+.overlay-stopped h2 {
+  margin: 0;
+  font: 600 17px/1.2 var(--font-label);
+}
+.overlay-stopped p {
+  margin: 0;
+}
+.stopped-error {
+  font-family: var(--font-data);
+  font-size: 13px;
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}
 .sc-head {
   display: flex;
   align-items: center;

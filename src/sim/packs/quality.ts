@@ -226,10 +226,15 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
     scheduler.schedule<BatchPayload>(batch.releaseAtS, QUALITY_EVENTS.destroyed, { batchId: batch.id });
   }
 
-  function block(batch: Batch, atS: number, why: string): void {
+  /** Blocks a batch; `cause` names the investigation whose fault blocked it, if one did (scenarios.ts tells why). */
+  function block(batch: Batch, atS: number, why: string, cause?: BatchFlag): void {
     batch.status = 'blocked';
     blocked += 1;
-    scheduler.log(atS, 'bad', `Batch ${batch.id} ${why}: ${formatPallets(batch.pallets)} blocked`, { topic: 'batchBlocked', batchId: batch.id });
+    scheduler.log(atS, 'bad', `Batch ${batch.id} ${why}: ${formatPallets(batch.pallets)} blocked`, {
+      topic: 'batchBlocked',
+      batchId: batch.id,
+      ...(cause ? { flag: cause } : {}),
+    });
     // A batch still filling keeps its pallets in quarantine until it closes, then they wait their time like the rest.
     if (batch.endS <= atS) scheduleDestruction(batch, atS);
   }
@@ -353,8 +358,10 @@ export function createQuality(config: PlantConfig, rng: Rng, scheduler: Schedule
         const spoiled = rng.chance(failChance);
         const creamed = batch.flags.has('creaming') && batch.creamingRiskPct >= config.scenarios.sensoryFailAbovePct;
         if (batch.qaResult === 'pass' || (!spoiled && !creamed)) release(batch, event.timeS);
-        else if (spoiled) block(batch, event.timeS, `failed incubation (a sample of ${batch.samples} spoiled)`);
-        else block(batch, event.timeS, `failed the sensory check: a cream layer (creaming risk ${Math.round(batch.creamingRiskPct)}%)`);
+        else if (spoiled) {
+          const cause = batch.flags.has('sterileAir') ? 'sterileAir' : undefined;
+          block(batch, event.timeS, `failed incubation (a sample of ${batch.samples} spoiled)`, cause);
+        } else block(batch, event.timeS, `failed the sensory check: a cream layer (creaming risk ${Math.round(batch.creamingRiskPct)}%)`, 'creaming');
       } else if (batch.status === 'blocked') {
         batches.delete(batch.id);
         scheduler.log(event.timeS, 'warn', `Batch ${batch.id}: ${formatPallets(batch.pallets)} left quarantine for destruction`, {

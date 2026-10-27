@@ -15,6 +15,13 @@
 // shadow pass included) and fps averaged over the last second, `--samples` times one second apart.
 // It prints one JSON object on stdout.
 //
+// --path s (phase 6, the gate G3 check) then drives a fixed camera path twice, at ×1 and at ×10,000:
+// from the whole plant through every stage in rail order, s seconds in all (60 for G3), noting every
+// frame's time. `path` in the output gives each run's average fps, its 1% low (the slowest 1% of frames)
+// and its slowest frame; `pathTargetMet` says whether both reach an average of 57 fps and a 1% low of
+// 30 fps, on a real GPU only. On the target laptop: `node tests/perf/measure.mjs --path 60 --headed --channel chrome`
+// (or `--channel msedge`).
+//
 // Draw calls and triangles depend on the scene and the camera only. fps depends on the GPU: without one,
 // Chromium draws with SwiftShader on the CPU (`gl.software` in the output says so), and those numbers say
 // nothing about a real machine. --headed, and --channel chrome to use the installed Chrome, put the
@@ -38,6 +45,9 @@ const DEFAULT_PORT = 5505; // the qa lane's port
 const OVERVIEW_DRAW_CALL_BUDGET = 350;
 /** And the frame rate it must hold on a mid-range laptop (plan 07, gate G1). */
 const FPS_TARGET = 60;
+/** The G3 check on the camera path (phase 6): the average and the 1% low it must reach at ×1 and ×10,000. */
+const PATH_AVERAGE_FPS = 57;
+const PATH_LOW_FPS = 30;
 const SERVER_START_MS = 30_000;
 /** A fly lasts 1.2 s of frame time; software GL stretches that to 12 slow frames, so wait long. */
 const LAND_TIMEOUT_MS = 60_000;
@@ -57,7 +67,7 @@ const BROWSER_GL_NOTE =
 function usage(message) {
   if (message) console.error(`measure.mjs: ${message}`);
   console.error(
-    'usage: node tests/perf/measure.mjs [port | url] [--width px] [--height px] [--hold s] [--samples n] [--headed] [--channel chrome]',
+    'usage: node tests/perf/measure.mjs [port | url] [--width px] [--height px] [--hold s] [--samples n] [--path s] [--headed] [--channel chrome]',
   );
   process.exit(2);
 }
@@ -72,6 +82,7 @@ function readOptions() {
         height: { type: 'string', default: '900' },
         hold: { type: 'string', default: '2' },
         samples: { type: 'string', default: '3' },
+        path: { type: 'string', default: '0' },
         headed: { type: 'boolean', default: false },
         channel: { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
@@ -108,6 +119,7 @@ function readOptions() {
     height: number('height', 240),
     holdS: number('hold', 0.5),
     samples: Math.round(number('samples', 1)),
+    pathS: number('path', 0),
     headed: values.headed,
     channel: values.channel,
   };
@@ -190,6 +202,55 @@ async function readFps(page, samples) {
   return { fps: Math.round(mean * 10) / 10, fpsSamples: fps.map((value) => Math.round(value * 10) / 10) };
 }
 
+/**
+ * Frame statistics from the times of consecutive frames (ms): the average fps over the whole run, the
+ * "1% low" (the fps of the slowest 1% of frames, averaged) and the slowest frame.
+ */
+function frameStats(timesMs) {
+  const gapsMs = timesMs.slice(1).map((time, i) => time - timesMs[i]);
+  if (gapsMs.length === 0) return { frames: 0, averageFps: 0, onePercentLowFps: 0, worstFrameMs: 0 };
+  const round = (value) => Math.round(value * 10) / 10;
+  const slowest = [...gapsMs].sort((a, b) => b - a).slice(0, Math.ceil(gapsMs.length / 100));
+  const slowestMeanMs = slowest.reduce((sum, value) => sum + value, 0) / slowest.length;
+  return {
+    frames: gapsMs.length,
+    averageFps: round((gapsMs.length * 1_000) / (timesMs.at(-1) - timesMs[0])),
+    onePercentLowFps: round(1_000 / slowestMeanMs),
+    worstFrameMs: round(slowest[0]),
+  };
+}
+
+/**
+ * The 60 fps check's fixed camera path (phase 6): from the whole plant, every stage in rail order, an equal
+ * share of pathS at each (the 1.2 s flight included), at the speed the digit key picks ('1' is ×1, '5' is
+ * ×10,000). Every frame's time is noted by a requestAnimationFrame loop of the script's own.
+ */
+async function runPath(page, stages, pathS, speedKey) {
+  await page.click('#rail [data-testid="overview"]');
+  await page.keyboard.press(speedKey);
+  await sleep(2_000); // the flight home, and the speed's first frames
+  await page.evaluate(() => {
+    const times = [];
+    window.__pathFrames = times;
+    const tick = (nowMs) => {
+      if (window.__pathFrames !== times) return;
+      times.push(nowMs);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  for (const { stage } of stages) {
+    await page.click(`#rail [data-testid="rail-stage-${stage}"]`);
+    await sleep((pathS * 1_000) / stages.length);
+  }
+  const times = await page.evaluate(() => {
+    const noted = window.__pathFrames;
+    window.__pathFrames = null;
+    return noted;
+  });
+  return frameStats(times);
+}
+
 async function measure(appUrl, options) {
   const { chromium } = await import('@playwright/test');
   const browser = await chromium.launch({
@@ -237,6 +298,7 @@ async function measure(appUrl, options) {
       await page.waitForSelector(`#viewport[data-focus-stage="${stage}"]`, { timeout: LAND_TIMEOUT_MS });
       stops.push({ stage, name, ...(await settledCounts(page, STOP_HOLD_S)), ...(await readFps(page, options.samples)) });
     }
+    const path = options.pathS > 0 ? { seconds: options.pathS, x1: await runPath(page, stages, options.pathS, '1'), x10000: await runPath(page, stages, options.pathS, '5') } : null;
     return {
       browser: `${options.channel ?? 'chromium'} ${browser.version()}${options.headed ? '' : ' (headless)'}`,
       gl,
@@ -244,6 +306,7 @@ async function measure(appUrl, options) {
       firstFrames,
       overview,
       stages: stops,
+      path,
       errors,
     };
   } finally {
@@ -269,9 +332,15 @@ async function main() {
       withinDrawCallBudget: withinBudget,
       // fps on software GL is the CPU drawing pixels: no verdict on the 60 fps target from it.
       fpsTargetMet: result.gl.software === false ? result.overview.fps >= FPS_TARGET - 1 : null,
+      // The G3 check on the path: at both speeds an average within 5% of 60 (a 60 Hz screen caps it there)
+      // and a 1% low of at least PATH_LOW_FPS, so no hitch the viewer would see.
+      pathTargetMet:
+        result.path && result.gl.software === false
+          ? [result.path.x1, result.path.x10000].every((run) => run.averageFps >= PATH_AVERAGE_FPS && run.onePercentLowFps >= PATH_LOW_FPS)
+          : null,
     };
     console.log(JSON.stringify(report, null, 2));
-    process.exitCode = withinBudget && result.errors.length === 0 ? 0 : 1;
+    process.exitCode = withinBudget && result.errors.length === 0 && report.pathTargetMet !== false ? 0 : 1;
   } catch (error) {
     console.error(`measure.mjs: ${error.message}`);
     process.exitCode = 2;

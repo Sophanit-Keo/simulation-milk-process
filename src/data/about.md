@@ -72,3 +72,26 @@ Tour, at the top of the stage list, flies the camera through the ten stages in o
 - The [decision log](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md) gives each one a source or marks it as a sim assumption.
 - The [hand calculations](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/hand-calculations.md) list the values the tests expect.
 - The stage research cites the [Dairy Processing Handbook](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk), the [UHT milk module](https://ebooks.inflibnet.ac.in/ftp04/chapter/uht-milk-and-milk-products/) for F0 and B*, and the [FDA aseptic guide](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-guides/aseptic-processing-and-packaging-food-industry).
+
+## Sources
+
+Process and regulation:
+
+- Tetra Pak Dairy Processing Handbook: [Long-life milk](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-milk), [Centrifugal separators and milk standardization](https://dairyprocessinghandbook.tetrapak.com/chapter/centrifugal-separators-and-milk-standardization), [Deaerators](https://dairyprocessinghandbook.tetrapak.com/chapter/deaerators), [Homogenizers](https://dairyprocessinghandbook.tetrapak.com/chapter/homogenizers), [Tanks](https://dairyprocessinghandbook.tetrapak.com/chapter/tanks), [Mixers](https://dairyprocessinghandbook.tetrapak.com/chapter/mixers) and [Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment)
+- [UHT milk and milk products](https://ebooks.inflibnet.ac.in/ftp04/chapter/uht-milk-and-milk-products/), INFLIBNET e-PG Pathshala: F0, B* and the microbial failure rate
+- [Regulation (EC) No 853/2004, Annex III, Section IX](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX): the UHT minimum and the incubation checks
+- [FDA: Aseptic Processing and Packaging for the Food Industry](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-guides/aseptic-processing-and-packaging-food-industry)
+- [Reinheimer and Demkow (1990), Comparison of rapid tests for assessing UHT milk sterility](https://www.cambridge.org/core/journals/journal-of-dairy-research/article/abs/comparison-of-rapid-tests-for-assessing-uht-milk-sterility/4614AE5B275AC91DE2AA432FE6E1E919), Journal of Dairy Research
+- [GEA: Shelf-stable milk](https://www.gea.com/en/stories/shelf-stable-milk-conscientious-convenience/): shelf life
+
+Equipment and logistics:
+
+- [Tetra Pak A3/Flex](https://www.tetrapak.com/solutions/packaging/filling-machines/tetra-pak-a3flex): filler capacity
+- [Tetra Alsafe aseptic tank](https://www.machineryworld.com/wp-content/uploads/2020/11/pd10196_tetra_alsafe.pdf): tank sizes
+- [ICPE: Aseptic packaging system](https://www.icpe.in/icpefoodnpackaging/pdfs/23_aseptic.pdf)
+- [Tetra Pak Tray Shrink 30](https://www.tetrapak.com/en-cz/solutions/packaging/downstream-equipment/film-wrappers/tetra-pak-tray-shrink-30)
+- [GS1 UK: Logistics labels and SSCCs](https://gs1uk.org/support-training/help-to-use-and-implement-gs1-standards/logistics-labels-and-ssccs): the pallet label
+- [Eurowag: How many euro pallets fit on a truck](https://eurowag.com/blog/how-many-euro-pallets-can-be-loaded-onto-a-truck): the truck load
+- [OEE.com: Calculating OEE](https://www.oee.com/calculating-oee/)
+
+Made with [three.js](https://threejs.org/) (MIT), [Chart.js](https://www.chartjs.org/) (MIT) and the Barlow, Barlow Condensed and IBM Plex Mono fonts ([SIL OFL 1.1](https://openfontlicense.org)). The conveyors are from [Kenney's Factory Kit](https://kenney.nl/assets/factory-kit) (CC0); the machines, vehicles and pack prints are the project's own work, and no brand appears on them.

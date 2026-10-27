@@ -6,6 +6,8 @@
 <meta name="description" content="Browser-based 3D simulation of a UHT milk plant, from standardization to ambient distribution.">
 <meta name="color-scheme" content="light dark">
 <title>UHT Milk Plant Simulation</title>
+<!-- Inline, so the browser asks the server for no /favicon.ico (a 404 on Pages and in `vite preview`). -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231767b0'/%3E%3Cpath d='M16 6c-4 6-7 9.5-7 13a7 7 0 0 0 14 0c0-3.5-3-7-7-13z' fill='%23fff'/%3E%3C/svg%3E">
 </head>
 <body>
 <!-- One screen (plan 08). main.ts needs #app and #viewport; the HUD (src/ui/hud.ts) fills #bar,
@@ -29,6 +31,9 @@
 
   <main class="view card" aria-label="3D view of the plant">
     <div id="viewport"></div>
+    <!-- Shown until the first frame is drawn (src/ui/appStatus.ts hides it); the module script loads three.js first. -->
+    <p id="loading" class="overlay overlay-loading" role="status" data-testid="loading"><span class="loading-dot" aria-hidden="true"></span>Loading the plant…</p>
+    <noscript><p class="overlay overlay-loading">This simulation needs JavaScript.</p></noscript>
     <!-- Overlays let clicks through to the 3D view (pointer-events: none in app.css). -->
     <p class="overlay overlay-hint">Drag to orbit · scroll to zoom · click a machine</p>
     <div class="overlay overlay-legend" role="img" aria-label="Pipe colour shows milk temperature: blue 4 °C, teal 20 °C, amber 60 °C, orange 80 °C, red 140 °C">

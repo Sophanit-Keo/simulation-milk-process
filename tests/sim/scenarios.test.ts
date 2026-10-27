@@ -356,6 +356,31 @@ describe('H110: resets, and what cannot start', () => {
   });
 });
 
+describe('two faults on the same batches (phase 6 bug bash)', () => {
+  it('judges each batch once: the fault that blocked it tells why, and both runs end', () => {
+    const run = startPacks(copyConfig(), { speed: 10_000 });
+    run.sim.dispatch({ type: 'triggerScenario', id: 'homogenizerPressureLoss' });
+    run.sim.dispatch({ type: 'triggerScenario', id: 'sterileAirFilterFailure' });
+    const end = run.runTo(hToS(8) + dayToS(plantConfig.quality.incubationDays) + 60);
+    const byId = (id: ScenarioId) => end.scenarios.runs.find((each) => each.id === id);
+    const homogenizer = byId('homogenizerPressureLoss');
+    const filter = byId('sterileAirFilterFailure');
+    for (const each of [homogenizer, filter]) {
+      expect(each?.following, each?.id).toBe(false);
+      expect(each?.summary, each?.id).toBe('Over: every batch judged');
+    }
+    for (const id of [54, 55]) {
+      const verdict = (entries: readonly LogEntry[]) => entries.filter((entry) => entry.message.startsWith(`Batch ${id} `) && /passed|blocked/.test(entry.message));
+      expect(verdict(end.log), `batch ${id} judged once`).toHaveLength(1);
+      const [entry] = verdict(end.log);
+      const tellers = [homogenizer, filter].filter((each) => verdict(each?.log ?? []).length > 0).map((each) => each?.id);
+      if (/spoiled/.test(entry?.message ?? '')) expect(tellers).toEqual(['sterileAirFilterFailure']);
+      else if (/sensory check/.test(entry?.message ?? '')) expect(tellers).toEqual(['homogenizerPressureLoss']);
+      else expect(tellers).toHaveLength(1);
+    }
+  });
+});
+
 describe('the same seed gives the same scenario log', () => {
   const play = (): unknown => {
     const run = startPacks(copyConfig(), { speed: 1_000 });

@@ -90,9 +90,9 @@
         "ratePacksPerH": 7500,
         "runningCount": 2,
         "packsPerH": 15000,
-        "oeePct": 93.58695652173911,
-        "oeeAPct": 93.58695652173911,
-        "oeeBPct": 93.58695652173911,
+        "oeePct": 93.61951983298538,
+        "oeeAPct": 93.61951983298538,
+        "oeeBPct": 93.61951983298538,
         "packsMade": 2874,
         "packsRejected": 4,
         "tempC": 20
@@ -230,9 +230,9 @@
         "packsRejected": 2,
         "breakdowns": 0,
         "availabilityPct": 100,
-        "performancePct": 93.71739130434781,
+        "performancePct": 93.74999999999999,
         "qualityPct": 99.86082115518441,
-        "oeePct": 93.58695652173911
+        "oeePct": 93.61951983298538
       },
       {
         "name": "B",
@@ -244,9 +244,9 @@
         "packsRejected": 2,
         "breakdowns": 0,
         "availabilityPct": 100,
-        "performancePct": 93.71739130434781,
+        "performancePct": 93.74999999999999,
         "qualityPct": 99.86082115518441,
-        "oeePct": 93.58695652173911
+        "oeePct": 93.61951983298538
       }
     ],
     "packaging": {
@@ -1066,7 +1066,7 @@
     "divertedL": 400.00000000000074,
     "tankLevelPct": 48.95833333333239,
     "packsPerH": 15000,
-    "oeePct": 93.58695652173911,
+    "oeePct": 93.61951983298538,
     "traysMade": 238,
     "palletsMade": 2,
     "batchesOnHold": 42,
