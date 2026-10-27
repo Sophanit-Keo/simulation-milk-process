@@ -218,8 +218,10 @@ export function createFillers(config: PlantConfig, rng: Rng, scheduler: Schedule
       const openForS = nowS - openS;
       // At the opening instant nothing has been measured yet: full availability and quality, the set rate's performance.
       const availabilityFrac = openForS > 0 ? Math.min(1, unit.runS / openForS) : 1;
+      // The pack being formed counts too: whole packs alone would make the first seconds read low (2 packs in
+      // the first second is 90% of 8,000 packs/h), and the KPI strip would flicker as the plant opens.
       const performanceFrac =
-        unit.runS > 0 ? unit.packsMade / (spec.maxRatePacksPerH * sToH(unit.runS)) : Math.max(0, ratePacksPerH) / spec.maxRatePacksPerH;
+        unit.runS > 0 ? (unit.packsMade + unit.formingPacks) / (spec.maxRatePacksPerH * sToH(unit.runS)) : Math.max(0, ratePacksPerH) / spec.maxRatePacksPerH;
       const qualityFrac = unit.packsMade > 0 ? (unit.packsMade - unit.packsRejected) / unit.packsMade : 1;
       return {
         name: unit.name,
