@@ -101,6 +101,20 @@ describe('H104: UHT temperature drop', () => {
     expect(scenario.summary).toBe('Over: back in production');
   });
 
+  it('diverts at 50% flow too (8 s hold): by 31.2 s, when the outlet crosses 136.06 °C, and 400 L go to the reject tank', () => {
+    const config = copyConfig();
+    config.asepticTank.startFrac = 0.95; // above 90%: the plant opens throttled, as in H91
+    const half = startPacks(config);
+    half.sim.dispatch({ type: 'triggerScenario', id: 'uhtTempDrop' });
+    const end = half.runTo(600);
+    expect(half.sim.snapshot().liquid.throttled).toBe(true);
+    const divertS = at(half, firstRun(end).log, /diverting to the reject tank/);
+    // 135.5 + 4.5 e^(−t/15) = 136.063 at t = 15 ln(4.5 / 0.563) = 31.2 s; a reading 0.3 °C low crosses at 24.8 s.
+    expect(divertS).toBeGreaterThanOrEqual(24.8);
+    expect(divertS).toBeLessThanOrEqual(31.2);
+    expectWithin(end.kpis.divertedL, 400, 1e-6);
+  });
+
   it('cannot start again while the steam is down, nor while the plant cleans', () => {
     const again = triggered('uhtTempDrop');
     again.runTo(60);
