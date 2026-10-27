@@ -36,12 +36,22 @@ Turn milk from the aseptic tank into packs, trays, pallets, batches and truckloa
 
 ## Gate G2 checklist
 
-- [ ] Silo to truck runs end to end at every speed preset with no errors.
-- [ ] Stages 7–10 are live: packs, pallets, quarantine, warehouse, trucks.
-- [ ] The conservation and coupling tests pass, and so does the 60-day run.
+- [x] Silo to truck runs end to end at every speed preset with no errors.
+- [x] Stages 7–10 are live: packs, pallets, quarantine, warehouse, trucks.
+- [x] The conservation and coupling tests pass, and so does the 60-day run.
 - [ ] 60 fps with tokens on screen.
-- [ ] Contracts v3 frozen and the cut list recorded.
+- [x] Contracts v3 frozen and the cut list recorded.
 - [ ] The developer signs G2.
+
+**Status (2026-10-27, all lanes, ready for the G2 review):**
+
+- **`lead`.** Contracts v3 (`src/contracts/packs.ts`, `Snapshot.packs`, `CONTRACT_VERSION` 3, frozen: `tests/sim/snapshotV3.test.ts` checks the version and the shape of every field) and `plant.json` schema 5 with D11's three keys and five more ([D14](../DECISIONS.md#d14-phase-4-packs-to-trucks-defaults)). The plant opens on day 8 at 06:00 with a week of history ([D11](../DECISIONS.md#d11-opening-state)). Cut list: nothing cut ([D14](../DECISIONS.md#d14-phase-4-packs-to-trucks-defaults)).
+- **`sim`.** `src/sim/packs/` (`filler.ts`, `packaging.ts`, `quality.ts`, `warehouse.ts`) and `src/sim/packsLine.ts` replace the filler stub; the liquid line hands the fillers each cut of each step, so litres drawn = packs made. Every timed change runs through the core's event queue, and the packs model draws from its own seeded stream.
+- **`qa`.** `tests/sim/packs.test.ts` (stages 7–10 and the coupling at the aseptic tank), `packsLongRun.test.ts` (60 days at ×10,000: conservation every sim hour, bounded queues, the R9 range, H52, H58, H59, H41–H43; 1 s and 10 s steps agree), `snapshotV3.test.ts`, `acceptancePacks.test.ts` (H97–H103), `tests/contracts/sscc.test.ts`, and the filler-down and quarantine-full fixtures. In the browser, `e2e/packs.spec.ts` runs silo to truck at every preset, then at ×10,000 until truck 1 leaves and batch 12 is released, and checks the batch list, a click on a block and the QA override; the phase 2 and 3 specs follow the day-8 opening. The whole suite passes but for `shell.spec.ts`'s pixel-ratio test, which fails the same way at the phase 3 merge on this machine's Chromium 153 and is not a phase 4 change.
+- **`scene`.** Cartons, trays and pallets ride the belts as samples; the palletizer's load grows, the stretch wrapper turns, pallets ride to their batch's block. The quarantine shows one block per batch with a lamp, and a click on one selects its batch. Racks fill with stock (5 pallets a place), forklifts shuttle and trucks dock and leave. The hero block-outs load behind `?heroes`. Draw calls at the overview: 194 ([perf baseline](../../tests/perf/baseline.md#phase-4-packs-to-trucks)).
+- **`ui`.** Panels 7–10 with state rows (each filler, packer lane and pallet, the newest pallet and its SSCC, the next pick, the dock), the stage 9 batch list with each batch's pallets, SSCCs and the QA override, the stage 10 stock and trucks, the filler-rate slider, and the per-filler OEE in the KPI strip.
+- **`process`.** Logistics acceptance signed off: [H97–H103](../hand-calculations.md#phase-4-acceptance-runs), with the 60-day results at the defaults, the OEE definition and the pallet label fields checked against GS1. Panel text, captions and the About text cover stages 7–10.
+- **Open.** 60 fps needs a real GPU ([To do on a real GPU](../../tests/perf/baseline.md#to-do-on-a-real-gpu)); the developer signs G2.
 
 ## Watch for
 

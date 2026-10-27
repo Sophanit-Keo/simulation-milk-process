@@ -9,7 +9,7 @@ export interface Sim {
   snapshot(): Snapshot;
 }
 
-/** Implemented by src/scene: createWorld(host, bus). Emits and reacts to selectStage on the bus. */
+/** Implemented by src/scene: createWorld(host, bus, options). Emits and reacts to selectStage on the bus. */
 export interface World {
   update(snapshot: Snapshot, realDtS: number): void;
   render(): void;

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { checkPlantConfig, type Snapshot } from '../../src/contracts';
 import { createSim } from '../../src/sim';
 import { createMockSim } from '../../src/sim/mock';
-import { copyConfig, plantConfig } from '../helpers/plantConfig';
+import { copyConfig, NO_BREAKDOWNS_MTBF_S, plantConfig } from '../helpers/plantConfig';
 import { quietConfig, startLiquid } from '../helpers/liquidRun';
 
 /** Steps a sim 1 sim second at a time (×10: 0.1 s of real time per step) and calls `each` after every step. */
@@ -104,8 +104,11 @@ describe('the homogenizer and the fillers when stopped', () => {
   });
 
   it('shows stage 7 idle while the fillers wait for product, and running again once they restart', () => {
-    // A divert at once: the fillers drain the 10,000 L tank in about 40 min (H37) and wait.
-    const sim = createSim(quietConfig());
+    // A divert at once: the fillers drain the 10,000 L tank in about 40 min (H37) and wait. No breakdowns,
+    // which would turn stage 7 red with one filler still running.
+    const config = quietConfig();
+    config.fillers.mtbfMeanS = NO_BREAKDOWNS_MTBF_S;
+    const sim = createSim(config);
     sim.dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value: 138 });
     let seenStarved = false;
     runSeconds(sim, 3_000, (snap) => {
@@ -123,8 +126,12 @@ describe('the homogenizer and the fillers when stopped', () => {
 describe('the ?mock sim (review)', () => {
   it('diverts on a set point under the limit, even in an amber window', () => {
     const sim = createMockSim(plantConfig);
-    // The mock opens in an amber stage 4 window with this seed, where it runs a little low.
-    expect(sim.snapshot().stages[4].status).toBe('warn');
+    // Run on to the first amber stage 4 window in production, where the mock runs a little low.
+    sim.dispatch({ type: 'setSpeed', speed: 1_000 });
+    const amber = () => sim.snapshot().stages[4].status === 'warn' && sim.snapshot().liquid.uhtMode === 'production';
+    for (let step = 0; step < 100_000 && !amber(); step++) sim.step(0.001);
+    expect(amber()).toBe(true);
+    sim.dispatch({ type: 'setSpeed', speed: 10 });
     sim.dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value: 138 });
     sim.step(0.1);
     expect(sim.snapshot().liquid.uhtMode).toBe('divert');

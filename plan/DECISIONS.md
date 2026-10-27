@@ -16,9 +16,10 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D8](#d8-clock) | Clock: start, default speed, step sizes | — | Proposed |
 | [D9](#d9-other-open-values) | Shelf life, incubation, deaerator, headspace, catch-up | — | Proposed |
 | [D10](#d10-formula-tests-in-phase-1) | Formula tests active from phase 1 | — | Proposed |
-| [D11](#d11-opening-state) | Open on day 8 with a week of history | — | Proposed (needs a contract change) |
+| [D11](#d11-opening-state) | Open on day 8 with a week of history | — | Proposed (in use since phase 4) |
 | [D12](#d12-conveyor-models) | Kenney Factory Kit for conveyors | — | Proposed |
 | [D13](#d13-phase-3-liquid-line-defaults) | Silo and mixing-tank sizes and the 21 liquid-line keys of schema 4 | — | Proposed |
+| [D14](#d14-phase-4-packs-to-trucks-defaults) | The 8 packs-to-trucks keys of schema 5 and the rules without a key | — | Proposed |
 
 ## D1. Batch size
 
@@ -145,13 +146,14 @@ This log settles the numbers and rules that the plan left open or that the [revi
 
 ## D11. Opening state
 
-- **Status:** Proposed (needs a contract change; until then D8's day-1 start stays)
-- **Date:** 2026-10-12
+- **Status:** Proposed (in use since phase 4: contracts v3 and `plant.json` schema 5 have the keys)
+- **Date:** 2026-10-12; implemented 2026-10-26
 - **Review note:** none
 - **Decision:** open on day 8 at 06:00 with a week of history, as the preview does: 42 batches on hold (6 a day for 7 days; the oldest is released at 14:00 that day) and 634 pallets of released stock (two days of shipments). This needs three `plant.json` keys from `lead`: `clock.startTimeS` = 626,400, `quality.historyDays` = 7 and `warehouse.startStockPallets` = 634.
 - **Why:** with a day-1 start and an empty plant, the first batch ends on day 1 at 14:00 and is released on day 8 at 14:00 at the earliest. Until then stock is zero, about 105 trucks find nothing to load, the order fill rate reads 0%, and stages 9 and 10 show nothing. That is about 63 s at ×10,000, 11 min at ×1,000 and almost 18 h at ×10.
 - **What it changes:** `clock.startTimeS` and the two new keys once the contract has them. A history of about 2,450 pallets on hold (42 batches of about 58.3) also starts the quarantine view at its full size ([R9](REVIEW.md#r9-quarantine-scale)).
 - **Phase 2 note:** contracts v1 did not add the three keys, so the plant still opens on day 1 at 06:00 (D8). That costs nothing yet: the static plant has no batches, stock or trucks, so the stage 9 and 10 panels show only their settings (incubation, samples, pallets per truck) and those KPIs read 0. The keys are needed by phase 4, when stages 9 and 10 go live. The grey-box racks have 384 pallet places (16 bays × 2 pallets × 4 rows × 3 levels), fewer than the 634 opening pallets, and stock grows by about 33 pallets a day after that ([H43](hand-calculations.md#counts-and-rates)). The preview drew one block per 10 pallets, 1,920 pallets in all, which holds the opening stock plus about 39 days of growth; phase 4 needs a scale like it ([G1 checklist](agent-plan/g1-checklist.md#layout-review), defect 4).
+- **Phase 4 note:** in use. `lead` added the three keys with contracts v3 (`plant.json` schema 5), and `src/sim/packs/quality.ts` makes the history: each of the 42 shifts on hold, and the older shifts the 634 pallets of stock come from, draws its own breakdowns as the live fillers do, so the opening quarantine holds 2,453 pallets (58.4 a batch) rather than a round number. Batch ids count up from the oldest: the stock is batches 1–11, the batches on hold 12–53 and the two filling at the opening 54 and 55. The oldest batch on hold is released at 14:00 on day 8 ([H50](hand-calculations.md#counts-and-rates)). The shift grid stays on `quality.firstShiftStartS` (day 1, 06:00), so the opening falls on a shift change. Phase 3's acceptance runs keep the day-1 start through `phase3Config()` in the tests ([Phase 3 acceptance runs](hand-calculations.md#phase-3-acceptance-runs)). The racks show stock at 5 pallets a place, so the 384 places hold 1,920 pallets, as the preview did: the opening stock and about 43 days of growth at 30 a day ([D14](#d14-phase-4-packs-to-trucks-defaults)).
 
 ## D12. Conveyor models
 
@@ -211,6 +213,34 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - **Rules the acceptance runs assume** ([Phase 3 acceptance runs](hand-calculations.md#phase-3-acceptance-runs)): the intermediate-clean count runs during production, throttled or not, and a full CIP restarts it, since the plant is clean afterwards. An aseptic tank that opens above 90% throttles the UHT plant on the first step. Litres sent to the reject tank count in the mass balance as they arrive, whatever later empties the tank.
   - **Rules with no key** (`src/sim/liquidLine.ts`): the full CIP pumps the reject tank out, empty by the CIP's end (reject milk leaves by road); a full reject tank stops the UHT flow; a full aseptic tank takes only what the fillers draw.
 - **What it changes:** the four `standardization` keys of schema 3 and the 21 keys of schema 4, all already in `plant.json`, and the matching rows in [default settings](06-simulation-model.md#default-settings).
+
+## D14. Phase 4 packs-to-trucks defaults
+
+- **Status:** Proposed
+- **Date:** 2026-10-26
+- **Review note:** none ([Phase 4](agent-plan/phase-4-packs-to-trucks.md))
+- **Decision:** the keys `sim` added to `plant.json` for the live stage 7–10 model (schema 5, beside D11's three), and the rules the model follows without a key.
+
+| Setting | Default | `plant.json` key | Basis |
+|---|---|---|---|
+| Seal-check rejects | 0.2% of packs | `fillers.rejectFrac` = 0.002 | Sim assumption; gives OEE quality Q = 0.998 ([H52](hand-calculations.md#counts-and-rates)). The preview left quality out of OEE |
+| Batch change on the packer | 2 min at each shift change | `packaging.batchChangeS` = 120 | Sim assumption: the packer closes the last pallet of the batch part-full ([D1](#d1-batch-size)), changes its batch code and starts a new pallet; packs queue on the conveyor meanwhile and the catch-up clears them |
+| Blocked batch kept in quarantine | 1 day, then destroyed | `quality.blockedHoldS` = 86,400 | Sim assumption: long enough to see the red block in the 3D view at ×1,000 (86 s) |
+| Truck loading | 20 min | `warehouse.truckLoadS` = 1,200 | Sim assumption; 22 pallets at under a minute each by forklift |
+| Dock doors | 3 | `warehouse.dockDoors` = 3 | The three loading docks of the grey-box warehouse (`DOOR_X_M` in `src/scene/equipment/packs/layout.ts`; [plan 05](05-layout-and-3d-assets.md) names the loading docks); a truck that finds every door taken waits in the yard |
+
+- **Rules with no key:**
+  - **Fillers** (`src/sim/packs/filler.ts`): a breakdown is counted only while a filler runs, not while it is starved or set to 0 packs/h. A repair takes the random part (`fillers.repairRandomMeanS`), shown as *broken down*, then the fixed part (`fillers.repairFixedS`), shown as *re-sterilizing*: the filler's aseptic zone is sterilized again before it restarts. Each restart owes 2 more samples ([D1](#d1-batch-size)). A starved filler restarts when the tank is back above 500 L ([D13](#d13-phase-3-liquid-line-defaults)).
+  - **OEE** per filler since the plant opened: availability = running time ÷ time open; performance = packs made ÷ (8,000 packs/h × running time); quality = good packs ÷ packs made. The KPI strip shows the mean of the two fillers, and the OEE card each filler's.
+  - **Packaging** (`src/sim/packs/packaging.ts`): one tray packer and pallet per filler line. The packer is rated for the filler's 8,000 packs/h maximum and catches up at up to 30% over it (`packaging.catchUpFrac`, [D9](#d9-other-open-values)), 10,400 packs/h, until its queue is clear. A pallet holds packs of one batch only.
+  - **Samples** are taken from the filler's good packs on a 30 min grid from the first shift (`quality.firstShiftStartS`), so a batch of 8 h at full rate has 16 (H29), and the packs on its pallets are 60,000 − rejects − samples (H98).
+  - **Quality** (`src/sim/packs/quality.ts`): the incubation result is drawn once, when incubation ends, with the chance 1 − (1 − p)^n that one of the batch's n samples spoils ([R10](REVIEW.md#r10-rare-qa-failures)). A QA override from the batch list blocks a batch at once (even one still filling, whose later pallets then go straight into its blocked block), or releases it when its incubation ends without the draw.
+  - **Warehouse** (`src/sim/packs/warehouse.ts`): trucks arrive every 100 min from the opening ([D3](#d3-truck-payload)), take the free door with the lowest number, and load only when released stock holds a full 22-pallet load, picked first-expired-first-out; trucks waiting at the doors or in the yard load in arrival order as stock is released. The order fill rate counts the trucks that found a full load on arrival; with no truck yet it reads 100%.
+  - **Random numbers:** the packs model draws from its own seeded stream (the plant seed mixed with a constant, `packsSeed` in `src/sim/index.ts`), so the fillers' breakdowns and the QA draws are the same at 1 s and 10 s steps and do not change when the liquid line's noise does.
+  - **3D view:** the belts, palletizer and pallet traffic show a sample of the packs, not every pack (plan 06: at ×10,000 the plant makes about 40 packs a real millisecond); a pallet sets off for the quarantine at most every 2 s of real time. The racks show stock at 5 pallets a place (D11 note), and each batch on hold is one block of up to 64 pallets with one lamp ([R9](REVIEW.md#r9-quarantine-scale)).
+- **Cut list at G2:** nothing cut for phase 4. The silo-to-truck run works, so the Could items built so far stay in: the stretch wrapper (it turns and wraps each pallet that leaves the palletizer) and the boiler house. The CIP station (Could) was never built: it is not in the preview ([G1 checklist](agent-plan/g1-checklist.md)), and cleaning stays a timed state of the UHT plant; it is left for phase 5 to build or cut. The hero models are in behind `?heroes`, with the grey boxes the default until phase 5.
+- **Why:** each value is a sim assumption chosen so the plant shows what the plan describes at the default speeds, and none moves a hand-calculated count: the batch change and catch-up keep every pallet of a batch on its own pallets, the rejects and samples come out of the batch's packs, and the trucks keep D3's 316.8 pallets a day. The [Phase 4 acceptance runs](hand-calculations.md#phase-4-acceptance-runs) (H97–H103) and the 60-day run check the model against them.
+- **What it changes:** the five keys above and D11's three, all already in `plant.json`, and the matching rows in [default settings](06-simulation-model.md#default-settings).
 
 ---
 

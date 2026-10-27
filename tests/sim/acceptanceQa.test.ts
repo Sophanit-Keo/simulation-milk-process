@@ -2,17 +2,18 @@
 // checks only in part, as process listed them at sign-off (plan/agent-plan/phase-3-liquid-line.md): the
 // rest of H76–H82, H86's zero flows and nextCleanS reset, H88 with the default noise over many seeds, H83's
 // 4 h read made unskippable, and H95 through createSim with H88's divert at t = 0. Run as the rows say:
-// copyConfig(), only the named keys changed, seed 81006, t = snapshot.timeS − 21,600, tolerances from the rows.
+// phase3Config() (day 1 06:00, no filler breakdowns), only the named keys changed, seed 81006,
+// t = snapshot.timeS − 21,600, tolerances from the rows.
 import { describe, expect, it } from 'vitest';
 import { LINE_POINT_IDS, type LinePointId, type PlantConfig, type Sim, type Snapshot } from '../../src/contracts';
 import { createSim } from '../../src/sim';
 import type { LiquidLine } from '../../src/sim/liquidLine';
 import { expectWithin } from '../helpers/expectWithin';
-import { copyConfig } from '../helpers/plantConfig';
+import { phase3Config } from '../helpers/plantConfig';
 
 const OPEN_S = 21_600;
 const quiet = (): PlantConfig => {
-  const config = copyConfig();
+  const config = phase3Config();
   config.uht.displayNoiseC = 0;
   return config;
 };
@@ -128,7 +129,7 @@ describe('normal run, the rest of H76–H82', () => {
   });
 
   it('H80: with the default noise, every step of 2 h stays in the bands (tempC 139.7–140.3, B* 1.1101–1.2662, F0 4.830–5.545) and stage 4 is never red', () => {
-    const run = start(copyConfig());
+    const run = start(phase3Config());
     const seenC: number[] = [];
     run.runTo(7_200, (snap) => {
       const four = snap.stages[4].values;
@@ -232,7 +233,7 @@ describe('H88: 139 °C with the default noise', () => {
   it('diverts on the first step for 100 seeds, including steps whose reading is above the 139.224 °C limit, and 140 °C again does not stop it', () => {
     let readingAboveLimit = 0;
     for (let seed = 1; seed <= 100; seed++) {
-      const config = copyConfig();
+      const config = phase3Config();
       config.seed = seed;
       const run = start(config);
       const first = divertAtStart(run);
@@ -255,7 +256,7 @@ describe('H88: 139 °C with the default noise', () => {
   });
 
   it('139.3 °C, above the limit, diverts only in a step whose reading falls under 139.224 °C', () => {
-    const run = start(copyConfig());
+    const run = start(phase3Config());
     run.sim.dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value: 139.3 });
     let diverted: Snapshot | undefined;
     run.runTo(600, (snap) => {

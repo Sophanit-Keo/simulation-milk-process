@@ -11,6 +11,7 @@ function install(overrides: Partial<DebugSources> = {}) {
   vi.stubGlobal('window', {});
   const sources: DebugSources = {
     stageScreenPoint: () => null,
+    batchScreenPoint: (batchId) => (batchId === 53 ? { x: 400, y: 300 } : null),
     focusStage: () => null,
     cameraTargetM: () => [0, 0, 0],
     cameraPositionM: () => [0, 0, 0],
@@ -31,6 +32,13 @@ describe('the ?debug hook', () => {
     const { scene } = install();
     expect(scene.equipmentState('divert-valve')).toEqual({ diverting: true, lamp: 'bad', flagRad: -1.5 });
     expect(scene.equipmentState('no-such-machine')).toBeNull();
+  });
+
+  it('reports where a quarantine batch can be clicked, and null for a batch with no block on screen', () => {
+    const { scene } = install();
+    expect(scene.batchScreenPoint(53)).toEqual({ x: 400, y: 300 });
+    expect(scene.batchScreenPoint(12)).toBeNull();
+    expect(scene.batchScreenPoint(Number.NaN)).toBeNull();
   });
 
   it('reports the pipes’ state', () => {

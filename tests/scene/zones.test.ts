@@ -104,6 +104,12 @@ describe('zone names', () => {
     expect(ZONES.find((zone) => zone.id === 'warehouse')?.labelAlign).toBe('right');
   });
 
+  /** True unless the object or one of its parents is hidden. */
+  const shown = (object: THREE.Object3D): boolean => {
+    for (let node: THREE.Object3D | null = object; node; node = node.parent) if (!node.visible) return false;
+    return true;
+  };
+
   it.each(REVIEW_VIEWS_PX)('read in full from the overview at $name: in view, apart, clear of every lamp and machine', (view) => {
     const camera = overviewCamera(view.widthPx, view.heightPx);
     const machines = EQUIPMENT_FACTORIES.flatMap((make) => make(makeContext()));
@@ -133,7 +139,8 @@ describe('zone names', () => {
         for (let x = box.left; x <= box.right; x += 3) {
           ndc.set((x / view.widthPx) * 2 - 1, 1 - (y / view.heightPx) * 2);
           raycaster.setFromCamera(ndc, camera);
-          const hit = raycaster.intersectObject(scene, true).find((h) => h.point.y > FLOOR_MARKING_TOP_M);
+          // Something hidden (a truck at a door no truck is docked at) hides nothing.
+          const hit = raycaster.intersectObject(scene, true).find((h) => h.point.y > FLOOR_MARKING_TOP_M && shown(h.object));
           let owner: THREE.Object3D | null = hit?.object ?? null;
           while (owner && owner.userData.equipmentId === undefined) owner = owner.parent;
           expect(owner?.userData.equipmentId, `${zone.id} name at ${x.toFixed(0)}, ${y.toFixed(0)} px`).toBeUndefined();

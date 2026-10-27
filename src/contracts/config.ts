@@ -1,5 +1,6 @@
+import { MAX_PALLETS_PER_BATCH } from './sscc';
 import { isSpeed } from './stages';
-import { dayToS } from './units';
+import { dayToS, sToH } from './units';
 
 /**
  * Shape of src/data/plant.json, the default settings (plan 06 and plan/DECISIONS.md).
@@ -11,7 +12,7 @@ export interface PlantConfig {
   /** Seed for every random draw, so demos and tests repeat (R2). */
   seed: number;
   clock: {
-    /** Sim time when the app opens, seconds since day 1, 00:00. */
+    /** Sim time when the app opens, seconds since day 1, 00:00 (D11: day 8, 06:00, after a week of history). */
     startTimeS: number;
     /** One of the speed presets in SPEEDS. */
     defaultSpeed: number;
@@ -154,6 +155,8 @@ export interface PlantConfig {
     repairFixedS: number;
     repairRandomMeanS: number;
     tempC: number;
+    /** Share of the packs formed that the seal check rejects, whole packs counted evenly (sim assumption, phase 4). */
+    rejectFrac: number;
   };
   /** Stage 8. */
   packaging: {
@@ -161,6 +164,11 @@ export interface PlantConfig {
     traysPerPallet: number;
     /** Extra speed to clear a queue after a stop (sources: up to 30%). */
     catchUpFrac: number;
+    /**
+     * The tray packer stops this long at each shift change, to close the old batch's last tray and pallet and
+     * code the new batch; packs queue on the accumulation table meanwhile (sim assumption, phase 4).
+     */
+    batchChangeS: number;
   };
   /** Stage 9. */
   quality: {
@@ -173,12 +181,22 @@ export interface PlantConfig {
     incubationTempC: number;
     incubationDays: number;
     failurePerPack: number;
+    /** Days of batches already made when the app opens, on hold in quarantine (D11). */
+    historyDays: number;
+    /** A blocked batch's pallets stay in quarantine this long, lamps red, before they leave for destruction (sim assumption, phase 4). */
+    blockedHoldS: number;
   };
   /** Stage 10. */
   warehouse: {
     tempC: number;
     palletsPerTruck: number;
     truckEveryS: number;
+    /** Released pallets in stock when the app opens, from batches before the history (D11). */
+    startStockPallets: number;
+    /** Time to load a truck at the dock (sim assumption, phase 4). */
+    truckLoadS: number;
+    /** Dock doors; a truck that finds them all taken waits in the yard (the layout has three). */
+    dockDoors: number;
   };
 }
 
@@ -218,6 +236,7 @@ const POSITIVE_KEYS = [
   'quality.incubationDays',
   'warehouse.palletsPerTruck',
   'warehouse.truckEveryS',
+  'warehouse.dockDoors',
 ] as const;
 
 // Floors and ceilings that keep the clock workable. "Next event" ignores the per-frame step cap, so a
@@ -233,7 +252,10 @@ const INTEGER_KEYS = [
   'packaging.packsPerTray',
   'packaging.traysPerPallet',
   'quality.samplesAfterStop',
+  'quality.historyDays',
   'warehouse.palletsPerTruck',
+  'warehouse.startStockPallets',
+  'warehouse.dockDoors',
   'clock.maxStepsPerFrame',
 ] as const;
 
@@ -302,5 +324,17 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   if (uht.bStarWarnBelow < 1) fail('uht.bStarWarnBelow must be at least 1, the divert level');
   if (fillers.ratePacksPerH > fillers.maxRatePacksPerH) fail('filler rate exceeds the machine maximum');
   if (uht.faultTempC >= uht.setpointC) fail('uht.faultTempC must be below the set point');
+  // Phase 4: rules that keep the discrete model working.
+  if (!(fillers.rejectFrac < 1)) fail('fillers.rejectFrac must be below 1, or no pack is ever good');
+  if (!(quality.failurePerPack <= 1)) fail('quality.failurePerPack must lie in 0–1');
+  if (!(config.packaging.batchChangeS < quality.batchS)) fail('packaging.batchChangeS must be shorter than a batch (quality.batchS)');
+  // A queue that builds in a changeover must clear before the next one, so the packer needs some catch-up speed.
+  if (config.packaging.batchChangeS > 0 && !(config.packaging.catchUpFrac > 0)) fail('packaging.catchUpFrac must be greater than 0 when batchChangeS is');
+  // History older than one incubation would already be released: that is the opening stock's part (D11).
+  if (quality.historyDays > quality.incubationDays) fail('quality.historyDays must not exceed quality.incubationDays');
+  const packsPerPallet = config.packaging.packsPerTray * config.packaging.traysPerPallet;
+  if (sToH(quality.batchS) * fillers.maxRatePacksPerH > MAX_PALLETS_PER_BATCH * packsPerPallet) {
+    fail(`a batch at the machine maximum must fit ${MAX_PALLETS_PER_BATCH} pallets, the SSCC serial range per batch`);
+  }
   return problems;
 }

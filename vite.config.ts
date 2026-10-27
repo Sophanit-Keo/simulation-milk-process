@@ -22,7 +22,16 @@ export default defineConfig(() => ({
   build: {
     target: 'es2022',
     sourcemap: true,
-    // three.js alone is about 560 kB minified; warn only if the bundle grows well past it.
+    // three.js with the loaders the app takes from it, about 655 kB minified, goes in a chunk of its own, which
+    // the browser keeps cached when only the app changes; the app's chunk is the rest (about 185 kB by phase 4).
+    // Warn if either grows well past that.
     chunkSizeWarningLimit: 800,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: 'three', test: /node_modules[\\/]three[\\/]/ }],
+        },
+      },
+    },
   },
 }));

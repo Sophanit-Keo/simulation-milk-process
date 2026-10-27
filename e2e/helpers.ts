@@ -25,17 +25,28 @@ export const STAGES: readonly StageInfo[] = parseStages(readJson('../src/data/st
 const staticSnapshot = createSim(plantConfig).snapshot();
 export const STATIC_VALUES = staticSnapshot.stages;
 export const STATIC_KPIS = staticSnapshot.kpis;
+export const STATIC_PACKS = staticSnapshot.packs;
 
 /**
  * Stage values that move with sim time even in steady production (phase 3's live line), and how far each
  * may stray from its opening value within a test, in its own unit: the UHT reading carries up to ±0.3 °C of
  * noise (D4), which moves F0 within 4.83–5.55 min and B* within 1.11–1.27 (H21, H22); the aseptic tank gains
  * 1,000 L/h (H31), so about 170 L in the 10 sim minutes of a minute at ×10; the silo drains between tankers.
+ *
+ * Stages 7–10 (phase 4) count up from the opening, so their bands are an hour of production (6 min of a
+ * test at ×10): 15,000 packs and 30 rejects, 1,250 trays and about 15 pallets (H26, H38); the OEE falls from
+ * 93.75% to 93.56% with the 0.2% rejects (H100); the next release and the next truck count down. Nothing
+ * else changes in that hour: the first truck comes 100 min after the opening and the first release at
+ * 14:00 (H50), and no filler breaks down before the truck.
  */
 export const LIVE_TOLERANCES: Readonly<Partial<Record<number, Readonly<Record<string, number>>>>> = {
   1: { siloLevelPct: 10, mixTankLevelPct: 1 },
   4: { tempC: 0.3, f0Min: 0.4, bStar: 0.09 },
   6: { levelL: 1_000, levelPct: 5, headspaceBar: 0.05, nextCleanS: 3_600 },
+  7: { oeeAPct: 0.25, oeeBPct: 0.25, packsMade: 15_000, packsRejected: 30 },
+  8: { traysMade: 1_250, palletsMade: 15, queuePacks: 300 },
+  9: { palletsInQuarantine: 15, nextReleaseS: 3_600 },
+  10: { nextTruckS: 3_600 },
 };
 
 /** What the panel shows with no stage selected (src/ui/stagePanel.ts, the shared spec's "Select a stage"). */
@@ -178,6 +189,8 @@ export async function waitForScene(page: Page): Promise<void> {
 /** The ?debug hook the scene sets on window (phase-2 shared spec). */
 export interface SceneDebug {
   stageScreenPoint(stage: number): { x: number; y: number } | null;
+  /** Client pixels where a click picks a quarantine batch's block (phase 4), or null. */
+  batchScreenPoint(batchId: number): { x: number; y: number } | null;
   focusStage(): number | null;
   drawCalls(): number;
   triangles(): number;

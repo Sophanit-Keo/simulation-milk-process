@@ -330,18 +330,48 @@
     "name": "Aseptic Packaging",
     "shortName": "Filling",
     "zone": "filling",
-    "description": "The fillers sterilize the carton material, form it into a tube, fill it with sterile milk and seal each pack below the liquid level, so no air or germs get in.",
+    "description": "The fillers sterilize the carton material, form it into a tube, fill it with sterile milk and seal each pack below the liquid level, so no air or germs get in. Each one breaks down now and then and is repaired and re-sterilized; the aseptic tank absorbs the stop.",
     "values": [
       {
-        "key": "fillerCount",
-        "label": "Fillers",
+        "key": "runningCount",
+        "label": "Fillers running",
         "unit": "",
         "decimals": 0
       },
       {
         "key": "ratePacksPerH",
-        "label": "Rate per filler",
+        "label": "Set rate per filler",
         "unit": "packs/h",
+        "decimals": 0
+      },
+      {
+        "key": "packsPerH",
+        "label": "Packs now, both fillers",
+        "unit": "packs/h",
+        "decimals": 0
+      },
+      {
+        "key": "oeeAPct",
+        "label": "OEE, filler A",
+        "unit": "%",
+        "decimals": 1
+      },
+      {
+        "key": "oeeBPct",
+        "label": "OEE, filler B",
+        "unit": "%",
+        "decimals": 1
+      },
+      {
+        "key": "packsMade",
+        "label": "Packs made since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "packsRejected",
+        "label": "Rejected at the seal check",
+        "unit": "",
         "decimals": 0
       },
       {
@@ -352,8 +382,8 @@
       }
     ],
     "tourCaption": [
-      "Two fillers form, fill and seal 1-litre cartons in a sterile zone.",
-      "From here on, milk is counted in packs."
+      "Two fillers form, fill and seal 1-litre cartons in a sterile zone, 7,500 an hour each.",
+      "From here on, milk is counted in packs, each coded with its batch and best-before date."
     ]
   },
   {
@@ -361,8 +391,26 @@
     "name": "Secondary Packaging & Palletization",
     "shortName": "Packaging",
     "zone": "packaging",
-    "description": "Conveyors group packs into shrink-wrapped trays, and a palletizer stacks the trays into labelled pallets, the unit tracked from here on.",
+    "description": "Conveyors group packs into shrink-wrapped trays, and a palletizer stacks the trays into pallets labelled with an SSCC, the unit tracked from here on. Each pallet carries one batch, so the last pallet of a batch leaves part-full.",
     "values": [
+      {
+        "key": "traysMade",
+        "label": "Trays made since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "palletsMade",
+        "label": "Pallets made since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "queuePacks",
+        "label": "Packs waiting for the tray packer",
+        "unit": "",
+        "decimals": 0
+      },
       {
         "key": "packsPerTray",
         "label": "Packs per tray",
@@ -383,8 +431,8 @@
       }
     ],
     "tourCaption": [
-      "Packs are grouped into trays of 12 and shrink-wrapped.",
-      "A robot stacks 84 trays on each labelled pallet."
+      "Packs are grouped into trays of 12 and shrink-wrapped; the packer catches up after a stop.",
+      "A robot stacks 84 trays on each pallet, labelled with its SSCC, batch and best-before date."
     ]
   },
   {
@@ -392,8 +440,45 @@
     "name": "Quarantine & QA Testing",
     "shortName": "Quarantine & QA",
     "zone": "quarantine",
-    "description": "Every batch stays on hold until its sample packs pass incubation, so a pallet can be finished but not yet sellable.",
+    "description": "Every batch, one filler's 8-hour shift, stays on hold until its sample packs pass incubation, so a pallet can be finished but not yet sellable. A failed sample blocks the whole batch.",
     "values": [
+      {
+        "key": "batchesOnHold",
+        "label": "Batches on hold",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "palletsInQuarantine",
+        "label": "Pallets in quarantine",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "nextReleaseS",
+        "label": "Next release in",
+        "unit": "h",
+        "decimals": 1,
+        "scale": 0.0002777777777777778
+      },
+      {
+        "key": "batchesReleased",
+        "label": "Batches released since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "batchesBlocked",
+        "label": "Batches blocked since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "samplesPerBatch",
+        "label": "Samples per batch, plus 2 per restart",
+        "unit": "",
+        "decimals": 0
+      },
       {
         "key": "incubationTempC",
         "label": "Incubation temperature",
@@ -405,17 +490,11 @@
         "label": "Incubation time",
         "unit": "days",
         "decimals": 0
-      },
-      {
-        "key": "samplesPerBatch",
-        "label": "Samples per batch",
-        "unit": "",
-        "decimals": 0
       }
     ],
     "tourCaption": [
-      "Each batch waits here while its samples incubate 7 days at 55 °C.",
-      "Only batches whose samples pass are released for sale."
+      "Each batch waits here about 7 days while its samples incubate at 55 °C.",
+      "Only batches whose samples pass are released; a failed sample blocks the batch."
     ]
   },
   {
@@ -423,18 +502,55 @@
     "name": "Warehousing & Ambient Distribution",
     "shortName": "Warehouse",
     "zone": "warehouse",
-    "description": "Released pallets are stored and shipped at room temperature with no cold chain, earliest best-before date first.",
+    "description": "Released pallets are stored and shipped at room temperature with no cold chain, earliest best-before date first. A truck that finds too little released stock waits at the dock.",
     "values": [
       {
-        "key": "tempC",
-        "label": "Storage temperature",
-        "unit": "°C",
+        "key": "palletsInStock",
+        "label": "Pallets in stock",
+        "unit": "",
         "decimals": 0
+      },
+      {
+        "key": "daysOfCover",
+        "label": "Days of cover",
+        "unit": "days",
+        "decimals": 1
+      },
+      {
+        "key": "orderFillPct",
+        "label": "Trucks loaded on arrival",
+        "unit": "%",
+        "decimals": 0
+      },
+      {
+        "key": "trucksShipped",
+        "label": "Trucks shipped since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "trucksAtDock",
+        "label": "Trucks at the dock",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "nextTruckS",
+        "label": "Next truck in",
+        "unit": "min",
+        "decimals": 0,
+        "scale": 0.016666666666666666
       },
       {
         "key": "palletsPerTruck",
         "label": "Pallets per truck",
         "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "tempC",
+        "label": "Storage temperature",
+        "unit": "°C",
         "decimals": 0
       }
     ],

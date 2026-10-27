@@ -45,7 +45,12 @@ const SHADOW_RADIUS = 3;
  * Both a rail click and a 3D click arrive here as selectStage on the bus; the camera flies to that stage.
  * An overview event (the rail's "Whole plant") flies it back to the whole plant.
  */
-export function createWorld(host: HTMLElement, bus: ViewBus): World {
+export interface WorldOptions {
+  /** Load the hero models in place of their grey boxes (?heroes, until phase 5 makes it the default). */
+  heroModels?: boolean;
+}
+
+export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptions = {}): World {
   // Make the WebGL 2 context here rather than in WebGLRenderer, which logs an error and throws
   // when it can't (three.js needs WebGL 2 since r163). Without it the rest of the app still runs.
   const canvas = document.createElement('canvas');
@@ -117,7 +122,7 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
   scene.add(floor);
 
   const zones = createZones(scene, labelScene);
-  const equipmentHost = createEquipmentHost(scene);
+  const equipmentHost = createEquipmentHost(scene, undefined, { heroModels: options.heroModels });
   const pipes = createPipes(scene, equipmentHost.materials.steel);
   const labels = createEquipmentLabels(equipmentHost.equipment, labelScene);
   const flight = createCameraFlight(scene, camera, controls, host);
@@ -127,14 +132,18 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
     flight.cancel();
   };
   const pickTargets: PickTarget[] = [
-    ...equipmentHost.equipment.map(({ object, stage }) => ({ object, stage })),
+    ...equipmentHost.equipment.map((item) => ({ object: item.object, stage: item.stage, batchAt: item.batchAt?.bind(item) })),
     ...pipes.pickTargets,
   ];
   const picker = createPicker({
     canvas,
     camera,
     targets: pickTargets,
-    onPick: (stage) => bus.emit({ type: 'selectStage', stage }),
+    onPick: (stage, batchId) => {
+      bus.emit({ type: 'selectStage', stage });
+      // A block in quarantine picks its batch too: the panel lists the batch's pallets (contracts v3).
+      if (batchId !== null) bus.emit({ type: 'selectBatch', batchId });
+    },
     onTakeCamera: takeCamera,
   });
 
@@ -146,9 +155,12 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
       flight.flyTo(event.stage);
     } else if (event.type === 'overview') {
       labels.select(null);
+      for (const item of equipmentHost.equipment) item.selectBatch?.(null);
       flight.flyHome(overviewPosition(), overviewTarget);
       // As in the preview, the overview refits the window again until the viewer takes the camera.
       cameraTaken = false;
+    } else if (event.type === 'selectBatch') {
+      for (const item of equipmentHost.equipment) item.selectBatch?.(event.batchId);
     }
   });
 
@@ -223,6 +235,13 @@ export function createWorld(host: HTMLElement, bus: ViewBus): World {
   const debug: DebugHook | null = debugRequested()
     ? installDebugHook({
         stageScreenPoint: (stage) => picker.stageScreenPoint(stage),
+        batchScreenPoint(batchId) {
+          for (const item of equipmentHost.equipment) {
+            const pointM = item.batchPointM?.(batchId);
+            if (pointM) return picker.batchScreenPoint(pointM, batchId);
+          }
+          return null;
+        },
         focusStage: () => flight.focusStage,
         cameraTargetM: () => controls.target.toArray(),
         cameraPositionM: () => camera.position.toArray(),

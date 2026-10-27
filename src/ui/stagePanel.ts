@@ -1,9 +1,12 @@
 import { ZONE_NAMES, type Snapshot, type StageId, type StageInfo, type Status } from '../contracts';
 import { el, setText, STATUS_TEXT } from './dom';
 import { formatValue } from './format';
-import { DERIVED_ROWS, STATE_ROWS, type DerivedRow, type StateRow } from './liquidRows';
+import { DERIVED_ROWS, type DerivedRow } from './liquidRows';
+import { PANEL_STATE_ROWS, type PanelStateRow } from './panelRows';
 
 export interface StagePanel {
+  /** The stage shown, or null for the whole plant. */
+  readonly stage: StageId | null;
   /** Shows a stage's name, description and value rows, filled from the snapshot if there is one yet. */
   show(stage: StageId, snapshot: Snapshot | null): void;
   /** Back to "Select a stage" and the how-to, as before the first selection (the whole plant). */
@@ -36,7 +39,7 @@ const HOW_TO: readonly (readonly (string | { key: string })[])[] = [
 ];
 
 interface StateCell {
-  row: StateRow;
+  row: PanelStateRow;
   lamp: HTMLElement;
   text: HTMLElement;
 }
@@ -44,7 +47,7 @@ interface StateCell {
 /**
  * The info panel (#panel): "Select a stage" and a short how-to until something is selected,
  * then that stage's name, zone, status, description (stages.json) and its live values: first the
- * liquid line's states in words where they belong (the UHT mode, the throttle, the fillers; liquidRows.ts),
+ * states in words where they belong (the UHT mode, the throttle, the fillers, the packers, the dock; panelRows.ts),
  * then one row per value, formatted with the value's scale, decimals and unit, with any value the panel
  * works out itself (the margin over the divert limit) after the row it follows; then the stage's parts.
  *
@@ -133,7 +136,7 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
     stateCells = [];
     derivedCells = [];
     const built: HTMLElement[] = [];
-    for (const state of STATE_ROWS[info.id] ?? []) {
+    for (const state of PANEL_STATE_ROWS[info.id] ?? []) {
       const row = el('div', 'val val-state');
       row.dataset.stateKey = state.key;
       const lamp = el('span', 'lamp');
@@ -176,7 +179,7 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
     const values = stage?.values ?? {};
     for (const { row, cell } of derivedCells) setText(cell, row.read(values));
     for (const { row, lamp, text } of stateCells) {
-      const state = row.read(snapshot.liquid);
+      const state = row.read(snapshot);
       if (lamp.dataset.status !== state.status) lamp.dataset.status = state.status;
       setText(text, state.text);
     }
@@ -184,6 +187,9 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
   }
 
   return {
+    get stage() {
+      return shown?.id ?? null;
+    },
     show(stage, snapshot) {
       const info = infos.get(stage);
       if (!info) return;

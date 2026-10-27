@@ -1,10 +1,11 @@
+import type { PacksSnapshot } from './packs';
 import type { LinePointId, Speed, StageId, Status } from './stages';
 
 /**
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
- * v0 week 1, v1 at G1, v2 at week 6, v3 at G2. After G2, fields may only be added.
+ * v0 week 1, v1 at G1, v2 at week 6, v3 at G2. From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 2;
+export const CONTRACT_VERSION = 3;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -20,7 +21,10 @@ export interface StageSnapshot {
   values: Record<string, number>;
 }
 
-/** The KPI strip (plan 06, KPIs on screen). Values the model can't produce yet are 0. */
+/**
+ * The KPI strip (plan 06, KPIs on screen). The counters (trays, pallets, batches released and blocked,
+ * trucks) count since the plant opened; OEE per filler is in Snapshot.packs.fillers.
+ */
 export interface Kpis {
   uhtFlowLph: number;
   f0Min: number;
@@ -67,7 +71,7 @@ export interface LiquidSnapshot {
   modeRemainingS: number;
   /** True while the aseptic tank's high level holds the UHT plant at its throttled flow (hysteresis 90% / 60%). */
   throttled: boolean;
-  /** Fillers drawing from the aseptic tank now (phase 3: a stub at the set filler rate, phase 4 the fillers). */
+  /** Fillers drawing from the aseptic tank now: running, not starved, stopped, broken down or cleaning (phase 4). */
   fillersRunning: number;
   /** True from the aseptic tank falling below its stop level until it is back above the restart level (150 L and 500 L). */
   fillersStarved: boolean;
@@ -109,6 +113,8 @@ export interface Snapshot {
   line: Record<LinePointId, LinePoint>;
   /** Stages 1–6 beyond their per-stage values: modes, tank levels and filler draw (contracts v2). */
   liquid: LiquidSnapshot;
+  /** Stages 7–10: fillers, packaging, batches in quarantine, warehouse and trucks (contracts v3). */
+  packs: PacksSnapshot;
   kpis: Kpis;
   /** Newest first, capped in length by the sim. */
   log: readonly LogEntry[];

@@ -78,7 +78,7 @@ A **pallet-load** is 1,008 packs (H26). The last pallet of each batch is closed 
 | H49 | Pallets in quarantine (7 days) | 7 days of output: 357.14 × 7. At full rate: 42 batches on hold (21 shift changes × 2 fillers) × 60, plus up to 2 × 60 on the two open batches | 2,500 pallet-loads; 2,520 pallets just after a release, up to 2,640 just before the next | ±0.1; exact | [R9](REVIEW.md#r9-quarantine-scale); [D1](DECISIONS.md#d1-batch-size) |
 | H50 | First release, starting empty on day 1 | Batch 1 ends day 1, 14:00; + 7 days | Day 8, 14:00 (sim time 655,200 s) | exact | [D11](DECISIONS.md#d11-opening-state) |
 | H51 | OEE example: one filler, one 8-hour shift, one 14-min stop | A = (480 − 14) ÷ 480 = 0.97083; P = 7,500 ÷ 8,000 = 0.9375; Q = 1 (no reject rate yet); OEE = 0.97083 × 0.9375 × 1 | 0.91016 (91.0%); 466 ÷ 60 × 7,500 = 58,250 packs | ±0.00001 | [OEE](06-simulation-model.md#core-formulas) |
-| H52 | Long-run OEE | 0.97166 × 0.9375 × 1 | 0.91093 (91.1%) | ±0.00001 | Same |
+| H52 | Long-run OEE | 0.97166 × 0.9375 × 1 | 0.91093 (91.1%); *phase 4*: with the seal check's 0.2% rejects (`fillers.rejectFrac`, [D14](DECISIONS.md#d14-phase-4-packs-to-trucks-defaults)) Q = 0.998, so 0.90911 (90.9%) | ±0.00001; the 60-day run ±0.004 | Same |
 
 ## Clock
 
@@ -86,7 +86,7 @@ H53–H55 are tested in phase 1 ([D8](DECISIONS.md#d8-clock)): H53 through the s
 
 | # | What | Formula with inputs | Expected | Tolerance | Source |
 |---|---|---|---|---|---|
-| H53 | Start time and first shift | 6 h × 3,600 | 21,600 s (day 1, 06:00): `clock.startTimeS` and `quality.firstShiftStartS` | exact | [D8](DECISIONS.md#d8-clock); [D1](DECISIONS.md#d1-batch-size) |
+| H53 | Start time and first shift | 6 h × 3,600; *phase 4*: 7 days × 86,400 + 21,600 | 21,600 s (day 1, 06:00): `quality.firstShiftStartS`, and `clock.startTimeS` until phase 4; since [D11](DECISIONS.md#d11-opening-state) the plant opens at 626,400 s (day 8, 06:00), on the same shift grid | exact | [D8](DECISIONS.md#d8-clock); [D1](DECISIONS.md#d1-batch-size) |
 | H54 | 7 days at ×10,000 | 7 × 86,400 s ÷ 10,000 = 604,800 ÷ 10,000 | 60.48 s of real time (about a minute) | ±0.01 | [How time works](06-simulation-model.md#how-time-works); [review](REVIEW.md#checked-and-correct) |
 | H55 | Steps in a capped 0.1 s frame | ×10,000: 0.1 × 10,000 ÷ 10 s; ×1,000: 0.1 × 1,000 ÷ 1 s | 100 steps each, under the 500 cap | exact | [D8](DECISIONS.md#d8-clock) |
 | H56 | Steps per frame at ×10,000 and 60 fps | 10,000 ÷ 60 = 166.7 s ÷ 10 s | 16.7 | ±0.1 | [D8](DECISIONS.md#d8-clock) |
@@ -136,7 +136,7 @@ These runs check the live stage 1–6 model against the rows above. `qa` automat
 
 How to run them:
 
-- **Config.** Take `copyConfig()` from `tests/helpers/plantConfig.ts`, change only the keys the row names, then call `createSim(config)`. The seed stays 81006. *Noise off* means `uht.displayNoiseC` = 0: the holding-tube reading is then the set point, so F0, B\* and the divert limit can be checked to their H-row tolerance. With the default ±0.3 °C, check the noise band instead (H21, H22).
+- **Config.** Take `copyConfig()` from `tests/helpers/plantConfig.ts`, change only the keys the row names, then call `createSim(config)`. *Since phase 4* take `phase3Config()` instead: the shipped config with the clock back at day 1, 06:00 and no filler breakdowns, the plant these rows were worked for. The packs model's breakdowns ([H39](#counts-and-rates)) change the tank's course, and [D11](DECISIONS.md#d11-opening-state) moved the opening to day 8. The seed stays 81006. *Noise off* means `uht.displayNoiseC` = 0: the holding-tube reading is then the set point, so F0, B\* and the divert limit can be checked to their H-row tolerance. With the default ±0.3 °C, check the noise band instead (H21, H22).
 - **Time.** t is sim time since the plant opened, `snapshot.timeS` − 21,600 (day 1, 06:00). "At t = 0" means before the first step.
 - **Stepping.** At the default ×10, each `step(0.1)` advances exactly 1 s. After `dispatch({ type: 'setSpeed', speed: 1000 })`, each `step(0.1)` advances 100 s in 1 s steps; at ×10,000 it advances 1,000 s in 10 s steps (`clock.fastStepS`). A step never crosses a shift change (t = 28,800, 57,600 and 86,400 s), and those lie on every step grid used here.
 - **Set points.** `dispatch({ type: 'setSetpoint', key: 'uhtSetpointC', value })` takes effect on the next step.
@@ -187,6 +187,32 @@ How to run them:
 |---|---|---|---|---|---|
 | H95 | Mass balance over 24 h | H76–H87's run, and H88's divert run, each for 24 h (t = 0 to 86,400 s) at ×1,000 | Litres drawn from the silo = litres to the fillers + litres sent to the reject tank (`divertedL`, not its level, which may be emptied) + surplus cream + change in mixing-tank contents + change in aseptic-tank contents. Steam drops out, since the flash vessel removes what it added. Without faults: fillers 360,000 L, aseptic tank +1,142.86 L, reject 0; if the mixing tank ends at its start level, 366,158.73 L drawn and 5,015.87 L of cream | 0.1% of the litres drawn | H3, H31–H35, H60 |
 | H96 | 1 s and 60 s steps agree | H87's run at 1 s steps (×1,000), and again with `clock.fastStepS` = 60 at ×10,000 | At t = 86,400 s, every tank level, `divertedL`, litres drawn from the silo and litres to the fillers within 1% of the 1 s run; the same number of throttles (1), cleans (2) and diverts (0). Context: the model switches at the exact crossing at either step (throttle at t = 28,800 s, full flow again at 31,885.7 s), so the 60 s run ends at the same 11,142.86 L | ±1% | H57; [D8](DECISIONS.md#d8-clock) |
+
+## Phase 4 acceptance runs
+
+These runs check the live stage 7–10 model (`src/sim/packsLine.ts` and `src/sim/packs/`) against the logistics rows above, for the [phase-4 card](agent-plan/phase-4-packs-to-trucks.md#who-does-what). `process` worked them, and `tests/sim/acceptancePacks.test.ts` runs them through `createSim`. The rows at the defaults over a long run (H52, H58, H59, H41–H43 and the R9 range) run in `tests/sim/packsLongRun.test.ts` over 60 days.
+
+How to run them:
+
+- **Config.** The *full-rate plant* is `emptyPlantConfig()` from `tests/helpers/packsRun.ts` with `fillers.mtbfMeanS` = 10¹² s: no breakdowns, no batches on hold and no stock at the opening, so every count follows from the rates. The other rows take the shipped config. Seed 81006.
+- **Time.** The plant opens on day 8 at 06:00 (626,400 s, [D11](DECISIONS.md#d11-opening-state)); t is sim time since then. Shift changes fall at t = 0, 28,800 and 57,600 s each day.
+- **Stepping.** At ×10,000 each 0.1 s frame advances 1,000 s in 10 s steps, cut at every queued event (a breakdown, a truck, a shift change), so events happen at their exact times.
+
+| # | What | How | Expected | Tolerance | Source |
+|---|---|---|---|---|---|
+| H97 | Pallets a day at full rate | The full-rate plant for 9 days; pallets made in each day from 06:00 to 06:00 | 360 a day: 6 batches (H30) × 60 pallets, the last of each part-full. 357.14 pallet-loads (H38) | exact | H38; [D1](DECISIONS.md#d1-batch-size) |
+| H98 | One batch at full rate | Same run, every closed batch | 60,000 packs made (H27); the seal check rejects 0.2%, 120 packs; 16 samples go to the incubators (H29); 60,000 − 120 − 16 = 59,864 packs on 60 pallets: 59 full (59,472) and one of 392. H28's 528 is the count before rejects and samples | exact | H27–H29; [D14](DECISIONS.md#d14-phase-4-packs-to-trucks-defaults) |
+| H99 | Quarantine at 7 days of incubation, full rate | Same run, pallets in quarantine from day 7 to day 9 | 2,520 just after each release (42 batches on hold × 60); up to 2,640 just before one, with the two open batches nearly full (H49). The run reaches 2,636: the open pallets are counted in packaging until they close | 2,520 exact; at most 2,640 | H49; [R9](REVIEW.md#r9-quarantine-scale) |
+| H100 | OEE at full rate | Same run, `kpis.oeePct` and each filler's `oeePct` | A = 1 (never stopped), P = 7,500 ÷ 8,000 = 0.9375, Q = 0.998: 0.935625 (93.6%). The plant opens at 93.75%, before its first reject | ±0.00001 | H51, H52 |
+| H101 | Truck interval | The shipped config for one day; each truck's `arrivedS` | The first 6,000 s (100 min) after opening, then one every 6,000 s: 1.67 h, which matches R3's "about one every 1.7 h" for 22 pallets; 14 arrive in the first day (14.4 a day, H41), each takes 22 pallets (316.8 a day, H42) | ±0.001 s | H41, H42; [R3](REVIEW.md#r3-truck-payload) |
+| H102 | SSCC check digit | GS1 mod 10 over the 17 digits of extension 3, company prefix 0614141 and serial 000054001 (batch 54, pallet 1): from the right, weights 3, 1, 3, 1…: 1×3 + 0 + 0 + 4 + 5×3 + 0 + 0 + 0 + 0 + 1 + 4×3 + 1 + 4×3 + 1 + 6×3 + 0 + 3×3 = 76; (10 − 76 mod 10) mod 10 | 4: SSCC 306141410000540014, shown as "(00) 3 0614141 000054001 4" | exact | [GS1 SSCC](https://gs1uk.org/support-training/help-to-use-and-implement-gs1-standards/logistics-labels-and-ssccs) |
+| H103 | Days of cover at the opening | The shipped config at t = 0 | 634 pallets ÷ 316.8 a day = 2.00 days (H44) | ±0.01 | H44; D11 |
+
+At the defaults, the 60-day run gives (seed 81006): 349.8 pallets a day (H58: about 350), OEE 91.0% against H52's 90.91%, 8.5% of production time throttled (H59: about 9%), 2,421–2,626 pallets in quarantine with a mean of 2,508 (R9), 14.38 trucks a day, every one loaded on arrival, and stock growing by 30.1 pallets a day (H43). The 42 batches on hold at the end average 58.5 pallets (H40: 58.3) and 18 samples, 16 plus 2 per restart. Three batches were blocked in the 60 days, against about 1.2 expected at H47's rate; a run of 3 or more has a chance of about 12%, so the test allows up to 6.
+
+**Label fields (`process`, checked against GS1).** A pallet's logistics label carries its SSCC under application identifier (00): 18 digits, an extension digit, the GS1 company prefix, a serial reference and a mod-10 check digit, as `src/contracts/sscc.ts` builds it. The model uses 0614141, the example prefix in GS1's own documents, and the serial is batch × 1,000 + pallet number, so a batch holds at most 999 pallets (`plant.json` is checked for it). The batch list also shows each pallet's batch (AI 10) and best-before date (AI 15), the other two fields a dairy pallet label carries. The model draws no barcode.
+
+**OEE (`process`, checked).** OEE = availability × performance × quality ([Simulation model](06-simulation-model.md#core-formulas)): availability is running time over the time the filler was open (since the plant opened), performance is packs made over the maximum rate (8,000 packs/h) times running time, and quality is good packs over packs made. Starved time counts against availability, not as a breakdown; a filler set to 0 packs/h counts as open but not running.
 
 ## Checks against the plan and the review
 

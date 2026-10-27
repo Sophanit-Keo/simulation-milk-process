@@ -66,8 +66,8 @@ function expectLineMatchesStages(snap: Snapshot, where: string): void {
 }
 
 describe('contracts v1', () => {
-  it('CONTRACT_VERSION is 2 (contracts v2, phase 3; v1 is a subset of it)', () => {
-    expect(CONTRACT_VERSION).toBe(2);
+  it('CONTRACT_VERSION is 3 (contracts v3, phase 4; v1 is a subset of it)', () => {
+    expect(CONTRACT_VERSION).toBe(3);
   });
 
   it('LINE_POINT_IDS lists the 12 measuring points once each, in flow order', () => {
@@ -111,7 +111,8 @@ describe.each(SIMS)('%s: Snapshot.line', (name, create) => {
       expectWellFormedLine(snap, where);
       expectLineMatchesStages(snap, where);
     }
-    expect(sim.snapshot().timeS).toBeGreaterThanOrEqual(plantConfig.clock.startTimeS + dayToS(7) - 1);
+    // Steps cut short to land on queued events leave a frame's last few seconds for the next: within one step.
+    expect(sim.snapshot().timeS).toBeGreaterThanOrEqual(plantConfig.clock.startTimeS + dayToS(7) - plantConfig.clock.fastStepS);
   });
 });
 

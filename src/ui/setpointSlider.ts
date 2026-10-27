@@ -18,10 +18,15 @@ export interface SetpointSpec {
   follow?: string;
 }
 
-/** The set points plan 08 puts in the panel: the UHT temperature (stage 4) and the homogenizer pressure (stage 3). */
+/**
+ * The set points plan 08 puts in the panel: the homogenizer pressure (stage 3), the UHT temperature (stage 4)
+ * and the filler speed (stage 7). The filler rate runs from 0, a stop, to the machine maximum, plant.json's
+ * fillers.maxRatePacksPerH, which main.ts passes the HUD (HudOptions.setpointMax); 8,000 is the A3/Flex's.
+ */
 export const SETPOINT_SLIDERS: Readonly<Partial<Record<StageId, SetpointSpec>>> = {
   3: { key: 'homogenizerStage1Bar', label: 'First-stage pressure', unit: 'bar', ...SETPOINT_RANGES.homogenizerStage1Bar, step: 5, decimals: 0 },
   4: { key: 'uhtSetpointC', label: 'UHT set point', unit: '°C', ...SETPOINT_RANGES.uhtSetpointC, step: 0.1, decimals: 1, follow: 'setpointC' },
+  7: { key: 'fillerRatePacksPerH', label: 'Rate per filler', unit: 'packs/h', min: 0, max: 8_000, step: 100, decimals: 0, follow: 'ratePacksPerH' },
 };
 
 /** The nearest value on the slider's steps, inside its range, without float dust (130 + 99 × 0.1 is 139.9, not 139.90000000000001). */

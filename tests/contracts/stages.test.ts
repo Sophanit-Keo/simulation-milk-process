@@ -1,7 +1,7 @@
 // src/data/stages.json (process lane) and parseStages (contracts v1): the text and the list of live
 // values the stage rail and the info panel show.
 import { describe, expect, it } from 'vitest';
-import { SECONDS_PER_HOUR, STAGE_IDS, ZONE_IDS, ZONE_NAMES, parseStages, type PlantConfig, type Sim, type StageInfo } from '../../src/contracts';
+import { SECONDS_PER_HOUR, SECONDS_PER_MINUTE, STAGE_IDS, ZONE_IDS, ZONE_NAMES, parseStages, type PlantConfig, type Sim, type StageInfo } from '../../src/contracts';
 import stagesJson from '../../src/data/stages.json';
 import { createSim } from '../../src/sim';
 import { createMockSim } from '../../src/sim/mock';
@@ -141,6 +141,23 @@ describe('stages.json', () => {
     const nextClean = stages[5].values.find((value) => value.key === 'nextCleanS');
     expect(nextClean).toMatchObject({ unit: 'h' });
     expect((nextClean?.scale ?? 0) * SECONDS_PER_HOUR).toBeCloseTo(1, 12);
+  });
+
+  it('shows the next release in hours and the next truck in minutes, scaled by exactly 1 ÷ 3,600 and 1 ÷ 60', () => {
+    const nextRelease = stages[8].values.find((value) => value.key === 'nextReleaseS');
+    const nextTruck = stages[9].values.find((value) => value.key === 'nextTruckS');
+    expect(nextRelease).toMatchObject({ unit: 'h' });
+    expect(nextTruck).toMatchObject({ unit: 'min' });
+    expect((nextRelease?.scale ?? 0) * SECONDS_PER_HOUR).toBeCloseTo(1, 12);
+    expect((nextTruck?.scale ?? 0) * SECONDS_PER_MINUTE).toBeCloseTo(1, 12);
+  });
+
+  it("lists the phase 4 keys of stages 7–10 (contracts v3), each filler's OEE among them", () => {
+    const keys = (id: number) => stages[id - 1]?.values.map((value) => value.key);
+    expect(keys(7)).toEqual(expect.arrayContaining(['runningCount', 'packsPerH', 'oeeAPct', 'oeeBPct', 'packsMade', 'packsRejected']));
+    expect(keys(8)).toEqual(expect.arrayContaining(['traysMade', 'palletsMade', 'queuePacks']));
+    expect(keys(9)).toEqual(expect.arrayContaining(['batchesOnHold', 'palletsInQuarantine', 'nextReleaseS', 'batchesReleased', 'batchesBlocked']));
+    expect(keys(10)).toEqual(expect.arrayContaining(['palletsInStock', 'daysOfCover', 'orderFillPct', 'trucksShipped', 'trucksAtDock', 'nextTruckS']));
   });
 
   it('lists the stage 4 values in the order that tells R6: flow, hold, temperature, limit, then B* and F0', () => {

@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
 import type { Kpis } from '../src/contracts';
-import { formatKpi, kpiSubText, type KpiText } from '../src/ui/format';
+import { fillerOeeText, formatKpi, kpiSubText, type KpiText } from '../src/ui/format';
 import { expect, test } from './fixtures';
-import { STATIC_KPIS, formatted, waitForClock } from './helpers';
+import { STATIC_KPIS, STATIC_PACKS, STATIC_VALUES, formatted, waitForClock } from './helpers';
 
 // The KPI strip (phase-2 shared spec): the eight slots of index.html, each with one [data-kpi-value]
 // showing its formatted value from the snapshot, and the other KPIs of plan 06 as [data-kpi-sub]
@@ -51,8 +51,9 @@ const SUB_SHAPES: Record<KpiSub, RegExp> = {
 /**
  * What the plant shows as it opens. The first four are the shared spec's examples and the hand values behind
  * them (H11, H12, H31: 16,000 L/h through the UHT plant, F0 5.17 min and B* 1.19, the tank at its 50%
- * start, 2 × 7,500 packs/h); since phase 3, F0, B* and the tank move with sim time (LIVE_SLOTS). The model
- * gives no OEE, batches, stock or trucks before phase 4, so those follow the static snapshot.
+ * start, 2 × 7,500 packs/h); since phase 3, F0, B* and the tank move with sim time (LIVE_SLOTS). The OEE,
+ * batches, stock and trucks follow the opening snapshot: since phase 4 that is D11's week of history
+ * (42 batches on hold, 634 pallets in stock) and fillers at 93.75% (H100), the first truck 100 min away.
  */
 const STATIC_TEXTS: Record<KpiSlot, string> = {
   uht: '16,000 L/h',
@@ -88,7 +89,13 @@ const LIVE_SLOTS: Partial<Record<KpiSlot, (text: string) => void>> = {
   },
 };
 
-/** The secondary values on the static plant, which has none of them before phases 3 and 4: zeros, in words. */
+/**
+ * Secondary values that count up from the opening (phase 4): the tray packers start at once, so a test sees
+ * up to an hour's worth, 1,250 trays and 15 pallets (H26, H38), however slow its frames.
+ */
+const LIVE_SUBS: Partial<Record<KpiSub, number>> = { trays: 1_250, pallets: 15 };
+
+/** The secondary values as the plant opens: nothing made or shipped yet, in words, and the opening stock's cover. */
 const STATIC_SUB_TEXTS: Record<KpiSub, string> = {
   diverted: `${formatted(STATIC_KPIS.divertedL)} L diverted`,
   trays: `${formatted(STATIC_KPIS.traysMade)} trays made`,
@@ -127,10 +134,17 @@ const LONG_KPIS: Kpis = {
 interface StripTexts {
   values: Record<string, KpiText>;
   subs: Record<string, string>;
+  /** The OEE card's line of each filler's OEE ([data-kpi-fillers], contracts v3). */
+  fillers: string;
 }
 const LONG_TEXTS: StripTexts = {
   values: Object.fromEntries(KPI_SLOTS.map((slot) => [slot, formatKpi(slot, LONG_KPIS)])),
   subs: Object.fromEntries(Object.keys(KPI_SUBS).map((sub) => [sub, kpiSubText(sub as KpiSub, LONG_KPIS)])),
+  // Both fillers at 100% (a rate set to the 8,000 packs/h maximum, before any stop): "A 100 · B 100".
+  fillers: fillerOeeText([
+    { name: 'A', oeePct: 100 },
+    { name: 'B', oeePct: 100 },
+  ]),
 };
 
 /**
@@ -187,7 +201,7 @@ interface StripFit {
  * measured and come out again in one synchronous run, so no HUD update can overwrite them in between.
  */
 async function stripFit(page: Page, texts: StripTexts): Promise<{ fontsIn: boolean; shown: StripFit; long: StripFit }> {
-  return page.evaluate(async ({ values, subs, fonts }) => {
+  return page.evaluate(async ({ values, subs, fillers, fonts }) => {
     // Loaded even where no text on screen uses a face yet, so no width is measured in a fallback font.
     await Promise.all(fonts.map((font) => document.fonts.load(font)));
     const fontsIn = fonts.every((font) => document.fonts.check(font));
@@ -221,8 +235,8 @@ async function stripFit(page: Page, texts: StripTexts): Promise<{ fontsIn: boole
       // As kpiStrip.ts writes them: units and names in <small>.
       node.replaceChildren(...runs.map((run) => (run.small ? Object.assign(document.createElement('small'), { textContent: run.text }) : run.text)));
     }
-    for (const [sub, text] of Object.entries(subs)) {
-      const node = document.querySelector(`#kpis [data-kpi-sub="${sub}"]`);
+    for (const [selector, text] of [...Object.entries(subs).map(([sub, text]) => [`[data-kpi-sub="${sub}"]`, text]), ['[data-kpi-fillers]', fillers]]) {
+      const node = document.querySelector(`#kpis ${selector}`);
       if (!node) continue;
       kept.push([node, [...node.childNodes]]);
       node.textContent = text;
@@ -263,21 +277,30 @@ for (const path of ['/', '/?mock']) {
         const { count, text } = read[`sub:${sub}`];
         expect(count, `secondary value ${sub} sits once in the ${slot} card`).toBe(1);
         expect(text, `secondary value ${sub}`).toMatch(SUB_SHAPES[sub]);
-        if (path === '/') expect(text, `secondary value ${sub} on the static plant`).toBe(STATIC_SUB_TEXTS[sub]);
+        const most = LIVE_SUBS[sub];
+        if (path === '/' && most !== undefined) {
+          const count = Number(/^([\d,]+) /.exec(text ?? '')?.[1]?.replace(/,/g, ''));
+          expect(count, `secondary value ${sub}: ${text}`).toBeGreaterThanOrEqual(0);
+          expect(count, `secondary value ${sub}: ${text}`).toBeLessThanOrEqual(most);
+        } else if (path === '/') expect(text, `secondary value ${sub} as the plant opens`).toBe(STATIC_SUB_TEXTS[sub]);
       }
     }).toPass({ timeout: 10_000 });
-    // Contracts v1 has one OEE, the whole plant's, and the card says so on screen, not in a tooltip.
-    await expect(page.locator('#kpis [data-kpi="oee"] .k-s')).toHaveText('whole plant');
-    await expect(page.locator('#kpis [data-kpi="oee"] .k-s')).toBeVisible();
+    // Since contracts v3 the card shows each filler's OEE under the mean, on screen, not in a tooltip.
+    const fillers = page.locator('#kpis [data-kpi="oee"] [data-kpi-fillers]');
+    await expect(fillers).toBeVisible();
+    await expect(fillers).toHaveText(path === '/' ? fillerOeeText(STATIC_PACKS.fillers) : /^A \d{1,3} · B \d{1,3}$/);
 
     await expect(async () => {
       const lamps = await visibleLamps(page);
       // Ten on the rail and one for the run state in the bar, at least.
       expect(lamps.length, 'lamps on screen').toBeGreaterThanOrEqual(11);
       for (const lamp of lamps) {
-        // The static plant runs every stage and the clock: green everywhere. The mock may show any status.
-        // The event log's lamps show each entry's kind, not a status: a plain note is the unlit ring there.
-        const expected = path === '/' && lamp.where !== 'event-log' ? 'ok' : expect.stringMatching(/^(ok|warn|bad|idle)$/);
+        // The plant opens running every stage and the clock: green, but for stage 9, amber while batches are
+        // on hold (from the opening on, D11). The mock may show any status. The event log's lamps show each
+        // entry's kind, not a status: a plain note is the unlit ring there.
+        const stage = /^rail-stage-(\d+)$/.exec(lamp.where)?.[1];
+        const opening = stage ? STATIC_VALUES[Number(stage) as keyof typeof STATIC_VALUES].status : 'ok';
+        const expected = path === '/' && lamp.where !== 'event-log' ? opening : expect.stringMatching(/^(ok|warn|bad|idle)$/);
         expect(lamp.status, `lamp in ${lamp.where}`).toEqual(expected);
       }
     }).toPass({ timeout: 10_000 });

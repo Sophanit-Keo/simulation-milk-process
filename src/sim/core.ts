@@ -10,6 +10,7 @@ import {
   type LinePointId,
   type LiquidSnapshot,
   type LogKind,
+  type PacksSnapshot,
   type PlantConfig,
   type SetpointKey,
   type Snapshot,
@@ -31,6 +32,13 @@ const SETPOINT_TEXT: Record<SetpointKey, { name: string; unit: string }> = {
 export interface CoreOptions {
   /** Continuous-model work for one fixed step. Runs before that step's due events (plan 07, "Every frame"). */
   onStep?: StepHandler;
+  /**
+   * Every queued event as it falls due, the core's own shift changes included (after the core has handled
+   * them). Returns true if it handled the event; the core logs one that nobody handled.
+   */
+  onEvent?: (event: QueuedEvent) => boolean;
+  /** A setQaResult command, for the model that keeps the batches; without one the core logs that it can't apply it. */
+  onQaResult?: (batchId: number, result: 'pass' | 'fail') => void;
 }
 
 export interface SimCore {
@@ -38,14 +46,19 @@ export interface SimCore {
   /** Live set points: plant.json values until a setSetpoint command changes one. */
   readonly setpoints: Readonly<Setpoints>;
   log(timeS: number, kind: LogKind, message: string): void;
+  /** Queues an event for the discrete model; it runs through onEvent when it falls due. */
+  schedule<P>(timeS: number, type: string, payload: P): QueuedEvent<P>;
+  /** Removes a queued event; false if it already ran or was cancelled. */
+  cancel(seq: number): boolean;
   step(realDtS: number): void;
   dispatch(command: Command): void;
-  /** Wraps the caller's stages, KPIs and liquid line with the clock, queue and log state. */
+  /** Wraps the caller's stages, KPIs, liquid line and packs with the clock, queue and log state. */
   snapshot(
     stages: Record<StageId, StageSnapshot>,
     kpis: Kpis,
     line: Record<LinePointId, LinePoint>,
     liquid: LiquidSnapshot,
+    packs: PacksSnapshot,
   ): Snapshot;
 }
 
@@ -76,10 +89,11 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
         // Far out in time a batch can round away to nothing; the change would then be due again at once, forever.
         if (!(nextS > event.timeS)) throw new RangeError(`A ${batchS} s batch does not move past ${event.timeS} s`);
         queue.schedule(nextS, 'shiftChange');
+        options.onEvent?.(event);
         return;
       }
       default:
-        log.add(event.timeS, 'warn', `Unknown event "${event.type}" skipped`);
+        if (!options.onEvent?.(event)) log.add(event.timeS, 'warn', `Unknown event "${event.type}" skipped`);
     }
   }
 
@@ -136,7 +150,8 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
         log.add(clock.timeS, 'warn', `Scenario "${command.id}" not started: fault scenarios arrive in phase 5`);
         return;
       case 'setQaResult':
-        log.add(clock.timeS, 'info', `QA result "${command.result}" for batch ${command.batchId} not applied: QA results arrive in phase 4`);
+        if (options.onQaResult) options.onQaResult(command.batchId, command.result);
+        else log.add(clock.timeS, 'info', `QA result "${command.result}" for batch ${command.batchId} not applied: this sim keeps no batches`);
         return;
       default:
         unknownCommand(command);
@@ -155,13 +170,15 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
     },
     setpoints,
     log: (timeS, kind, message) => log.add(timeS, kind, message),
+    schedule: (timeS, type, payload) => queue.schedule(timeS, type, payload),
+    cancel: (seq) => queue.cancel(seq),
     step: (realDtS) => {
       // No step crosses a queued event, so each event runs at exactly its own time and the log stays in
       // time order, even after a speed change has moved the steps off the shift grid.
       clock.advance(realDtS, onStep, () => queue.peek()?.timeS);
     },
     dispatch,
-    snapshot: (stages, kpis, line, liquid) => ({
+    snapshot: (stages, kpis, line, liquid, packs) => ({
       version: CONTRACT_VERSION,
       timeS: clock.timeS,
       speed: clock.speed,
@@ -170,6 +187,7 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       stages,
       line,
       liquid,
+      packs,
       kpis,
       log: log.entries(),
     }),

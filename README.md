@@ -8,9 +8,9 @@ Needs Node 22.13 or later (22.x LTS or 24.x; see `.nvmrc`).
 
 ```sh
 npm ci
-npm run dev        # http://localhost:5173 (add ?mock to run on the mock snapshot)
+npm run dev        # http://localhost:5173 (?mock: the mock snapshot; ?debug: lil-gui and window.__scene; ?heroes: the hero models)
 npm run check      # typecheck, lint and unit tests
-npm run e2e        # browser smoke test (Playwright, Chromium)
+npm run e2e        # browser tests (Playwright, Chromium)
 npm run build      # production build in dist/ (CI sets BASE_PATH=/simulation-milk-process/ for GitHub Pages)
 ```
 

@@ -38,9 +38,15 @@ export interface EquipmentHost {
   dispose(): void;
 }
 
+export interface EquipmentHostOptions {
+  /** Load the hero models in place of the grey boxes (EquipmentContext.heroModels). */
+  heroModels?: boolean;
+}
+
 export function createEquipmentHost(
   scene: THREE.Scene,
   factories: readonly EquipmentFactory[] = EQUIPMENT_FACTORIES,
+  options: EquipmentHostOptions = {},
 ): EquipmentHost {
   const materials = Object.fromEntries(
     Object.entries(MATERIAL_SETTINGS).map(([name, settings]) => [name, new THREE.MeshStandardMaterial(settings)]),
@@ -95,7 +101,7 @@ export function createEquipmentHost(
     return load;
   };
 
-  const ctx: EquipmentContext = { materials, loadModel, loadTexture };
+  const ctx: EquipmentContext = { materials, loadModel, loadTexture, heroModels: options.heroModels ?? false };
   // A module that throws while building is reported and left out, so the rest of the plant still shows.
   const equipment = factories.flatMap((make) => {
     try {

@@ -4,6 +4,7 @@ import { expect, test } from './fixtures';
 import {
   NO_STAGE_TITLE,
   STAGES,
+  STATIC_VALUES,
   afterHudUpdates,
   clockTimeS,
   expectLanded,
@@ -170,8 +171,11 @@ test.describe('the stage rail', () => {
         const stage = STAGES[index];
         expect(button.tag, `rail-stage-${stage.id} is a <button>`).toBe('BUTTON');
         expect(button.text, `rail-stage-${stage.id} shows its short name`).toContain(stage.shortName);
-        // The static plant runs every stage at its set point: every lamp green once the HUD has drawn.
-        expect(button.lamps, `rail-stage-${stage.id} has one lamp, green`).toEqual(['ok']);
+        // The plant opens running every stage at its set point: every lamp green once the HUD has drawn, but
+        // stage 9's, amber while batches are on hold, which they are from the opening on (D11).
+        const opening = STATIC_VALUES[stage.id].status;
+        expect(opening, `stage ${stage.id} opens green, or stage 9 amber`).toBe(stage.id === 9 ? 'warn' : 'ok');
+        expect(button.lamps, `rail-stage-${stage.id} has one lamp, ${opening}`).toEqual([opening]);
         expect(button.current, `rail-stage-${stage.id} is not current`).toBeNull();
       }
     }).toPass({ timeout: 10_000 });

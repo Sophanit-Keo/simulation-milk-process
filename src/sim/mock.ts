@@ -11,13 +11,13 @@ import {
   hToS,
   minToS,
   pctToFrac,
-  sToDay,
   sToH,
   STAGE_IDS,
   type Kpis,
   type LinePoint,
   type LinePointId,
   type LiquidSnapshot,
+  type PacksSnapshot,
   type PlantConfig,
   type Sim,
   type StageId,
@@ -25,7 +25,7 @@ import {
   type UhtMode,
 } from '../contracts';
 import { createCore } from './core';
-import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, oeeFrac, tubeVolumeL } from './formulas';
+import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, tubeVolumeL } from './formulas';
 import {
   condenserKw,
   creamingRiskPct,
@@ -36,6 +36,7 @@ import {
   separatorFlows,
   steamLph,
 } from './liquid/stageModels';
+import { mockPacks } from './mockPacks';
 import { createRng, mulberry32 } from './rng';
 import { fillerDrawLph, linePoints, staticLiquid, staticPlant, toStages, type StageValues } from './staticPlant';
 
@@ -89,6 +90,7 @@ interface MockPulse {
 interface MockState extends MockPulse {
   values: StageValues;
   kpis: Kpis;
+  packs: PacksSnapshot;
   /** What the lamps show: the statuses with the episode's mode laid over stages 2–5. */
   shown: Record<StageId, Status>;
   line: Record<LinePointId, LinePoint>;
@@ -96,7 +98,7 @@ interface MockState extends MockPulse {
 }
 
 export function createMockSim(config: PlantConfig): Sim {
-  const { asepticTank: tank, uht, fillers, packaging, quality, warehouse } = config;
+  const { asepticTank: tank, uht, fillers } = config;
   const rng = createRng(config.seed);
   // Seeded phases, so each wave starts somewhere different but repeatably.
   const phases = Array.from({ length: 12 }, () => rng.next() * 2 * Math.PI);
@@ -264,19 +266,21 @@ export function createMockSim(config: PlantConfig): Sim {
     // 10: the warehouse warms and cools with the day.
     values[10].tempC += 1.5 * wave(timeS, dayToS(1), 11);
 
-    // Counters grow with time since the start; batch counts follow the 06:00 / 14:00 / 22:00 shift grid.
-    // The 0.95 uptime, 60 batches per blocked one, stock swing and fill rate are mock numbers, not plant.json.
-    const elapsedS = timeS - config.clock.startTimeS;
-    const packsMade = Math.floor(sToH(elapsedS) * fillers.count * core.setpoints.fillerRatePacksPerH * 0.95);
-    const traysMade = Math.floor(packsMade / packaging.packsPerTray);
-    const shiftIndex = (t: number) => Math.floor((t - quality.firstShiftStartS) / quality.batchS);
-    const closedBatches = fillers.count * (shiftIndex(timeS) - shiftIndex(config.clock.startTimeS));
-    const batchesPerHold = fillers.count * Math.ceil(dayToS(quality.incubationDays) / quality.batchS);
-    const pastHold = Math.max(0, closedBatches - batchesPerHold);
-    const batchesBlocked = Math.floor(pastHold / 60);
-    const palletsInStock = Math.round(300 + 150 * wave(timeS, dayToS(2), 0));
-    const palletsPerDay = warehouse.palletsPerTruck / sToDay(warehouse.truckEveryS);
-    const availabilityFrac = statuses[7] === 'bad' ? 0.5 : 0.93 + 0.03 * wave(timeS, hToS(4), 1);
+    // 7–10: the packs model's picture (mockPacks.ts) from the stage 7 status window and a few slow waves.
+    // The availability, stock swing and fill rate are mock numbers, not plant.json.
+    const statusLeftS = STATUS_WINDOW_S - ((timeS + windowOffsetS[7]) % STATUS_WINDOW_S);
+    const discrete = mockPacks(config, {
+      timeS,
+      openS: config.clock.startTimeS,
+      fillerStatus: statuses[7],
+      statusRemainingS: statusLeftS,
+      ratePacksPerH: values[7].ratePacksPerH,
+      availabilityFrac: 0.5,
+      palletsInStock: Math.round(300 + 150 * wave(timeS, dayToS(2), 0)),
+      orderFillPct: Math.min(100, 97 + 4 * wave(timeS, dayToS(3), 2)),
+      dockWave: wave(timeS, dayToS(2), 0),
+    });
+    for (const id of [7, 8, 9, 10] as const) values[id] = { ...discrete.values[id], ...(id === 10 ? { tempC: values[10].tempC } : {}) };
 
     const kpis: Kpis = {
       uhtFlowLph: flowLph,
@@ -285,16 +289,7 @@ export function createMockSim(config: PlantConfig): Sim {
       divertedL,
       tankLevelPct: values[6].levelPct,
       packsPerH: runningFillers * values[7].ratePacksPerH,
-      oeePct: fracToPct(oeeFrac(availabilityFrac, values[7].ratePacksPerH / fillers.maxRatePacksPerH, 0.998)),
-      traysMade,
-      palletsMade: Math.floor(traysMade / packaging.traysPerPallet),
-      batchesOnHold: Math.min(closedBatches, batchesPerHold),
-      batchesReleased: pastHold - batchesBlocked,
-      batchesBlocked,
-      palletsInStock,
-      daysOfCover: palletsInStock / palletsPerDay,
-      orderFillPct: Math.min(100, 97 + 4 * wave(timeS, dayToS(3), 2)),
-      trucksShipped: Math.floor(elapsedS / warehouse.truckEveryS),
+      ...discrete.kpis,
     };
     // A red stage 4 is diverting: the whole UHT flow goes to the reject tank, none on to the flash vessel.
     const line = linePoints(values, {
@@ -318,7 +313,8 @@ export function createMockSim(config: PlantConfig): Sim {
     liquid.tanks.silo.levelL = config.standardization.siloCapacityL * pctToFrac(values[1].siloLevelPct);
     liquid.tanks.mixTank.levelL = config.standardization.mixTankCapacityL * pctToFrac(values[1].mixTankLevelPct);
     liquid.productionSinceCleanS = productionSinceCleanS;
-    return { ...pulse, values, kpis, shown, line, liquid };
+    for (const id of [8, 9, 10] as const) shown[id] = worst(shown[id] === 'idle' ? 'ok' : shown[id], discrete.statuses[id]);
+    return { ...pulse, values, kpis, shown, line, liquid, packs: discrete.packs };
   }
 
   let lastStatuses: Record<StageId, Status> | undefined;
@@ -357,8 +353,8 @@ export function createMockSim(config: PlantConfig): Sim {
     step: (realDtS) => core.step(realDtS),
     dispatch: (command) => core.dispatch(command),
     snapshot() {
-      const { values, kpis, shown, line, liquid } = stateAt(core.timeS);
-      return core.snapshot(toStages(values, (id) => shown[id]), kpis, line, liquid);
+      const { values, kpis, shown, line, liquid, packs } = stateAt(core.timeS);
+      return core.snapshot(toStages(values, (id) => shown[id]), kpis, line, liquid, packs);
     },
   };
 }

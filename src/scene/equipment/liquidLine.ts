@@ -12,6 +12,7 @@ import { pctToFrac, type Snapshot, type StageId, type UhtMode } from '../../cont
 import type { PointM } from '../layout';
 import { advancePhase, motionDtS } from '../motion';
 import { LAMP_GLOW_HEX, type LampStatus } from '../theme';
+import { HERO_MODELS, swapInHero } from './heroes';
 import { MachineBuilder } from './liquid/builder';
 import { createKit, type Kit } from './liquid/kit';
 import { createPuffs } from './liquid/puffs';
@@ -28,7 +29,7 @@ import {
   vapourFrac,
   type TankId,
 } from './liquid/visuals';
-import type { Equipment, EquipmentFactory } from './types';
+import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
 
 // Grey-box motion. It shows what runs, so it stays on under prefers-reduced-motion, but it is slower
 // than the preview's (bowl 9, agitator 2.2, pistons 11 rad/s) so it reads as information, not busyness.
@@ -76,13 +77,13 @@ export const liquidLine: EquipmentFactory = (ctx) => {
   return [
     silo(kit, 'silo-a', 'Silo A', -18.5),
     silo(kit, 'silo-b', 'Silo B', -9.5),
-    separator(kit),
+    separator(kit, ctx),
     standardizationSkid(kit),
     mixingTank(kit),
     balanceTank(kit),
     plateHeatExchanger(kit),
     deaerator(kit),
-    homogenizer(kit),
+    homogenizer(kit, ctx),
     steamInjector(kit),
     holdingTube(kit),
     divertValve(kit),
@@ -103,11 +104,14 @@ interface MachineSpec {
   debugState?: () => Readonly<Record<string, number | string | boolean>>;
   /** Frees what the machine made beside the builder's parts (a material of its own). */
   dispose?: () => void;
+  /** Called once with the built root, and whether the machine is still in the scene, for a model that loads later. */
+  onBuilt?: (object: THREE.Object3D, isAlive: () => boolean) => void;
 }
 
 function machine(builder: MachineBuilder, spec: MachineSpec): Equipment {
   const { object, dispose } = builder.build();
   object.userData = { equipmentId: spec.id, stage: spec.stage };
+  let alive = true;
   const equipment: Equipment = {
     id: spec.id,
     stage: spec.stage,
@@ -117,11 +121,13 @@ function machine(builder: MachineBuilder, spec: MachineSpec): Equipment {
     labelText: spec.labelText ?? (() => ''),
     update: spec.update ?? (() => {}),
     dispose: () => {
+      alive = false;
       spec.dispose?.();
       dispose();
     },
   };
   if (spec.debugState) equipment.debugState = spec.debugState;
+  spec.onBuilt?.(object, () => alive);
   return equipment;
 }
 
@@ -199,12 +205,12 @@ function silo(kit: Kit, id: string, label: string, zM: number): Equipment {
   });
 }
 
-function separator(kit: Kit): Equipment {
+function separator(kit: Kit, ctx: EquipmentContext): Equipment {
   const b = new MachineBuilder(kit, 'separator', [-51.5, 0, -14]);
   b.part('box', 'paint', [-51.5, 0.4, -14], [1.7, 0.8, 1.7], { castShadow: true }); // frame
   b.part('box', 'paint', [-51.5, 0.4, -15.55], [0.8, 0.8, 1.0], { castShadow: true }); // motor
   // The node the hero model keeps (assets' hero spec): everything that spins with the disc stack.
-  const bowl = b.pivot('bowl', [-51.5, 1.35, -14]);
+  let bowl: THREE.Object3D = b.pivot('bowl', [-51.5, 1.35, -14]);
   b.part('cyl8', 'steel', [0, 0, 0], [0.6, 1.1, 0.6], { parent: bowl, castShadow: true });
   b.part('coneUp', 'steel', [0, 0.75, 0], [0.6, 0.4, 0.6], { parent: bowl, castShadow: true });
   b.part('box', 'steelDark', [0.56, 0, 0], [0.12, 0.9, 0.16], { parent: bowl }); // a fin, so the spin shows
@@ -222,6 +228,12 @@ function separator(kit: Kit): Equipment {
       bowl.rotation.y = advancePhase(bowl.rotation.y, spinRadPerS * dtS, MAX_TURN_PER_FRAME_RAD, FULL_TURN_RAD);
     },
     debugState: () => ({ spinRadPerS, angleRad: bowl.rotation.y }),
+    onBuilt(object, isAlive) {
+      swapInHero(ctx, object, { path: HERO_MODELS.separator, nodes: ['bowl'] }, (nodes) => {
+        nodes.bowl.rotation.y = bowl.rotation.y;
+        bowl = nodes.bowl;
+      }, isAlive);
+    },
   });
 }
 
@@ -351,7 +363,7 @@ function deaerator(kit: Kit): Equipment {
 
 /* stage 3: homogenizer */
 
-function homogenizer(kit: Kit): Equipment {
+function homogenizer(kit: Kit, ctx: EquipmentContext): Equipment {
   const originM: PointM = [-20.5, 0, -14];
   const b = new MachineBuilder(kit, 'homogenizer', originM);
   b.part('box', 'steelDark', [-20.5, 0.1, -14], [2.5, 0.2, 1.5]); // base frame
@@ -371,7 +383,7 @@ function homogenizer(kit: Kit): Equipment {
   ] as const;
   // Named for the hero model (assets' hero spec): piston_1 to piston_3, left to right, stroking along z.
   const pistonZM = -13.1;
-  const pistons = [-21.1, -20.5, -19.9].map((xM, i) =>
+  const pistons: THREE.Object3D[] = [-21.1, -20.5, -19.9].map((xM, i) =>
     b.mesh(`piston_${i + 1}`, 'cylLo', 'steel', [xM, 0.8, pistonZM], [0.09, 0.55, 0.09], { rotationRad: [Math.PI / 2, 0, 0] }),
   );
   let crankRad = 0;
@@ -394,6 +406,16 @@ function homogenizer(kit: Kit): Equipment {
       }
     },
     debugState: () => ({ crankRad, needle1Rad: needles[0].rotation.y, needle2Rad: needles[1].rotation.y }),
+    onBuilt(object, isAlive) {
+      // The model has the gauges but no needles: the grey needles stay, on its dials.
+      const swap = { path: HERO_MODELS.homogenizer, nodes: ['piston_1', 'piston_2', 'piston_3'] as const, keep: needles };
+      swapInHero(ctx, object, swap, (nodes) => {
+        swap.nodes.forEach((name, i) => {
+          nodes[name].position.z = pistons[i].position.z;
+          pistons[i] = nodes[name];
+        });
+      }, isAlive);
+    },
   });
 }
 

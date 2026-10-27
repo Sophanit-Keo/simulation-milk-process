@@ -1,6 +1,6 @@
 import type { Snapshot } from '../contracts';
 import { el, setAttr, setText } from './dom';
-import { formatKpi, KPI_IDS, KPI_SUB_IDS, kpiSubText, NO_VALUE, sterilityStatus, type KpiId, type KpiSubId } from './format';
+import { fillerOeeText, formatKpi, KPI_IDS, KPI_SUB_IDS, kpiSubText, NO_VALUE, sterilityStatus, type KpiId, type KpiSubId } from './format';
 
 export interface KpiStrip {
   update(snapshot: Snapshot): void;
@@ -16,8 +16,9 @@ interface Slot {
 
 /**
  * The KPI strip: fills the [data-kpi-value] element of each [data-kpi] slot in index.html
- * from snapshot.kpis, and each [data-kpi-sub] secondary value under it. A slot or value
- * missing from the markup is skipped, not an error, so the strip can lose or gain them
+ * from snapshot.kpis, and each [data-kpi-sub] secondary value under it; the OEE card's
+ * [data-kpi-fillers] line reads each filler's OEE from snapshot.packs (contracts v3). A slot or
+ * value missing from the markup is skipped, not an error, so the strip can lose or gain them
  * without code changes here.
  */
 export function createKpiStrip(root: HTMLElement): KpiStrip {
@@ -32,6 +33,7 @@ export function createKpiStrip(root: HTMLElement): KpiStrip {
     const node = root.querySelector<HTMLElement>(`[data-kpi-sub="${id}"]`);
     if (node) subs.set(id, node);
   }
+  const fillers = root.querySelector<HTMLElement>('[data-kpi-fillers]');
 
   return {
     update(snapshot) {
@@ -44,6 +46,7 @@ export function createKpiStrip(root: HTMLElement): KpiStrip {
         slot.value.replaceChildren(...runs.map((run) => (run.small ? el('small', '', run.text) : run.text)));
       }
       for (const [id, node] of subs) setText(node, kpiSubText(id, snapshot.kpis));
+      if (fillers) setText(fillers, fillerOeeText(snapshot.packs?.fillers));
       // Sterility is the one KPI with a hard limit: it turns red on B* or a divert, never on F0 (D4).
       const sterility = slots.get('sterility');
       if (sterility) setAttr(sterility.card, 'data-s', sterilityStatus(snapshot.kpis.bStar, snapshot.stages[4].status));
@@ -54,6 +57,7 @@ export function createKpiStrip(root: HTMLElement): KpiStrip {
         slot.card.removeAttribute('data-s');
       }
       for (const node of subs.values()) node.textContent = NO_VALUE;
+      if (fillers) fillers.textContent = NO_VALUE;
     },
   };
 }

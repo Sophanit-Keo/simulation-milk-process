@@ -16,7 +16,7 @@ How 3D models and textures get into the plant: where files go, the rules every m
 | `assets/screenshots/` | Small fit-check screenshots of the heroes in the scene (each under 150 kB) | Yes, from phase 3 |
 | [`assets/LICENSES.md`](LICENSES.md) | One row for every file in `public/models/` and `public/textures/` | Yes |
 
-## What is committed now (phases 2 and 3)
+## What is committed now (phases 2 to 4)
 
 | What | Files | Size | Status |
 |---|---|---|---|
@@ -24,7 +24,7 @@ How 3D models and textures get into the plant: where files go, the rules every m
 | Truck and forklift | `public/models/vehicles/truck.glb`, `forklift.glb` | 139 KB + 78 KB | Own work (no CC0 kit has them, see [Vehicles](#vehicles)). They replace the grey boxes at the docks. |
 | Token textures | `public/textures/carton.png`, `tray.png`, `pallet.png` | 8, 19, 35 KB | Own work, brand-free. Printed on the static tokens since G1: the cartons on both pack lines, the trays on the tray line, and the pallets at the palletizer and in the racks. Phase 4 moves the same tokens. See [Token textures](#token-textures). |
 | Hero specs | [`hero-specs.md`](hero-specs.md) | | Separator, homogenizer, aseptic filler, palletizer. The models follow in phases 3–5. |
-| Hero block-outs (phase 3) | `public/models/hero/separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` | 123, 149, 80, 67 KB | Own work, plain grey, at the grey boxes' size with every moving node the scene drives. Not loaded by the scene yet: phase 5 swaps them in. See [hero-specs.md](hero-specs.md#phase-3-block-outs). |
+| Hero block-outs (phase 3) | `public/models/hero/separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` | 123, 149, 80, 67 KB | Own work, plain grey, at the grey boxes' size with every moving node the scene drives. Since phase 4 the scene loads them behind `?heroes` (`src/scene/equipment/heroes.ts`); the grey boxes stay the default until phase 5. See [hero-specs.md](hero-specs.md#phase-3-block-outs). |
 
 Vite copies `public/` to the build as it is. Load files through the base URL, so the same code works in dev and on Vercel (`/`) and on GitHub Pages (`/simulation-milk-process/`):
 

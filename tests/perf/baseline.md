@@ -105,6 +105,26 @@ The overview holds at 188 draw calls, the `scene` lane's figure, a little over h
 
 Frame rates are again left out: other lanes' builds and browser tests shared the 4 cores (load average 18 to 19), and the readings (1 to 4 fps) measure that, not the scene. **The 60 fps exit criterion stays open** until it is measured on a real GPU ([To do on a real GPU](#to-do-on-a-real-gpu)).
 
+### Phase 4: packs to trucks
+
+Measured on 27 October 2026 by `qa` on the phase 4 branch (after `74323b9`, with the hero flag and the KPI fixes; contracts v3, the live packs model and the stage 7–10 scene), same machine and method, a production build served by `vite preview`, on the live sim without `?heroes`. The project's Playwright (1.56) has no matching headless shell on this machine, so the script ran on the installed Chromium 153 through a local copy with `executablePath`; that browser also asks for `/favicon.ico`, which the app does not have, and its 404 is the one console error the script reported (exit code 1). The app itself logged none. 33 machines; within the overview budget.
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **194** | **187,786** | **194** | **187,786** |
+| 1 Standardization | 92 | 103,744 | 92 | 103,744 |
+| 2 Preheating | 88 | 103,672 | 90 | 103,740 |
+| 3 Homogenization | 90 | 100,516 | 90 | 100,516 |
+| 4 UHT | 98 | 110,196 | 99 | 110,208 |
+| 5 Flash cooling | 90 | 108,112 | 90 | 108,112 |
+| 6 Aseptic tank | 79 | 98,920 | 79 | 98,920 |
+| 7 Filling | 95 | 103,856 | 95 | 103,856 |
+| 8 Packaging | 102 | 110,250 | 103 | 110,418 |
+| 9 Quarantine & QA | 122 | 171,420 | 129 | 174,776 |
+| 10 Warehouse | 129 | 115,624 | 139 | 121,620 |
+
+Six draw calls more than phase 3 at the overview: the moving packs, trays and pallets, the quarantine blocks and their lamps, and the trucks are instanced meshes of a draw or two each. The triangles grow by about 83,000, most of them the 2,453 pallets on hold at the opening (one instance of 12 triangles each, drawn in both passes) and the stock in the racks; that is still under the 300,000 a frame the asset budget plans for ([assets/README.md](../../assets/README.md#budgets)). The first frames read 193 draw calls and 165,914 triangles, before the Kenney pieces and vehicles replaced their grey boxes. Software GL gave 3.9 fps at the overview at 1440 × 900 (4.3 at 1280 × 720), against 7.2 in phase 2, with the measurement's own SwiftShader threads the only load (load average 3.9): the triangles cost a CPU renderer more than a GPU. **The G2 item "60 fps with tokens on screen" stays open** until it is measured on a real GPU ([To do on a real GPU](#to-do-on-a-real-gpu)).
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.

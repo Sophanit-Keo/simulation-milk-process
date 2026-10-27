@@ -1,0 +1,1083 @@
+{
+  "version": 3,
+  "timeS": 655140,
+  "speed": 10,
+  "paused": false,
+  "nextEventS": 655200,
+  "stages": {
+    "1": {
+      "id": 1,
+      "status": "ok",
+      "values": {
+        "siloTempC": 4,
+        "separatorTempC": 60,
+        "feedTankTempC": 4,
+        "rawMilkFatPct": 4,
+        "productFatPct": 3.5,
+        "creamShareFrac": 0.08635794743429287,
+        "rawMilkLph": 16222.222222222223,
+        "surplusCreamLph": 222.22222222222263,
+        "siloLevelPct": 40.45467860921097,
+        "mixTankLevelPct": 50
+      }
+    },
+    "2": {
+      "id": 2,
+      "status": "ok",
+      "values": {
+        "preheatTempC": 80,
+        "deaeratorTempC": 76,
+        "airPct": 0.5,
+        "heatRecoveredKw": 1317.3333333333333
+      }
+    },
+    "3": {
+      "id": 3,
+      "status": "ok",
+      "values": {
+        "stage1Bar": 200,
+        "stage2Bar": 30,
+        "inletTempC": 76,
+        "outletTempC": 81.75,
+        "globuleUm": 0.8,
+        "creamingRiskPct": 0,
+        "powerKw": 124.66124661246614
+      }
+    },
+    "4": {
+      "id": 4,
+      "status": "ok",
+      "values": {
+        "setpointC": 140,
+        "tempC": 140.16058068312705,
+        "flowLph": 16000,
+        "holdS": 4,
+        "f0Min": 5.369907555466427,
+        "bStar": 1.2280682180447169,
+        "divertLimitC": 139.22374451577414,
+        "rejectLevelL": 0
+      }
+    },
+    "5": {
+      "id": 5,
+      "status": "ok",
+      "values": {
+        "flashTempC": 80,
+        "coolerTempC": 20,
+        "waterRemovedLph": 1652.1818181818182,
+        "condenserKw": 1009.6666666666667
+      }
+    },
+    "6": {
+      "id": 6,
+      "status": "ok",
+      "values": {
+        "levelL": 13274.267769552858,
+        "levelPct": 66.37133884776429,
+        "capacityL": 20000,
+        "tempC": 20,
+        "inflowLph": 16000,
+        "outflowLph": 15000,
+        "headspaceBar": 2.663713388477643,
+        "nextCleanS": 7260
+      }
+    },
+    "7": {
+      "id": 7,
+      "status": "ok",
+      "values": {
+        "fillerCount": 2,
+        "ratePacksPerH": 7500,
+        "runningCount": 2,
+        "packsPerH": 15000,
+        "oeePct": 90.32802713987473,
+        "oeeAPct": 90.43997912317326,
+        "oeeBPct": 90.2160751565762,
+        "packsMade": 115609,
+        "packsRejected": 230,
+        "tempC": 20
+      }
+    },
+    "8": {
+      "id": 8,
+      "status": "ok",
+      "values": {
+        "packsPerTray": 12,
+        "traysPerPallet": 84,
+        "packsPerPallet": 1008,
+        "queuePacks": 0,
+        "traysMade": 9611,
+        "palletsMade": 114
+      }
+    },
+    "9": {
+      "id": 9,
+      "status": "warn",
+      "values": {
+        "incubationTempC": 55,
+        "incubationDays": 7,
+        "samplesPerBatch": 16,
+        "batchesOnHold": 42,
+        "palletsInQuarantine": 2567,
+        "nextReleaseS": 60,
+        "batchesReleased": 0,
+        "batchesBlocked": 0,
+        "samplesTaken": 38
+      }
+    },
+    "10": {
+      "id": 10,
+      "status": "ok",
+      "values": {
+        "tempC": 25,
+        "palletsPerTruck": 22,
+        "palletsInStock": 546,
+        "daysOfCover": 1.7234848484848484,
+        "trucksAtDock": 0,
+        "nextTruckS": 1260,
+        "trucksShipped": 4,
+        "orderFillPct": 100
+      }
+    }
+  },
+  "line": {
+    "silo": {
+      "tempC": 4,
+      "flowLph": 16222.222222222223
+    },
+    "separator": {
+      "tempC": 60,
+      "flowLph": 16000
+    },
+    "feedTank": {
+      "tempC": 4,
+      "flowLph": 16000
+    },
+    "preheater": {
+      "tempC": 80,
+      "flowLph": 16000
+    },
+    "deaerator": {
+      "tempC": 76,
+      "flowLph": 16000
+    },
+    "homogenizer": {
+      "tempC": 81.75,
+      "flowLph": 16000
+    },
+    "holdingTube": {
+      "tempC": 140.16058068312705,
+      "flowLph": 16000
+    },
+    "divert": {
+      "tempC": 140.16058068312705,
+      "flowLph": 0
+    },
+    "flashVessel": {
+      "tempC": 80,
+      "flowLph": 16000
+    },
+    "cooler": {
+      "tempC": 20,
+      "flowLph": 16000
+    },
+    "asepticTank": {
+      "tempC": 20,
+      "flowLph": 15000
+    },
+    "filler": {
+      "tempC": 20,
+      "flowLph": 15000
+    }
+  },
+  "liquid": {
+    "uhtMode": "production",
+    "modeRemainingS": 0,
+    "throttled": false,
+    "fillersRunning": 2,
+    "fillersStarved": false,
+    "headspaceBar": 2.663713388477643,
+    "productionSinceCleanS": 28740,
+    "divertCount": 0,
+    "tanks": {
+      "silo": {
+        "levelL": 40454.678609210976,
+        "capacityL": 100000
+      },
+      "mixTank": {
+        "levelL": 5000,
+        "capacityL": 10000
+      },
+      "asepticTank": {
+        "levelL": 13274.267769552858,
+        "capacityL": 20000
+      },
+      "rejectTank": {
+        "levelL": 0,
+        "capacityL": 6000
+      }
+    }
+  },
+  "packs": {
+    "fillers": [
+      {
+        "name": "A",
+        "state": "running",
+        "stateRemainingS": 0,
+        "packsPerH": 7500,
+        "batchId": 54,
+        "packsMade": 57876,
+        "packsRejected": 115,
+        "breakdowns": 2,
+        "availabilityPct": 96.66266018097424,
+        "performancePct": 93.74875632844405,
+        "qualityPct": 99.8012993296012,
+        "oeePct": 90.43997912317326
+      },
+      {
+        "name": "B",
+        "state": "running",
+        "stateRemainingS": 0,
+        "packsPerH": 7500,
+        "batchId": 55,
+        "packsMade": 57733,
+        "packsRejected": 115,
+        "breakdowns": 1,
+        "availabilityPct": 96.42278530166118,
+        "performancePct": 93.74976827753908,
+        "qualityPct": 99.80080716401365,
+        "oeePct": 90.2160751565762
+      }
+    ],
+    "packaging": {
+      "lanes": [
+        {
+          "name": "A",
+          "packerState": "running",
+          "changeoverRemainingS": 0,
+          "queuePacks": 0,
+          "trayPacks": 9,
+          "palletTrays": 23,
+          "batchId": 54
+        },
+        {
+          "name": "B",
+          "packerState": "running",
+          "changeoverRemainingS": 0,
+          "queuePacks": 0,
+          "trayPacks": 0,
+          "palletTrays": 12,
+          "batchId": 55
+        }
+      ],
+      "traysMade": 9611,
+      "palletsMade": 114,
+      "packsSampled": 38,
+      "lastPallet": {
+        "batchId": 55,
+        "palletNo": 57,
+        "atS": 655071
+      }
+    },
+    "batches": [
+      {
+        "id": 12,
+        "filler": "A",
+        "status": "hold",
+        "startS": 21600,
+        "endS": 50400,
+        "releaseAtS": 655200,
+        "bestBeforeS": 15746400,
+        "pallets": 59,
+        "packs": 58818,
+        "lastPalletPacks": 354,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 13,
+        "filler": "B",
+        "status": "hold",
+        "startS": 21600,
+        "endS": 50400,
+        "releaseAtS": 655200,
+        "bestBeforeS": 15746400,
+        "pallets": 59,
+        "packs": 58781,
+        "lastPalletPacks": 317,
+        "samples": 20,
+        "qaResult": "pending"
+      },
+      {
+        "id": 14,
+        "filler": "A",
+        "status": "hold",
+        "startS": 50400,
+        "endS": 79200,
+        "releaseAtS": 684000,
+        "bestBeforeS": 15775200,
+        "pallets": 59,
+        "packs": 59315,
+        "lastPalletPacks": 851,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 15,
+        "filler": "B",
+        "status": "hold",
+        "startS": 50400,
+        "endS": 79200,
+        "releaseAtS": 684000,
+        "bestBeforeS": 15775200,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 16,
+        "filler": "A",
+        "status": "hold",
+        "startS": 79200,
+        "endS": 108000,
+        "releaseAtS": 712800,
+        "bestBeforeS": 15804000,
+        "pallets": 60,
+        "packs": 59542,
+        "lastPalletPacks": 70,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 17,
+        "filler": "B",
+        "status": "hold",
+        "startS": 79200,
+        "endS": 108000,
+        "releaseAtS": 712800,
+        "bestBeforeS": 15804000,
+        "pallets": 57,
+        "packs": 56548,
+        "lastPalletPacks": 100,
+        "samples": 20,
+        "qaResult": "pending"
+      },
+      {
+        "id": 18,
+        "filler": "A",
+        "status": "hold",
+        "startS": 108000,
+        "endS": 136800,
+        "releaseAtS": 741600,
+        "bestBeforeS": 15832800,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 19,
+        "filler": "B",
+        "status": "hold",
+        "startS": 108000,
+        "endS": 136800,
+        "releaseAtS": 741600,
+        "bestBeforeS": 15832800,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 20,
+        "filler": "A",
+        "status": "hold",
+        "startS": 136800,
+        "endS": 165600,
+        "releaseAtS": 770400,
+        "bestBeforeS": 15861600,
+        "pallets": 59,
+        "packs": 58707,
+        "lastPalletPacks": 243,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 21,
+        "filler": "B",
+        "status": "hold",
+        "startS": 136800,
+        "endS": 165600,
+        "releaseAtS": 770400,
+        "bestBeforeS": 15861600,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 22,
+        "filler": "A",
+        "status": "hold",
+        "startS": 165600,
+        "endS": 194400,
+        "releaseAtS": 799200,
+        "bestBeforeS": 15890400,
+        "pallets": 55,
+        "packs": 54538,
+        "lastPalletPacks": 106,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 23,
+        "filler": "B",
+        "status": "hold",
+        "startS": 165600,
+        "endS": 194400,
+        "releaseAtS": 799200,
+        "bestBeforeS": 15890400,
+        "pallets": 54,
+        "packs": 53883,
+        "lastPalletPacks": 459,
+        "samples": 20,
+        "qaResult": "pending"
+      },
+      {
+        "id": 24,
+        "filler": "A",
+        "status": "hold",
+        "startS": 194400,
+        "endS": 223200,
+        "releaseAtS": 828000,
+        "bestBeforeS": 15919200,
+        "pallets": 59,
+        "packs": 59374,
+        "lastPalletPacks": 910,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 25,
+        "filler": "B",
+        "status": "hold",
+        "startS": 194400,
+        "endS": 223200,
+        "releaseAtS": 828000,
+        "bestBeforeS": 15919200,
+        "pallets": 56,
+        "packs": 56035,
+        "lastPalletPacks": 595,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 26,
+        "filler": "A",
+        "status": "hold",
+        "startS": 223200,
+        "endS": 252000,
+        "releaseAtS": 856800,
+        "bestBeforeS": 15948000,
+        "pallets": 58,
+        "packs": 58220,
+        "lastPalletPacks": 764,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 27,
+        "filler": "B",
+        "status": "hold",
+        "startS": 223200,
+        "endS": 252000,
+        "releaseAtS": 856800,
+        "bestBeforeS": 15948000,
+        "pallets": 59,
+        "packs": 58922,
+        "lastPalletPacks": 458,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 28,
+        "filler": "A",
+        "status": "hold",
+        "startS": 252000,
+        "endS": 280800,
+        "releaseAtS": 885600,
+        "bestBeforeS": 15976800,
+        "pallets": 59,
+        "packs": 58911,
+        "lastPalletPacks": 447,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 29,
+        "filler": "B",
+        "status": "hold",
+        "startS": 252000,
+        "endS": 280800,
+        "releaseAtS": 885600,
+        "bestBeforeS": 15976800,
+        "pallets": 59,
+        "packs": 58863,
+        "lastPalletPacks": 399,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 30,
+        "filler": "A",
+        "status": "hold",
+        "startS": 280800,
+        "endS": 309600,
+        "releaseAtS": 914400,
+        "bestBeforeS": 16005600,
+        "pallets": 58,
+        "packs": 57758,
+        "lastPalletPacks": 302,
+        "samples": 24,
+        "qaResult": "pending"
+      },
+      {
+        "id": 31,
+        "filler": "B",
+        "status": "hold",
+        "startS": 280800,
+        "endS": 309600,
+        "releaseAtS": 914400,
+        "bestBeforeS": 16005600,
+        "pallets": 58,
+        "packs": 57742,
+        "lastPalletPacks": 286,
+        "samples": 22,
+        "qaResult": "pending"
+      },
+      {
+        "id": 32,
+        "filler": "A",
+        "status": "hold",
+        "startS": 309600,
+        "endS": 338400,
+        "releaseAtS": 943200,
+        "bestBeforeS": 16034400,
+        "pallets": 55,
+        "packs": 54745,
+        "lastPalletPacks": 313,
+        "samples": 22,
+        "qaResult": "pending"
+      },
+      {
+        "id": 33,
+        "filler": "B",
+        "status": "hold",
+        "startS": 309600,
+        "endS": 338400,
+        "releaseAtS": 943200,
+        "bestBeforeS": 16034400,
+        "pallets": 55,
+        "packs": 55082,
+        "lastPalletPacks": 650,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 34,
+        "filler": "A",
+        "status": "hold",
+        "startS": 338400,
+        "endS": 367200,
+        "releaseAtS": 972000,
+        "bestBeforeS": 16063200,
+        "pallets": 59,
+        "packs": 58525,
+        "lastPalletPacks": 61,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 35,
+        "filler": "B",
+        "status": "hold",
+        "startS": 338400,
+        "endS": 367200,
+        "releaseAtS": 972000,
+        "bestBeforeS": 16063200,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 36,
+        "filler": "A",
+        "status": "hold",
+        "startS": 367200,
+        "endS": 396000,
+        "releaseAtS": 1000800,
+        "bestBeforeS": 16092000,
+        "pallets": 58,
+        "packs": 58207,
+        "lastPalletPacks": 751,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 37,
+        "filler": "B",
+        "status": "hold",
+        "startS": 367200,
+        "endS": 396000,
+        "releaseAtS": 1000800,
+        "bestBeforeS": 16092000,
+        "pallets": 59,
+        "packs": 58708,
+        "lastPalletPacks": 244,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 38,
+        "filler": "A",
+        "status": "hold",
+        "startS": 396000,
+        "endS": 424800,
+        "releaseAtS": 1029600,
+        "bestBeforeS": 16120800,
+        "pallets": 58,
+        "packs": 57663,
+        "lastPalletPacks": 207,
+        "samples": 20,
+        "qaResult": "pending"
+      },
+      {
+        "id": 39,
+        "filler": "B",
+        "status": "hold",
+        "startS": 396000,
+        "endS": 424800,
+        "releaseAtS": 1029600,
+        "bestBeforeS": 16120800,
+        "pallets": 59,
+        "packs": 58984,
+        "lastPalletPacks": 520,
+        "samples": 20,
+        "qaResult": "pending"
+      },
+      {
+        "id": 40,
+        "filler": "A",
+        "status": "hold",
+        "startS": 424800,
+        "endS": 453600,
+        "releaseAtS": 1058400,
+        "bestBeforeS": 16149600,
+        "pallets": 59,
+        "packs": 59180,
+        "lastPalletPacks": 716,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 41,
+        "filler": "B",
+        "status": "hold",
+        "startS": 424800,
+        "endS": 453600,
+        "releaseAtS": 1058400,
+        "bestBeforeS": 16149600,
+        "pallets": 57,
+        "packs": 57225,
+        "lastPalletPacks": 777,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 42,
+        "filler": "A",
+        "status": "hold",
+        "startS": 453600,
+        "endS": 482400,
+        "releaseAtS": 1087200,
+        "bestBeforeS": 16178400,
+        "pallets": 57,
+        "packs": 56940,
+        "lastPalletPacks": 492,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 43,
+        "filler": "B",
+        "status": "hold",
+        "startS": 453600,
+        "endS": 482400,
+        "releaseAtS": 1087200,
+        "bestBeforeS": 16178400,
+        "pallets": 60,
+        "packs": 59475,
+        "lastPalletPacks": 3,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 44,
+        "filler": "A",
+        "status": "hold",
+        "startS": 482400,
+        "endS": 511200,
+        "releaseAtS": 1116000,
+        "bestBeforeS": 16207200,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 45,
+        "filler": "B",
+        "status": "hold",
+        "startS": 482400,
+        "endS": 511200,
+        "releaseAtS": 1116000,
+        "bestBeforeS": 16207200,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 46,
+        "filler": "A",
+        "status": "hold",
+        "startS": 511200,
+        "endS": 540000,
+        "releaseAtS": 1144800,
+        "bestBeforeS": 16236000,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 47,
+        "filler": "B",
+        "status": "hold",
+        "startS": 511200,
+        "endS": 540000,
+        "releaseAtS": 1144800,
+        "bestBeforeS": 16236000,
+        "pallets": 58,
+        "packs": 58194,
+        "lastPalletPacks": 738,
+        "samples": 20,
+        "qaResult": "pending"
+      },
+      {
+        "id": 48,
+        "filler": "A",
+        "status": "hold",
+        "startS": 540000,
+        "endS": 568800,
+        "releaseAtS": 1173600,
+        "bestBeforeS": 16264800,
+        "pallets": 58,
+        "packs": 58107,
+        "lastPalletPacks": 651,
+        "samples": 20,
+        "qaResult": "pending"
+      },
+      {
+        "id": 49,
+        "filler": "B",
+        "status": "hold",
+        "startS": 540000,
+        "endS": 568800,
+        "releaseAtS": 1173600,
+        "bestBeforeS": 16264800,
+        "pallets": 55,
+        "packs": 55214,
+        "lastPalletPacks": 782,
+        "samples": 22,
+        "qaResult": "pending"
+      },
+      {
+        "id": 50,
+        "filler": "A",
+        "status": "hold",
+        "startS": 568800,
+        "endS": 597600,
+        "releaseAtS": 1202400,
+        "bestBeforeS": 16293600,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 51,
+        "filler": "B",
+        "status": "hold",
+        "startS": 568800,
+        "endS": 597600,
+        "releaseAtS": 1202400,
+        "bestBeforeS": 16293600,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 52,
+        "filler": "A",
+        "status": "hold",
+        "startS": 597600,
+        "endS": 626400,
+        "releaseAtS": 1231200,
+        "bestBeforeS": 16322400,
+        "pallets": 60,
+        "packs": 59864,
+        "lastPalletPacks": 392,
+        "samples": 16,
+        "qaResult": "pending"
+      },
+      {
+        "id": 53,
+        "filler": "B",
+        "status": "hold",
+        "startS": 597600,
+        "endS": 626400,
+        "releaseAtS": 1231200,
+        "bestBeforeS": 16322400,
+        "pallets": 58,
+        "packs": 58219,
+        "lastPalletPacks": 763,
+        "samples": 18,
+        "qaResult": "pending"
+      },
+      {
+        "id": 54,
+        "filler": "A",
+        "status": "filling",
+        "startS": 626400,
+        "endS": 655200,
+        "releaseAtS": 1260000,
+        "bestBeforeS": 16351200,
+        "pallets": 57,
+        "packs": 57456,
+        "lastPalletPacks": 1008,
+        "samples": 20,
+        "qaResult": "pending"
+      },
+      {
+        "id": 55,
+        "filler": "B",
+        "status": "filling",
+        "startS": 626400,
+        "endS": 655200,
+        "releaseAtS": 1260000,
+        "bestBeforeS": 16351200,
+        "pallets": 57,
+        "packs": 57456,
+        "lastPalletPacks": 1008,
+        "samples": 18,
+        "qaResult": "pending"
+      }
+    ],
+    "warehouse": {
+      "stock": [
+        {
+          "batchId": 2,
+          "pallets": 12,
+          "bestBeforeS": 15602400
+        },
+        {
+          "batchId": 3,
+          "pallets": 57,
+          "bestBeforeS": 15602400
+        },
+        {
+          "batchId": 4,
+          "pallets": 59,
+          "bestBeforeS": 15631200
+        },
+        {
+          "batchId": 5,
+          "pallets": 60,
+          "bestBeforeS": 15631200
+        },
+        {
+          "batchId": 6,
+          "pallets": 60,
+          "bestBeforeS": 15660000
+        },
+        {
+          "batchId": 7,
+          "pallets": 59,
+          "bestBeforeS": 15660000
+        },
+        {
+          "batchId": 8,
+          "pallets": 59,
+          "bestBeforeS": 15688800
+        },
+        {
+          "batchId": 9,
+          "pallets": 60,
+          "bestBeforeS": 15688800
+        },
+        {
+          "batchId": 10,
+          "pallets": 60,
+          "bestBeforeS": 15717600
+        },
+        {
+          "batchId": 11,
+          "pallets": 60,
+          "bestBeforeS": 15717600
+        }
+      ],
+      "palletsInStock": 546,
+      "trucks": [],
+      "nextTruckS": 656400,
+      "trucksArrived": 4,
+      "trucksFilledOnArrival": 4,
+      "trucksShipped": 4,
+      "palletsShipped": 88,
+      "palletsDestroyed": 0
+    }
+  },
+  "kpis": {
+    "uhtFlowLph": 16000,
+    "f0Min": 5.369907555466427,
+    "bStar": 1.2280682180447169,
+    "divertedL": 0,
+    "tankLevelPct": 66.37133884776429,
+    "packsPerH": 15000,
+    "oeePct": 90.32802713987473,
+    "traysMade": 9611,
+    "palletsMade": 114,
+    "batchesOnHold": 42,
+    "batchesReleased": 0,
+    "batchesBlocked": 0,
+    "palletsInStock": 546,
+    "daysOfCover": 1.7234848484848484,
+    "orderFillPct": 100,
+    "trucksShipped": 4
+  },
+  "log": [
+    {
+      "timeS": 651600,
+      "kind": "ok",
+      "message": "Truck 4 left with 22 pallets"
+    },
+    {
+      "timeS": 650552.6360296031,
+      "kind": "ok",
+      "message": "Aseptic tank below 60%: UHT plant back to full flow"
+    },
+    {
+      "timeS": 650400,
+      "kind": "info",
+      "message": "Truck 4 docked at door 1: loading 22 pallets, earliest best-before first"
+    },
+    {
+      "timeS": 648668.5194276657,
+      "kind": "ok",
+      "message": "Filler A sterile: running again"
+    },
+    {
+      "timeS": 648548.5194276657,
+      "kind": "info",
+      "message": "Filler A repaired: re-sterilizing its aseptic zone for 2 min"
+    },
+    {
+      "timeS": 648078.7527456576,
+      "kind": "bad",
+      "message": "Filler A broke down: repair about 10 min with re-sterilizing"
+    },
+    {
+      "timeS": 646817.3946951648,
+      "kind": "ok",
+      "message": "Filler A sterile: running again"
+    },
+    {
+      "timeS": 646697.3946951648,
+      "kind": "info",
+      "message": "Filler A repaired: re-sterilizing its aseptic zone for 2 min"
+    },
+    {
+      "timeS": 646570.516243135,
+      "kind": "warn",
+      "message": "Aseptic tank above 90%: UHT plant throttled to 50%"
+    },
+    {
+      "timeS": 646448.0099131849,
+      "kind": "bad",
+      "message": "Filler A broke down: repair about 6 min with re-sterilizing"
+    },
+    {
+      "timeS": 645600,
+      "kind": "ok",
+      "message": "Truck 3 left with 22 pallets"
+    },
+    {
+      "timeS": 644400,
+      "kind": "info",
+      "message": "Truck 3 docked at door 1: loading 22 pallets, earliest best-before first"
+    },
+    {
+      "timeS": 644331.6090932889,
+      "kind": "ok",
+      "message": "Filler B sterile: running again"
+    },
+    {
+      "timeS": 644211.6090932889,
+      "kind": "info",
+      "message": "Filler B repaired: re-sterilizing its aseptic zone for 2 min"
+    },
+    {
+      "timeS": 643303.5175889863,
+      "kind": "bad",
+      "message": "Filler B broke down: repair about 17 min with re-sterilizing"
+    },
+    {
+      "timeS": 639600,
+      "kind": "ok",
+      "message": "Truck 2 left with 22 pallets"
+    },
+    {
+      "timeS": 638400,
+      "kind": "info",
+      "message": "Truck 2 docked at door 1: loading 22 pallets, earliest best-before first"
+    },
+    {
+      "timeS": 633600,
+      "kind": "ok",
+      "message": "Truck 1 left with 22 pallets"
+    },
+    {
+      "timeS": 632400,
+      "kind": "info",
+      "message": "Truck 1 docked at door 1: loading 22 pallets, earliest best-before first"
+    },
+    {
+      "timeS": 626400,
+      "kind": "info",
+      "message": "Plant opens: day 8, 06:00"
+    }
+  ]
+}

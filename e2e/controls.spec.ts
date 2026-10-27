@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { SPEEDS } from '../src/contracts';
+import { SPEEDS, type PlantConfig, type Sim } from '../src/contracts';
+import { createSim } from '../src/sim';
+import { createMockSim } from '../src/sim/mock';
+import { formatSimTime } from '../src/ui/format';
 import { expect, test } from './fixtures';
 import {
   afterHudUpdates,
@@ -18,10 +21,24 @@ import {
 // keyboard. Every flow runs on the model and on the mock (?mock). The fixtures fail any test that logs
 // a console error or warning on the way.
 
-/** The first two shift changes after the start (shared spec): day 1, 14:00 and 22:00. */
-const FIRST_EVENT_S = 50_400;
-const SECOND_EVENT_S = 79_200;
 const { defaultSpeed } = plantConfig.clock;
+
+/**
+ * The first two queued events after the opening, as the page's own sim has them: the same seeded model
+ * (or the mock), run headless here. On the mock they are the shift changes of day 8, 14:00 and 22:00; the
+ * model's queue also holds the packs model's breakdowns and trucks (phase 4), so its first is earlier.
+ */
+function firstEvents(make: (config: PlantConfig) => Sim): [number, number] {
+  const sim = make(plantConfig);
+  const first = sim.snapshot().nextEventS;
+  sim.dispatch({ type: 'pause', paused: true });
+  sim.dispatch({ type: 'nextEvent' });
+  sim.step(plantConfig.clock.maxFrameS);
+  const second = sim.snapshot().nextEventS;
+  if (first === null || second === null || sim.snapshot().timeS !== first) throw new Error('the headless sim has no two events to jump to');
+  return [first, second];
+}
+const FIRST_EVENTS: Record<string, [number, number]> = { '/': firstEvents(createSim), '/?mock': firstEvents(createMockSim) };
 
 /** aria-pressed of each speed button, by speed, read in one go ('missing' for a button that isn't there). */
 async function speedsPressed(page: Page): Promise<Record<string, string>> {
@@ -198,24 +215,27 @@ for (const path of ['/', '/?mock']) {
       expect(fastRate, `×1,000 (${fastRate.toFixed(1)}/s) against ×1 (${slowRate.toFixed(2)}/s)`).toBeGreaterThan(20 * Math.max(slowRate, 0.25));
     });
 
-    test('next event jumps to 14:00 (50,400 s) from the start, and the next one to 22:00', async ({ page }) => {
+    test('next event jumps to the first queued event from the start, and on to the next one', async ({ page }) => {
+      const [FIRST_EVENT_S, SECOND_EVENT_S] = FIRST_EVENTS[path];
+      if (path === '/?mock') expect([FIRST_EVENT_S, SECOND_EVENT_S], 'the mock queues the shift changes of day 8, 14:00 and 22:00').toEqual([655_200, 684_000]);
       await page.goto(path);
       const startS = await waitForClock(page);
-      expect(startS, 'the plant opens before the first shift change').toBeLessThan(FIRST_EVENT_S);
+      expect(startS, 'the plant opens before the first event').toBeLessThan(FIRST_EVENT_S);
       // Paused, so the clock shows the event time itself rather than a moment after it.
       await page.getByTestId('pause').click();
       await expect(page.getByTestId('pause')).toHaveAttribute('aria-pressed', 'true');
 
+      await expect(page.getByTestId('next-event')).toHaveAttribute('title', `Jump the clock to the next event, ${formatSimTime(FIRST_EVENT_S)}`);
       await page.getByTestId('next-event').click();
-      await expect(simClock(page)).toHaveAttribute('data-time-s', String(FIRST_EVENT_S));
-      await expect(simClock(page)).toContainText('day 1 · 14:00');
+      await expect(simClock(page)).toHaveAttribute('data-time-s', String(Math.floor(FIRST_EVENT_S)));
+      await expect(simClock(page)).toContainText(formatSimTime(FIRST_EVENT_S));
       await expect(page.getByTestId('pause'), 'a jump leaves the clock paused').toHaveAttribute('aria-pressed', 'true');
 
       // Running, a jump lands on the next event and the clock runs on from there.
       await page.getByTestId('pause').click();
       await expect(page.getByTestId('pause')).toHaveAttribute('aria-pressed', 'false');
       await page.getByTestId('next-event').click();
-      await expect.poll(() => clockTimeS(page), { message: 'the clock jumped to 22:00' }).toBeGreaterThanOrEqual(SECOND_EVENT_S);
+      await expect.poll(() => clockTimeS(page), { message: `the clock jumped to the next event, ${formatSimTime(SECOND_EVENT_S)}` }).toBeGreaterThanOrEqual(SECOND_EVENT_S);
       // At ×10 the clock runs on about 10 s per real second after the jump; 10 min is ample for a slow runner.
       expect(await clockTimeS(page)).toBeLessThan(SECOND_EVENT_S + 600);
       await expect(page.getByTestId('pause'), 'a jump leaves the clock running').toHaveAttribute('aria-pressed', 'false');

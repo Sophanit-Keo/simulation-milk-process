@@ -499,7 +499,10 @@ kbd {
 }
 
 /* A state in words with its lamp ("● Diverting to reject · 2 min 30 s left"). Unlike a number it may
-   wrap, and the lamp stays with its first line. */
+   wrap, and the lamp stays with its first line; the label keeps its width and the words wrap instead. */
+.val-state {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
 .val-state dd {
   display: inline-flex;
   align-items: baseline;
@@ -605,6 +608,140 @@ kbd {
   color: var(--muted);
 }
 
+/* Stage 9's batch list and the picked batch, stage 10's dock and stock (batchList.ts, stockList.ts). */
+.batches,
+.stock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.batch-rows,
+.pallet-rows,
+.stock-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+/* The list scrolls inside the panel, so the picked batch below it stays in reach. */
+.batch-rows {
+  max-height: 240px;
+  overflow: auto;
+}
+.batch-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  grid-template-areas: 'lamp name pallets' '. due due';
+  column-gap: 8px;
+  row-gap: 1px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+.batch-row:hover {
+  border-color: var(--line);
+}
+.batch-row[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.batch-row .lamp {
+  grid-area: lamp;
+  width: 8px;
+  height: 8px;
+}
+.b-name {
+  grid-area: name;
+  font-weight: 600;
+}
+.b-pallets {
+  grid-area: pallets;
+  font: 500 12.5px/1.35 var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.b-due {
+  grid-area: due;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.batch-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.batch-head {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.batch-head .lamp {
+  width: 9px;
+  height: 9px;
+}
+.b-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+.batch-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.qa-override {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.qa-button[data-result='fail'] {
+  border-color: var(--bad);
+}
+.pallet-rows {
+  max-height: 200px;
+  overflow: auto;
+  font: 500 12px/1.35 var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+.pallet-rows li {
+  display: grid;
+  grid-template-columns: 2.4em minmax(0, 1fr);
+  gap: 8px;
+}
+.p-no-small {
+  color: var(--muted);
+  text-align: right;
+}
+.stock-rows li {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 13px;
+}
+.stock-rows .lamp {
+  width: 8px;
+  height: 8px;
+  flex: none;
+}
+.stock-rows .tag {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* Event log under the rail. The card keeps the size the grid gives it and the list scrolls inside, so
    new entries move nothing else on screen. */
 .log-card {
@@ -653,7 +790,8 @@ kbd {
 
 /* KPI strip. Each column's share follows the widest text its card holds at the longest values a run
    reaches by phase 4 ("F0 99.99 · B* 9.99", "999,999 L diverted", "9,999,999 trays made", "99.9 days
-   of cover"), so nothing is cut short down to the 1101 px of the one-row layout. */
+   of cover", each filler's OEE "A 100 · B 100"), so nothing is cut short down to the 1101 px of the
+   one-row layout. */
 .kpis {
   grid-area: kpis;
   min-width: 0;
@@ -662,8 +800,8 @@ kbd {
   margin: 0;
   display: grid;
   grid-template-columns:
-    minmax(0, 1.25fr) minmax(0, 1.9fr) minmax(0, 1fr) minmax(0, 1.4fr)
-    minmax(0, 0.85fr) minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.05fr);
+    minmax(0, 1.23fr) minmax(0, 1.88fr) minmax(0, 1fr) minmax(0, 1.38fr)
+    minmax(0, 0.91fr) minmax(0, 1.1fr) minmax(0, 1.2fr) minmax(0, 1.05fr);
   gap: 8px;
 }
 .kpi {
@@ -730,8 +868,8 @@ kbd {
   /* The packs and hold columns widen for their pairs ("9,999,999 trays made · 99,999 pallets made"). */
   .kpi-grid {
     grid-template-columns:
-      minmax(0, 1.25fr) minmax(0, 1.9fr) minmax(0, 1fr) minmax(0, 2.55fr)
-      minmax(0, 0.85fr) minmax(0, 1.65fr) minmax(0, 1.2fr) minmax(0, 1.05fr);
+      minmax(0, 1.23fr) minmax(0, 1.88fr) minmax(0, 0.99fr) minmax(0, 2.55fr)
+      minmax(0, 0.92fr) minmax(0, 1.65fr) minmax(0, 1.19fr) minmax(0, 1.04fr);
   }
   .k-pair > * {
     display: inline;
