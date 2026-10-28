@@ -24,6 +24,10 @@ const LIGHT_FALLBACKS = {
   '--t60': '#e3a21c',
   '--t80': '#ea8027',
   '--t140': '#d63b26',
+  // The cleaning fluids in the pipes while the CIP station cleans (phase 7); the same in both themes.
+  '--clean-water': '#8fb4c8',
+  '--clean-lye': '#7d5cc6',
+  '--clean-acid': '#c2479a',
 } as const satisfies Record<`--${string}`, string> & Record<ZoneColorVar | '--scene-bg' | '--floor', string>;
 
 export type SceneColorVar = keyof typeof LIGHT_FALLBACKS;

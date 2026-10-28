@@ -164,7 +164,7 @@ describe("the OEE card's filler line", () => {
 
 describe('PANEL_STATE_ROWS', () => {
   it('reads the fillers in stage 7, the packers and pallets in stage 8, the pick and dock in stage 10, and the liquid line as before', () => {
-    expect(PANEL_STATE_ROWS[4]?.map((row) => row.key)).toEqual(['uhtMode', 'throttle']);
+    expect(PANEL_STATE_ROWS[4]?.map((row) => row.key)).toEqual(['uhtMode', 'cleaning', 'throttle']);
     expect(PANEL_STATE_ROWS[6]?.map((row) => row.key)).toEqual(['throttle', 'fillers', 'sterileAir']);
     expect(PANEL_STATE_ROWS[7]?.map((row) => row.key)).toEqual(['fillerA', 'fillerB']);
     expect(PANEL_STATE_ROWS[8]?.map((row) => row.key)).toEqual(['packerA', 'packerB', 'palletA', 'palletB', 'lastPallet', 'lastSscc']);

@@ -7,7 +7,7 @@ import type { LinePointId, Speed, StageId, Status } from './stages';
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
  * v0 week 1, v1 at G1, v2 at week 6, v3 at G2, v4 in phase 5 (scenarios). From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 4;
+export const CONTRACT_VERSION = 5;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -57,6 +57,37 @@ export type UhtMode = 'production' | 'divert' | 'cip' | 'sterilize' | 'aic';
 
 export const UHT_MODES: readonly UhtMode[] = ['production', 'divert', 'cip', 'sterilize', 'aic'];
 
+/** The UHT plant's two cleaning programmes (contracts v5, phase 7): the full CIP after a divert, and the intermediate clean. */
+export type CleaningProgram = 'cip' | 'aic';
+
+/** What circulates through the UHT plant in a cleaning step: water, the alkaline detergent (NaOH lye) or the acid (HNO3). */
+export type CleaningFluid = 'water' | 'lye' | 'acid';
+export const CLEANING_FLUIDS: readonly CleaningFluid[] = ['water', 'lye', 'acid'];
+
+/**
+ * The steps the programmes are made of (plant.json cleaning.cipSteps and aicSteps): the CIP's pre-rinse, lye,
+ * rinse, acid, post-rinse and gradual cooling (Dairy Processing Handbook), and the AIC's water that displaces
+ * the product before its lye and rinse.
+ */
+export type CleaningStepId = 'preRinse' | 'lye' | 'rinse' | 'acid' | 'postRinse' | 'cooling' | 'displace';
+export const CLEANING_STEP_IDS: readonly CleaningStepId[] = ['preRinse', 'lye', 'rinse', 'acid', 'postRinse', 'cooling', 'displace'];
+
+/** The cleaning step under way (contracts v5, phase 7). */
+export interface CleaningSnapshot {
+  program: CleaningProgram;
+  step: CleaningStepId;
+  fluid: CleaningFluid;
+  /** The step's place in its programme, from 0, and how many steps the programme has. */
+  stepIndex: number;
+  stepCount: number;
+  /** Sim seconds left in this step. */
+  stepRemainingS: number;
+  /** The temperature the step runs at; null for an AIC step, which holds the UHT set point so the plant stays sterile. */
+  tempC: number | null;
+  /** What the CIP station circulates through the UHT plant, stages 2–5, and back. */
+  flowLph: number;
+}
+
 /** A tank's contents (contracts v2). The 3D view fills each tank to levelL ÷ capacityL. */
 export interface TankLevel {
   levelL: number;
@@ -83,6 +114,11 @@ export interface LiquidSnapshot {
   productionSinceCleanS: number;
   /** Diverts since the plant opened. */
   divertCount: number;
+  /**
+   * The cleaning step under way during a full CIP or an intermediate clean, null otherwise (contracts v5,
+   * phase 7). Absent from an older snapshot. The milk's line points (Snapshot.line) carry no cleaning flow.
+   */
+  cleaning?: CleaningSnapshot | null;
   tanks: {
     silo: TankLevel;
     /** The mixing (feed) tank after standardization, which feeds the UHT plant. */

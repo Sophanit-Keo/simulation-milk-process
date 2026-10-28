@@ -216,6 +216,52 @@ describe('createPipes', () => {
     pipes.dispose();
   });
 
+  it('while the plant cleans, the CIP circuit and the CIP lines carry the fluid’s colour; milk keeps its own outside the circuit (phase 7)', () => {
+    const { pipes, scene, line } = setUp();
+    const lye = stop('--clean-lye');
+    expect(pipes.state().cleaning).toBeNull();
+    for (const run of ['cip-supply', 'cip-return']) for (const { color: c } of vertices(scene, run)) expectColor(c, stop('--steel'), `pipe-${run} idle`);
+    pipes.update(line, 0, false, { fluid: 'lye', flowLph: 24_000 });
+    expect(pipes.state().cleaning).toBe('lye');
+    // In the circuit, from the balance tank to the tee after the cooler.
+    for (const c of near(scene, 'feed', [-30.35, 0.5, -14])) expectColor(c, lye, 'pipe-feed at the preheater');
+    for (const { color: c } of vertices(scene, 'holding-tube')) expectColor(c, lye, 'pipe-holding-tube');
+    for (const c of near(scene, 'product', [-9.3, 0.8, -11.6])) expectColor(c, lye, 'pipe-product in the cooler');
+    for (const run of ['cip-supply', 'cip-return']) for (const { color: c } of vertices(scene, run)) expectColor(c, lye, `pipe-${run}`);
+    // Outside it: the mixing tank's outlet, the aseptic tank's inlet and the divert line still show milk.
+    for (const c of near(scene, 'feed', [-42.4, 0.7, -14])) expectColor(c, ramp(line.feedTank.tempC), 'pipe-feed at the mixing tank');
+    for (const c of near(scene, 'product', [4, 1.6, -14])) expectColor(c, stop('--t20'), 'pipe-product at the aseptic tank');
+    for (const { color: c } of vertices(scene, 'divert')) expectColor(c, ramp(line.divert.tempC), 'pipe-divert');
+    // The next step's fluid, then the end of the clean: back to the milk's temperatures, the CIP lines to steel.
+    pipes.update(line, 0, false, { fluid: 'acid', flowLph: 24_000 });
+    for (const { color: c } of vertices(scene, 'holding-tube')) expectColor(c, stop('--clean-acid'), 'pipe-holding-tube in the acid');
+    pipes.update(line, 0, false, null);
+    expect(pipes.state().cleaning).toBeNull();
+    for (const { color: c } of vertices(scene, 'holding-tube')) expectColor(c, stop('--t140'), 'pipe-holding-tube after the clean');
+    for (const { color: c } of vertices(scene, 'cip-return')) expectColor(c, stop('--steel'), 'pipe-cip-return after the clean');
+    pipes.dispose();
+  });
+
+  it('flows the circuit’s stripes at the circulation on a slot of their own while it cleans, and gives the vertices back to their points after', () => {
+    const { pipes, scene, line } = setUp();
+    const slots = (run: string): number[] => Array.from(((scene.getObjectByName(`pipe-${run}`) as THREE.Mesh).geometry.getAttribute('flowSlot').array as Float32Array));
+    const milkSlots = slots('holding-tube');
+    for (const id of Object.keys(line) as LinePointId[]) line[id].flowLph = 0; // no milk moves while the plant cleans
+    pipes.update(line, 0.01, false, { fluid: 'water', flowLph: 24_000 });
+    // 24,000 L/h moves the stripes 2.4 m a second (10,000 L/h is 1 m/s).
+    expect(pipes.state().cleanPhaseM).toBeCloseTo(0.024, 6);
+    expect(pipes.state().phaseM.holdingTube).toBe(0);
+    expect(new Set(slots('holding-tube').filter((slot, i) => slot !== milkSlots[i])).size, 'the tube moved onto one slot').toBe(1);
+    expect(slots('silo-manifold').every((slot, i) => slot === slots('silo-manifold')[i])).toBe(true);
+    pipes.update(line, 0.01, false, null);
+    expect(slots('holding-tube')).toEqual(milkSlots);
+    // With no clean the cleaning stripes stand still.
+    const still = pipes.state().cleanPhaseM;
+    pipes.update(line, 0.01, false, null);
+    expect(pipes.state().cleanPhaseM).toBe(still);
+    pipes.dispose();
+  });
+
   it('disposes both milk materials and the stripe texture', () => {
     const { pipes, scene } = setUp();
     const disposed = new Set<unknown>();

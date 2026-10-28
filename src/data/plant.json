@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -86,7 +86,21 @@
     "aicS": 1800,
     "aicEveryProductionS": 36000,
     "cipAfterDivert": true,
-    "cipTempC": 75
+    "cipTempC": 75,
+    "circulateLph": 24000,
+    "cipSteps": [
+      { "step": "preRinse", "fluid": "water", "durationS": 600, "tempC": 45 },
+      { "step": "lye", "fluid": "lye", "durationS": 1800, "tempC": 75 },
+      { "step": "rinse", "fluid": "water", "durationS": 300, "tempC": 45 },
+      { "step": "acid", "fluid": "acid", "durationS": 1200, "tempC": 70 },
+      { "step": "postRinse", "fluid": "water", "durationS": 420, "tempC": 20 },
+      { "step": "cooling", "fluid": "water", "durationS": 480, "tempC": 20 }
+    ],
+    "aicSteps": [
+      { "step": "displace", "fluid": "water", "durationS": 300 },
+      { "step": "lye", "fluid": "lye", "durationS": 1200 },
+      { "step": "rinse", "fluid": "water", "durationS": 300 }
+    ]
   },
   "fillers": {
     "count": 2,

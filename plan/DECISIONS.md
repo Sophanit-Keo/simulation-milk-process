@@ -21,6 +21,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D13](#d13-phase-3-liquid-line-defaults) | Silo and mixing-tank sizes and the 21 liquid-line keys of schema 4 | — | Proposed |
 | [D14](#d14-phase-4-packs-to-trucks-defaults) | The 8 packs-to-trucks keys of schema 5 and the rules without a key | — | Proposed |
 | [D15](#d15-phase-5-fault-scenario-defaults) | The 10 fault-scenario keys of schema 6, the scenario rules, and the heroes' AO and compression | [R10](REVIEW.md#r10-rare-qa-failures) | Proposed |
+| [D16](#d16-phase-7-cleaning-programmes) | The CIP and AIC as programmes of steps: the three keys of schema 7 | — | Proposed |
 
 ## D1. Batch size
 
@@ -271,6 +272,27 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Hero models (`assets`, for `lead`):** the plan's AO bake and compression, adapted to models made in code. The AO is baked per vertex into the vertex colours (32 rays a vertex over 0.4 m, up to 85% darker, each rigid body shading only itself), not into a 1024² ORM texture, because the models have no UVs or textures; so there is no KTX2 step either. The geometry is meshopt-compressed losslessly with glTF-Transform (new pinned dev dependencies: `@gltf-transform/core`, `@gltf-transform/extensions` 4.5.1, `meshoptimizer` 1.3.0), without quantization, which would put a scale on the moving nodes. The app loads the heroes by default; `?greybox` keeps the grey boxes ([assets/hero-specs.md](../assets/hero-specs.md#phase-5-final-models)).
 - **Why:** each value is a sim assumption chosen so a scenario plays out visibly within a few minutes at the default speeds, and none moves a phase 3 or 4 count when no scenario runs: the scenario keys act only while a scenario does. The [Phase 5 scenario scripts](hand-calculations.md#phase-5-scenario-scripts) (H104–H110) check them.
 - **What it changes:** the ten keys above in `plant.json` (schema 6), contracts v4's additive fields (the scenario runs, log entries' `scenario` and `why`, batches' `flags` and `creamingRiskPct`), and the matching rows in [default settings](06-simulation-model.md#default-settings).
+
+## D16. Phase 7: cleaning programmes
+
+- **Status:** Proposed
+- **Date:** 2026-10-27
+- **Review note:** none (the roadmap's stretch item "animated CIP cleaning", taken as phase 7)
+- **Decision:** the full CIP and the intermediate clean run as programmes of steps, each with its fluid, time and temperature, so the panel and the 3D view can show what circulates. Three keys in `plant.json` (schema 7):
+
+| Setting | Default | `plant.json` key | Basis |
+|---|---|---|---|
+| CIP steps | Pre-rinse, warm water, 10 min, 45 °C; lye, 30 min, 75 °C; rinse, warm water, 5 min, 45 °C; acid, 20 min, 70 °C; post-rinse, cold water, 7 min, 20 °C; gradual cooling, cold water, 8 min, 20 °C | `cleaning.cipSteps` | The handbook's programme for circuits with heated surfaces, UHT plants among them ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment)): steps, fluids, times and the 75 °C and 70 °C. Sim assumptions: "warm" as 45 °C, "cold" as 20 °C, and the post-rinse's 7 min, the rest of D2's 80 min |
+| AIC steps | Water displaces the product, 5 min; lye, 20 min; rinse, water, 5 min; all at the UHT set point | `cleaning.aicSteps` | The handbook gives the AIC's 30 min "without losing aseptic conditions" ([Long-life dairy products](https://dairyprocessinghandbook.tetrapak.com/chapter/long-life-dairy-products)), not its steps: they are a sim assumption, and the set point keeps the plant sterile |
+| Circulation | 24,000 L/h in both programmes | `cleaning.circulateLph` | Sim assumption: 1.5 × the product flow, about 2.0 m/s in a 65 mm bore, inside the handbook's 1.5–3.0 m/s for CIP (H114) |
+
+- **Rules with no key:**
+  - The programmes fill their modes' times (checked: cipSteps add up to cleaning.cipS, aicSteps to aicS), so the step under way follows from the time spent in the mode, and the CIP still takes 80 min and the plant 113 min out after a divert (H36, H104).
+  - A CIP step sets the temperature the preheater (with its 30 s lag) and the holding-tube outlet run at; the lye's is cleaning.cipTempC (checked). An AIC step has no temperature of its own.
+  - The cleaning fluids are not part of the milk's balance, and `Snapshot.line` carries no cleaning flow: the snapshot's `liquid.cleaning` (contracts v5) gives the step, fluid, temperature, time left and the circulation, and the 3D view draws them.
+  - The CIP station cleans the UHT plant from the balance tank to the tubular cooler's outlet. The aseptic tank, which feeds the fillers during an AIC, and the divert line are not in the circuit.
+- **Why:** the handbook gives a programme with times that come within 7 min of D2's 80 min, so the model can show the real sequence of fluids and temperatures without changing any time the scenarios and tests rely on.
+- **What it changes:** the three keys above in `plant.json` (schema 7), contracts v5's `liquid.cleaning`, the matching rows in [default settings](06-simulation-model.md#default-settings), and the "Cleaning is a timed machine state" simplification, which now reads that the steps run but the fluids are not part of the balance.
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →

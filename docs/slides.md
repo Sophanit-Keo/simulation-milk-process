@@ -73,7 +73,7 @@ Twelve slides, about 15 minutes with the live demo (slide 8). One slide per head
 
 ## 11. Limits
 
-- Plug flow, stepped temperatures, one product, timed cleaning
+- Plug flow, stepped temperatures, one product, cleaning steps on a timer
 - Random failures at simple rates; trucks at a fixed interval
 - Scripted faults of one fixed size
 

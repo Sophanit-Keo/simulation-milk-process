@@ -18,7 +18,7 @@ function install(overrides: Partial<DebugSources> = {}) {
     info: () => ({ calls: 0, triangles: 0 }),
     equipmentIds: () => ['divert-valve'],
     equipmentState: (id) => (id === 'divert-valve' ? { diverting: true, lamp: 'bad', flagRad: -1.5 } : null),
-    pipeState: () => ({ divertLit: true, phaseM: { silo: 0.25 } }),
+    pipeState: () => ({ divertLit: true, phaseM: { silo: 0.25 }, cleaning: null, cleanPhaseM: 0 }),
     ...overrides,
   };
   const hook = installDebugHook(sources);
@@ -43,13 +43,13 @@ describe('the ?debug hook', () => {
 
   it('reports the pipes’ state', () => {
     const { scene } = install();
-    expect(scene.pipeState()).toEqual({ divertLit: true, phaseM: { silo: 0.25 } });
+    expect(scene.pipeState()).toEqual({ divertLit: true, phaseM: { silo: 0.25 }, cleaning: null, cleanPhaseM: 0 });
   });
 
   it('hands out copies, so a caller can’t change what the scene holds', () => {
     const held = { fillFrac: 0.5 };
     const phaseM = { silo: 0.1 };
-    const { scene } = install({ equipmentState: () => held, pipeState: () => ({ divertLit: false, phaseM }) });
+    const { scene } = install({ equipmentState: () => held, pipeState: () => ({ divertLit: false, phaseM, cleaning: 'lye', cleanPhaseM: 0.3 }) });
     (scene.equipmentState('x') as Record<string, unknown>).fillFrac = 1;
     scene.pipeState().phaseM.silo = 9;
     expect(held.fillFrac).toBe(0.5);

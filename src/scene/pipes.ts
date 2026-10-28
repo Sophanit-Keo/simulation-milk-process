@@ -1,10 +1,11 @@
 // The liquid line's pipes (preview: "pipes: colour follows milk temperature"). Each run is one
 // TubeGeometry mesh along the preview's route, coloured per vertex from the temperatures in
 // snapshot.line, with a shared stripe texture that flows at the speed of the milk. The divert route to
-// the reject tank lights up red while the plant diverts.
+// the reject tank lights up red while the plant diverts. While the UHT plant cleans (phase 7), the CIP
+// circuit's pipes and the CIP station's lines carry the cleaning fluid's colour, flowing at its circulation.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { degToRad, LINE_POINT_IDS, type LinePoint, type LinePointId, type StageId } from '../contracts';
+import { CLEANING_FLUIDS, degToRad, LINE_POINT_IDS, type CleaningFluid, type LinePoint, type LinePointId, type StageId } from '../contracts';
 import type { PointM } from './layout';
 import { advancePhase } from './motion';
 import { LAMP_GLOW_HEX, readSceneColor, type SceneColorVar } from './theme';
@@ -217,6 +218,32 @@ export const MILK_RUNS: readonly PipeRun[] = [
   },
 ];
 
+/**
+ * The CIP circuit (phase 7, D16): the UHT plant from the balance tank's inlet (x −33.55) to the tee after the
+ * tubular cooler (x −5.6), where the CIP return branches off. While the plant cleans, these runs' pipes in that
+ * stretch carry the cleaning fluid. The aseptic tank's inlet past the tee, and the divert line, stay out.
+ */
+export const CIP_CIRCUIT = { runIds: ['feed', 'holding-tube', 'product'] as readonly string[], fromXM: -33.55, toXM: -5.6 } as const;
+
+/**
+ * The CIP station's lines (src/scene/equipment/utilities.ts): the supply from its pump along the floor behind
+ * the line to the balance tank, and the return from the tee after the cooler to the header before its tanks.
+ */
+export const CIP_LINES: readonly { id: string; pointsM: readonly PointM[] }[] = [
+  { id: 'cip-supply', pointsM: [[-9.5, 0.3, -20.1], [-9.5, 0.3, -18], [-33, 0.3, -18], [-33, 0.3, -14.5]] },
+  { id: 'cip-return', pointsM: [[-5.6, 1.1, -11.6], [-5.6, 1.1, -20.6], [-7.7, 1.1, -20.6]] },
+];
+const CIP_LINE_RADIUS_M = 0.08;
+
+/** Each cleaning fluid's pipe colour, a token of its own (tokens.css). */
+export const FLUID_COLOR_VAR: Readonly<Record<CleaningFluid, SceneColorVar>> = { water: '--clean-water', lye: '--clean-lye', acid: '--clean-acid' };
+
+/** What the pipes show of a clean: the fluid in the circuit and how fast it circulates. */
+export interface PipeCleaning {
+  fluid: CleaningFluid;
+  flowLph: number;
+}
+
 /** Steam, vapour, vacuum and sterile-air lines (the preview's utility pipes): plain steel, no milk in them. */
 export const UTILITY_PATHS: readonly { pointsM: readonly PointM[]; radiusM: number }[] = [
   // Steam from the boiler house to the steam injector.
@@ -271,9 +298,10 @@ const STRIPE_MPS_PER_LPH = 1e-4;
 const MAX_STRIPE_STEP_M = STRIPE_M / 4;
 /** How brightly the divert route glows, in the lamps' red, while the plant diverts. */
 const DIVERT_LIT_INTENSITY = 0.6;
-/** Slots in the phase table: one per line point, then one that never moves (joint balls). */
+/** Slots in the phase table: one per line point, then one that never moves (joint balls), then the cleaning flow's. */
 const STILL_SLOT = LINE_POINT_IDS.length;
-const FLOW_SLOTS = LINE_POINT_IDS.length + 1;
+const CLEAN_SLOT = LINE_POINT_IDS.length + 1;
+const FLOW_SLOTS = LINE_POINT_IDS.length + 2;
 /** Where the still slot samples the stripe texture: the middle of the light part. */
 const STILL_ARC_M = 0.25 * STRIPE_M;
 const SLOT_OF = new Map<LinePointId, number>(LINE_POINT_IDS.map((id, i) => [id, i]));
@@ -284,11 +312,15 @@ export interface Pipes {
   /**
    * Colours and stripes from the snapshot's line points. Each point's stripes move at a speed proportional
    * to its flow for `animationDtS` (motion.ts: 0 while paused, so they stand still); the divert route to
-   * the reject tank glows red while `diverting`.
+   * the reject tank glows red while `diverting`. While `cleaning`, the CIP circuit and the CIP lines take the
+   * fluid's colour and flow at its circulation instead.
    */
-  update(line: Readonly<Record<LinePointId, LinePoint>>, animationDtS: number, diverting?: boolean): void;
-  /** For tests and the ?debug hook: whether the divert route is lit, and each line point's stripe offset. */
-  state(): { divertLit: boolean; phaseM: Record<LinePointId, number> };
+  update(line: Readonly<Record<LinePointId, LinePoint>>, animationDtS: number, diverting?: boolean, cleaning?: PipeCleaning | null): void;
+  /**
+   * For tests and the ?debug hook: whether the divert route is lit, each line point's stripe offset, and the
+   * fluid in the CIP circuit (null while it carries milk) with its stripes' offset.
+   */
+  state(): { divertLit: boolean; phaseM: Record<LinePointId, number>; cleaning: CleaningFluid | null; cleanPhaseM: number };
   applyTheme(): void;
   dispose(): void;
 }
@@ -338,6 +370,21 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
     return mesh;
   });
 
+  // The CIP lines carry nothing but the cleaning fluid: they flow on the cleaning slot only, steel while idle.
+  const cipLines = CIP_LINES.map(({ id, pointsM }) => {
+    const { geometry, samples } = buildPath(pointsM, CIP_LINE_RADIUS_M);
+    geometry.setAttribute('arcM', new THREE.Float32BufferAttribute(samples.map((sample) => (sample.joint ? STILL_ARC_M : sample.arcM)), 1));
+    geometry.setAttribute('flowSlot', new THREE.Float32BufferAttribute(samples.map((sample) => (sample.joint ? STILL_SLOT : CLEAN_SLOT)), 1));
+    const colors = new THREE.BufferAttribute(new Float32Array(samples.length * 3), 3);
+    geometry.setAttribute('color', colors);
+    const mesh = new THREE.Mesh(geometry, milkMaterial);
+    mesh.name = `pipe-${id}`;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    scene.add(mesh);
+    return { mesh, colors };
+  });
+
   const utilityGeometry = mergeOrThrow(UTILITY_PATHS.map(({ pointsM, radiusM }) => buildPath(pointsM, radiusM).geometry));
   const utilityMesh = new THREE.Mesh(utilityGeometry, utilityMaterial);
   utilityMesh.name = 'pipe-utilities';
@@ -345,6 +392,10 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
   scene.add(utilityMesh);
 
   const stops = TEMP_STOPS.map(({ tempC }) => ({ tempC, color: new THREE.Color() }));
+  const fluidColors = Object.fromEntries(CLEANING_FLUIDS.map((fluid) => [fluid, new THREE.Color()])) as Record<CleaningFluid, THREE.Color>;
+  const idleLineColor = new THREE.Color();
+  /** The fluid in the CIP circuit now; null while it carries milk. */
+  let cleaningFluid: CleaningFluid | null = null;
   const pointTempC = new Float32Array(LINE_POINT_IDS.length);
   const color = new THREE.Color();
   /** Per line point: did its temperature change in this update? */
@@ -356,12 +407,20 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
     return false;
   };
 
-  /** Recolours every run, or with `onlyChanged` just the runs that carry a point whose temperature changed. */
+  /**
+   * Recolours every run, or with `onlyChanged` just the runs that carry a point whose temperature changed. The
+   * CIP circuit's vertices take the cleaning fluid's colour while there is one.
+   */
   const recolour = (onlyChanged = false): void => {
-    for (const { colors, tempIndex, tempWeight, tempPoints } of runs) {
+    const fluidColor = cleaningFluid === null ? null : fluidColors[cleaningFluid];
+    for (const { colors, tempIndex, tempWeight, tempPoints, circuit } of runs) {
       if (onlyChanged && !carriesChange(tempPoints)) continue;
       const array = colors.array as Float32Array;
       for (let v = 0; v < colors.count; v++) {
+        if (fluidColor && circuit[v] === 1) {
+          fluidColor.toArray(array, v * 3);
+          continue;
+        }
         let tempC = 0;
         for (let k = v * 4; k < v * 4 + 4; k++) tempC += tempWeight[k] * pointTempC[tempIndex[k]];
         tempColor(tempC, stops, color);
@@ -371,11 +430,33 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
       }
       colors.needsUpdate = true;
     }
+    for (const { colors } of cipLines) {
+      const lineColor = fluidColor ?? idleLineColor;
+      for (let v = 0; v < colors.count; v++) lineColor.toArray(colors.array as Float32Array, v * 3);
+      colors.needsUpdate = true;
+    }
     coloured = true;
+  };
+
+  /** Moves the CIP circuit's vertices onto the cleaning flow's slot while it cleans, back onto their points' after. */
+  const setCircuitSlots = (cleaning: boolean): void => {
+    for (const { geometry, circuit, baseSlot } of runs) {
+      const slots = geometry.getAttribute('flowSlot') as THREE.BufferAttribute;
+      const array = slots.array as Float32Array;
+      let changed = false;
+      for (let v = 0; v < array.length; v++) {
+        if (circuit[v] !== 1 || baseSlot[v] === STILL_SLOT) continue;
+        array[v] = cleaning ? CLEAN_SLOT : baseSlot[v];
+        changed = true;
+      }
+      if (changed) slots.needsUpdate = true;
+    }
   };
 
   const applyTheme = (): void => {
     for (const [i, stop] of TEMP_STOPS.entries()) stops[i].color.set(readSceneColor(stop.colorVar));
+    for (const fluid of CLEANING_FLUIDS) fluidColors[fluid].set(readSceneColor(FLUID_COLOR_VAR[fluid]));
+    idleLineColor.set(readSceneColor('--steel'));
     if (coloured) recolour();
   };
   applyTheme();
@@ -385,7 +466,7 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
       const stage = runs[i].run.stage;
       return stage === undefined ? [] : [{ object: mesh, stage }];
     }),
-    update(line, animationDtS, diverting = false) {
+    update(line, animationDtS, diverting = false, cleaning = null) {
       // Recolour only the runs whose temperatures moved: the static plant never does; the live model's
       // display noise moves only the UHT section, so the silo and filler runs stay as they are.
       let changed = false;
@@ -397,7 +478,12 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
           changed = true;
         }
       }
-      if (!coloured) recolour();
+      const fluid = cleaning?.fluid ?? null;
+      if (fluid !== cleaningFluid) {
+        if ((fluid === null) !== (cleaningFluid === null)) setCircuitSlots(fluid !== null);
+        cleaningFluid = fluid;
+        recolour();
+      } else if (!coloured) recolour();
       else if (changed) recolour(true);
 
       if (diverting !== divertLit) {
@@ -412,16 +498,20 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
         // Modulo one stripe: the texture repeats, and a small phase keeps the shader's float precision.
         phaseM[i] = advancePhase(phaseM[i], speedMps * animationDtS, MAX_STRIPE_STEP_M, STRIPE_M);
       }
+      const cleanLph = cleaning && Number.isFinite(cleaning.flowLph) ? Math.max(0, cleaning.flowLph) : 0;
+      phaseM[CLEAN_SLOT] = advancePhase(phaseM[CLEAN_SLOT], cleanLph * STRIPE_MPS_PER_LPH * animationDtS, MAX_STRIPE_STEP_M, STRIPE_M);
     },
     state() {
       return {
         divertLit,
         phaseM: Object.fromEntries(LINE_POINT_IDS.map((id, i) => [id, phaseM[i]])) as Record<LinePointId, number>,
+        cleaning: cleaningFluid,
+        cleanPhaseM: phaseM[CLEAN_SLOT],
       };
     },
     applyTheme,
     dispose() {
-      for (const mesh of [...meshes, utilityMesh]) {
+      for (const mesh of [...meshes, ...cipLines.map((line) => line.mesh), utilityMesh]) {
         mesh.removeFromParent();
         mesh.geometry.dispose();
       }
@@ -442,6 +532,10 @@ interface MilkRunGeometry {
   tempWeight: Float32Array;
   /** The line points whose temperatures colour the run, each once. */
   tempPoints: Uint8Array;
+  /** Per vertex: 1 if it lies in the CIP circuit (CIP_CIRCUIT), 0 if not. */
+  circuit: Uint8Array;
+  /** Per vertex: the flow slot it has while the circuit carries milk. */
+  baseSlot: Float32Array;
 }
 
 function buildMilkRun(run: PipeRun): MilkRunGeometry {
@@ -450,8 +544,12 @@ function buildMilkRun(run: PipeRun): MilkRunGeometry {
   const tempWeight: number[] = [];
   const arcM: number[] = [];
   const flowSlot: number[] = [];
+  const circuit: number[] = [];
+  const inCircuitRun = CIP_CIRCUIT.runIds.includes(run.id);
+  const inCircuit = (xM: number): number => (inCircuitRun && xM >= CIP_CIRCUIT.fromXM - 1e-6 && xM <= CIP_CIRCUIT.toXM + 1e-6 ? 1 : 0);
 
-  const pushVertex = (weights: readonly [LinePointId, number][], slot: number, arc: number): void => {
+  /** `xM` is where the vertex lies along x on the route's centre line, which decides whether it is in the CIP circuit. */
+  const pushVertex = (weights: readonly [LinePointId, number][], slot: number, arc: number, xM: number): void => {
     for (let k = 0; k < 4; k++) {
       const [id, weight] = weights[k] ?? ['silo', 0];
       tempIndex.push(slotOf(id));
@@ -459,6 +557,7 @@ function buildMilkRun(run: PipeRun): MilkRunGeometry {
     }
     flowSlot.push(slot);
     arcM.push(arc);
+    circuit.push(inCircuit(xM));
   };
 
   for (const path of run.paths) {
@@ -470,21 +569,26 @@ function buildMilkRun(run: PipeRun): MilkRunGeometry {
     parts.push(built.geometry);
     for (const sample of built.samples) {
       if (sample.joint) {
-        pushVertex(tempWeights(vertices[sample.segment][3], 1), STILL_SLOT, STILL_ARC_M);
+        pushVertex(tempWeights(vertices[sample.segment][3], 1), STILL_SLOT, STILL_ARC_M, vertices[sample.segment][0]);
         continue;
       }
       const { segment, frac } = sample;
       const start = vertices[segment];
       const end = vertices[segment + 1];
       // The segment flows at its upstream end's speed; its temperature ramps from one end to the other.
-      pushVertex([...tempWeights(start[3], 1 - frac), ...tempWeights(end[3], frac)], slotOf(start[4] ?? upstreamPoint(start[3])), sample.arcM);
+      pushVertex(
+        [...tempWeights(start[3], 1 - frac), ...tempWeights(end[3], frac)],
+        slotOf(start[4] ?? upstreamPoint(start[3])),
+        sample.arcM,
+        start[0] + frac * (end[0] - start[0]),
+      );
     }
   }
 
   for (const joint of run.joints ?? []) {
     const ball = jointBall(joint.at, joint.radiusM);
     parts.push(ball);
-    for (let v = 0; v < ball.getAttribute('position').count; v++) pushVertex(tempWeights(joint.at[3], 1), STILL_SLOT, STILL_ARC_M);
+    for (let v = 0; v < ball.getAttribute('position').count; v++) pushVertex(tempWeights(joint.at[3], 1), STILL_SLOT, STILL_ARC_M, joint.at[0]);
   }
 
   const geometry = mergeOrThrow(parts);
@@ -495,7 +599,16 @@ function buildMilkRun(run: PipeRun): MilkRunGeometry {
   geometry.setAttribute('arcM', new THREE.Float32BufferAttribute(arcM, 1));
   geometry.setAttribute('flowSlot', new THREE.Float32BufferAttribute(flowSlot, 1));
   const tempPoints = Uint8Array.from(new Set(tempIndex.filter((_, k) => tempWeight[k] !== 0)));
-  return { run, geometry, colors, tempIndex: Uint8Array.from(tempIndex), tempWeight: Float32Array.from(tempWeight), tempPoints };
+  return {
+    run,
+    geometry,
+    colors,
+    tempIndex: Uint8Array.from(tempIndex),
+    tempWeight: Float32Array.from(tempWeight),
+    tempPoints,
+    circuit: Uint8Array.from(circuit),
+    baseSlot: Float32Array.from(flowSlot),
+  };
 }
 
 function slotOf(id: LinePointId): number {

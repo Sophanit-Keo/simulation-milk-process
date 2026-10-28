@@ -454,6 +454,34 @@ button {
 .swatch.t140 {
   background: var(--t140);
 }
+/* While the UHT plant cleans (src/ui/pipeLegend.ts): the fluids on a line of their own, the one in the circuit marked. */
+.legend-clean {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.legend-clean-title {
+  color: var(--ink);
+}
+.legend-fluid.active {
+  color: var(--ink);
+  font-weight: 600;
+}
+.legend-fluid.active .swatch {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.swatch.clean-water {
+  background: var(--clean-water);
+}
+.swatch.clean-lye {
+  background: var(--clean-lye);
+}
+.swatch.clean-acid {
+  background: var(--clean-acid);
+}
 /* The running scenario (src/ui/scenarioLog.ts) and the tour's caption (src/ui/tour.ts) sit at the top
    of the 3D view, as cards that take clicks, out of the way of the hint and the legend below. */
 .overlay-scenario,

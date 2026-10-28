@@ -1,10 +1,21 @@
 // The info panel's words for the liquid line (src/ui/liquidRows.ts): the UHT mode with the time left, the
 // throttle and the fillers, and the margin over the divert limit that makes R6 visible in the stage 4 panel.
 import { describe, expect, it } from 'vitest';
-import { UHT_MODES, type LiquidSnapshot } from '../../src/contracts';
+import { CLEANING_STEP_IDS, UHT_MODES, type CleaningSnapshot, type LiquidSnapshot } from '../../src/contracts';
 import { createSim } from '../../src/sim';
 import { divertLimitC } from '../../src/sim/formulas';
-import { DERIVED_ROWS, feedText, fillersText, marginText, STATE_ROWS, supplyText, throttleText, uhtModeText } from '../../src/ui/liquidRows';
+import {
+  CLEANING_STEP_TEXT,
+  cleaningText,
+  DERIVED_ROWS,
+  feedText,
+  fillersText,
+  marginText,
+  STATE_ROWS,
+  supplyText,
+  throttleText,
+  uhtModeText,
+} from '../../src/ui/liquidRows';
 import { plantConfig } from '../helpers/plantConfig';
 
 const liquid = (): LiquidSnapshot => createSim(plantConfig).snapshot().liquid;
@@ -36,6 +47,43 @@ describe('uhtModeText', () => {
 
   it('shows a dash, unlit, for a mode it does not know (a newer sim)', () => {
     expect(uhtModeText({ uhtMode: 'flush' as never, modeRemainingS: 60 })).toEqual({ text: '—', status: 'idle' });
+  });
+});
+
+describe('cleaningText (phase 7)', () => {
+  const lye: CleaningSnapshot = {
+    program: 'cip',
+    step: 'lye',
+    fluid: 'lye',
+    stepIndex: 1,
+    stepCount: 6,
+    stepRemainingS: 1_740,
+    tempC: 75,
+    flowLph: plantConfig.cleaning.circulateLph,
+  };
+
+  it('reads a CIP step with its temperature, its place in the programme and the time left, in amber', () => {
+    expect(cleaningText({ cleaning: lye })).toEqual({ text: 'Lye (NaOH), 75 °C · 2 of 6 · 29 min left', status: 'warn' });
+    expect(cleaningText({ cleaning: { ...lye, step: 'acid', fluid: 'acid', stepIndex: 3, tempC: 70, stepRemainingS: 90 } }).text).toBe(
+      'Acid (HNO₃), 70 °C · 4 of 6 · 1 min 30 s left',
+    );
+  });
+
+  it('leaves out the temperature of an AIC step, which holds the UHT set point', () => {
+    const displace: CleaningSnapshot = { ...lye, program: 'aic', step: 'displace', fluid: 'water', stepIndex: 0, stepCount: 3, tempC: null, stepRemainingS: 300 };
+    expect(cleaningText({ cleaning: displace }).text).toBe('Water displaces milk · 1 of 3 · 5 min 00 s left');
+  });
+
+  it('reads "None", unlit, while no programme runs, and from a snapshot older than contracts v5', () => {
+    expect(cleaningText({ cleaning: null })).toEqual({ text: 'None', status: 'idle' });
+    expect(cleaningText({})).toEqual({ text: 'None', status: 'idle' });
+    expect(cleaningText(liquid())).toEqual({ text: 'None', status: 'idle' });
+  });
+
+  it('has words for every step of the contract, each different', () => {
+    const texts = CLEANING_STEP_IDS.map((step) => CLEANING_STEP_TEXT[step]);
+    expect(texts.every(Boolean)).toBe(true);
+    expect(new Set(texts).size).toBe(CLEANING_STEP_IDS.length);
   });
 });
 
@@ -73,15 +121,15 @@ describe('throttleText and fillersText', () => {
 });
 
 describe('STATE_ROWS', () => {
-  it('shows the UHT mode in stage 4, and the throttle where it starts and where it acts (stages 6 and 4)', () => {
-    expect(STATE_ROWS[4]?.map((row) => row.key)).toEqual(['uhtMode', 'throttle']);
+  it('shows the UHT mode and the cleaning step in stage 4, and the throttle where it starts and where it acts (stages 6 and 4)', () => {
+    expect(STATE_ROWS[4]?.map((row) => row.key)).toEqual(['uhtMode', 'cleaning', 'throttle']);
     expect(STATE_ROWS[6]?.map((row) => row.key)).toEqual(['throttle', 'fillers']);
     for (const stage of [1, 2, 3, 5, 7, 8, 9, 10] as const) expect(STATE_ROWS[stage], `stage ${stage}`).toBeUndefined();
   });
 
   it('reads every row from the liquid snapshot', () => {
     const throttled = { ...liquid(), throttled: true, uhtMode: 'divert' as const, modeRemainingS: 30 };
-    expect(STATE_ROWS[4]?.map((row) => row.read(throttled).text)).toEqual(['Diverting to reject · 30 s left', 'Throttled · tank high']);
+    expect(STATE_ROWS[4]?.map((row) => row.read(throttled).text)).toEqual(['Diverting to reject · 30 s left', 'None', 'Throttled · tank high']);
   });
 });
 

@@ -1,6 +1,22 @@
+import { CLEANING_FLUIDS, CLEANING_STEP_IDS, type CleaningFluid, type CleaningStepId } from './snapshot';
 import { MAX_PALLETS_PER_BATCH } from './sscc';
 import { isSpeed } from './stages';
 import { dayToS, sToH } from './units';
+
+/**
+ * One step of a cleaning programme (phase 7, D16). JSON gives `step` and `fluid` as plain strings:
+ * checkPlantConfig refuses any but CLEANING_STEP_IDS and CLEANING_FLUIDS, and cleaningSteps() narrows them.
+ */
+export interface CleaningStepConfig {
+  step: string;
+  fluid: string;
+  durationS: number;
+}
+
+/** A CIP step runs at its own temperature; an AIC step has none, as it holds the UHT set point so the plant stays sterile. */
+export interface CipStepConfig extends CleaningStepConfig {
+  tempC: number;
+}
 
 /**
  * Shape of src/data/plant.json, the default settings (plan 06 and plan/DECISIONS.md).
@@ -143,6 +159,12 @@ export interface PlantConfig {
     cipAfterDivert: boolean;
     /** Temperature of the lye circulating through the UHT plant during a full CIP (sim assumption, phase 3). */
     cipTempC: number;
+    /** What the CIP station circulates through the UHT plant in either programme (sim assumption, phase 7, D16). */
+    circulateLph: number;
+    /** The full CIP's steps in order, adding up to cipS (Dairy Processing Handbook, phase 7, D16). */
+    cipSteps: CipStepConfig[];
+    /** The intermediate clean's steps in order, adding up to aicS (sim assumption, phase 7, D16). */
+    aicSteps: CleaningStepConfig[];
   };
   /** Stage 7. */
   fillers: {
@@ -246,6 +268,9 @@ const POSITIVE_KEYS = [
   'standardization.tankerUnloadLph',
   'standardization.tankerBelowFrac',
   'cleaning.aicEveryProductionS',
+  'cleaning.cipS',
+  'cleaning.aicS',
+  'cleaning.circulateLph',
   'asepticTank.capacityL',
   'fillers.count',
   'fillers.ratePacksPerH',
@@ -287,6 +312,24 @@ const INTEGER_KEYS = [
   'scenarios.spikeTrucks',
   'clock.maxStepsPerFrame',
 ] as const;
+
+/** A cleaning step with its step and fluid narrowed: what cleaningSteps() returns. */
+export interface CleaningStep {
+  step: CleaningStepId;
+  fluid: CleaningFluid;
+  durationS: number;
+  tempC: number | null;
+}
+
+/** A programme's steps from a config checkPlantConfig passed, narrowed to the cleaning types. */
+export function cleaningSteps(config: PlantConfig, program: 'cip' | 'aic'): CleaningStep[] {
+  return config.cleaning[program === 'cip' ? 'cipSteps' : 'aicSteps'].map((step) => ({
+    step: step.step as CleaningStepId,
+    fluid: step.fluid as CleaningFluid,
+    durationS: step.durationS,
+    tempC: 'tempC' in step ? (step as CipStepConfig).tempC : null,
+  }));
+}
 
 /** Returns every problem found in a config; an empty list means it is usable. */
 export function checkPlantConfig(config: PlantConfig): string[] {
@@ -370,5 +413,28 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   if (!(scenarios.homogenizerFaultBar < homogenizer.stage1Bar)) fail('scenarios.homogenizerFaultBar must be below homogenizer.stage1Bar');
   if (!(scenarios.filterFailurePerPack <= 1)) fail('scenarios.filterFailurePerPack must lie in 0–1');
   if (!(scenarios.sensoryFailAbovePct <= 100)) fail('scenarios.sensoryFailAbovePct must lie in 0–100');
+  // Phase 7: each cleaning programme is a list of known steps that fills its time exactly.
+  const { cleaning } = config;
+  const checkSteps = (name: 'cipSteps' | 'aicSteps', totalKey: 'cipS' | 'aicS'): void => {
+    const list: unknown = cleaning[name];
+    if (!Array.isArray(list) || list.length === 0) {
+      fail(`cleaning.${name} must list at least one step`);
+      return;
+    }
+    let sumS = 0;
+    for (const [i, step] of (list as (CleaningStepConfig & { tempC?: unknown })[]).entries()) {
+      const where = `cleaning.${name}[${i}]`;
+      if (!CLEANING_STEP_IDS.includes(step.step as CleaningStepId)) fail(`${where}.step must be one of ${CLEANING_STEP_IDS.join(', ')}`);
+      if (!CLEANING_FLUIDS.includes(step.fluid as CleaningFluid)) fail(`${where}.fluid must be one of ${CLEANING_FLUIDS.join(', ')}`);
+      if (!(typeof step.durationS === 'number' && step.durationS > 0)) fail(`${where}.durationS must be greater than 0`);
+      else sumS += step.durationS;
+      if (name === 'cipSteps' && typeof step.tempC !== 'number') fail(`${where}.tempC is needed: each CIP step runs at its own temperature`);
+      if (name === 'aicSteps' && step.tempC !== undefined) fail(`${where}.tempC must be left out: an AIC step holds the UHT set point`);
+      if (name === 'cipSteps' && step.fluid === 'lye' && step.tempC !== cleaning.cipTempC) fail(`${where}: the lye runs at cleaning.cipTempC`);
+    }
+    if (Math.abs(sumS - cleaning[totalKey]) > 1e-6) fail(`cleaning.${name} must add up to cleaning.${totalKey} (${cleaning[totalKey]} s), not ${sumS} s`);
+  };
+  checkSteps('cipSteps', 'cipS');
+  checkSteps('aicSteps', 'aicS');
   return problems;
 }

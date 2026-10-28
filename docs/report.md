@@ -35,7 +35,7 @@ All defaults live in one file, `src/data/plant.json` (schema 6), checked at star
 - B\* = (t ÷ 10.1) × 10^((T − 135) ÷ 10.5), 1.19 at 140 °C and 4 s;
 - the divert limit, B\* = 1, is T = 135 + 10.5 log10(10.1 ÷ t): 139.22 °C at 4 s, 136.06 °C at 8 s.
 
-Below the limit the divert valve sends milk to the reject tank for 3 min, then the plant cleans in place for 80 min and re-sterilizes for 30 min at 125 °C or more: 113 min without product ([D2](../plan/DECISIONS.md#d2-missing-defaults)). The display noise is capped at ±0.3 °C, so noise alone never diverts at 140 °C ([D4](../plan/DECISIONS.md#d4-divert-rule-and-display-noise)). The flash vessel returns the milk to 80 °C and a cooler to 20 °C.
+Below the limit the divert valve sends milk to the reject tank for 3 min, then the plant cleans in place for 80 min and re-sterilizes for 30 min at 125 °C or more: 113 min without product ([D2](../plan/DECISIONS.md#d2-missing-defaults)). The clean walks the Dairy Processing Handbook's six steps for heated circuits (pre-rinse, lye at 75 °C, rinse, acid at 70 °C, post-rinse, cooling), and after every 10 h of production a 30 min intermediate clean runs water, lye and water at the set point; the CIP station pumps each fluid at 24,000 L/h, and the pipes of the circuit take its colour ([D16](../plan/DECISIONS.md#d16-phase-7-cleaning-programmes)). The display noise is capped at ±0.3 °C, so noise alone never diverts at 140 °C ([D4](../plan/DECISIONS.md#d4-divert-rule-and-display-noise)). The flash vessel returns the milk to 80 °C and a cooler to 20 °C.
 
 **The aseptic tank couples the two halves.** It holds 20,000 L and opens half full. The UHT plant makes 16,000 L/h and the two fillers draw 15,000, so the tank gains 1,000 L/h. Above 90% the UHT plant drops to 50% flow, and back to full flow below 60%. Below 150 L the fillers stop, and they restart above 500 L. Each step cuts at the moment a threshold is crossed, so the litres balance exactly: the tests check that milk in equals milk out plus what the tanks hold, every sim hour for 60 days.
 
@@ -66,9 +66,10 @@ Every expected value is worked by hand first, then tested. `process` writes the 
 | Acceptance runs | Phase 3: normal run, divert at 139 °C, throttle to 50%, a clean covered by the buffer, mass balance, step size (H76–H96). Phase 4: pallets a day, one batch, quarantine size, OEE, trucks, SSCC, days of cover (H97–H103) | `tests/sim/acceptance*.test.ts` |
 | 60-day run | Conservation every sim hour, bounded queues, 1 s and 10 s steps agree | `tests/sim/packsLongRun.test.ts` |
 | Scenario scripts | Each fault's timings and KPIs (H104–H110), resets, the same seed giving the same log | `tests/sim/scenarios.test.ts` |
+| Cleaning programmes | The CIP's six steps and the AIC's three: their order, times and temperatures, and the circulation speed (H111–H114) | `tests/sim/cleaning.test.ts` |
 | Demo script | The live demo's sequence replayed, every number the presenter quotes | `tests/sim/demoScript.test.ts` |
 | Assets | Every model's size, nodes, budget, licence, and the committed files byte for byte | `assets/scripts/*.test.mjs` |
-| Browser | The app in Chromium: stages and camera, controls, KPIs, the liquid line and divert, silo to truck, scenarios, tour, About, loading and error states, no console errors | `e2e/*.spec.ts` |
+| Browser | The app in Chromium: stages and camera, controls, KPIs, the liquid line and divert, the cleaning steps, silo to truck, scenarios, tour, About, loading and error states, no console errors | `e2e/*.spec.ts` |
 
 At the defaults the 60-day run gives 349.8 pallets a day (hand calculation: about 350), OEE 91.0% (90.91%), 8.5% of production time throttled (about 9%), 2,421–2,626 pallets in quarantine (the review's range), 14.38 trucks a day, every one loaded on arrival, and stock growing by about 30 pallets a day ([phase 4 acceptance](../plan/hand-calculations.md#phase-4-acceptance-runs)).
 
@@ -89,7 +90,7 @@ The final number check (phase 6) compared what the screen shows with the review'
 
 ### 2.4 Performance
 
-The budget is 60 fps on a mid-range laptop with one shadow-casting light. The plant draws 207 draw calls and 232,346 triangles at the overview with the hero models (budget 350 draw calls, about 300,000 triangles), and 92 to 151 at the stage stops ([perf baseline](../tests/perf/baseline.md)). Packs, trays and pallets are instanced meshes, and the 3D view moves a sample of them, not every pack. Static parts are merged into one mesh per material, and the hero models carry their ambient occlusion in their vertex colours. The gate G3 check drives a fixed camera path for 60 s at ×1 and ×10,000 and records the average and the 1% low (`node tests/perf/measure.mjs --path 60 --headed --channel chrome`). It needs the target laptop's GPU: the build machines only have software rendering, at about 4 fps.
+The budget is 60 fps on a mid-range laptop with one shadow-casting light. The plant draws 221 draw calls and 242,154 triangles at the overview with the hero models and the CIP station (budget 350 draw calls, about 300,000 triangles), and 98 to 162 at the stage stops ([perf baseline](../tests/perf/baseline.md)). Packs, trays and pallets are instanced meshes, and the 3D view moves a sample of them, not every pack. Static parts are merged into one mesh per material, and the hero models carry their ambient occlusion in their vertex colours. The gate G3 check drives a fixed camera path for 60 s at ×1 and ×10,000 and records the average and the 1% low (`node tests/perf/measure.mjs --path 60 --headed --channel chrome`). It needs the target laptop's GPU: the build machines only have software rendering, at about 4 fps.
 
 ### 2.5 3D assets
 
@@ -97,7 +98,7 @@ The machines are the project's own models, built in code (`assets/scripts/make-h
 
 ## 3. Limitations
 
-The [About panel](../src/data/about.md) lists the accepted simplifications. The main ones: plug flow with no pressure drop or fouling; temperatures that step with a short lag rather than follow heat-transfer equations; one product and pack size; cleaning as a timed state; failures at simple random rates; trucks at a fixed interval rather than random orders; scripted faults with one fixed size each. The model also mixes plant types: a direct UHT plant with the homogenizer before it, and the 50% throttle of indirect plants ([R5](../plan/REVIEW.md#r5-plant-type-mix)).
+The [About panel](../src/data/about.md) lists the accepted simplifications. The main ones: plug flow with no pressure drop or fouling; temperatures that step with a short lag rather than follow heat-transfer equations; one product and pack size; cleaning as timed steps whose fluids are not part of the balance; failures at simple random rates; trucks at a fixed interval rather than random orders; scripted faults with one fixed size each. The model also mixes plant types: a direct UHT plant with the homogenizer before it, and the 50% throttle of indirect plants ([R5](../plan/REVIEW.md#r5-plant-type-mix)).
 
 ## 4. How to run and test
 

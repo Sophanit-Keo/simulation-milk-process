@@ -62,11 +62,19 @@ Make the simulation fast, stable and deployed, then produce the demo video, repo
 - **`process`.** The on-screen numbers checked against the review's table ([report, 2.3](../../docs/report.md#23-verification)); the [demo script](../../docs/demo-script.md); the report's technical chapter.
 - **`lead`.** [README](../../README.md) with how to use, run and test; the [report](../../docs/report.md), [slides](../../docs/slides.md) and [video script](../../docs/video-script.md). Tagging `v1.0` and the clean-browser check of the deployed link wait for the developer.
 
-**Scope at G3** ([asset list](../05-layout-and-3d-assets.md#3d-asset-list)): every Must item is built and animated. Should: the standardization skid and the balance tank with its pump are built but static (their valve and impeller animations were not done); the tray-shrink tunnel, the palletizer (a hero model) and the racks, forklifts and trucks are built and move. Could: the stretch wrapper (turns) and the boiler house are built; the CIP station is not, and cleaning stays a timed state of the UHT plant.
+**Scope at G3** ([asset list](../05-layout-and-3d-assets.md#3d-asset-list)): every Must item is built and animated. Should: the standardization skid and the balance tank with its pump are built but static (their valve and impeller animations were not done); the tray-shrink tunnel, the palletizer (a hero model) and the racks, forklifts and trucks are built and move. Could: the stretch wrapper (turns) and the boiler house are built; the CIP station is not, and cleaning stays a timed state of the UHT plant (phase 7 built both the station and the cleaning steps, below).
 
 ## Afterwards
 
 If the term runs longer, take the roadmap's stretch list one item per week: animated CIP cleaning, a steam and energy model, a switch between direct and indirect UHT, and a mobile layout. Each one follows the same task loop, so it starts with `process` writing the expected numbers.
+
+**Phase 7 (2026-10-27): animated CIP cleaning**, the first stretch item, through the same task loop:
+
+- **`process`.** The programmes, their numbers and sources: H111–H114 in the [hand calculations](../hand-calculations.md#phase-7-the-cleaning-programmes) and [D16](../DECISIONS.md#d16-phase-7-cleaning-programmes). The full CIP is the Dairy Processing Handbook's six steps for heated circuits (80 min: pre-rinse 45 °C, lye 75 °C, rinse, acid 70 °C, post-rinse, cooling); the AIC is water, lye and water at the set point (30 min); both circulate at 24,000 L/h, about 2 m/s. The circuit runs from the balance tank to the tubular cooler's outlet.
+- **`lead` + `sim`.** Contracts v5 add `liquid.cleaning` (the programme, step, fluid, its place, the time left, a CIP step's temperature, the flow), and `plant.json` schema 7 the steps. The step follows from the time spent in the mode, so the modes keep their times: H36, H104 and the demo script hold unchanged.
+- **`scene`.** The CIP station (the Could item never built) behind the flash vessel: a tank per fluid with a band of its colour and a lamp that lights while that fluid circulates, its pump and return header, and the supply and return lines. While the plant cleans, the circuit's pipes and the CIP lines take the fluid's colour and their stripes flow at the circulation rate. 221 draw calls at the overview, 14 more than phase 5, of the 350 budget ([perf baseline](../../tests/perf/baseline.md#phase-7-the-cip-station)).
+- **`ui`.** A "Cleaning step" row in the stage 4 panel ("Lye (NaOH), 75 °C · 2 of 6 · 29 min left"), and the fluids in the pipe legend while a programme runs, the one in the circuit marked. About explains the programmes; the simplification now reads that the steps run on a timer and the fluids are not part of the balance.
+- **`qa`.** `tests/sim/cleaning.test.ts` runs H111–H114; `e2e/cleaning.spec.ts` follows the CIP after the UHT temperature drop frame by frame (pipes, station lamp, panel, legend). `npm run check` passes, 1,124 unit tests and 69 asset tests; the browser suite passes 60 of 61 on the agents' Chromium 153, the new test among them; the one failure is the pixel-ratio test of bug-bash item 6, as before.
 
 ---
 

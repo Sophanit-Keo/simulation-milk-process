@@ -11,12 +11,21 @@
 // Two fault scenarios act here (phase 5, scenarios.ts): a steam dip, which lets the holding-tube outlet fall
 // toward uht.faultTempC until the plant diverts (a step is cut at the instant it crosses the divert limit),
 // and a homogenizer pressure loss, which holds stage 1 at a low pressure.
+//
+// A full CIP and an intermediate clean walk their programme's steps (phase 7, plant.json cleaning.cipSteps and
+// aicSteps): the step under way follows from the time already spent in the mode, so the modes keep their
+// times. A CIP step sets the temperature the preheater and the holding-tube outlet run at; an AIC step holds
+// the UHT set point. The cleaning fluids are no part of the milk's balance.
 import {
+  cleaningSteps,
   fracToPct,
   lphToLps,
   lpsToLph,
   sToH,
   sToMin,
+  type CleaningProgram,
+  type CleaningSnapshot,
+  type CleaningStep,
   type Kpis,
   type LiquidSnapshot,
   type PlantConfig,
@@ -176,6 +185,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
   const throttleAboveL = tank.throttleAboveFrac * tank.capacityL;
   const resumeBelowL = tank.resumeBelowFrac * tank.capacityL;
   const tankerBelowL = std.tankerBelowFrac * std.siloCapacityL;
+  const programSteps: Readonly<Record<CleaningProgram, readonly CleaningStep[]>> = { cip: cleaningSteps(config, 'cip'), aic: cleaningSteps(config, 'aic') };
 
   const asepticStartL = tank.capacityL * tank.startFrac;
   const state: LiquidState = {
@@ -210,6 +220,23 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     productionS: 0,
     throttledProductionS: 0,
   };
+
+  /**
+   * The cleaning step under way in a full CIP or an intermediate clean: the step of the programme that the time
+   * already spent in the mode falls in, and the time left in it. Null in any other mode.
+   */
+  function cleaningStepNow(): { program: CleaningProgram; index: number; step: CleaningStep; remainingS: number } | null {
+    if (state.mode !== 'cip' && state.mode !== 'aic') return null;
+    const program = state.mode;
+    const steps = programSteps[program];
+    const spentS = Math.max(0, (program === 'cip' ? cleaning.cipS : cleaning.aicS) - state.modeRemainingS);
+    let endS = 0;
+    for (const [index, step] of steps.entries()) {
+      endS += step.durationS;
+      if (spentS < endS - TIME_EPS_S || index === steps.length - 1) return { program, index, step, remainingS: Math.max(0, endS - spentS) };
+    }
+    return null;
+  }
 
   /** UHT flow the plant runs at in production or divert: full capacity, or the throttled share. */
   const nominalUhtLph = (): number => uht.capacityLph * (state.throttled ? tank.throttledFlowFrac : 1);
@@ -264,6 +291,9 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     let soonestS = Infinity;
     const at = (s: number) => (soonestS = Math.min(soonestS, Math.max(0, s)));
     if (TIMED_MODES.has(state.mode)) at(state.modeRemainingS);
+    // A cleaning step's end, where its temperature changes.
+    const cleaningStep = cleaningStepNow();
+    if (cleaningStep && cleaningStep.remainingS > TIME_EPS_S) at(cleaningStep.remainingS);
     // A falling outlet crossing the divert limit; one already on it is caught by checkDivert at the cut's start.
     if (flows.uhtLph > 0) {
       const crossS = timeToDivertLimitS(nowS, setpoints.uhtSetpointC, holdTimeS(tubeL, flows.uhtLph));
@@ -324,9 +354,9 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       totals.rejectPumpedL += pumpedL;
     }
 
-    // Stage 2: the preheater outlet runs at the preheat temperature (lye temperature during a full CIP);
+    // Stage 2: the preheater outlet runs at the preheat temperature (the CIP step's during a full CIP);
     // the deaerator takes the air down while milk flows, and it creeps back while the plant stands.
-    const preheatTargetC = state.mode === 'cip' ? cleaning.cipTempC : preheating.preheatTempC;
+    const preheatTargetC = cleaningStepNow()?.step.tempC ?? preheating.preheatTempC;
     state.preheatTempC = lagToward(state.preheatTempC, preheatTargetC, dtS, preheating.lagS);
     const airTargetPct = flows.uhtLph > 0 ? preheating.deaeratedAirPct : preheating.rawAirPct;
     state.airPct = lagToward(state.airPct, airTargetPct, dtS, preheating.lagS);
@@ -472,16 +502,13 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     const globule = globuleUm(config, runningBar);
     const creamingRisk = creamingRiskPct(config, globule);
 
-    // The holding-tube outlet reads the milk's temperature plus noise while product or AIC water runs at
-    // sterilizing heat (the set point, or lower during a steam dip), the lye during a full CIP and the hot
-    // water while re-sterilizing.
+    // The holding-tube outlet reads the milk's temperature plus noise while product or an AIC's water and lye
+    // run at sterilizing heat (the set point, or lower during a steam dip), the CIP step's temperature during a
+    // full CIP, and the hot water while re-sterilizing.
     const setpointC = setpoints.uhtSetpointC;
-    const tempC =
-      state.mode === 'cip'
-        ? cleaning.cipTempC
-        : state.mode === 'sterilize'
-          ? uht.sterilizeTempC
-          : milkOutletC(timeS, setpointC) + state.noiseC;
+    const cleaningStep = cleaningStepNow();
+    const cipTempC = cleaningStep?.program === 'cip' ? cleaningStep.step.tempC : null;
+    const tempC = cipTempC ?? (state.mode === 'sterilize' ? uht.sterilizeTempC : milkOutletC(timeS, setpointC) + state.noiseC);
     // With nothing flowing there is no hold and no sterilizing effect; the limit shown is the one production restarts at.
     const holdS = uhtLph > 0 ? holdTimeS(tubeL, uhtLph) : 0;
     const f0 = uhtLph > 0 ? f0Min(tempC, holdS) : 0;
@@ -557,6 +584,18 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     };
 
     const tankLevel = (levelL: number, capacityL: number) => ({ levelL, capacityL });
+    const cleaningView: CleaningSnapshot | null = cleaningStep
+      ? {
+          program: cleaningStep.program,
+          step: cleaningStep.step.step,
+          fluid: cleaningStep.step.fluid,
+          stepIndex: cleaningStep.index,
+          stepCount: programSteps[cleaningStep.program].length,
+          stepRemainingS: cleaningStep.remainingS,
+          tempC: cleaningStep.step.tempC,
+          flowLph: cleaning.circulateLph,
+        }
+      : null;
     const liquid: LiquidSnapshot = {
       uhtMode: state.mode,
       modeRemainingS: Math.max(0, state.modeRemainingS),
@@ -566,6 +605,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       headspaceBar: values[6].headspaceBar,
       productionSinceCleanS: state.productionSinceCleanS,
       divertCount: state.divertCount,
+      cleaning: cleaningView,
       tanks: {
         silo: tankLevel(state.siloL, std.siloCapacityL),
         mixTank: tankLevel(state.mixTankL, std.mixTankCapacityL),

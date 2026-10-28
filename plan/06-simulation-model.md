@@ -79,6 +79,8 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | CIP lye temperature | 75 °C | Alkaline detergent for about 30 min at 75 °C in circuits with heated surfaces, UHT included ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment), [D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)) |
 | Intermediate clean interval | Every 10 h of production | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | Full CIP trigger | Only after a divert (B\* < 1): 3 min divert, 80 min CIP, then 30 min sterilizing at 125 °C or more; 113 min out | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
+| CIP programme | Pre-rinse 10 min at 45 °C, lye 30 min at 75 °C, rinse 5 min at 45 °C, acid 20 min at 70 °C, post-rinse 7 min and gradual cooling 8 min at 20 °C; 24,000 L/h | Steps, times and the 75 °C and 70 °C from the handbook's programme for heated surfaces ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment)); the rest sim assumptions ([D16](DECISIONS.md#d16-phase-7-cleaning-programmes)) |
+| AIC programme | Water 5 min, lye 20 min, water 5 min, at the UHT set point | Sim assumption ([D16](DECISIONS.md#d16-phase-7-cleaning-programmes)) |
 | Batch | One filler for one 8-hour shift (60,000 packs, about 60 pallets); shifts start at 06:00, 14:00 and 22:00, the first on day 1 at 06:00 | Sim assumption ([D1](DECISIONS.md#d1-batch-size)) |
 | QA samples | 1 pack per filler every 30 min, plus 2 after each stop | Sim assumption |
 | Quarantine | 7 days at 55 °C (default) or 15 days at 30 °C | [Regulation 853/2004](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX), [D9](DECISIONS.md#d9-other-open-values) |

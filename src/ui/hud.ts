@@ -4,6 +4,7 @@ import { createBatchList } from './batchList';
 import { el, onPress } from './dom';
 import { createEventLog } from './eventLog';
 import { createKpiStrip } from './kpiStrip';
+import { createPipeLegend } from './pipeLegend';
 import { createScenarioLog } from './scenarioLog';
 import { createScenarioMenu } from './scenarioMenu';
 import { createSetpointSlider, SETPOINT_SLIDERS } from './setpointSlider';
@@ -119,6 +120,7 @@ export function createHud(
   const log = createEventLog(logRoot);
   const panel = createStagePanel(panelRoot, stages, panelParts);
   const kpis = createKpiStrip(kpiRoot);
+  const legend = createPipeLegend(viewRoot);
 
   let lastSnapshot: Snapshot | null = null;
 
@@ -196,6 +198,7 @@ export function createHud(
       log.update(snapshot);
       panel.update(snapshot);
       kpis.update(snapshot);
+      legend.update(snapshot);
     },
     dispatch: send,
     sentSetpoints: () => ({ ...sentSetpoints }),
@@ -212,6 +215,7 @@ export function createHud(
       log.dispose();
       panel.dispose();
       kpis.dispose();
+      legend.dispose();
     },
   };
 }
