@@ -6,6 +6,7 @@ import {
   heatGlowFrac,
   needleAngleRad,
   STEAM_DIP_FRAC,
+  STEAM_FULL_KG_PER_H,
   steamFrac,
   tankFillFrac,
   uhtModeOf,
@@ -148,6 +149,24 @@ describe('steam and vapour', () => {
     expect(steamFrac(inMode('divert'))).toBe(1);
     for (const mode of ['cip', 'sterilize', 'aic'] as const) expect(steamFrac(inMode(mode)), mode).toBe(0);
     expect(steamFrac(inMode('production', 0))).toBe(0);
+  });
+
+  it('puffs while it heats the cleaning or re-sterilizing circulation (phase 8, liquid.energy): full for an AIC, a wisp for a CIP step', () => {
+    const heating = (mode: 'cip' | 'sterilize' | 'aic', steamKgPerH: number): Snapshot => {
+      const snapshot = inMode(mode, 0);
+      const energy = snapshot.liquid.energy;
+      if (!energy) throw new Error('no liquid.energy');
+      snapshot.liquid.energy = { ...energy, steamKgPerH, steamUse: mode === 'sterilize' ? 'sterilizing' : 'cleaning' };
+      return snapshot;
+    };
+    expect(steamFrac(heating('aic', 2_722.91))).toBe(1);
+    expect(steamFrac(heating('sterilize', 2_084.73))).toBe(1);
+    expect(steamFrac(heating('cip', 170.18))).toBeCloseTo(170.18 / STEAM_FULL_KG_PER_H, 12);
+    expect(steamFrac(heating('cip', 0))).toBe(0);
+    // Without liquid.energy (an older snapshot) a clean shows no steam, as before phase 8.
+    const older = inMode('aic', 0);
+    delete older.liquid.energy;
+    expect(steamFrac(older)).toBe(0);
   });
 
   it('only sputters while the steam supply dips (the UHT temperature drop scenario), until its run stops acting', () => {

@@ -97,12 +97,12 @@ export const STATE_ROWS: Readonly<Partial<Record<StageId, readonly StateRow[]>>>
   ],
 };
 
-/** A value row the panel works out from the stage's other values, shown right after the row `after`. */
+/** A value row the panel works out from the stage's other values (or the liquid line's), shown right after the row `after`. */
 export interface DerivedRow {
   key: string;
   label: string;
   after: string;
-  read(values: Readonly<Record<string, number>>): string;
+  read(values: Readonly<Record<string, number>>, liquid?: Partial<LiquidSnapshot>): string;
 }
 
 /**
@@ -118,6 +118,20 @@ export function marginText(values: Readonly<Record<string, number>>): string {
   return withUnit(formatSigned(tempC - divertLimitC, 2), '°C');
 }
 
+/**
+ * The energy since the plant opened per tonne of raw milk drawn (contracts v6, phase 8), as BAT counts it for
+ * dairies: the boiler's gas and the homogenizer's electricity, "92.4 kWh/t raw milk" after a day. "—" before any
+ * raw milk is drawn, or from an older snapshot.
+ */
+export function energyPerTonneText(liquid: Partial<Pick<LiquidSnapshot, 'energy'>> | undefined): string {
+  const kwhPerT = liquid?.energy?.kwhPerT;
+  if (typeof kwhPerT !== 'number' || !Number.isFinite(kwhPerT)) return NO_VALUE;
+  return `${formatNumber(kwhPerT, 1)} kWh/t raw milk`;
+}
+
 export const DERIVED_ROWS: Readonly<Partial<Record<StageId, readonly DerivedRow[]>>> = {
-  4: [{ key: 'marginC', label: 'Margin over limit', after: 'divertLimitC', read: marginText }],
+  4: [
+    { key: 'marginC', label: 'Margin over limit', after: 'divertLimitC', read: marginText },
+    { key: 'energyPerT', label: 'Energy since opening', after: 'gasKw', read: (_values, liquid) => energyPerTonneText(liquid) },
+  ],
 };
