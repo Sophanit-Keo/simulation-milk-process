@@ -4,7 +4,9 @@
 //
 // `lead` owns this file. factory-model builds a FactoryView from FactoryData (model.ts), factory-client
 // reads FactoryData and the changes from Let Report (supabase.ts), and factory-ui draws the view (board.ts).
-import type { FactoryData } from './view';
+// Phase 10 (D20) adds the 3D view's contract at the end: factory-scene draws the same view on the factory
+// floor (scene/), laid out by layout.ts.
+import type { FactoryData, FactoryView } from './view';
 
 export * from './view';
 
@@ -65,3 +67,38 @@ export type CreateFactoryClient = (options: ClientOptions) => FactoryClient;
 
 /** How often the page reloads everything while signed in, whatever the socket does. */
 export const POLL_MS = 15_000;
+
+// ───── Phase 10: the factory floor in 3D (scene/scene.ts) ─────
+
+/** What the board and the 3D view have picked: a UHT by its name, or a line by its id. */
+export type FactorySelection = { kind: 'uht'; name: string } | { kind: 'line'; id: string };
+
+/** How the page shows the factory: the cards, or the cards beside the 3D floor. Kept in the address as #3d. */
+export type FactoryViewMode = 'board' | '3d';
+
+export interface FactorySceneOptions {
+  /**
+   * The viewer picked a machine in the view (a click on it, or on its label), or went back to the whole
+   * factory (Esc, or "Whole factory"): null. Not called for select().
+   */
+  onSelect(selection: FactorySelection | null): void;
+  /** Load the hero filler model over the grey box (D20); ?greybox turns it off, as in the 3D plant. */
+  heroModels?: boolean;
+}
+
+export interface FactoryScene {
+  /**
+   * Draws `view`: builds the floor again when its layout's key changes (layout.ts), otherwise only moves the
+   * lamps, labels, belts and pipes on to the new statuses. The page calls it on every reload and once a second.
+   */
+  render(view: FactoryView): void;
+  /** Flies the camera to the selection and marks it, or back to the whole factory for null. Calls no onSelect. */
+  select(selection: FactorySelection | null): void;
+  /** The frame loop runs while the 3D view shows and stops while the board alone shows. */
+  setActive(active: boolean): void;
+  /** Frees the GPU context and removes the canvas and the labels. */
+  dispose(): void;
+}
+
+/** scene/scene.ts, loaded only when the viewer first opens the 3D view: the board alone loads no three.js. */
+export type CreateFactoryScene = (host: HTMLElement, options: FactorySceneOptions) => FactoryScene;

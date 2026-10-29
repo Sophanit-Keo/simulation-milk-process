@@ -33,6 +33,11 @@ const THEMED_MATERIALS: Partial<Record<MaterialName, SceneColorVar>> = {
 export interface EquipmentHost {
   readonly equipment: readonly Equipment[];
   readonly materials: Readonly<Record<MaterialName, THREE.MeshStandardMaterial>>;
+  /**
+   * What the modules were built with: the shared materials, and the model and texture loads the host caches and
+   * frees. The Factory board's 3D floor (phase 10) builds its machines on it, with no module of its own here.
+   */
+  readonly context: EquipmentContext;
   /** Re-reads the theme colours into the shared materials. */
   applyTheme(): void;
   update(snapshot: Snapshot, realDtS: number): void;
@@ -127,6 +132,7 @@ export function createEquipmentHost(
   return {
     equipment,
     materials,
+    context: ctx,
     applyTheme,
     update(snapshot, realDtS) {
       for (const item of equipment) {
