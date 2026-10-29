@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "timeS": 627000,
   "speed": 10,
   "paused": false,
@@ -28,7 +28,8 @@
         "preheatTempC": 80,
         "deaeratorTempC": 76,
         "airPct": 0.5,
-        "heatRecoveredKw": 1317.3333333333333
+        "heatRecoveredKw": 1317.3333333333333,
+        "regenerationPct": 56.61080074487895
       }
     },
     "3": {
@@ -55,7 +56,9 @@
         "f0Min": 4.9088803309145,
         "bStar": 1.1274428224390094,
         "divertLimitC": 139.22374451577414,
-        "rejectLevelL": 0
+        "rejectLevelL": 0,
+        "steamKgPerH": 1652.1818181818182,
+        "gasKw": 1280.4944609455113
       }
     },
     "5": {
@@ -200,6 +203,17 @@
     "productionSinceCleanS": 600,
     "divertCount": 0,
     "cleaning": null,
+    "energy": {
+      "steamKgPerH": 1652.1818181818182,
+      "steamUse": "milk",
+      "gasKw": 1280.4944609455113,
+      "electricKw": 124.66124661246614,
+      "regenerationPct": 56.61080074487895,
+      "steamKg": 275.36363636363745,
+      "gasKwh": 213.41574349091937,
+      "electricKwh": 20.77687443541118,
+      "kwhPerT": 86.61918745220389
+    },
     "tanks": {
       "silo": {
         "levelL": 57296.296296294895,

@@ -1,7 +1,7 @@
 // The stage 1–6 physics as pure functions of plant.json and the live flows, shared by the live
 // model (liquidLine.ts) and the ?mock sim. Litres are treated as kilograms throughout (sim
 // assumption, as in H3), so L/h × kJ/(kg·K) × K gives kJ/h, and L/s gives kJ/s = kW.
-import { fracToPct, lphToLps, type PlantConfig } from '../../contracts';
+import { fracToPct, kgPerHToKgPerS, lphToLps, type PlantConfig } from '../../contracts';
 import { hydraulicPowerKw, surplusCreamFrac } from '../formulas';
 
 /** Stage 1: the raw milk the separator needs for standardizedLph of target-fat milk, and the cream left over (H3, H4). */
@@ -46,6 +46,25 @@ export function homogenizerPowerKw(config: PlantConfig, flowLph: number, totalBa
  */
 export function steamLph(config: PlantConfig, flowLph: number, fromC: number, toC: number): number {
   return (flowLph * config.product.cpKjPerKgK * Math.max(0, toC - fromC)) / config.uht.steamLatentKjPerKg;
+}
+
+/** Stage 4 (phase 8): heat steamKgPerH of steam gives what it condenses into, ṁ_steam × latent, in kW. */
+export function steamHeatKw(config: PlantConfig, steamKgPerH: number): number {
+  return kgPerHToKgPerS(steamKgPerH) * config.uht.steamLatentKjPerKg;
+}
+
+/** Boiler house (phase 8, D17): gas burned to raise steamKgPerH of steam, ṁ_steam × boiler heat ÷ efficiency, in kW. */
+export function boilerGasKw(config: PlantConfig, steamKgPerH: number): number {
+  return (kgPerHToKgPerS(steamKgPerH) * config.energy.boilerHeatKjPerKg) / config.energy.boilerEfficiencyFrac;
+}
+
+/**
+ * Stage 2 (phase 8, D17): the share of the milk's heating to UHT temperature that regeneration gives it, in %:
+ * heat recovered ÷ (heat recovered + steam heat). Null with no heating at all.
+ */
+export function regenerationPct(recoveredKw: number, steamKw: number): number | null {
+  const totalKw = recoveredKw + steamKw;
+  return totalKw > 0 ? fracToPct(recoveredKw / totalKw) : null;
 }
 
 /** Stage 5: heat the flash vapour gives up in the condenser, ṁ_vapour × latent, in kW. */

@@ -6,6 +6,7 @@ import {
   CONTRACT_VERSION,
   LINE_POINT_IDS,
   STAGE_IDS,
+  STEAM_USES,
   UHT_MODES,
   isSpeed,
   parseStages,
@@ -72,7 +73,7 @@ const PHASE_4_KEYS: Readonly<Record<7 | 8 | 9 | 10, readonly string[]>> = {
 /** Every shape rule of contracts v4 (src/contracts/snapshot.ts, packs.ts, scenarios.ts) that a consumer may rely on. */
 function expectContracts(snap: Snapshot, where: string): void {
   expect(snap.version, `${where}: version`).toBe(CONTRACT_VERSION);
-  expect(CONTRACT_VERSION).toBe(5);
+  expect(CONTRACT_VERSION).toBe(6);
   expect(Number.isFinite(snap.timeS), `${where}: timeS`).toBe(true);
   expect(isSpeed(snap.speed), `${where}: speed ${snap.speed}`).toBe(true);
   expect(typeof snap.paused, `${where}: paused`).toBe('boolean');
@@ -120,6 +121,15 @@ function expectContracts(snap: Snapshot, where: string): void {
     expect(cleaning.stepIndex >= 0 && cleaning.stepIndex < cleaning.stepCount, `${where}: cleaning.stepIndex`).toBe(true);
     expect(cleaning.stepRemainingS >= 0 && cleaning.stepRemainingS <= liquid.modeRemainingS + 1e-6, `${where}: cleaning.stepRemainingS`).toBe(true);
   }
+  // Contracts v6: the steam and energy, every rate and total a number of 0 or more, and what the steam heats.
+  const energy = liquid.energy;
+  if (!energy) expect.fail(`${where}: no liquid.energy`);
+  for (const key of ['steamKgPerH', 'gasKw', 'electricKw', 'steamKg', 'gasKwh', 'electricKwh'] as const) {
+    if (!(Number.isFinite(energy[key]) && energy[key] >= 0)) expect.fail(`${where}: energy.${key} is ${energy[key]}`);
+  }
+  expect(energy.steamUse === null ? energy.steamKgPerH === 0 : STEAM_USES.includes(energy.steamUse), `${where}: energy.steamUse`).toBe(true);
+  expect(energy.regenerationPct === null || (energy.regenerationPct >= 0 && energy.regenerationPct <= 100), `${where}: energy.regenerationPct`).toBe(true);
+  expect(energy.kwhPerT === null || (Number.isFinite(energy.kwhPerT) && energy.kwhPerT >= 0), `${where}: energy.kwhPerT`).toBe(true);
   expect(Object.keys(liquid.tanks).sort(), `${where}: tanks`).toEqual(['asepticTank', 'mixTank', 'rejectTank', 'silo']);
   for (const [name, { levelL, capacityL }] of Object.entries(liquid.tanks)) {
     if (!(capacityL > 0 && levelL >= 0 && levelL <= capacityL)) expect.fail(`${where}: ${name} holds ${levelL} of ${capacityL} L`);

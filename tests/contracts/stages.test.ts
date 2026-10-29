@@ -160,10 +160,16 @@ describe('stages.json', () => {
     expect(keys(10)).toEqual(expect.arrayContaining(['palletsInStock', 'daysOfCover', 'orderFillPct', 'trucksShipped', 'trucksAtDock', 'nextTruckS']));
   });
 
-  it('lists the stage 4 values in the order that tells R6: flow, hold, temperature, limit, then B* and F0', () => {
+  it('lists the stage 4 values in the order that tells R6: flow, hold, temperature, limit, then B* and F0; the steam last', () => {
     expect(stages[3].values.map((value) => value.key)).toEqual([
-      'flowLph', 'holdS', 'tempC', 'setpointC', 'divertLimitC', 'bStar', 'f0Min', 'rejectLevelL',
+      'flowLph', 'holdS', 'tempC', 'setpointC', 'divertLimitC', 'bStar', 'f0Min', 'rejectLevelL', 'steamKgPerH', 'gasKw',
     ]);
+  });
+
+  it('lists the phase 8 energy values (contracts v6): the steam and the boiler gas at stage 4, the regeneration at stage 2', () => {
+    const keys = (id: number) => stages[id - 1]?.values.map((value) => value.key);
+    expect(keys(4)).toEqual(expect.arrayContaining(['steamKgPerH', 'gasKw']));
+    expect(keys(2)).toEqual(expect.arrayContaining(['heatRecoveredKw', 'regenerationPct']));
   });
 
   it('lets off only keys the sims still lack: take a key off AWAITING_SIM once both sims give it', () => {

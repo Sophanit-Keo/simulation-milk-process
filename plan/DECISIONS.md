@@ -304,7 +304,7 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 
 | Setting | Default | `plant.json` key | Basis |
 |---|---|---|---|
-| Boiler heat | 2,391 kJ to raise 1 kg of steam | `energy.boilerHeatKjPerKg` | US DOE [Steam Tip Sheet #15](https://www1.eere.energy.gov/manufacturing/tech_assistance/pdfs/steam15_benchmark.pdf), Table 1: 1,028 Btu/lb for saturated steam at 150 psig from 200 °F feedwater, 2,391.13 kJ/kg (H115). Sim assumption: that row of the table, a common steam main and a feed tank kept hot; direct injection returns no condensate, so all the feedwater is make-up |
+| Boiler heat | 2,391.13 kJ to raise 1 kg of steam | `energy.boilerHeatKjPerKg` | US DOE [Steam Tip Sheet #15](https://www1.eere.energy.gov/manufacturing/tech_assistance/pdfs/steam15_benchmark.pdf), Table 1: 1,028 Btu/lb for saturated steam at 150 psig from 200 °F feedwater, 2,391.13 kJ/kg (H115). Sim assumption: that row of the table, a common steam main and a feed tank kept hot; direct injection returns no condensate, so all the feedwater is make-up |
 | Boiler efficiency | 85.7% | `energy.boilerEfficiencyFrac` | The same tip sheet, Table 2: natural gas, "based on boilers equipped with feedwater economizers or air preheaters and 3% oxygen in flue gas" |
 
 - **Rules with no key:**

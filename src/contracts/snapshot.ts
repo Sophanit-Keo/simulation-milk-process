@@ -5,9 +5,10 @@ import type { LinePointId, Speed, StageId, Status } from './stages';
 
 /**
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
- * v0 week 1, v1 at G1, v2 at week 6, v3 at G2, v4 in phase 5 (scenarios). From v3 on, fields may only be added.
+ * v0 week 1, v1 at G1, v2 at week 6, v3 at G2, v4 in phase 5 (scenarios), v5 in phase 7 (cleaning steps), v6 in
+ * phase 8 (steam and energy). From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 5;
+export const CONTRACT_VERSION = 6;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -88,6 +89,35 @@ export interface CleaningSnapshot {
   flowLph: number;
 }
 
+/**
+ * What the steam injector heats (contracts v6, phase 8): the milk, in production and while diverting; a cleaning
+ * step's fluid, in a full CIP or an intermediate clean; or the hot water that re-sterilizes the plant.
+ */
+export type SteamUse = 'milk' | 'cleaning' | 'sterilizing';
+export const STEAM_USES: readonly SteamUse[] = ['milk', 'cleaning', 'sterilizing'];
+
+/**
+ * The UHT plant's steam and energy (contracts v6, phase 8, D17): the boiler house raises the steam the injector
+ * uses and burns gas for it, and the homogenizer draws the electricity. The totals count since the plant opened.
+ */
+export interface EnergySnapshot {
+  /** Steam to the injector now. */
+  steamKgPerH: number;
+  /** What the steam heats now; null while the injector takes none. */
+  steamUse: SteamUse | null;
+  /** Gas the boiler burns for that steam. */
+  gasKw: number;
+  /** Electricity now: the homogenizer's, the one drive the model counts. */
+  electricKw: number;
+  /** Share of the milk's heating to UHT temperature that regeneration (the preheater) gives it; null while no milk flows. */
+  regenerationPct: number | null;
+  steamKg: number;
+  gasKwh: number;
+  electricKwh: number;
+  /** Gas and electricity per tonne of raw milk drawn, both since the plant opened (litres count as kg); null before any. */
+  kwhPerT: number | null;
+}
+
 /** A tank's contents (contracts v2). The 3D view fills each tank to levelL ÷ capacityL. */
 export interface TankLevel {
   levelL: number;
@@ -119,6 +149,8 @@ export interface LiquidSnapshot {
    * phase 7). Absent from an older snapshot. The milk's line points (Snapshot.line) carry no cleaning flow.
    */
   cleaning?: CleaningSnapshot | null;
+  /** The steam, the gas and the electricity (contracts v6, phase 8). Absent from an older snapshot. */
+  energy?: EnergySnapshot;
   tanks: {
     silo: TankLevel;
     /** The mixing (feed) tank after standardization, which feeds the UHT plant. */

@@ -7,9 +7,12 @@
  *   S, Min, H, Days    seconds, minutes, hours, days (sim time)
  *   Ms                 milliseconds (browser timestamps: performance.now, requestAnimationFrame)
  *   L, Lph, Lps        litres, litres per hour, litres per second
- *   C, Bar, Kw         degrees Celsius, bar, kilowatts
+ *   Kg, KgPerH, KgPerS kilograms, per hour, per second (steam, phase 8); litres of milk count as kilograms (D13)
+ *   T                  tonnes (raw milk for the energy per tonne, phase 8)
+ *   C, Bar, Kw, Kwh    degrees Celsius, bar, kilowatts, kilowatt-hours
  *   Um                 micrometres (fat-globule size)
  *   KjPerKg, KjPerKgK  kilojoules per kilogram (latent heat), per kilogram and kelvin (specific heat)
+ *   KwhPerT            kilowatt-hours per tonne (energy per tonne of raw milk, phase 8)
  *   Pct, Frac          percent (0–100), fraction (0–1)
  *   Packs, Trays, Pallets, PacksPerH    counts and count rates
  *   PerPack            a probability (0–1) per pack, such as failurePerPack
@@ -33,6 +36,15 @@ export const msToS = (ms: number): number => ms / MS_PER_SECOND;
 
 export const lphToLps = (flowLph: number): number => flowLph / SECONDS_PER_HOUR;
 export const lpsToLph = (flowLps: number): number => flowLps * SECONDS_PER_HOUR;
+
+export const kgPerHToKgPerS = (kgPerH: number): number => kgPerH / SECONDS_PER_HOUR;
+
+/** Energy of a power held for a time: 1 kW for 3,600 s is 1 kWh. */
+export const kwSToKwh = (kw: number, durationS: number): number => (kw * durationS) / SECONDS_PER_HOUR;
+/** 1 kWh is 3,600 kJ. */
+export const kjToKwh = (kj: number): number => kj / SECONDS_PER_HOUR;
+/** Litres of milk as tonnes: litres count as kilograms (D13), and a tonne is 1,000 kg. */
+export const lToT = (litres: number): number => litres / 1_000;
 
 export const fracToPct = (frac: number): number => frac * 100;
 export const pctToFrac = (pct: number): number => pct / 100;

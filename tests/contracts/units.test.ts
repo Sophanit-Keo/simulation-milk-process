@@ -6,6 +6,10 @@ import {
   degToRad,
   fracToPct,
   hToS,
+  kgPerHToKgPerS,
+  kjToKwh,
+  kwSToKwh,
+  lToT,
   lphToLps,
   lpsToLph,
   minToS,
@@ -52,5 +56,20 @@ describe('the other conversions', () => {
     expect(lphToLps(36_000)).toBe(10);
     expect(fracToPct(0.25)).toBe(25);
     expect(degToRad(180)).toBe(Math.PI);
+  });
+});
+
+describe('the energy conversions (phase 8)', () => {
+  it('turn steam per hour into per second, kilowatts held for a time and kilojoules into kWh, litres into tonnes', () => {
+    expect(kgPerHToKgPerS(3_600)).toBe(1);
+    expect(kwSToKwh(1, 3_600)).toBe(1);
+    expect(kwSToKwh(124.66, 1_800)).toBeCloseTo(62.33, 12);
+    expect(kjToKwh(3_600)).toBe(1);
+    // Litres of milk count as kilograms (D13): 16,222.22 L of raw milk is 16.22 t.
+    expect(lToT(16_222.22)).toBeCloseTo(16.22222, 12);
+  });
+
+  it('agree with each other: a kilowatt for an hour is 3,600 kJ', () => {
+    expect(kwSToKwh(2.5, hToS(2))).toBe(kjToKwh(2.5 * hToS(2)));
   });
 });

@@ -57,6 +57,26 @@ export function hydraulicPowerKw(flowLph: number, bar: number): number {
   return lpsBarToKw(lphToLps(flowLph), bar);
 }
 
+/** ∫₀^dt (a + b·e^(−t/τ)) dt: the area under a first-order lag's path, a + b at the start and a at the end. */
+export function lagArea(a: number, b: number, dtS: number, timeConstantS: number): number {
+  return a * dtS + b * timeConstantS * (1 - Math.exp(-dtS / timeConstantS));
+}
+
+/**
+ * ∫₀^dt max(0, a + b·e^(−t/τ)) dt, exactly: the area of a lag's path counted only while it is above zero.
+ * The path is monotonic, so it crosses zero at most once, at t = τ ln(−b ÷ a).
+ */
+export function positiveLagArea(a: number, b: number, dtS: number, timeConstantS: number): number {
+  const startValue = a + b;
+  const endValue = a + b * Math.exp(-dtS / timeConstantS);
+  if (startValue >= 0 && endValue >= 0) return lagArea(a, b, dtS, timeConstantS);
+  if (startValue <= 0 && endValue <= 0) return 0;
+  const crossS = timeConstantS * Math.log(-b / a);
+  const whole = lagArea(a, b, dtS, timeConstantS);
+  const beforeCross = lagArea(a, b, crossS, timeConstantS);
+  return startValue > 0 ? beforeCross : whole - beforeCross;
+}
+
 /**
  * One step of a first-order lag toward targetValue, integrated exactly: x += (target − x)(1 − e^(−dt/τ)).
  * Two half steps land where one whole step does, so the result does not depend on the step size.

@@ -103,6 +103,12 @@
         "label": "Heat recovered",
         "unit": "kW",
         "decimals": 0
+      },
+      {
+        "key": "regenerationPct",
+        "label": "Regeneration",
+        "unit": "%",
+        "decimals": 1
       }
     ],
     "tourCaption": [
@@ -218,6 +224,18 @@
         "key": "rejectLevelL",
         "label": "Reject tank",
         "unit": "L",
+        "decimals": 0
+      },
+      {
+        "key": "steamKgPerH",
+        "label": "Steam to injector",
+        "unit": "kg/h",
+        "decimals": 0
+      },
+      {
+        "key": "gasKw",
+        "label": "Boiler gas",
+        "unit": "kW",
         "decimals": 0
       }
     ],
