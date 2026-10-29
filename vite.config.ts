@@ -1,4 +1,5 @@
 import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, searchForWorkspaceRoot } from 'vite';
 
 // Agent worktrees symlink node_modules from the main checkout. The dev server must still serve
@@ -27,6 +28,12 @@ export default defineConfig(() => ({
     // Warn if either grows well past that.
     chunkSizeWarningLimit: 800,
     rolldownOptions: {
+      // Two pages: the 3D plant, and the Factory board (phase 9), which loads no three.js. Their links to each
+      // other are relative (factory.html, ./), so the GitHub Pages base path needs nothing more.
+      input: {
+        main: fileURLToPath(new URL('index.html', import.meta.url)),
+        factory: fileURLToPath(new URL('factory.html', import.meta.url)),
+      },
       output: {
         codeSplitting: {
           groups: [{ name: 'three', test: /node_modules[\\/]three[\\/]/ }],

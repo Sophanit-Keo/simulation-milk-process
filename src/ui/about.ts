@@ -57,6 +57,11 @@ export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
   open.dataset.testid = 'about';
   open.title = 'About this model: what it shows, its simplifications and sources';
   open.setAttribute('aria-haspopup', 'dialog');
+  // The Factory board (factory.html, phase 9): the real factory's UHT plants and lines, live from Let Report.
+  const factory = el('a', 'link about-open', 'Factory');
+  factory.href = 'factory.html';
+  factory.dataset.testid = 'factory-link';
+  factory.title = "Factory board: the real factory's UHT plants and lines, live from Let Report";
 
   const dialog = el('dialog', 'about card');
   dialog.dataset.testid = 'about-dialog';
@@ -90,9 +95,9 @@ export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
   if (title) {
     titleRow = el('div', 'brand-title');
     title.replaceWith(titleRow);
-    titleRow.append(title, open);
+    titleRow.append(title, open, factory);
   } else {
-    bar.append(open);
+    bar.append(open, factory);
   }
   document.body.append(dialog);
 
@@ -101,6 +106,7 @@ export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
       if (dialog.open) dialog.close();
       dialog.remove();
       open.remove();
+      factory.remove();
       const title = titleRow?.firstElementChild;
       if (titleRow && title) titleRow.replaceWith(title);
     },

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="The factory's UHT plants and filling lines, live from Let Report, next to the UHT milk plant simulation.">
+<meta name="color-scheme" content="light dark">
+<title>Factory board · UHT milk plant</title>
+<!-- Inline, so the browser asks the server for no /favicon.ico (a 404 on Pages and in `vite preview`). -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231767b0'/%3E%3Cpath d='M16 6c-4 6-7 9.5-7 13a7 7 0 0 0 14 0c0-3.5-3-7-7-13z' fill='%23fff'/%3E%3C/svg%3E">
+</head>
+<body>
+<!-- The Factory board (phase 9, D19): the real factory's UHT plants and lines, live from Let Report.
+     src/factory/main.ts fills #factory (src/factory/board.ts draws it). No three.js on this page. -->
+<div id="factory" class="fb">
+  <p class="fb-boot" data-testid="factory-loading">Loading the factory board…</p>
+  <noscript><p class="fb-boot">The factory board needs JavaScript.</p></noscript>
+</div>
+<script type="module" src="/src/factory/main.ts"></script>
+</body>
+</html>
