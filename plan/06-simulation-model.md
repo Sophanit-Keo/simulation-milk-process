@@ -81,6 +81,8 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 | Full CIP trigger | Only after a divert (B\* < 1): 3 min divert, 80 min CIP, then 30 min sterilizing at 125 °C or more; 113 min out | Sim assumption ([D2](DECISIONS.md#d2-missing-defaults)) |
 | CIP programme | Pre-rinse 10 min at 45 °C, lye 30 min at 75 °C, rinse 5 min at 45 °C, acid 20 min at 70 °C, post-rinse 7 min and gradual cooling 8 min at 20 °C; 24,000 L/h | Steps, times and the 75 °C and 70 °C from the handbook's programme for heated surfaces ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment)); the rest sim assumptions ([D16](DECISIONS.md#d16-phase-7-cleaning-programmes)) |
 | AIC programme | Water 5 min, lye 20 min, water 5 min, at the UHT set point | Sim assumption ([D16](DECISIONS.md#d16-phase-7-cleaning-programmes)) |
+| Boiler | 2,391 kJ raises 1 kg of steam at 150 psig from 93 °C feedwater; 85.7% efficient on natural gas, so 2,790 kJ of gas a kilogram | US DOE [Steam Tip Sheet #15](https://www1.eere.energy.gov/manufacturing/tech_assistance/pdfs/steam15_benchmark.pdf), Tables 1 and 2 ([D17](DECISIONS.md#d17-phase-8-steam-and-energy)) |
+| Steam and energy | Steam heats what passes the injector to the holding-tube temperature: milk from the homogenizer outlet, or the cleaning and re-sterilizing circulation from the deaerator outlet; electricity is the homogenizer's; energy per tonne = (gas + electricity) ÷ raw milk drawn | Sim assumption, measured as BAT's indicator for dairies ([Decision (EU) 2019/2031](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32019D2031), BAT 21; [D17](DECISIONS.md#d17-phase-8-steam-and-energy)) |
 | Batch | One filler for one 8-hour shift (60,000 packs, about 60 pallets); shifts start at 06:00, 14:00 and 22:00, the first on day 1 at 06:00 | Sim assumption ([D1](DECISIONS.md#d1-batch-size)) |
 | QA samples | 1 pack per filler every 30 min, plus 2 after each stop | Sim assumption |
 | Quarantine | 7 days at 55 °C (default) or 15 days at 30 °C | [Regulation 853/2004](https://www.legislation.gov.uk/eur/2004/853/annex/III/section/IX), [D9](DECISIONS.md#d9-other-open-values) |
@@ -108,6 +110,7 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 - Liquid line: UHT throughput (L/h), F0 and B\*, litres diverted, aseptic tank level (%).
 - Filling and packing: packs per hour and OEE per filler, trays and pallets made.
 - QA and warehouse: batches on hold, released and blocked; pallets in stock; days of cover; order fill rate; trucks shipped.
+- Energy (phase 8, in the stage 4 panel): steam to the injector (kg/h), the boiler's gas (kW) and the energy since the plant opened per tonne of raw milk (kWh/t); regeneration (%) in the stage 2 panel.
 
 ## Fault scenarios
 
