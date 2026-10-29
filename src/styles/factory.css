@@ -1,0 +1,498 @@
+/*
+ * The Factory board (factory.html, src/factory/board.ts): the 3D app's look without its one-screen grid.
+ * Colours, fonts and radius come from tokens.css (light and dark), which src/factory/main.ts imports with
+ * fonts.css before this file. The few shared rules (.card, .lamp, .btn, .link) are copies of app.css's, so
+ * this page does not load the 3D app's stylesheet; keep them equal.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.4 var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ───── shared with app.css ───── */
+
+.card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+
+/* Idle is a hollow ring, so "off" reads as unlit rather than as a fourth colour. */
+.lamp {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: inset 0 0 0 2px var(--muted);
+}
+.lamp[data-status='ok'] {
+  background: var(--ok);
+  box-shadow: none;
+}
+.lamp[data-status='warn'] {
+  background: var(--warn);
+  box-shadow: none;
+}
+.lamp[data-status='bad'] {
+  background: var(--bad);
+  box-shadow: none;
+}
+
+.btn {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 14px/1 var(--font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.btn:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.link {
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--accent);
+  font: 600 14px/1 var(--font-ui);
+  text-decoration: none;
+  cursor: pointer;
+}
+.link:hover {
+  text-decoration: underline;
+}
+
+/* ───── the page ───── */
+
+/* A 16 px gutter at every width; the board stays readable on a wide screen. */
+.fb {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 12px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fb-boot {
+  margin: 24px 0;
+  color: var(--muted);
+}
+
+/* header */
+.fb-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 14px;
+}
+.fb-brand {
+  display: flex;
+  flex-direction: column;
+  margin-right: auto;
+  min-width: 0;
+}
+.fb-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.fb-head h1 {
+  margin: 0;
+  font: 700 21px/1.05 var(--font-label);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.fb-head h1:focus {
+  outline: none;
+}
+.fb-back {
+  padding: 2px 4px;
+  font-size: 13px;
+}
+.fb-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.fb-site {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.fb-session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+.fb-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font: 600 13px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fb-live .lamp {
+  width: 8px;
+  height: 8px;
+}
+.fb-user {
+  margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.fb-user-email {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* sign-in */
+.fb-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fb-signin {
+  width: min(420px, 100%);
+  margin: 24px auto 0;
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fb-signin h2 {
+  margin: 0;
+  font: 600 22px/1.2 var(--font-label);
+}
+.fb-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.fb-note a {
+  color: var(--accent);
+}
+.fb-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fb-field label {
+  font: 600 13px/1.2 var(--font-ui);
+}
+.fb-field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.fb-field input:focus-visible {
+  border-color: var(--accent);
+  outline-offset: 0;
+}
+.fb-field input[aria-invalid='true'] {
+  border-color: var(--bad);
+}
+/* Empty until there is something to say; it keeps no height then, so the form does not jump on load. */
+.fb-form-error {
+  margin: 0;
+  color: var(--bad);
+  font-weight: 600;
+  font-size: 14px;
+}
+.fb-form-error:empty {
+  display: none;
+}
+.fb-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.btn-primary {
+  min-width: 96px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:disabled {
+  color: var(--accent-ink);
+}
+
+/* the board */
+.fb-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fb-summary,
+.fb-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.fb-load-error {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--bad);
+  border-radius: 8px;
+  background: var(--raised);
+  font-size: 14px;
+}
+
+/* Three across on a wide screen, stacked on a phone. */
+.fb-uhts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.fb-uht {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 14px 6px;
+}
+.fb-uht-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fb-uht-name {
+  margin: 0;
+  font: 700 19px/1.1 var(--font-label);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.fb-cap {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fb-state {
+  margin: 0;
+  font: 500 15px/1.3 var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The draw bar: the UHT's lines' draw as a share of its capacity; amber when they draw more than it makes. */
+.fb-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fb-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.fb-bar-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+.fb-meter[data-over='true'] .fb-bar-fill {
+  background: var(--warn);
+}
+.fb-pct {
+  min-width: 8ch;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.fb-meter[data-over='true'] .fb-pct {
+  color: var(--ink);
+  font-weight: 600;
+}
+.fb-over {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.fb-over::before {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--warn);
+}
+
+/* a row per line */
+.fb-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fb-line {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.fb-line > .lamp {
+  margin-top: 5px;
+}
+.fb-line-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fb-line-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 10px;
+}
+.fb-line-name {
+  margin: 0;
+  font: 600 16px/1.25 var(--font-ui);
+}
+.fb-line-status {
+  font-weight: 600;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.fb-line-filler,
+.fb-line-lot,
+.fb-line-out {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.fb-line-filler {
+  font-family: var(--font-data);
+  font-size: 12.5px;
+}
+.fb-line-lot,
+.fb-line-out {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+.fb-product {
+  color: var(--ink);
+}
+
+/* Open troubles: a dot in the worst severity's colour, and the severity in words beside the count. */
+.fb-trouble {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 600;
+}
+.fb-trouble::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--muted);
+}
+.fb-trouble[data-sev='1']::before {
+  background: var(--warn);
+  box-shadow: none;
+}
+.fb-trouble[data-sev='2']::before,
+.fb-trouble[data-sev='3']::before {
+  background: var(--bad);
+  box-shadow: none;
+}
+.fb-trouble[data-sev='3'] {
+  color: var(--bad);
+}
+
+.fb-unassigned .fb-note {
+  font-size: 13.5px;
+}
+.fb-unassigned .fb-lines:empty {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .fb-head h1 {
+    font-size: 19px;
+  }
+  .fb-session {
+    width: 100%;
+  }
+  .fb-session .btn {
+    margin-left: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fb-bar-fill {
+    transition: none;
+  }
+}

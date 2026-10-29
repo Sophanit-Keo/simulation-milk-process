@@ -24,6 +24,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D16](#d16-phase-7-cleaning-programmes) | The CIP and AIC as programmes of steps: the three keys of schema 7 | — | Proposed |
 | [D17](#d17-phase-8-steam-and-energy) | The boiler's steam and gas, and the energy per tonne of raw milk: the two keys of schema 8 | — | Proposed |
 | [D18](#d18-reporting-a-fault-in-let-report) | What each fault is reported as in Let Report, through a prefilled link | — | Proposed |
+| [D19](#d19-the-factory-board) | The factory board: the real factory's UHT plants and lines, mirrored live from Let Report | — | Proposed |
 
 ## D1. Batch size
 
@@ -340,6 +341,32 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - The fields travel in the address's hash, as Let Report's own links do (`#report=…`); the hash never reaches a server, and Let Report clears it once read.
 - **Why:** the simulation shows how a fault travels down the line; Let Report is where staff report one. A prefilled form links the two without the simulation, a public static site, holding a login or writing to Let Report's database.
 - **What it changes:** `src/ui/letReport.ts`, the banner and the scenario log (`src/ui/scenarioLog.ts`), and, in Let Report, a `#new?` link that opens its report form.
+
+## D19. The factory board
+
+- **Status:** Proposed
+- **Date:** 2026-10-29
+- **Review note:** none (the developer's request to show their factory's lines, synced with [Let Report](https://let-report.vercel.app); [phase 9](agent-plan/phase-9-factory-board.md))
+- **Decision:** a second page, `factory.html`, shows the developer's factory as Let Report holds it: its UHT plants, the lines each one feeds, and every line's status, product, lot, CIP and open troubles. The page mirrors Let Report and computes nothing of its own beyond the flow each line draws. The teaching plant is unchanged.
+- **The layout lives in Let Report** (its migration 0013): each production line names its UHT, filler, filler speed and pack size, and the plan lists the UHT plants with their capacity. People change them in Let Report, and the board follows. Let Report started from this table:
+
+| UHT | Capacity | Lines | Filler | Speed | Basis |
+|---|---|---|---|---|---|
+| UHT 1 | 4,000 L/h | line 1 | TFA (Tetra Fino Aseptic) | 3,600 packs/h | The developer's layout; the speed from a used Tetra Fino Aseptic line ([Exapro](https://www.exapro.com/tetra-pakr-tetra-fino-aseptic-p260514321)) |
+| | | line 6 | TBA/22 | 20,000 packs/h | Tetra Pak's launch claim ([ConfectioneryNews, 2006](https://www.confectionerynews.com/Article/2006/04/06/Coca-Cola-switches-to-high-speed-filling-machines-in-US/)) |
+| UHT 2 | 8,000 L/h | line 2 | TBA/19 | 7,500 packs/h | Dealer listings of 200 ml machines ([resale.info](https://resale.info/en/tetra-pak-tba-19-tba-19-200-sl/No-1227552)) |
+| | | lines 3, 4 | A3/Speed | 24,000 packs/h | Tetra Pak's portion-pack version ([DairyReporter, 2014](https://www.dairyreporter.com/Article/2014/04/15/Tetra-Pak-Mengniu-dairy-flavoured-milk-A3-Speed/)) |
+| UHT 3 | 4,000 L/h | line 7 | A3/Speed | 24,000 packs/h | As lines 3 and 4 |
+
+- **Rules with no key:**
+  - The pack size starts at 100 ml for every line, a sim assumption for the developer to correct in Let Report (the products' names give 110 to 220 ml).
+  - A line draws packs/h × ml ÷ 1,000 from its UHT while it runs, and nothing otherwise. At 100 ml, with every line running, UHT 1's lines draw 2,360 of its 4,000 L/h, UHT 2's 5,550 of 8,000, and UHT 3's 2,400 of 4,000. A UHT whose lines would draw more than it makes shows a warning; the board does not throttle anything.
+  - The lamps keep the simulation's meaning: running green; stopped and maintenance red; changeover amber; CIP and idle grey, a CIP with its time left from Let Report's planned end. A UHT is producing while any of its lines runs, in CIP when all are cleaning, otherwise stopped.
+  - Lines of type UHT that name no UHT are listed apart; other lines (SCM, yogurt) are left out.
+  - The page needs a Let Report account: its data is readable only when signed in, and the simulation is a public site. The project's address and publishable key are public, as in Let Report's own page; row-level security protects the rows.
+  - Changes arrive over Let Report's realtime feed, the one its own app uses, within a second; the page also reloads every 15 s, so a dropped socket loses nothing.
+- **Why:** the developer's factory has three UHT plants (4,000, 8,000 and 4,000 L/h) and six lines with four filler types, where the teaching plant has one UHT and two fillers. A board shows the real factory live now, without reworking the model; the three trains in 3D come in later phases.
+- **What it changes:** `factory.html` and `src/factory/` (contracts in `types.ts`, the model, the Let Report client, the page), a Factory link in the top bar, `src/data/letReport.json`, and, in Let Report, migration 0013 and the line and plan forms.
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →

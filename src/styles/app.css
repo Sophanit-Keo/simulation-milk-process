@@ -254,6 +254,10 @@ button {
   font: 600 14px/1 var(--font-ui);
   cursor: pointer;
 }
+/* A link styled as one, as "Factory" next to About, is underlined only on hover too. */
+a.link {
+  text-decoration: none;
+}
 .link:hover {
   text-decoration: underline;
 }

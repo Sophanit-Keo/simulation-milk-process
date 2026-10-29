@@ -4,10 +4,12 @@
 // the simulation never writes to Let Report itself. Everything travels in the address's hash, which Let Report
 // reads and clears, and which never reaches a server.
 import type { ScenarioId, ScenarioRunSnapshot } from '../contracts';
+import letReportJson from '../data/letReport.json';
 import { formatSimTime } from './format';
 import { SCENARIO_MENU, scenarioName } from './scenarioMenu';
 
-export const LET_REPORT_URL = 'https://let-report.vercel.app/';
+/** Let Report's address, from src/data/letReport.json, which also names its database for the Factory board. */
+export const LET_REPORT_URL: string = letReportJson.appUrl;
 
 /** Let Report's categories, as its links name them. */
 export type LetReportCat = 'temperature' | 'hygiene' | 'foreign' | 'pest' | 'equipment' | 'allergen' | 'labelling' | 'cleaning' | 'custom';
