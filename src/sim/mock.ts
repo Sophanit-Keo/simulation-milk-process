@@ -9,11 +9,14 @@ import {
   dayToS,
   fracToPct,
   hToS,
+  kwSToKwh,
+  lToT,
   minToS,
   pctToFrac,
   SCENARIO_IDS,
   sToH,
   STAGE_IDS,
+  type EnergySnapshot,
   type Kpis,
   type LinePoint,
   type LinePointId,
@@ -24,18 +27,23 @@ import {
   type Sim,
   type StageId,
   type Status,
+  type SteamUse,
   type UhtMode,
 } from '../contracts';
 import { createCore } from './core';
 import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, tubeVolumeL } from './formulas';
 import {
+  boilerGasKw,
+  boilerGasKwh,
   condenserKw,
   creamingRiskPct,
   globuleUm,
   headspaceBar,
   heatRecoveredKw,
   homogenizerPowerKw,
+  regenerationPct,
   separatorFlows,
+  steamHeatKw,
   steamLph,
 } from './liquid/stageModels';
 import { mockPacks } from './mockPacks';
@@ -127,6 +135,39 @@ export function createMockSim(config: PlantConfig): Sim {
   let divertedL = 0;
   let rejectL = 0;
   let divertCount = 0;
+  // The steam and energy since opening (phase 8), summed step by step.
+  let steamKg = 0;
+  let electricKwh = 0;
+  let rawDrawnL = 0;
+
+  /**
+   * The steam, electricity and raw milk at an episode and a UHT flow (phase 8), from the live line's models at the
+   * set temperatures: milk from the homogenizer outlet while it flows, the cleaning or re-sterilizing circulation
+   * from the deaerator outlet while it does not.
+   */
+  function energyRates(episode: UhtMode, flowLph: number): { use: SteamUse | null; steamKgPerH: number; electricKw: number; rawLph: number } {
+    const { preheating, homogenizer, cleaning } = config;
+    const deaeratorC = preheating.preheatTempC - preheating.deaeratorDropC;
+    const totalBar = core.setpoints.homogenizerStage1Bar + homogenizer.stage2Bar;
+    const setpointC = core.setpoints.uhtSetpointC;
+    let use: SteamUse | null = null;
+    let steamKgPerH = 0;
+    if (flowLph > 0) {
+      use = 'milk';
+      const toC = episode === 'divert' ? uht.faultTempC : setpointC;
+      steamKgPerH = steamLph(config, flowLph, homogenizerOutletC(deaeratorC, totalBar, homogenizer.barPerDegreeC), toC);
+    } else if (episode === 'cip' || episode === 'sterilize' || episode === 'aic') {
+      use = episode === 'sterilize' ? 'sterilizing' : 'cleaning';
+      const toC = { cip: cleaning.cipTempC, sterilize: uht.sterilizeTempC, aic: setpointC }[episode];
+      steamKgPerH = steamLph(config, cleaning.circulateLph, deaeratorC, toC);
+    }
+    return {
+      use: steamKgPerH > 0 ? use : null,
+      steamKgPerH,
+      electricKw: homogenizerPowerKw(config, flowLph, flowLph > 0 ? totalBar : 0),
+      rawLph: separatorFlows(config, flowLph).rawMilkLph,
+    };
+  }
 
   /** The episode mode at timeS: a stateless hash of (seed, window), like the status windows. */
   function episodeAt(timeS: number): { mode: UhtMode; remainingS: number } {
@@ -250,6 +291,24 @@ export function createMockSim(config: PlantConfig): Sim {
     values[5].condenserKw = condenserKw(config, waterRemovedLph);
     const productionSinceCleanS = (timeS - config.clock.startTimeS) % config.cleaning.aicEveryProductionS;
 
+    // 2 and 4: the steam and energy (phase 8, contracts v6).
+    const rates = energyRates(episode.mode, flowLph);
+    const gasKwh = boilerGasKwh(config, steamKg);
+    const energy: EnergySnapshot = {
+      steamKgPerH: rates.steamKgPerH,
+      steamUse: rates.use,
+      gasKw: boilerGasKw(config, rates.steamKgPerH),
+      electricKw: rates.electricKw,
+      regenerationPct: flowLph > 0 ? regenerationPct(values[2].heatRecoveredKw, steamHeatKw(config, rates.steamKgPerH)) : null,
+      steamKg,
+      gasKwh,
+      electricKwh,
+      kwhPerT: rawDrawnL > 0 ? (gasKwh + electricKwh) / lToT(rawDrawnL) : null,
+    };
+    values[2].regenerationPct = energy.regenerationPct ?? 0;
+    values[4].steamKgPerH = energy.steamKgPerH;
+    values[4].gasKw = energy.gasKw;
+
     // What the panels and lamps show: an episode's mode on stage 4, nothing flowing in a clean.
     const shown = { ...statuses };
     if (episode.mode === 'divert') shown[4] = 'bad';
@@ -321,6 +380,7 @@ export function createMockSim(config: PlantConfig): Sim {
     liquid.tanks.silo.levelL = config.standardization.siloCapacityL * pctToFrac(values[1].siloLevelPct);
     liquid.tanks.mixTank.levelL = config.standardization.mixTankCapacityL * pctToFrac(values[1].mixTankLevelPct);
     liquid.productionSinceCleanS = productionSinceCleanS;
+    liquid.energy = energy;
     for (const id of [8, 9, 10] as const) shown[id] = worst(shown[id] === 'idle' ? 'ok' : shown[id], discrete.statuses[id]);
     return { ...pulse, values, kpis, shown, line, liquid, packs: discrete.packs };
   }
@@ -339,6 +399,10 @@ export function createMockSim(config: PlantConfig): Sim {
       }
       // A full CIP pumps the reject tank out by its end, as in the live line.
       if (episode === 'cip') rejectL -= (rejectL * dtS) / (episodeRemainingS + dtS);
+      const rates = energyRates(episode, flowLph);
+      steamKg += rates.steamKgPerH * sToH(dtS);
+      electricKwh += kwSToKwh(rates.electricKw, dtS);
+      rawDrawnL += rates.rawLph * sToH(dtS);
       lastDiverting = diverting;
       if (episode !== lastEpisode) core.log(timeS, ...EPISODE_LOG[episode]);
       lastEpisode = episode;

@@ -22,6 +22,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D14](#d14-phase-4-packs-to-trucks-defaults) | The 8 packs-to-trucks keys of schema 5 and the rules without a key | — | Proposed |
 | [D15](#d15-phase-5-fault-scenario-defaults) | The 10 fault-scenario keys of schema 6, the scenario rules, and the heroes' AO and compression | [R10](REVIEW.md#r10-rare-qa-failures) | Proposed |
 | [D16](#d16-phase-7-cleaning-programmes) | The CIP and AIC as programmes of steps: the three keys of schema 7 | — | Proposed |
+| [D17](#d17-phase-8-steam-and-energy) | The boiler's steam and gas, and the energy per tonne of raw milk: the two keys of schema 8 | — | Proposed |
 
 ## D1. Batch size
 
@@ -293,6 +294,28 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - The CIP station cleans the UHT plant from the balance tank to the tubular cooler's outlet. The aseptic tank, which feeds the fillers during an AIC, and the divert line are not in the circuit.
 - **Why:** the handbook gives a programme with times that come within 7 min of D2's 80 min, so the model can show the real sequence of fluids and temperatures without changing any time the scenarios and tests rely on.
 - **What it changes:** the three keys above in `plant.json` (schema 7), contracts v5's `liquid.cleaning`, the matching rows in [default settings](06-simulation-model.md#default-settings), and the "Cleaning is a timed machine state" simplification, which now reads that the steps run but the fluids are not part of the balance.
+
+## D17. Phase 8: steam and energy
+
+- **Status:** Proposed
+- **Date:** 2026-10-29
+- **Review note:** none (the roadmap's stretch item "a steam and energy model", taken as phase 8)
+- **Decision:** the boiler house raises the steam the injector uses, burning gas for it, and the plant counts its energy as the EU's dairy benchmark does: heat and electricity per tonne of raw milk. Two keys in `plant.json` (schema 8):
+
+| Setting | Default | `plant.json` key | Basis |
+|---|---|---|---|
+| Boiler heat | 2,391.13 kJ to raise 1 kg of steam | `energy.boilerHeatKjPerKg` | US DOE [Steam Tip Sheet #15](https://www1.eere.energy.gov/manufacturing/tech_assistance/pdfs/steam15_benchmark.pdf), Table 1: 1,028 Btu/lb for saturated steam at 150 psig from 200 °F feedwater, 2,391.13 kJ/kg (H115). Sim assumption: that row of the table, a common steam main and a feed tank kept hot; direct injection returns no condensate, so all the feedwater is make-up |
+| Boiler efficiency | 85.7% | `energy.boilerEfficiencyFrac` | The same tip sheet, Table 2: natural gas, "based on boilers equipped with feedwater economizers or air preheaters and 3% oxygen in flue gas" |
+
+- **Rules with no key:**
+  - Steam heats whatever passes the injector, from the temperature it arrives at to the holding-tube outlet's, at uht.steamLatentKjPerKg and the milk's specific heat (D13): the milk in production and while diverting, from the homogenizer outlet; a cleaning step's fluid and the re-sterilizing water, circulating at cleaning.circulateLph (D16), from the deaerator outlet, as the homogenizer stands. The fluids count as milk (3.9 kJ/(kg·K), where water's is 4.19). Nothing else uses steam.
+  - The preheater keeps its 30 s lag (D13, D16), so the steam peaks while a step's temperature rises and stops while it falls. The totals integrate the lags exactly, so they do not depend on the step size.
+  - The electricity is the homogenizer's (D13). The separator, the pumps, the fillers and the packaging line are left out: no source gives their power for this plant.
+  - Regeneration is the share of the milk's heating to UHT temperature that the preheater gives it, heat recovered ÷ (heat recovered + steam heat), while milk flows: 56.6% at the defaults (H116). Sources give up to 90% for indirect plants ([GEA, UHT systems](https://www.gea.com/en/products/liquid-processing/uht-systems/)); a direct plant gives some of it up for its flash cooling.
+  - The energy per tonne is the gas and the electricity since the plant opened ÷ the raw milk drawn since then, litres counted as kilograms: BAT's indicator, "final energy consumption" (heat and electricity) per tonne of raw materials ([Decision (EU) 2019/2031](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32019D2031), BAT 21). The model's 92 kWh/t over a day (H119) sits under BAT's 100–600 kWh/t for market milk, which counts a whole dairy.
+  - The snapshot carries it all in `liquid.energy` (contracts v6): the steam, what it heats, the gas, the electricity, the regeneration, the totals and the energy per tonne. Stage 4 lists the steam and the gas, stage 2 the regeneration.
+- **Why:** the model already worked out the steam injected and the heat recovered (D13); a boiler and a benchmark turn them into what a plant pays for, and show what a divert costs: 113 min of steam with no product (H118). The two keys come from one public table each, and no earlier number changes.
+- **What it changes:** the two keys above in `plant.json` (schema 8), contracts v6's `liquid.energy`, stage 4's `steamKgPerH` and `gasKw` and stage 2's `regenerationPct`, the matching rows in [default settings](06-simulation-model.md#default-settings), and an accepted simplification on what the energy leaves out.
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →

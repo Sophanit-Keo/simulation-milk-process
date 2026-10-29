@@ -177,7 +177,7 @@ export function createStagePanel(panel: HTMLElement, stages: readonly StageInfo[
       if (cell) setText(cell, formatValue(stage?.values[info.key], info));
     }
     const values = stage?.values ?? {};
-    for (const { row, cell } of derivedCells) setText(cell, row.read(values));
+    for (const { row, cell } of derivedCells) setText(cell, row.read(values, snapshot.liquid));
     for (const { row, lamp, text } of stateCells) {
       const state = row.read(snapshot);
       if (lamp.dataset.status !== state.status) lamp.dataset.status = state.status;

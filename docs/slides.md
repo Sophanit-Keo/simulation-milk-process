@@ -38,6 +38,8 @@ Twelve slides, about 15 minutes with the live demo (slide 8). One slide per head
 - F0 5.2 min and B\* 1.19 at 140 °C for 4 s
 - Divert limit 139.2 °C (B\* = 1)
 - Below it: 3 min to reject, 80 min clean, 30 min re-sterilize: 113 min out
+- Steam 1,652 kg/h from a gas boiler; regeneration gives 56.6% of the heating
+- About 92 kWh per tonne of raw milk over a day (EU dairy benchmark: 100–600 for a whole dairy)
 
 ## 6. The model: packs to trucks
 
@@ -58,14 +60,14 @@ Twelve slides, about 15 minutes with the live demo (slide 8). One slide per head
 
 ## 9. How it was checked
 
-- Every expected number worked by hand first, with its source (H1–H110)
-- About 1,100 unit tests: formulas, acceptance runs, a 60-day run, every scenario, the demo itself
+- Every expected number worked by hand first, with its source (H1–H119)
+- About 1,150 unit tests: formulas, acceptance runs, a 60-day run, every scenario, the cleaning and energy, the demo itself
 - Browser tests in Chromium; asset checks on every model
 - The same seed gives the same run, every time
 
 ## 10. Performance
 
-- 207 draw calls and about 232,000 triangles at the overview (budget 350 and 300,000)
+- 222 draw calls and about 244,000 triangles at the overview (budget 350 and 300,000)
 - Instanced packs and pallets; one shadow-casting light; baked ambient occlusion
 - 60 fps check on the target laptop: a fixed 60 s camera path at ×1 and ×10,000
 
@@ -74,6 +76,7 @@ Twelve slides, about 15 minutes with the live demo (slide 8). One slide per head
 ## 11. Limits
 
 - Plug flow, stepped temperatures, one product, cleaning steps on a timer
+- Energy counts the steam and the homogenizer only
 - Random failures at simple rates; trucks at a fixed interval
 - Scripted faults of one fixed size
 

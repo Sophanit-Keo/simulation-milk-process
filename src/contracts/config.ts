@@ -220,6 +220,13 @@ export interface PlantConfig {
     /** Dock doors; a truck that finds them all taken waits in the yard (the layout has three). */
     dockDoors: number;
   };
+  /** The boiler house (phase 8, D17): what raising the injector's steam costs in gas. */
+  energy: {
+    /** Heat to raise 1 kg of saturated steam from the feedwater (US DOE Steam Tip Sheet #15: 150 psig from 200 °F). */
+    boilerHeatKjPerKg: number;
+    /** Share of the gas's heat that reaches the steam (the same tip sheet: natural gas, with an economizer). */
+    boilerEfficiencyFrac: number;
+  };
   /** How each fault scenario plays out once triggered (phase 5, D15; plan 06, fault scenarios). */
   scenarios: {
     /** UHT temperature drop: the outlet falls from the set point toward uht.faultTempC with this time constant (sim assumption, the preview's 15 s). */
@@ -283,6 +290,8 @@ const POSITIVE_KEYS = [
   'warehouse.palletsPerTruck',
   'warehouse.truckEveryS',
   'warehouse.dockDoors',
+  'energy.boilerHeatKjPerKg',
+  'energy.boilerEfficiencyFrac',
   'scenarios.steamFaultLagS',
   'scenarios.fillerRepairS',
   'scenarios.filterReplaceS',
@@ -436,5 +445,9 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   };
   checkSteps('cipSteps', 'cipS');
   checkSteps('aicSteps', 'aicS');
+  // Phase 8: a boiler can't be more than all efficient, nor a kilogram of steam give the milk more than it took to raise.
+  const { energy } = config;
+  if (energy.boilerEfficiencyFrac > 1) fail('energy.boilerEfficiencyFrac must lie in 0–1');
+  if (energy.boilerHeatKjPerKg < uht.steamLatentKjPerKg) fail('energy.boilerHeatKjPerKg must be at least uht.steamLatentKjPerKg, the heat a kilogram of steam gives the milk');
   return problems;
 }

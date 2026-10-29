@@ -21,6 +21,7 @@ The biggest risk is scope: ten stages plus detailed 3D is a lot for one person, 
 - Temperatures change in steps with a short lag, not through heat-transfer equations.
 - One product and one pack size.
 - Cleaning runs its steps on a timer: the fluids colour the pipes and set the temperatures, but they are not part of the liquid balance, and nothing models soil or detergent strength. ([D16](DECISIONS.md#d16-phase-7-cleaning-programmes))
+- The energy counts the boiler's gas for the injector's steam and the homogenizer's electricity; the other drives, cooling, compressed air and buildings are left out, so the energy per tonne comes in under a whole dairy's. ([D17](DECISIONS.md#d17-phase-8-steam-and-energy))
 - Failures follow simple random rates, not real plant data.
 - A full CIP runs only after a divert (B\* < 1: 3 min divert, 80 min CIP, 30 min sterilizing at 125 °C or more); real plants also clean at the end of each production run ([D2](DECISIONS.md#d2-missing-defaults)).
 - Demand is a truck of 22 pallets at a fixed interval, standing in for random daily orders ([D2](DECISIONS.md#d2-missing-defaults), [D3](DECISIONS.md#d3-truck-payload)).

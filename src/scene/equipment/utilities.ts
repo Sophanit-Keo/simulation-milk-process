@@ -1,12 +1,20 @@
 // Plant utilities that serve the liquid line but are no machine of it, both Could items of the plan 05 asset
 // list at stage 4: the boiler house, where the preview's steam line from the steam injector ends (one box and
 // a chimney, two draw calls, at the preview's position and size), and since phase 7 the CIP station that
-// cleans the UHT plant, behind the flash vessel. pipes.ts draws the steam line and the CIP lines.
+// cleans the UHT plant, behind the flash vessel. pipes.ts draws the steam line and the CIP lines. Since phase 8
+// the boiler house is live (contracts v6): its label reads the steam it raises, and its chimney's plume grows
+// with the gas it burns, one more draw call.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CLEANING_FLUIDS, type CleaningFluid, type Snapshot } from '../../contracts';
+import { motionDtS } from '../motion';
 import { FLUID_COLOR_VAR } from '../pipes';
 import { readSceneColor } from '../theme';
+import { MachineBuilder } from './liquid/builder';
+import { createKit, type Kit } from './liquid/kit';
+import { createPuffs } from './liquid/puffs';
+import { labelValue } from './liquid/readings';
+import { boilerPlumeFrac } from './liquid/visuals';
 import type { Equipment, EquipmentFactory } from './types';
 
 /** The preview's 'dark' material: a building, not a machine, so it keeps one colour in both themes. */
@@ -17,6 +25,8 @@ const HOUSE = { atM: [-17, 1.2, -21.3], sizeM: [3.2, 2.4, 2.2] } as const;
 /** Chimney at the house's back corner, rising 2.3 m from just below the roof. */
 const CHIMNEY = { atM: [-16, 3.5, -21.7], radiusM: 0.22, heightM: 2.3 } as const;
 const CHIMNEY_SIDES = 14;
+/** The plume rises from the chimney's top (y 4.65) and drifts a little east, as the flash vessel's vapour does. */
+const PLUME = { fromM: [-16, 4.75, -21.7], travelM: [0.3, 1.6, 0.1], radiusM: 0.32, count: 6, cycleS: 3.2 } as const;
 
 /**
  * The CIP station (phase 7): a tank for each cleaning fluid in a row along x behind the flash vessel, on a skid,
@@ -40,7 +50,7 @@ const TANK_SIDES = 24;
 /** A lit lamp's glow, and the dark it shows while its fluid stands. */
 const LAMP_LIT_INTENSITY = 0.9;
 
-export const utilities: EquipmentFactory = (ctx) => [boilerHouse(ctx.materials.steelDark), cipStation(ctx.materials.steel, ctx.materials.steelDark)];
+export const utilities: EquipmentFactory = (ctx) => [boilerHouse(createKit(ctx), ctx.materials.steelDark), cipStation(ctx.materials.steel, ctx.materials.steelDark)];
 
 /** What circulates now: the fluid of the cleaning step under way (contracts v5), or none. */
 const fluidOf = (snapshot: Snapshot): CleaningFluid | null => snapshot.liquid?.cleaning?.fluid ?? null;
@@ -156,11 +166,13 @@ function cipStation(steel: THREE.Material, dark: THREE.Material): Equipment {
   };
 }
 
-function boilerHouse(chimneyMaterial: THREE.Material): Equipment {
-  const object = new THREE.Group();
-  object.name = 'boiler-house';
+function boilerHouse(kit: Kit, chimneyMaterial: THREE.Material): Equipment {
   // Same convention as the liquid line: the root at the footprint centre on the floor, so a model can replace it in place.
-  object.position.set(HOUSE.atM[0], 0, HOUSE.atM[2]);
+  const builder = new MachineBuilder(kit, 'boiler-house', [HOUSE.atM[0], 0, HOUSE.atM[2]]);
+  // The plume: the liquid line's see-through puffs, as the flash vessel's vapour.
+  const plume = createPuffs(builder, 'boiler-plume', 'steam', { ...PLUME, envelope: 'swell' });
+  const built = builder.build();
+  const object = built.object;
   object.userData = { equipmentId: 'boiler-house', stage: 4 };
 
   const houseGeometry = new THREE.BoxGeometry(...HOUSE.sizeM);
@@ -189,13 +201,16 @@ function boilerHouse(chimneyMaterial: THREE.Material): Equipment {
     object,
     // Over the roof's front half, clear of the chimney at the back.
     labelAnchorM: [HOUSE.atM[0] - 0.6, HOUSE.sizeM[1] + 0.35, HOUSE.atM[2] + 0.4],
-    // The snapshot carries no steam values (contracts v1); the label names the building only.
-    labelText: () => '',
-    update() {},
+    // The steam it raises for the injector (contracts v6); nothing from an older snapshot.
+    labelText: (snapshot) => labelValue(snapshot.liquid?.energy?.steamKgPerH, 0, 'kg/h'),
+    update: (snapshot, realDtS) => plume.update(boilerPlumeFrac(snapshot), motionDtS(snapshot, realDtS)),
+    debugState: () => ({ plumeFrac: plume.strength(), phase: plume.phase() }),
     dispose() {
       houseGeometry.dispose();
       houseMaterial.dispose();
       chimneyGeometry.dispose();
+      // The plume's instance buffer; its shape and material are the kit's, which lets go of them with the last holder.
+      built.dispose();
       // The chimney's material is shared (equipmentHost) and disposed there.
     },
   };

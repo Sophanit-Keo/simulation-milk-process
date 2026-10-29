@@ -72,13 +72,25 @@ export function heatGlowFrac(tempC: number): number {
 }
 
 /**
+ * Steam that fills the injector's puffs while it heats the cleaning or re-sterilizing circulation (phase 8): about
+ * what milk takes at full flow, 1,652 kg/h (H116). An AIC's 2,723 kg/h and re-sterilizing's 2,085 kg/h fill them;
+ * a CIP step, which makes up only the deaerator's 4 °C, shows a wisp.
+ */
+export const STEAM_FULL_KG_PER_H = 1_650;
+
+/**
  * Steam at the injector (0–1): the share of full flow while milk is heated, in production and while
- * diverting (the plant still heats the milk it sends to reject); nothing while it cleans or re-sterilizes,
- * or with no flow through the holding tube.
+ * diverting (the plant still heats the milk it sends to reject). Since phase 8 the injector also heats the
+ * cleaning and re-sterilizing circulation, from the snapshot's liquid.energy (contracts v6); an older snapshot
+ * shows none then. Nothing with no flow through the holding tube.
  */
 export function steamFrac(snapshot: Snapshot): number {
   const mode = uhtModeOf(snapshot);
-  if (mode !== 'production' && mode !== 'divert') return 0;
+  if (mode !== 'production' && mode !== 'divert') {
+    const energy = snapshot.liquid?.energy;
+    const heatsCirculation = energy?.steamUse === 'cleaning' || energy?.steamUse === 'sterilizing';
+    return heatsCirculation && Number.isFinite(energy.steamKgPerH) ? clampFrac(energy.steamKgPerH / STEAM_FULL_KG_PER_H) : 0;
+  }
   const frac = flowFrac(lineFlowLph(snapshot, 'holdingTube'));
   // While the steam supply dips (the UHT temperature drop scenario, phase 5) the injector only sputters.
   const dipping = snapshot.scenarios?.runs.some((run) => run.id === 'uhtTempDrop' && run.endedS === null) ?? false;
@@ -87,6 +99,15 @@ export function steamFrac(snapshot: Snapshot): number {
 
 /** The puffs' size while the steam supply dips: a sputter, against full steam at full flow. */
 export const STEAM_DIP_FRAC = 0.3;
+
+/** Gas that fills the boiler house's chimney plume (phase 8): just over an AIC's 2,110 kW, the most the plant burns (H117). */
+export const PLUME_FULL_GAS_KW = 2_200;
+
+/** The boiler house's chimney plume (0–1), from the gas it burns (contracts v6); none from an older snapshot. */
+export function boilerPlumeFrac(snapshot: Snapshot): number {
+  const gasKw = snapshot.liquid?.energy?.gasKw;
+  return typeof gasKw === 'number' && Number.isFinite(gasKw) ? clampFrac(gasKw / PLUME_FULL_GAS_KW) : 0;
+}
 
 /**
  * The flash vessel's vapour at full size. Water removed equals steam injected: about a tenth of the milk

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -136,6 +136,10 @@
     "startStockPallets": 634,
     "truckLoadS": 1200,
     "dockDoors": 3
+  },
+  "energy": {
+    "boilerHeatKjPerKg": 2391.13,
+    "boilerEfficiencyFrac": 0.857
   },
   "scenarios": {
     "steamFaultLagS": 15,

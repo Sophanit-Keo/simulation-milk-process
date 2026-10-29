@@ -23,6 +23,14 @@ A full CIP walks the Dairy Processing Handbook's programme for circuits with hea
 
 The CIP station behind the flash vessel pumps each fluid at 24,000 L/h, about 2 m/s in the pipes, and lights the lamp of the one it pumps. The pipes from the balance tank to the cooler outlet take that fluid's colour: pale blue water, violet lye, magenta acid. The aseptic tank and the divert line are not in the circuit. The stage 4 panel names the step and the time left in it.
 
+## Steam and energy
+
+The boiler house raises the steam the injector uses. Steam heats whatever passes it: the milk, from the homogenizer outlet at 81.75 °C to 140 °C, 1,652 kg/h at full flow; and, while the plant cleans or re-sterilizes, the circulating water, lye or acid, from the deaerator outlet to the step's temperature. An intermediate clean at the set point takes more steam than production, 2,723 kg/h, because the circulation is faster; a CIP step only makes up the deaerator's 4 °C once the preheater has its temperature. Raising a kilogram of steam at 150 psig from 93 °C feedwater takes 2,391 kJ, and a gas boiler with an economizer burns it at 85.7% efficiency, so production burns 1,280 kW of gas ([US DOE Steam Tip Sheet #15](https://www1.eere.energy.gov/manufacturing/tech_assistance/pdfs/steam15_benchmark.pdf)). The homogenizer draws 125 kW of electricity.
+
+Regeneration gives the milk 56.6% of its heating: the preheater warms it from 4 °C to 80 °C with heat from the hot product and the flash vapour, and the steam does the rest. Indirect plants recover up to 90% ([GEA](https://www.gea.com/en/products/liquid-processing/uht-systems/)); a direct plant gives some of that up for its flash cooling.
+
+The stage 4 panel adds up the energy since the plant opened, gas and electricity, per tonne of raw milk drawn, as the EU's best available techniques for dairies count it ([Decision (EU) 2019/2031](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32019D2031), BAT 21). A day at the defaults comes to about 92 kWh/t, under the 100–600 kWh/t given for market milk, which counts a whole dairy. A divert costs 113 min of steam with no product: one soon after the plant opens more than triples the figure ([D17](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d17-phase-8-steam-and-energy)).
+
 ## Holding time follows the flow
 
 The holding tube holds 17.8 L, so the holding time is that volume divided by the flow: 4 s at full flow (16,000 L/h), 8 s at 50%. At 8 s, B* rises to 2.37, F0 to 10.35 min, and the divert limit falls to 136.06 °C. The stage 4 panel shows this.
@@ -64,6 +72,7 @@ Tour, at the top of the stage list, flies the camera through the ten stages in o
 - Temperatures change in steps with a short lag, not through heat-transfer equations.
 - One product and one pack size.
 - Cleaning runs its steps on a timer: the fluids colour the pipes and set the temperatures, but they are not part of the liquid balance, and nothing models soil or detergent strength.
+- The energy counts the boiler's gas for the injector's steam and the homogenizer's electricity; the other drives, cooling, compressed air and buildings are left out, and the cleaning fluids heat as milk does.
 - Failures follow simple random rates, not real plant data.
 - The fault scenarios are scripted, each with one fixed size and duration.
 - The machines are simplified models made in code, shaded with baked ambient occlusion, not drawings of real equipment.
@@ -89,6 +98,13 @@ Process and regulation:
 - [FDA: Aseptic Processing and Packaging for the Food Industry](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-guides/aseptic-processing-and-packaging-food-industry)
 - [Reinheimer and Demkow (1990), Comparison of rapid tests for assessing UHT milk sterility](https://www.cambridge.org/core/journals/journal-of-dairy-research/article/abs/comparison-of-rapid-tests-for-assessing-uht-milk-sterility/4614AE5B275AC91DE2AA432FE6E1E919), Journal of Dairy Research
 - [GEA: Shelf-stable milk](https://www.gea.com/en/stories/shelf-stable-milk-conscientious-convenience/): shelf life
+
+Steam and energy:
+
+- [US DOE Steam Tip Sheet #15: Benchmark the Fuel Cost of Steam Generation](https://www1.eere.energy.gov/manufacturing/tech_assistance/pdfs/steam15_benchmark.pdf): the heat to raise steam, and a gas boiler's efficiency
+- [Commission Implementing Decision (EU) 2019/2031](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32019D2031), BAT 21: the dairy energy benchmark
+- [Engineering ToolBox: Saturated steam](https://www.engineeringtoolbox.com/saturated-steam-properties-d_457.html): steam tables
+- [GEA: UHT systems](https://www.gea.com/en/products/liquid-processing/uht-systems/): heat recovery in indirect plants
 
 Equipment and logistics:
 

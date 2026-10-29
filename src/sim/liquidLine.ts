@@ -16,34 +16,60 @@
 // aicSteps): the step under way follows from the time already spent in the mode, so the modes keep their
 // times. A CIP step sets the temperature the preheater and the holding-tube outlet run at; an AIC step holds
 // the UHT set point. The cleaning fluids are no part of the milk's balance.
+//
+// The steam and energy (phase 8, D17): steam heats whatever passes the injector, from the temperature it arrives
+// at to the holding-tube outlet's (the milk from the homogenizer outlet, or the cleaning and re-sterilizing
+// circulation from the deaerator outlet), and the boiler house burns gas for it. Within a cut the preheater lags
+// and a steam dip's outlet falls along exponentials, so the steam totals are integrated exactly, like the lags.
 import {
   cleaningSteps,
   fracToPct,
+  kgPerHToKgPerS,
+  kwSToKwh,
   lphToLps,
   lpsToLph,
+  lToT,
   sToH,
   sToMin,
   type CleaningProgram,
   type CleaningSnapshot,
   type CleaningStep,
+  type EnergySnapshot,
   type Kpis,
   type LiquidSnapshot,
   type PlantConfig,
   type Status,
+  type SteamUse,
   type UhtMode,
 } from '../contracts';
 import type { Setpoints } from './core';
 import { createFillerStub, type FillerSupply } from './fillerStub';
 import type { LogWriter } from './log';
-import { bStar, creamShareFrac, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, lagToward, surplusCreamFrac, tubeVolumeL } from './formulas';
 import {
+  bStar,
+  creamShareFrac,
+  divertLimitC,
+  f0Min,
+  holdTimeS,
+  homogenizerOutletC,
+  lagArea,
+  lagToward,
+  positiveLagArea,
+  surplusCreamFrac,
+  tubeVolumeL,
+} from './formulas';
+import {
+  boilerGasKw,
+  boilerGasKwh,
   condenserKw,
   creamingRiskPct,
   globuleUm,
   headspaceBar,
   heatRecoveredKw,
   homogenizerPowerKw,
+  regenerationPct,
   separatorFlows,
+  steamHeatKw,
   steamLph,
 } from './liquid/stageModels';
 import type { Rng } from './rng';
@@ -108,6 +134,10 @@ export interface LiquidTotals {
   productionS: number;
   /** Production time spent throttled (H59: about 9% of production time). */
   throttledProductionS: number;
+  /** Steam the injector took (phase 8); the boiler's gas follows from it. */
+  steamKg: number;
+  /** Electricity the homogenizer drew (phase 8). */
+  electricKwh: number;
 }
 
 /** Flows at one instant, for the line points and the stage values. */
@@ -167,6 +197,16 @@ export interface LiquidLineOptions {
 
 const TIMED_MODES: ReadonlySet<UhtMode> = new Set(['divert', 'cip', 'sterilize', 'aic']);
 
+/** What the steam injector heats now (phase 8, D17): the flow through it, and from and to which temperature. */
+interface InjectorLoad {
+  use: SteamUse;
+  flowLph: number;
+  /** Where the flow reaches the injector: the homogenizer outlet for milk, the deaerator outlet for the circulation. */
+  fromC: number;
+  /** The holding-tube outlet's temperature, which the steam heats it to. */
+  toC: number;
+}
+
 /** Time for a level moving at rateLps to reach targetL, or Infinity if it is moving away or still. */
 function timeToReachS(levelL: number, rateLps: number, targetL: number): number {
   if (rateLps > 0 && targetL > levelL) return (targetL - levelL) / rateLps;
@@ -219,6 +259,8 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     rejectPumpedL: 0,
     productionS: 0,
     throttledProductionS: 0,
+    steamKg: 0,
+    electricKwh: 0,
   };
 
   /**
@@ -266,6 +308,46 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
   const stage1BarNow = (setpoints: Readonly<Setpoints>): number =>
     state.homogenizerFaultBar === null ? setpoints.homogenizerStage1Bar : Math.min(state.homogenizerFaultBar, setpoints.homogenizerStage1Bar);
 
+  /**
+   * What the steam injector heats now (D17): the milk in production and while diverting, from the homogenizer
+   * outlet to the holding-tube outlet; a CIP or AIC step's fluid, or the re-sterilizing water, circulating at
+   * cleaning.circulateLph from the deaerator outlet (the homogenizer stands) to the step's temperature, the set
+   * point or the sterilizing temperature. Null with no milk flowing outside a clean.
+   */
+  function injectorLoad(nowS: number, setpoints: Readonly<Setpoints>, flows: LiquidFlows): InjectorLoad | null {
+    const deaeratorC = state.preheatTempC - preheating.deaeratorDropC;
+    if (producing()) {
+      if (!(flows.uhtLph > 0)) return null;
+      const totalBar = stage1BarNow(setpoints) + homogenizer.stage2Bar;
+      const fromC = homogenizerOutletC(deaeratorC, totalBar, homogenizer.barPerDegreeC);
+      return { use: 'milk', flowLph: flows.uhtLph, fromC, toC: milkOutletC(nowS, setpoints.uhtSetpointC) };
+    }
+    if (state.mode === 'sterilize') return { use: 'sterilizing', flowLph: cleaning.circulateLph, fromC: deaeratorC, toC: uht.sterilizeTempC };
+    const cleaningStep = cleaningStepNow();
+    if (!cleaningStep) return null;
+    return { use: 'cleaning', flowLph: cleaning.circulateLph, fromC: deaeratorC, toC: cleaningStep.step.tempC ?? setpoints.uhtSetpointC };
+  }
+
+  /**
+   * Steam over the next dtS, exactly. The gap the steam closes, outlet minus inlet, moves along two exponentials:
+   * the preheater lags toward preheatTargetC (so the inlet does), and during a steam dip the outlet falls toward
+   * the fault temperature. The steam stops while the gap is below zero (a CIP step cooler than the one before),
+   * which only happens with the preheater's exponential alone.
+   */
+  function steamOverKg(load: InjectorLoad, dtS: number, setpoints: Readonly<Setpoints>, preheatTargetC: number): number {
+    // Steam per kelvin of gap and second: litres count as kilograms (D13).
+    const kgPerKs = kgPerHToKgPerS(steamLph(config, load.flowLph, 0, 1));
+    // The inlet's part that lags: it ends preheatTargetC − preheatTempC higher than now.
+    const inletLagC = state.preheatTempC - preheatTargetC;
+    const dipping = load.use === 'milk' && state.steamFaultSinceS !== null;
+    const outletEndC = dipping ? Math.min(setpoints.uhtSetpointC, uht.faultTempC) : load.toC;
+    const settledGapC = outletEndC - (load.fromC - inletLagC);
+    if (!dipping) return kgPerKs * positiveLagArea(settledGapC, -inletLagC, dtS, preheating.lagS);
+    const outletLagC = load.toC - outletEndC;
+    const areaKs = lagArea(settledGapC, -inletLagC, dtS, preheating.lagS) + lagArea(0, outletLagC, dtS, config.scenarios.steamFaultLagS);
+    return kgPerKs * Math.max(0, areaKs);
+  }
+
   /** The level the mixing tank's level control steers to: hold while the UHT plant draws, fill up while it doesn't. */
   const mixTargetL = (uhtLph: number): number => std.mixTankCapacityL * (uhtLph > 0 ? std.mixTankStartFrac : std.mixTankIdleFrac);
 
@@ -312,8 +394,8 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     return soonestS;
   }
 
-  /** Moves every level and lag on by dtS at constant flows. */
-  function advance(dtS: number, flows: LiquidFlows): void {
+  /** Moves every level and lag on by dtS from nowS at constant flows, and adds up the steam and electricity. */
+  function advance(dtS: number, flows: LiquidFlows, nowS: number, setpoints: Readonly<Setpoints>): void {
     if (dtS <= 0) return;
     const hours = sToH(dtS);
     const uhtL = flows.uhtLph * hours;
@@ -357,6 +439,13 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     // Stage 2: the preheater outlet runs at the preheat temperature (the CIP step's during a full CIP);
     // the deaerator takes the air down while milk flows, and it creeps back while the plant stands.
     const preheatTargetC = cleaningStepNow()?.step.tempC ?? preheating.preheatTempC;
+    // Phase 8: the steam over the cut, from the preheater's temperature before it moves, and the homogenizer's
+    // electricity at the pressure it runs at (none while it stands).
+    const load = injectorLoad(nowS, setpoints, flows);
+    if (load) totals.steamKg += steamOverKg(load, dtS, setpoints, preheatTargetC);
+    if (flows.uhtLph > 0) {
+      totals.electricKwh += kwSToKwh(homogenizerPowerKw(config, flows.uhtLph, stage1BarNow(setpoints) + homogenizer.stage2Bar), dtS);
+    }
     state.preheatTempC = lagToward(state.preheatTempC, preheatTargetC, dtS, preheating.lagS);
     const airTargetPct = flows.uhtLph > 0 ? preheating.deaeratedAirPct : preheating.rawAirPct;
     state.airPct = lagToward(state.airPct, airTargetPct, dtS, preheating.lagS);
@@ -470,7 +559,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       const cutS = cuts < MAX_CUTS_PER_STEP ? Math.min(leftS, nextEventS(flows, nowS, setpoints)) : leftS;
       // Whether the tank fed the fillers in this cut: a starving or refilling switch comes at its end.
       const fed = !state.fillersStarved;
-      advance(cutS, flows);
+      advance(cutS, flows, nowS, setpoints);
       doneS += cutS;
       // The last cut ends on the step's end exactly, where the packs model and the event queue meet it.
       const cutEndS = doneS >= dtS - TIME_EPS_S ? endS : startS + doneS;
@@ -517,6 +606,26 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     const waterLph = steamLph(config, flows.productLph, outletTempC, setpointC);
     const levelFrac = state.asepticL / tank.capacityL;
 
+    // Phase 8 (D17): the steam the injector takes now, the boiler's gas for it, and the homogenizer's electricity.
+    const load = injectorLoad(timeS, setpoints, flows);
+    // Litres count as kilograms (D13), so the steam in L/h is in kg/h.
+    const steamKgPerH = load ? steamLph(config, load.flowLph, load.fromC, load.toC) : 0;
+    const recoveredKw = heatRecoveredKw(config, uhtLph, state.preheatTempC);
+    const electricKw = homogenizerPowerKw(config, uhtLph, totalBar);
+    const regeneration = uhtLph > 0 ? regenerationPct(recoveredKw, steamHeatKw(config, steamKgPerH)) : null;
+    const gasKwh = boilerGasKwh(config, totals.steamKg);
+    const energy: EnergySnapshot = {
+      steamKgPerH,
+      steamUse: load && steamKgPerH > 0 ? load.use : null,
+      gasKw: boilerGasKw(config, steamKgPerH),
+      electricKw,
+      regenerationPct: regeneration,
+      steamKg: totals.steamKg,
+      gasKwh,
+      electricKwh: totals.electricKwh,
+      kwhPerT: totals.rawDrawnL > 0 ? (gasKwh + totals.electricKwh) / lToT(totals.rawDrawnL) : null,
+    };
+
     const values: LiquidView['values'] = {
       1: {
         siloTempC: std.siloTempC,
@@ -534,7 +643,9 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
         preheatTempC: state.preheatTempC,
         deaeratorTempC,
         airPct: state.airPct,
-        heatRecoveredKw: heatRecoveredKw(config, uhtLph, state.preheatTempC),
+        heatRecoveredKw: recoveredKw,
+        // None while no milk flows: there is no heating of milk to share out.
+        regenerationPct: regeneration ?? 0,
       },
       3: {
         stage1Bar,
@@ -543,9 +654,20 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
         outletTempC,
         globuleUm: globule,
         creamingRiskPct: creamingRisk,
-        powerKw: homogenizerPowerKw(config, uhtLph, totalBar),
+        powerKw: electricKw,
       },
-      4: { setpointC, tempC, flowLph: uhtLph, holdS, f0Min: f0, bStar: bStarNow, divertLimitC: limitC, rejectLevelL: state.rejectL },
+      4: {
+        setpointC,
+        tempC,
+        flowLph: uhtLph,
+        holdS,
+        f0Min: f0,
+        bStar: bStarNow,
+        divertLimitC: limitC,
+        rejectLevelL: state.rejectL,
+        steamKgPerH,
+        gasKw: energy.gasKw,
+      },
       5: {
         flashTempC: flashCooling.flashTempC,
         coolerTempC: flashCooling.coolerTempC,
@@ -606,6 +728,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       productionSinceCleanS: state.productionSinceCleanS,
       divertCount: state.divertCount,
       cleaning: cleaningView,
+      energy,
       tanks: {
         silo: tankLevel(state.siloL, std.siloCapacityL),
         mixTank: tankLevel(state.mixTankL, std.mixTankCapacityL),

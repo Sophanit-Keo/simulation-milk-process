@@ -123,7 +123,9 @@ describe('the step size does not change the outcome', () => {
       const dtS = [7, 60][index];
       for (const source of ['state', 'totals'] as const) {
         for (const [key, value] of Object.entries(fine[source])) {
-          if (typeof value !== 'number' || key === 'noiseC') continue;
+          // The steam (phase 8) follows the set point, which divertOnce holds at 139 °C for one step: 1 s, 7 s or
+          // 60 s of steam toward 139 °C, a real difference. tests/sim/energy.test.ts checks it over a steam dip.
+          if (typeof value !== 'number' || key === 'noiseC' || key === 'steamKg') continue;
           const otherValue = (other[source] as unknown as Record<string, number>)[key];
           if (Math.abs(value - otherValue) > 1e-9 * Math.max(1, Math.abs(value))) {
             expect.fail(`${source}.${key}: ${value} at 1 s steps, ${otherValue} at ${dtS} s steps`);
