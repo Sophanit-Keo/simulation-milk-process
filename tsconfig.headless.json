@@ -6,5 +6,5 @@
     "lib": ["ES2022"],
     "types": []
   },
-  "include": ["src/sim", "src/contracts", "src/factory/types.ts", "src/factory/model.ts"]
+  "include": ["src/sim", "src/contracts", "src/factory/view.ts", "src/factory/model.ts"]
 }

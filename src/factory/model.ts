@@ -17,7 +17,7 @@ import {
   type LineView,
   type UhtState,
   type UhtView,
-} from './types';
+} from './view';
 
 const LINE_LAMPS: Readonly<Record<LineStatus, Status>> = {
   running: 'ok',
