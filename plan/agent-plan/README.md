@@ -14,6 +14,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 4. Packs to trucks (7–10) | 7–9 | sim | **G2** · scope freeze | [Phase 4](phase-4-packs-to-trucks.md) |
 | 5. Detail & scenarios | 10–11 | assets, sim | Hero models, six faults, guided tour | [Phase 5](phase-5-detail-and-scenarios.md) |
 | 6. Polish & present | 12 | qa, lead | **G3** · final demo | [Phase 6](phase-6-polish-and-present.md) |
+| 9. Factory board | after the term | lead, factory-* agents | The real factory's lines live from Let Report | [Phase 9](phase-9-factory-board.md) |
 
 ## The agents
 

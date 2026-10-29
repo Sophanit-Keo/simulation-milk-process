@@ -12,6 +12,7 @@ A browser-based 3D simulation of a UHT milk plant in three.js, from standardizat
 - **Report in Let Report** (on a fault's banner and in the scenario log): opens [Let Report](https://let-report.vercel.app), the QC/QA trouble-report app, in a new tab, with its new-report form filled in for that fault: category, severity, product and what happened ([D18](plan/DECISIONS.md#d18-reporting-a-fault-in-let-report)). You sign in, sign and send it there; the simulation writes nothing to Let Report itself.
 - **Tour** (top of the stage list): the ten stages in about 3 minutes.
 - **About** (next to the title): what the model is and isn't, and its sources.
+- **Factory** (next to About): the factory board, `factory.html`. Sign in with a Let Report account to see the real factory live: UHT 1, 2 and 3, the lines each one feeds, and each line's status, product, lot, CIP and open troubles, as Let Report holds them. A change in Let Report shows within a second ([D19](plan/DECISIONS.md#d19-the-factory-board), [phase 9](plan/agent-plan/phase-9-factory-board.md)). Which UHT feeds a line, its filler, speed and pack size are edited in Let Report.
 
 The plant opens the same way every time: day 8 at 06:00, ×10, seed 81006. URL options: `?mock` runs the UI on the mock snapshot, `?debug` adds lil-gui and `window.__scene`, `?greybox` shows the grey boxes instead of the hero models.
 
@@ -63,5 +64,8 @@ node tests/perf/measure.mjs --path 60 --headed --channel chrome  # the 60 fps ch
 | `src/scene/` | 3D view | `scene` |
 | `src/ui/`, `src/styles/`, `index.html` | Screen layout and controls | `ui` |
 | `public/models/`, `assets/` | 3D assets and their licences | `assets` |
+| `factory.html`, `src/factory/` | The factory board: contracts (`types.ts`), the Let Report client, the model, the page. No three.js | `lead`, `factory-client`, `factory-model`, `factory-ui` |
 | `tests/`, `e2e/` | Unit and browser tests, and the perf check | `qa` |
 | `docs/` | Report, demo and video scripts, slides | `lead`, `process` |
+
+The phase 9 agents' definitions are in `.claude/agents/`.
