@@ -46,9 +46,19 @@ Wave 1 runs at once: no two agents write the same file, and none commits.
 
 ## Exit checklist
 
-- [ ] `npm run check` and `npm run build` pass; the build has both `index.html` and `factory.html`.
-- [ ] `tests/factory/model.test.ts`: every status's lamp and text; UHT 2 draws 5,550 of 8,000 L/h; over capacity warns; the CIP and lot clocks; lines with no UHT; a missing speed.
-- [ ] `tests/factory/supabase.test.ts`: sign-in, refresh, sign-out on a 401, the change events, reconnecting.
-- [ ] `e2e/factory.spec.ts`: signed in, the three UHT cards show their lines and fillers (UHT line 2 on its TBA/19); a live change stops UHT line 3 and UHT 2 falls from 5,550 to 3,150 L/h; a CIP shows its time left.
-- [ ] The 3D app's browser tests still pass with the Factory link in the top bar.
+- [x] `npm run check` and `npm run build` pass; the build has both `index.html` and `factory.html`.
+- [x] `tests/factory/model.test.ts`: every status's lamp and text; UHT 2 draws 5,550 of 8,000 L/h; over capacity warns; the CIP and lot clocks; lines with no UHT; a missing speed.
+- [x] `tests/factory/supabase.test.ts`: sign-in, refresh, sign-out on a 401, the change events, reconnecting.
+- [x] `e2e/factory.spec.ts`: signed in, the three UHT cards show their lines and fillers (UHT line 2 on its TBA/19); a live change stops UHT line 3 and UHT 2 falls from 5,550 to 3,150 L/h; a CIP shows its time left.
+- [x] The 3D app's browser tests still pass with the Factory link in the top bar.
 - [ ] The developer signs in on the board and sees a change made in Let Report within a second.
+
+## Status
+
+Built by the five wave 1 agents in parallel, then checked by `qa`, on 29 October:
+
+- `npm run check`: typecheck (both configs), lint, 1,289 unit tests in 58 files (128 of them the factory's: 90 for the model, 38 for the client), 69 asset tests. `npm run build` gives both pages; the board's loads no three.js.
+- `e2e/factory.spec.ts`: 6 of 6, twice, on Chromium 153 with Let Report faked (`page.route`, `page.routeWebSocket`): sign-in and a wrong password, the three cards, a live change (UHT 2 to 3,150 L/h without a reload), a CIP counting down, sign-out, the Factory link and back.
+- The 3D app's shell, smoke, About and KPI specs: 12 of 13. The pixel-ratio test (`shell.spec.ts:58`) fails the same way on master before phase 9, as phase 8 recorded.
+- Let Report (its card): the forms against a fake backend, 7 checks; migration 0013 applied to its database, where the six UHT lines now carry their layout.
+- Open: the developer's own signed-in check against the live database. CI does not run at present (GitHub Actions starts no job, on master too), so these local runs are the evidence.
