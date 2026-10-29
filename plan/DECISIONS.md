@@ -23,6 +23,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D15](#d15-phase-5-fault-scenario-defaults) | The 10 fault-scenario keys of schema 6, the scenario rules, and the heroes' AO and compression | [R10](REVIEW.md#r10-rare-qa-failures) | Proposed |
 | [D16](#d16-phase-7-cleaning-programmes) | The CIP and AIC as programmes of steps: the three keys of schema 7 | — | Proposed |
 | [D17](#d17-phase-8-steam-and-energy) | The boiler's steam and gas, and the energy per tonne of raw milk: the two keys of schema 8 | — | Proposed |
+| [D18](#d18-reporting-a-fault-in-let-report) | What each fault is reported as in Let Report, through a prefilled link | — | Proposed |
 
 ## D1. Batch size
 
@@ -316,6 +317,29 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - The snapshot carries it all in `liquid.energy` (contracts v6): the steam, what it heats, the gas, the electricity, the regeneration, the totals and the energy per tonne. Stage 4 lists the steam and the gas, stage 2 the regeneration.
 - **Why:** the model already worked out the steam injected and the heat recovered (D13); a boiler and a benchmark turn them into what a plant pays for, and show what a divert costs: 113 min of steam with no product (H118). The two keys come from one public table each, and no earlier number changes.
 - **What it changes:** the two keys above in `plant.json` (schema 8), contracts v6's `liquid.energy`, stage 4's `steamKgPerH` and `gasKw` and stage 2's `regenerationPct`, the matching rows in [default settings](06-simulation-model.md#default-settings), and an accepted simplification on what the energy leaves out.
+
+## D18. Reporting a fault in Let Report
+
+- **Status:** Proposed
+- **Date:** 2026-10-29
+- **Review note:** none (linking the simulation with [Let Report](https://let-report.vercel.app), the developer's QC/QA trouble-report app)
+- **Decision:** a fault scenario's banner and its section of the scenario log link to Let Report's new-report form, filled in with what the fault would be reported as. The link is `https://let-report.vercel.app/#new?cat=…&sev=…&ptype=UHT+milk&…&desc=…` (`src/ui/letReport.ts`). It only opens the form: a person signs in, signs and sends the report in Let Report, which drops any value it doesn't know.
+
+| Scenario | Category | Severity | Hold | Place | Why |
+|---|---|---|---|---|---|
+| UHT temperature drop | Temperature | High | No | Let Report's first UHT line | The divert keeps the milk under the limit out of the aseptic tank, so no pack is at risk, but the line is out for 113 min |
+| Sterile-air filter failure | Equipment | High | Yes | First UHT line | The batches filled meanwhile are held for investigation (D15) |
+| Failed incubation | Custom: "Failed incubation: blown pack" | Critical | Yes | Packing | A blown pack is a sterility failure in packed product; the batch is blocked. Let Report has no category for it |
+| Homogenizer pressure loss | Equipment | Medium | No | First UHT line | A quality fault (a cream layer), not a safety one |
+| Filler breakdown | Equipment | Medium | No | First UHT line | Downtime; the aseptic zone is re-sterilized before the filler runs again |
+| Demand spike, late trucks | No link | | | | Logistics, not food safety |
+
+- **Rules with no key:**
+  - The description names the scenario, its run and start, says what it is (`src/data/scenarios.json`), then lists its log, oldest first, each entry with its sim time; it stops at 800 characters with an ellipsis. Let Report cuts at the same length.
+  - The link carries no lot. A run's batches are in its log, so they are in the description.
+  - The fields travel in the address's hash, as Let Report's own links do (`#report=…`); the hash never reaches a server, and Let Report clears it once read.
+- **Why:** the simulation shows how a fault travels down the line; Let Report is where staff report one. A prefilled form links the two without the simulation, a public static site, holding a login or writing to Let Report's database.
+- **What it changes:** `src/ui/letReport.ts`, the banner and the scenario log (`src/ui/scenarioLog.ts`), and, in Let Report, a `#new?` link that opens its report form.
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →

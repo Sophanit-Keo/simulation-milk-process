@@ -1,11 +1,13 @@
 // What a fault scenario did, and why (plan 08's scenario mode; phase 5). A banner over the 3D view names the
 // newest scenario, says what it is doing now and its latest step; it stays until that scenario has played
 // out, or until it is hidden. Its button opens a dialog with every scenario's log, oldest step first, each
-// with the reason behind it: the scenario's own steps and the plant's reactions to it.
+// with the reason behind it: the scenario's own steps and the plant's reactions to it. The banner and each
+// scenario in the dialog link to Let Report, which opens its new-report form filled in for that fault (D18).
 import type { LogEntry, ScenarioRunSnapshot, Snapshot } from '../contracts';
-import { createLamp, el, onPress, setLamp, setText } from './dom';
+import { createLamp, el, onPress, setAttr, setLamp, setText } from './dom';
 import { LOG_KIND_TEXT, LOG_LAMP } from './eventLog';
 import { formatSimTime } from './format';
+import { letReportHref } from './letReport';
 import { scenarioName } from './scenarioMenu';
 
 /** Real seconds the banner stays up after its scenario has played out, showing "Over: …". */
@@ -47,6 +49,16 @@ function entryItem(entry: LogEntry): HTMLLIElement {
   return li;
 }
 
+/** "Report in Let Report": a link that opens Let Report in a new tab, its href set by whoever shows it. */
+function reportLink(): HTMLAnchorElement {
+  const link = el('a', 'link sc-report', 'Report in Let Report');
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.title = 'Open Let Report in a new tab, with this fault filled in as a trouble report';
+  link.dataset.testid = 'scenario-report';
+  return link;
+}
+
 export function createScenarioLog(view: HTMLElement, signal: AbortSignal): ScenarioLog {
   const banner = el('section', 'overlay overlay-scenario');
   banner.dataset.testid = 'scenario-banner';
@@ -66,7 +78,11 @@ export function createScenarioLog(view: HTMLElement, signal: AbortSignal): Scena
   const openLog = el('button', 'link sc-open', 'What happened and why');
   openLog.type = 'button';
   openLog.dataset.testid = 'scenario-log-open';
-  banner.append(head, last, openLog);
+  const report = reportLink();
+  report.hidden = true;
+  const links = el('div', 'sc-links');
+  links.append(openLog, report);
+  banner.append(head, last, links);
   view.append(banner);
 
   const dialog = el('dialog', 'about card scenario-log');
@@ -107,6 +123,12 @@ export function createScenarioLog(view: HTMLElement, signal: AbortSignal): Scena
         section.dataset.run = String(run.run);
         const heading = el('h3', '', scenarioName(run.id, run.variant));
         const meta = el('p', 'sc-meta', `${runTimes(run)} · ${run.summary}`);
+        const href = letReportHref(run);
+        if (href) {
+          const link = reportLink();
+          link.href = href;
+          meta.append(' · ', link);
+        }
         const list = el('ol', 'sc-entries');
         list.append(...run.log.map(entryItem));
         section.append(heading, meta, list);
@@ -147,6 +169,9 @@ export function createScenarioLog(view: HTMLElement, signal: AbortSignal): Scena
         const latest = run.log.at(-1);
         setText(last, latest ? `${formatSimTime(latest.timeS)} · ${latest.message}` : '');
         setLamp(lamp, latest ? LOG_LAMP[latest.kind] : 'warn');
+        const href = letReportHref(run);
+        setAttr(report, 'href', href);
+        report.hidden = href === null;
       }
       if (dialog.open) renderRuns(snapshot.scenarios.runs);
     },

@@ -49,6 +49,13 @@ test('a filler breakdown starts from the menu: the view goes to stage 7, the ban
   await expect(page.locator('#panel [data-state-key="fillerA"]')).toContainText('Broken down · repair');
   await expect.poll(async () => (await eventLog(page)).find((entry) => /^Filler A broke down/.test(entry.text))?.why ?? '').toMatch(/jammed sealing jaw/);
 
+  // The banner links to Let Report's new-report form in a new tab, filled in as an equipment fault (D18).
+  const letReport = /^https:\/\/let-report\.vercel\.app\/#new\?cat=equipment&sev=1&ptype=UHT\+milk&desc=From\+the\+UHT\+milk\+plant\+simulation.+Filler\+A\+broke\+down/;
+  const bannerReport = banner(page).getByTestId('scenario-report');
+  await expect(bannerReport).toBeVisible();
+  await expect(bannerReport).toHaveAttribute('href', letReport);
+  await expect(bannerReport).toHaveAttribute('target', '_blank');
+
   // The scenario log: the run, when it started, and each step with its why.
   await page.getByTestId('scenario-log-open').click();
   const dialog = page.getByTestId('scenario-log');
@@ -56,6 +63,7 @@ test('a filler breakdown starts from the menu: the view goes to stage 7, the ban
   const run = dialog.locator('.sc-run').first();
   await expect(run.locator('h3')).toHaveText('Filler breakdown');
   await expect(run.locator('.sc-meta')).toContainText(/Started day \d+ · \d\d:\d\d · acting now/);
+  await expect(run.getByTestId('scenario-report')).toHaveAttribute('href', letReport);
   await expect(run.locator('.sc-entries > li').first().locator('.sc-what')).toContainText('Filler A broke down');
   await expect(run.locator('.sc-entries > li').first().locator('.sc-why')).toContainText('jammed sealing jaw');
   await page.getByTestId('scenario-log-close').click();
