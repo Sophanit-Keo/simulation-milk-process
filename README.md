@@ -13,6 +13,7 @@ A browser-based 3D simulation of a UHT milk plant in three.js, from standardizat
 - **Tour** (top of the stage list): the ten stages in about 3 minutes.
 - **About** (next to the title): what the model is and isn't, and its sources.
 - **Factory** (next to About): the factory board, `factory.html`. Sign in with a Let Report account to see the real factory live: UHT 1, 2 and 3, the lines each one feeds, and each line's status, product, lot, CIP and open troubles, as Let Report holds them. A change in Let Report shows within a second ([D19](plan/DECISIONS.md#d19-the-factory-board), [phase 9](plan/agent-plan/phase-9-factory-board.md)). Which UHT feeds a line, its filler, speed and pack size are edited in Let Report.
+  - **3D** (on the board, next to Board): the same factory on a floor in 3D: each UHT plant with its aseptic tank and its lines' fillers, packs riding the running lines' belts and milk flowing in their pipes, with the board's lamps and words. Click a machine or its label to fly to it and mark its card, or "Show in 3D" on a card; Esc for the whole floor. `factory.html#3d` opens it ([D20](plan/DECISIONS.md#d20-the-factory-floor-in-3d), [phase 10](plan/agent-plan/phase-10-factory-floor.md)).
 
 The plant opens the same way every time: day 8 at 06:00, ×10, seed 81006. URL options: `?mock` runs the UI on the mock snapshot, `?debug` adds lil-gui and `window.__scene`, `?greybox` shows the grey boxes instead of the hero models.
 
@@ -64,8 +65,8 @@ node tests/perf/measure.mjs --path 60 --headed --channel chrome  # the 60 fps ch
 | `src/scene/` | 3D view | `scene` |
 | `src/ui/`, `src/styles/`, `index.html` | Screen layout and controls | `ui` |
 | `public/models/`, `assets/` | 3D assets and their licences | `assets` |
-| `factory.html`, `src/factory/` | The factory board: contracts (`types.ts`), the Let Report client, the model, the page. No three.js | `lead`, `factory-client`, `factory-model`, `factory-ui` |
+| `factory.html`, `src/factory/` | The factory board: contracts (`types.ts`, `view.ts`), the Let Report client, the model, the floor's layout, the page; no three.js until its 3D view (`src/factory/scene/`) opens | `lead`, `factory-client`, `factory-model`, `factory-scene`, `factory-ui` |
 | `tests/`, `e2e/` | Unit and browser tests, and the perf check | `qa` |
 | `docs/` | Report, demo and video scripts, slides | `lead`, `process` |
 
-The phase 9 agents' definitions are in `.claude/agents/`.
+The phase 9 and 10 agents' definitions are in `.claude/agents/`.

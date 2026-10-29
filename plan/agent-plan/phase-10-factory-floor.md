@@ -40,12 +40,18 @@ The agents' definitions are in `.claude/agents/`.
 
 ## Exit checklist
 
-- [ ] `npm run check` and `npm run build` pass; the board's page still loads no three.js until the 3D view opens, which loads it in a chunk of its own.
-- [ ] `tests/factory/layout.test.ts`: the factory's three bays in Let Report's order with their lines left to right; the sizes by filler kind; the pipes from each UHT to its tank and to each filler; the unassigned bay; a UHT with no lines; the key changes with the layout but not with a status; the speeds.
-- [ ] `tests/factory/floor.test.ts`: a machine per UHT, tank and line; belts and pipes follow each line's status; a rebuild on a new layout and none on a new status; everything freed on dispose.
-- [ ] `e2e/factoryFloor.spec.ts`: signed in, the 3D view shows the three bays with their six lines; a live change stops UHT line 3 on the floor and UHT 2's label falls to 3,150 of 8,000 L/h; a click on a filler's label marks its row; `#3d` opens the 3D view after a reload; the board's six tests in `e2e/factory.spec.ts` still pass.
+- [x] `npm run check` and `npm run build` pass; the board's page still loads no three.js until the 3D view opens, which loads it in a chunk of its own.
+- [x] `tests/factory/layout.test.ts`: the factory's three bays in Let Report's order with their lines left to right; the sizes by filler kind; the pipes from each UHT to its tank and to each filler; the unassigned bay; a UHT with no lines; the key changes with the layout but not with a status; the speeds.
+- [x] `tests/factory/floor.test.ts`: a machine per UHT, tank and line; belts and pipes follow each line's status; a rebuild on a new layout and none on a new status; everything freed on dispose.
+- [x] `e2e/factoryFloor.spec.ts`: signed in, the 3D view shows the three bays with their six lines; a live change stops UHT line 3 on the floor and UHT 2's label falls to 3,150 of 8,000 L/h; a click on a filler's label marks its row; `#3d` opens the 3D view after a reload; the board's six tests in `e2e/factory.spec.ts` still pass.
 - [ ] The developer opens the 3D view signed in and sees a change made in Let Report on the floor within a second.
 
 ## Status
 
-Not started.
+Built on 29 October in one session, lane by lane in the order above (contracts, layout, floor, page, tests), then checked as `qa` would:
+
+- `npm run check`: typecheck (both configs; the layout is checked headless), lint, 1,331 unit tests in 60 files (42 new: 26 for the layout, 16 for the floor), 69 asset tests. `npm run build` gives both pages: the board's loads its own chunk and a small shared one, and the floor (25 kB), the 3D plant's shared code and three.js come by `import()` only when the 3D view opens.
+- `e2e/factoryFloor.spec.ts`: 5 of 5, twice, on Chromium 153 with Let Report faked: three.js only on the switch, the three trains with their six lines running and the hero filler on each; a live change that stops UHT line 3 on the floor (red lamp, packs standing, its reel still, UHT 2 at 3,150 L/h) without building the floor again; a line in CIP with an empty belt and its train's pipes in the cleaning colour; picking by label, by "Show in 3D", by a click on the machine and by the keyboard, and Esc; `#3d` after a reload, Board and back to the same floor, and the floor gone on signing out. `e2e/factory.spec.ts`, the board's: 6 of 6, with its fake moved to `e2e/letReportFake.ts`.
+- Looked at in Chromium at 1280 × 720, 1920 × 1080 and 390 × 844, light and dark: the labels show their name and status where there is room, their lamp and name or their lamp alone where there is less, so neighbours never run together.
+- The full browser suite, the 3D plant's specs with it: running.
+- Open: the developer's own signed-in check against the live database; CI still starts no job (phase 9's status), so these local runs are the evidence.
