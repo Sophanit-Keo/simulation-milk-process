@@ -9,6 +9,7 @@ A browser-based 3D simulation of a UHT milk plant in three.js, from standardizat
 - **Pick a stage** in the list on the left, or click a machine in the 3D view: the panel on the right explains it and shows its live values. Drag to orbit, scroll to zoom, Esc for the whole plant.
 - **Time:** pause and the speeds ×1 to ×10,000 in the top bar (Space and the keys 1–5); "Next event" jumps to the next thing that happens.
 - **Scenarios** (top bar): start any of the six faults, reset them, or read the scenario log, which tells what happened and why.
+- **Report in Let Report** (on a fault's banner and in the scenario log): opens [Let Report](https://let-report.vercel.app), the QC/QA trouble-report app, in a new tab, with its new-report form filled in for that fault: category, severity, product and what happened ([D18](plan/DECISIONS.md#d18-reporting-a-fault-in-let-report)). You sign in, sign and send it there; the simulation writes nothing to Let Report itself.
 - **Tour** (top of the stage list): the ten stages in about 3 minutes.
 - **About** (next to the title): what the model is and isn't, and its sources.
 

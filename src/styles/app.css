@@ -600,10 +600,24 @@ button {
   margin: 0;
   color: var(--muted);
 }
-.sc-open {
-  align-self: flex-start;
+/* "What happened and why" and "Report in Let Report", side by side under the latest step. */
+.sc-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 16px;
+}
+.sc-open,
+.sc-report {
   padding: 2px 0;
   font-size: 13px;
+}
+/* A link styled as the text buttons, underlined only on hover. */
+.sc-report {
+  text-decoration: none;
+}
+.sc-report[hidden] {
+  display: none;
 }
 .overlay-tour {
   left: 50%;
