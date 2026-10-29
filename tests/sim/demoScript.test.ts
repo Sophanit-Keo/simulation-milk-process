@@ -45,7 +45,13 @@ let tankMaxL = 0;
 runTo(DEMO_AT_S.uhtTempDrop, (snap) => (tankMaxL = Math.max(tankMaxL, snap.liquid.tanks.asepticTank.levelL)));
 const beforeDrop = sim.snapshot();
 send({ type: 'triggerScenario', id: 'uhtTempDrop' });
-runTo(DEMO_AT_S.homogenizerPressureLoss);
+// The steam halfway through re-sterilizing (09:53–10:23), and the energy per tonne as production resumes.
+let sterilizing: Snapshot | undefined;
+let resumed: Snapshot | undefined;
+runTo(DEMO_AT_S.homogenizerPressureLoss, (snap) => {
+  if (!sterilizing && snap.liquid.uhtMode === 'sterilize' && snap.liquid.modeRemainingS < 900) sterilizing = snap;
+  if (sterilizing && !resumed && snap.liquid.uhtMode === 'production') resumed = snap;
+});
 const afterDrop = sim.snapshot();
 send({ type: 'setSpeed', speed: 10 });
 send({ type: 'triggerScenario', id: 'homogenizerPressureLoss' });
@@ -100,6 +106,14 @@ describe('the demo script, replayed (docs/demo-script.md)', () => {
     expectWithin(at('uhtTempDrop', /fillers running again/) - at('uhtTempDrop', /back in production/), 78.75, 0.01);
     expectWithin(afterDrop.kpis.divertedL, 800, 1e-6);
     expect(afterDrop.kpis).toMatchObject({ palletsInStock: 590, trucksShipped: 2 });
+  });
+
+  it('4. … re-sterilizing takes 2,085 kg/h of steam and 1,616 kW of gas; the energy since opening goes from 86.6 to about 107 kWh/t', () => {
+    expectWithin(beforeDrop.liquid.energy?.kwhPerT ?? Number.NaN, 86.62, 0.01);
+    expect(sterilizing?.liquid.energy?.steamUse).toBe('sterilizing');
+    expectWithin(sterilizing?.stages[4].values.steamKgPerH ?? Number.NaN, 2_084.73, 0.01);
+    expectWithin(sterilizing?.stages[4].values.gasKw ?? Number.NaN, 1_615.73, 0.01);
+    expectWithin(resumed?.liquid.energy?.kwhPerT ?? Number.NaN, 107, 0.5);
   });
 
   it('5–7. homogenizer at 50 bar, the filter down and batch 12 failed: 54 and 55 under investigation, 41 on hold', () => {

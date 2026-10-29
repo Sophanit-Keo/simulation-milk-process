@@ -18,14 +18,14 @@ The app is TypeScript built with Vite, with three.js r186 for the 3D view ([tech
 
 | Layer | Folder | What it does | Rule |
 |---|---|---|---|
-| Contracts | `src/contracts/` | The types every layer shares: the plant config, commands, the per-frame snapshot, units | No three.js, no DOM; additive changes only once frozen (v1 to v4) |
+| Contracts | `src/contracts/` | The types every layer shares: the plant config, commands, the per-frame snapshot, units | No three.js, no DOM; additive changes only once frozen (v1 to v6) |
 | Simulation | `src/sim/` | The clock, the event queue, the liquid line (stages 1–6), fillers, packaging, quality, warehouse (7–10), the fault scenarios | No three.js, no DOM; runs headless in Node, so every rule is unit-tested |
 | Scene | `src/scene/` | The 3D plant: equipment, pipes coloured by temperature, moving packs, trays and pallets, labels, camera, picking | Reads the snapshot only |
 | UI | `src/ui/` | Top bar, stage rail, info panel with live values and charts, KPI strip, event log, scenario menu and log, guided tour, About | Reads the snapshot; writes only commands |
 
 Every frame runs the same six steps ([plan 07](../plan/07-tech-stack-and-architecture.md#every-frame)): commands from the UI go to the sim; the sim advances by the frame's real time × speed in fixed steps (1 s, or 10 s above ×1,000), handling every queued event at its exact time; it builds one plain-object snapshot; the scene and the HUD read it (the HUD 4 times a second); the frame renders. A frame never counts as longer than 0.1 s, so a stalled tab doesn't make the plant jump.
 
-All defaults live in one file, `src/data/plant.json` (schema 6), checked at start-up. Every value has a key and a source or a "sim assumption" note in the [decision log](../plan/DECISIONS.md) (D1–D15). Names carry their unit (`levelL`, `flowLph`, `tempC`), and conversions happen only in `units.ts` ([R8](../plan/REVIEW.md#r8-units-in-typescript)). Randomness comes from seeded streams (mulberry32, seed 81006), so a run repeats exactly.
+All defaults live in one file, `src/data/plant.json` (schema 8), checked at start-up. Every value has a key and a source or a "sim assumption" note in the [decision log](../plan/DECISIONS.md) (D1–D17). Names carry their unit (`levelL`, `flowLph`, `tempC`), and conversions happen only in `units.ts` ([R8](../plan/REVIEW.md#r8-units-in-typescript)). Randomness comes from seeded streams (mulberry32, seed 81006), so a run repeats exactly.
 
 ### 2.2 The process model
 
@@ -36,6 +36,8 @@ All defaults live in one file, `src/data/plant.json` (schema 6), checked at star
 - the divert limit, B\* = 1, is T = 135 + 10.5 log10(10.1 ÷ t): 139.22 °C at 4 s, 136.06 °C at 8 s.
 
 Below the limit the divert valve sends milk to the reject tank for 3 min, then the plant cleans in place for 80 min and re-sterilizes for 30 min at 125 °C or more: 113 min without product ([D2](../plan/DECISIONS.md#d2-missing-defaults)). The clean walks the Dairy Processing Handbook's six steps for heated circuits (pre-rinse, lye at 75 °C, rinse, acid at 70 °C, post-rinse, cooling), and after every 10 h of production a 30 min intermediate clean runs water, lye and water at the set point; the CIP station pumps each fluid at 24,000 L/h, and the pipes of the circuit take its colour ([D16](../plan/DECISIONS.md#d16-phase-7-cleaning-programmes)). The display noise is capped at ±0.3 °C, so noise alone never diverts at 140 °C ([D4](../plan/DECISIONS.md#d4-divert-rule-and-display-noise)). The flash vessel returns the milk to 80 °C and a cooler to 20 °C.
+
+**Steam and energy.** The boiler house raises the injector's steam: m = Q × cp × ΔT ÷ 2,200 kJ/kg, 1,652 kg/h for 16,000 L/h from 81.75 °C to 140 °C. Raising a kilogram at 150 psig from 93 °C feedwater takes 2,391 kJ, burnt at 85.7% on natural gas ([US DOE Steam Tip Sheet #15](https://www1.eere.energy.gov/manufacturing/tech_assistance/pdfs/steam15_benchmark.pdf)): 1,280 kW of gas in production, beside the homogenizer's 125 kW of electricity. While the plant cleans or re-sterilizes, the steam heats the 24,000 L/h circulation from the deaerator outlet instead, 2,723 kg/h in an intermediate clean, and the preheater's 30 s lag sets when it peaks. Regeneration gives the milk 56.6% of its heating. The panel counts the gas and electricity since opening per tonne of raw milk, the EU's dairy indicator ([Decision (EU) 2019/2031](https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32019D2031), BAT 21): 92 kWh/t over a day at the defaults, under the 100–600 kWh/t given for a whole market-milk dairy. A divert costs 113 min of steam, 1,373 kg, with no product ([D17](../plan/DECISIONS.md#d17-phase-8-steam-and-energy), H115–H119). The totals integrate the lags exactly, so they agree to 1e-9 whatever the step size.
 
 **The aseptic tank couples the two halves.** It holds 20,000 L and opens half full. The UHT plant makes 16,000 L/h and the two fillers draw 15,000, so the tank gains 1,000 L/h. Above 90% the UHT plant drops to 50% flow, and back to full flow below 60%. Below 150 L the fillers stop, and they restart above 500 L. Each step cuts at the moment a threshold is crossed, so the litres balance exactly: the tests check that milk in equals milk out plus what the tanks hold, every sim hour for 60 days.
 
@@ -67,9 +69,10 @@ Every expected value is worked by hand first, then tested. `process` writes the 
 | 60-day run | Conservation every sim hour, bounded queues, 1 s and 10 s steps agree | `tests/sim/packsLongRun.test.ts` |
 | Scenario scripts | Each fault's timings and KPIs (H104–H110), resets, the same seed giving the same log | `tests/sim/scenarios.test.ts` |
 | Cleaning programmes | The CIP's six steps and the AIC's three: their order, times and temperatures, and the circulation speed (H111–H114) | `tests/sim/cleaning.test.ts` |
+| Steam and energy | The boiler's figures, the steam, gas and electricity in production, cleaning and re-sterilizing, a divert's cost and a day's energy per tonne (H115–H119), and the totals at four step sizes | `tests/sim/energy.test.ts` |
 | Demo script | The live demo's sequence replayed, every number the presenter quotes | `tests/sim/demoScript.test.ts` |
 | Assets | Every model's size, nodes, budget, licence, and the committed files byte for byte | `assets/scripts/*.test.mjs` |
-| Browser | The app in Chromium: stages and camera, controls, KPIs, the liquid line and divert, the cleaning steps, silo to truck, scenarios, tour, About, loading and error states, no console errors | `e2e/*.spec.ts` |
+| Browser | The app in Chromium: stages and camera, controls, KPIs, the liquid line and divert, the cleaning steps, the steam and energy, silo to truck, scenarios, tour, About, loading and error states, no console errors | `e2e/*.spec.ts` |
 
 At the defaults the 60-day run gives 349.8 pallets a day (hand calculation: about 350), OEE 91.0% (90.91%), 8.5% of production time throttled (about 9%), 2,421–2,626 pallets in quarantine (the review's range), 14.38 trucks a day, every one loaded on arrival, and stock growing by about 30 pallets a day ([phase 4 acceptance](../plan/hand-calculations.md#phase-4-acceptance-runs)).
 
@@ -98,7 +101,7 @@ The machines are the project's own models, built in code (`assets/scripts/make-h
 
 ## 3. Limitations
 
-The [About panel](../src/data/about.md) lists the accepted simplifications. The main ones: plug flow with no pressure drop or fouling; temperatures that step with a short lag rather than follow heat-transfer equations; one product and pack size; cleaning as timed steps whose fluids are not part of the balance; failures at simple random rates; trucks at a fixed interval rather than random orders; scripted faults with one fixed size each. The model also mixes plant types: a direct UHT plant with the homogenizer before it, and the 50% throttle of indirect plants ([R5](../plan/REVIEW.md#r5-plant-type-mix)).
+The [About panel](../src/data/about.md) lists the accepted simplifications. The main ones: plug flow with no pressure drop or fouling; temperatures that step with a short lag rather than follow heat-transfer equations; one product and pack size; cleaning as timed steps whose fluids are not part of the balance; energy counted for the injector's steam and the homogenizer only; failures at simple random rates; trucks at a fixed interval rather than random orders; scripted faults with one fixed size each. The model also mixes plant types: a direct UHT plant with the homogenizer before it, and the 50% throttle of indirect plants ([R5](../plan/REVIEW.md#r5-plant-type-mix)).
 
 ## 4. How to run and test
 
