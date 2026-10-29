@@ -67,7 +67,7 @@ Twelve slides, about 15 minutes with the live demo (slide 8). One slide per head
 
 ## 10. Performance
 
-- 207 draw calls and about 232,000 triangles at the overview (budget 350 and 300,000)
+- 222 draw calls and about 244,000 triangles at the overview (budget 350 and 300,000)
 - Instanced packs and pallets; one shadow-casting light; baked ambient occlusion
 - 60 fps check on the target laptop: a fixed 60 s camera path at ×1 and ×10,000
 

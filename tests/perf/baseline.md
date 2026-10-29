@@ -188,6 +188,26 @@ Measured on 27 October 2026 on the phase 7 branch (contracts v5, the CIP station
 
 14 draw calls more than phase 5 at the overview: the station's steel body and its pump (each in the main and the shadow pass), a band and a lamp per tank (main pass only: they sit on the tanks, inside their shadow; casting their own read 224), and the CIP supply and return lines (both passes). The shadow pass draws the body, the pump and the two lines from any camera, so every stop draws at least 4 more; stages 4 and 5 frame the station itself. Cleaning changes colours and a shader uniform only, not draw calls. Software GL gave 3.0 fps at the overview at 1440 × 900 (3.7 at 1280 × 720), at a load average of about 4.5 against phase 5's 4: not comparable, and not the 60 fps check, which runs on the target laptop.
 
+### Phase 8: the boiler house's plume
+
+Measured on 29 October 2026 on the phase 8 branch (contracts v6, the live boiler house), a production build served by `vite preview`, in headless Chromium 153.0.8010.12 on SwiftShader, on the live sim with no scenario running. 34 machines; within the overview budget; no console errors.
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **222** | **244,266** | **222** | **244,266** |
+| 1 Standardization | 110 | 136,632 | 110 | 136,632 |
+| 2 Preheating | 107 | 138,552 | 108 | 138,564 |
+| 3 Homogenization | 108 | 135,788 | 108 | 135,788 |
+| 4 UHT | 123 | 148,152 | 126 | 148,556 |
+| 5 Flash cooling | 118 | 141,832 | 118 | 141,832 |
+| 6 Aseptic tank | 99 | 129,828 | 101 | 130,044 |
+| 7 Filling | 111 | 144,268 | 111 | 144,268 |
+| 8 Packaging | 121 | 145,586 | 122 | 145,754 |
+| 9 Quarantine & QA | 142 | 214,160 | 149 | 222,888 |
+| 10 Warehouse | 148 | 156,832 | 163 | 163,980 |
+
+One draw call and 2,112 triangles more than phase 7 at every camera: the chimney's plume, six puffs in one `InstancedMesh` (main pass only, as the flash vessel's vapour). Its copies move, so it is not frustum-culled, and it shows from any camera whenever the boiler burns gas, nearly all the time. Software GL gave 3.8 fps at the overview at 1440 × 900 (3.9 at 1280 × 720), at a load average of about 4: as phase 7's, and not the 60 fps check, which runs on the target laptop.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.
