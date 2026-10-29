@@ -170,9 +170,9 @@ describe('energyPerTonneText (phase 8, contracts v6)', () => {
   const energy = createSim(plantConfig).snapshot().liquid.energy;
   if (!energy) throw new Error('no liquid.energy');
 
-  it('reads the energy since opening per tonne of raw milk, one decimal: "92.4 kWh/t raw milk" after a day (H119)', () => {
-    expect(energyPerTonneText({ energy: { ...energy, kwhPerT: 92.38 } })).toBe('92.4 kWh/t raw milk');
-    expect(energyPerTonneText({ energy: { ...energy, kwhPerT: 1_234.56 } })).toBe('1,234.6 kWh/t raw milk');
+  it('reads the energy since opening per tonne of raw milk, one decimal: "92.4 kWh/t" after a day (H119)', () => {
+    expect(energyPerTonneText({ energy: { ...energy, kwhPerT: 92.38 } })).toBe('92.4 kWh/t');
+    expect(energyPerTonneText({ energy: { ...energy, kwhPerT: 1_234.56 } })).toBe('1,234.6 kWh/t');
   });
 
   it('shows a dash before any raw milk is drawn, and from a snapshot without energy', () => {
@@ -185,6 +185,6 @@ describe('energyPerTonneText (phase 8, contracts v6)', () => {
   it('sits right after the boiler gas in the stage 4 panel, reading the liquid line', () => {
     const row = DERIVED_ROWS[4]?.find((each) => each.key === 'energyPerT');
     expect(row).toEqual(expect.objectContaining({ label: 'Energy since opening', after: 'gasKw' }));
-    expect(row?.read({}, { energy: { ...energy, kwhPerT: 86.62 } })).toBe('86.6 kWh/t raw milk');
+    expect(row?.read({}, { energy: { ...energy, kwhPerT: 86.62 } })).toBe('86.6 kWh/t');
   });
 });

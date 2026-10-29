@@ -1,7 +1,7 @@
 // The stage 1–6 physics as pure functions of plant.json and the live flows, shared by the live
 // model (liquidLine.ts) and the ?mock sim. Litres are treated as kilograms throughout (sim
 // assumption, as in H3), so L/h × kJ/(kg·K) × K gives kJ/h, and L/s gives kJ/s = kW.
-import { fracToPct, kgPerHToKgPerS, lphToLps, type PlantConfig } from '../../contracts';
+import { fracToPct, kgPerHToKgPerS, kjToKwh, lphToLps, type PlantConfig } from '../../contracts';
 import { hydraulicPowerKw, surplusCreamFrac } from '../formulas';
 
 /** Stage 1: the raw milk the separator needs for standardizedLph of target-fat milk, and the cream left over (H3, H4). */
@@ -53,9 +53,17 @@ export function steamHeatKw(config: PlantConfig, steamKgPerH: number): number {
   return kgPerHToKgPerS(steamKgPerH) * config.uht.steamLatentKjPerKg;
 }
 
-/** Boiler house (phase 8, D17): gas burned to raise steamKgPerH of steam, ṁ_steam × boiler heat ÷ efficiency, in kW. */
+/** Boiler house (phase 8, D17): gas burned for each kilogram of steam, boiler heat ÷ efficiency, in kJ. */
+const gasKjPerKg = (config: PlantConfig): number => config.energy.boilerHeatKjPerKg / config.energy.boilerEfficiencyFrac;
+
+/** Boiler house (phase 8, D17): gas burned to raise steamKgPerH of steam, in kW. */
 export function boilerGasKw(config: PlantConfig, steamKgPerH: number): number {
-  return (kgPerHToKgPerS(steamKgPerH) * config.energy.boilerHeatKjPerKg) / config.energy.boilerEfficiencyFrac;
+  return kgPerHToKgPerS(steamKgPerH) * gasKjPerKg(config);
+}
+
+/** Boiler house (phase 8, D17): gas burned to raise steamKg of steam, in kWh. */
+export function boilerGasKwh(config: PlantConfig, steamKg: number): number {
+  return kjToKwh(steamKg * gasKjPerKg(config));
 }
 
 /**

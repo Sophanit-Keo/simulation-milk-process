@@ -9,7 +9,6 @@ import {
   dayToS,
   fracToPct,
   hToS,
-  kjToKwh,
   kwSToKwh,
   lToT,
   minToS,
@@ -35,6 +34,7 @@ import { createCore } from './core';
 import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, tubeVolumeL } from './formulas';
 import {
   boilerGasKw,
+  boilerGasKwh,
   condenserKw,
   creamingRiskPct,
   globuleUm,
@@ -293,7 +293,7 @@ export function createMockSim(config: PlantConfig): Sim {
 
     // 2 and 4: the steam and energy (phase 8, contracts v6).
     const rates = energyRates(episode.mode, flowLph);
-    const gasKwh = kjToKwh((steamKg * config.energy.boilerHeatKjPerKg) / config.energy.boilerEfficiencyFrac);
+    const gasKwh = boilerGasKwh(config, steamKg);
     const energy: EnergySnapshot = {
       steamKgPerH: rates.steamKgPerH,
       steamUse: rates.use,

@@ -120,13 +120,14 @@ export function marginText(values: Readonly<Record<string, number>>): string {
 
 /**
  * The energy since the plant opened per tonne of raw milk drawn (contracts v6, phase 8), as BAT counts it for
- * dairies: the boiler's gas and the homogenizer's electricity, "92.4 kWh/t raw milk" after a day. "—" before any
+ * dairies: the boiler's gas and the homogenizer's electricity, "92.4 kWh/t" after a day (About says per tonne of
+ * what; "raw milk" in the value would wrap the row). "—" before any
  * raw milk is drawn, or from an older snapshot.
  */
 export function energyPerTonneText(liquid: Partial<Pick<LiquidSnapshot, 'energy'>> | undefined): string {
   const kwhPerT = liquid?.energy?.kwhPerT;
   if (typeof kwhPerT !== 'number' || !Number.isFinite(kwhPerT)) return NO_VALUE;
-  return `${formatNumber(kwhPerT, 1)} kWh/t raw milk`;
+  return `${formatNumber(kwhPerT, 1)} kWh/t`;
 }
 
 export const DERIVED_ROWS: Readonly<Partial<Record<StageId, readonly DerivedRow[]>>> = {

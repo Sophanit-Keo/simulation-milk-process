@@ -25,7 +25,6 @@ import {
   cleaningSteps,
   fracToPct,
   kgPerHToKgPerS,
-  kjToKwh,
   kwSToKwh,
   lphToLps,
   lpsToLph,
@@ -61,6 +60,7 @@ import {
 } from './formulas';
 import {
   boilerGasKw,
+  boilerGasKwh,
   condenserKw,
   creamingRiskPct,
   globuleUm,
@@ -613,7 +613,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     const recoveredKw = heatRecoveredKw(config, uhtLph, state.preheatTempC);
     const electricKw = homogenizerPowerKw(config, uhtLph, totalBar);
     const regeneration = uhtLph > 0 ? regenerationPct(recoveredKw, steamHeatKw(config, steamKgPerH)) : null;
-    const gasKwh = kjToKwh((totals.steamKg * config.energy.boilerHeatKjPerKg) / config.energy.boilerEfficiencyFrac);
+    const gasKwh = boilerGasKwh(config, totals.steamKg);
     const energy: EnergySnapshot = {
       steamKgPerH,
       steamUse: load && steamKgPerH > 0 ? load.use : null,

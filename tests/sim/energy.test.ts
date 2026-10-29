@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { checkPlantConfig, lToT, type PlantConfig, type Snapshot } from '../../src/contracts';
 import { createSim } from '../../src/sim';
 import { lagArea, positiveLagArea } from '../../src/sim/formulas';
-import { boilerGasKw } from '../../src/sim/liquid/stageModels';
+import { boilerGasKw, boilerGasKwh } from '../../src/sim/liquid/stageModels';
 import type { LiquidLine } from '../../src/sim/liquidLine';
 import { expectWithin } from '../helpers/expectWithin';
 import { quietConfig, startLiquid } from '../helpers/liquidRun';
@@ -83,6 +83,8 @@ describe('H115: the boiler', () => {
   it('burns 2,790.11 kJ of gas a kilogram at 85.7%, 0.775 kWh', () => {
     // 3,600 kg/h is 1 kg/s, so the gas in kW is the kJ a kilogram.
     expectWithin(boilerGasKw(plantConfig, 3_600), 2_790.11, 0.01);
+    expectWithin(boilerGasKwh(plantConfig, 1), 0.775, 0.0001);
+    expectWithin(boilerGasKwh(plantConfig, 3_600), boilerGasKw(plantConfig, 3_600), 1e-9);
   });
 
   it('gives the milk what the model takes for steam, within 0.4%: 2,780.8 − 589.1 = 2,191.6 kJ/kg against 2,200', () => {
@@ -216,7 +218,7 @@ describe('H118: the cost of a divert', () => {
 
   it('burns 1,064.07 kWh of gas for it, against 3,111.61 kg of steam in 113 min of production', () => {
     const outageKg = OUTAGE.divertKg + OUTAGE.cipKg + OUTAGE.sterilizeKg;
-    expectWithin(boilerGasKw(plantConfig, outageKg), OUTAGE.gasKwh, 0.05);
+    expectWithin(boilerGasKwh(plantConfig, outageKg), OUTAGE.gasKwh, 0.05);
     expectWithin((PRODUCTION.steamKgPerH * 113) / 60, 3_111.61, 0.01);
   });
 

@@ -8,7 +8,7 @@ import { expectLanded, railButton, sceneCall, waitForClock, waitForScene } from 
 // milk has more than tripled by the time production resumes. The exact numbers are the unit tests'
 // (tests/sim/energy.test.ts); here what shows on screen.
 
-/** The number in a panel row's value, e.g. 86.6 from "86.6 kWh/t raw milk". */
+/** The number in a panel row's value, e.g. 86.6 from "86.6 kWh/t". */
 const numberIn = (text: string | null): number => Number((text ?? '').replace(/,/g, '').match(/[\d.]+/)?.[0] ?? Number.NaN);
 
 test('the boiler house and the stage 2 and 4 panels show the steam and the energy; re-sterilizing after a divert burns gas for no milk', async ({ page }) => {
@@ -37,7 +37,7 @@ test('the boiler house and the stage 2 and 4 panels show the steam and the energ
   await expect(steamRow).toHaveText('1,652 kg/h');
   await expect(gasRow).toHaveText('1,280 kW');
   // Only production since the plant opened, so the energy per tonne is H116's.
-  await expect(energyRow).toHaveText('Energy since opening 86.6 kWh/t raw milk');
+  await expect(energyRow).toHaveText('Energy since opening 86.6 kWh/t');
 
   await page.getByTestId('scenario-menu').click();
   await page.locator('#scenario-menu-list [data-scenario="uhtTempDrop"]').click();
