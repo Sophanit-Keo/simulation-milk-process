@@ -3,10 +3,14 @@
 // FactoryView (model.ts) and nothing of its own. Every update writes the DOM only where a text or attribute
 // changed (setText, setAttr), so the clock tick each second leaves the rest of the page alone; a card's rows
 // are rebuilt only when its lines change (another line joins or leaves, or the order changes).
+//
+// Phase 10 (D20) adds the 3D view: a Board / 3D switch in the header, the viewport the floor is drawn in
+// (src/factory/scene/, which main.ts loads), beside the cards in 3D, and a "Show in 3D" button on each card
+// and row there. What the floor or a button picks is marked on its card or row.
 import type { Status } from '../contracts';
 import { createLamp, el, setAttr, setLamp, setText } from '../ui/dom';
 import { formatDuration, formatNumber } from '../ui/format';
-import { POLL_MS, type FactoryView, type LineView, type LiveState, type UhtView } from './types';
+import { POLL_MS, type FactorySelection, type FactoryView, type FactoryViewMode, type LineView, type LiveState, type UhtView } from './types';
 
 // ───── Texts (pure, so tests can call them) ─────
 
@@ -116,23 +120,36 @@ function linesKey(lines: readonly LineView[]): string {
   return lines.map((line) => line.id).join('\n');
 }
 
+/** "Show in 3D": shown only in the 3D view (factory.css), where it flies the floor's camera to its card or row. */
+function locateButton(testId: string, onLocate: () => void): HTMLButtonElement {
+  const node = button('Show in 3D', 'link fb-locate', testId);
+  node.addEventListener('click', onLocate);
+  return node;
+}
+
+type Locate = (selection: FactorySelection) => void;
+
 // ───── A line's row ─────
 
 interface LineRowView {
   root: HTMLLIElement;
   update(line: LineView): void;
+  /** Marks the row while its line is picked. */
+  mark(selection: FactorySelection | null): HTMLElement | null;
 }
 
-function createLineRow(): LineRowView {
+function createLineRow(onLocate: Locate): LineRowView {
   const root = el('li', 'fb-line');
   const lamp = quietLamp('idle');
   const body = el('div', 'fb-line-body');
+  let lineId = '';
 
   const top = el('div', 'fb-line-top');
   const name = el('h3', 'fb-line-name');
   const status = el('span', 'fb-line-status');
   status.dataset.testid = 'line-status';
-  top.append(name, status);
+  const locate = locateButton('locate-line', () => onLocate({ kind: 'line', id: lineId }));
+  top.append(name, status, locate);
 
   const filler = el('p', 'fb-line-filler');
   filler.dataset.testid = 'line-filler';
@@ -157,10 +174,12 @@ function createLineRow(): LineRowView {
   return {
     root,
     update(line) {
+      lineId = line.id;
       setAttr(root, 'data-testid', `line-${line.name}`);
       setAttr(root, 'data-status', line.status);
       setLamp(lamp, line.lamp);
       setText(name, line.name);
+      setAttr(locate, 'aria-label', `Show ${line.name} in 3D`);
       setText(status, line.statusText);
       setText(filler, fillerText(line));
 
@@ -178,11 +197,23 @@ function createLineRow(): LineRowView {
       setAttr(troubles, 'data-sev', line.worstSev === null ? null : String(line.worstSev));
       show(troubles, trouble !== '');
     },
+    mark(selection) {
+      const on = selection?.kind === 'line' && selection.id === lineId;
+      setAttr(root, 'data-selected', on ? 'true' : null);
+      return on ? root : null;
+    },
   };
 }
 
+interface LineListView {
+  root: HTMLUListElement;
+  update(lines: readonly LineView[]): void;
+  /** Marks the picked line's row, and returns it (null when it is not in this list). */
+  mark(selection: FactorySelection | null): HTMLElement | null;
+}
+
 /** A list of line rows that rebuilds its rows only when the lines change. */
-function createLineList(): { root: HTMLUListElement; update(lines: readonly LineView[]): void } {
+function createLineList(onLocate: Locate): LineListView {
   const root = el('ul', 'fb-lines');
   let key: string | null = null;
   let rows: LineRowView[] = [];
@@ -192,11 +223,16 @@ function createLineList(): { root: HTMLUListElement; update(lines: readonly Line
       const nextKey = linesKey(lines);
       if (nextKey !== key) {
         key = nextKey;
-        rows = lines.map(() => createLineRow());
+        rows = lines.map(() => createLineRow(onLocate));
         root.replaceChildren(...rows.map((row) => row.root));
       }
       lines.forEach((line, index) => rows[index].update(line));
       show(root, lines.length > 0);
+    },
+    mark(selection) {
+      let found: HTMLElement | null = null;
+      for (const row of rows) found = row.mark(selection) ?? found;
+      return found;
     },
   };
 }
@@ -206,12 +242,15 @@ function createLineList(): { root: HTMLUListElement; update(lines: readonly Line
 interface UhtCardView {
   root: HTMLElement;
   update(uht: UhtView): void;
+  /** Marks the card while its UHT is picked, or its row while one of its lines is; returns what it marked. */
+  mark(selection: FactorySelection | null): HTMLElement | null;
 }
 
-function createUhtCard(): UhtCardView {
+function createUhtCard(onLocate: Locate): UhtCardView {
   const titleId = uniqueId('fb-uht');
   const root = el('section', 'fb-uht card');
   root.setAttribute('aria-labelledby', titleId);
+  let uhtName = '';
 
   const head = el('div', 'fb-uht-head');
   const lamp = quietLamp('idle');
@@ -219,7 +258,8 @@ function createUhtCard(): UhtCardView {
   name.id = titleId;
   const capacity = el('span', 'fb-cap');
   capacity.dataset.testid = 'capacity';
-  head.append(lamp, name, capacity);
+  const locate = locateButton('locate-uht', () => onLocate({ kind: 'uht', name: uhtName }));
+  head.append(lamp, name, capacity, locate);
 
   const state = el('p', 'fb-state');
   state.dataset.testid = 'draw';
@@ -239,12 +279,14 @@ function createUhtCard(): UhtCardView {
   over.dataset.testid = 'over-capacity';
   over.hidden = true;
 
-  const lines = createLineList();
+  const lines = createLineList(onLocate);
   root.append(head, state, meter, over, lines.root);
 
   return {
     root,
     update(uht) {
+      uhtName = uht.name;
+      setAttr(locate, 'aria-label', `Show ${uht.name} in 3D`);
       setAttr(root, 'data-testid', `uht-${uht.name}`);
       setAttr(root, 'data-state', uht.state);
       setLamp(lamp, uht.lamp);
@@ -263,11 +305,21 @@ function createUhtCard(): UhtCardView {
 
       lines.update(uht.lines);
     },
+    mark(selection) {
+      const on = selection?.kind === 'uht' && selection.name === uhtName;
+      setAttr(root, 'data-selected', on ? 'true' : null);
+      const row = lines.mark(selection);
+      return on ? root : row;
+    },
   };
 }
 
 /** The card of the UHT lines whose UHT is none Let Report lists. */
-function createUnassignedCard(): { root: HTMLElement; update(lines: readonly LineView[]): void } {
+function createUnassignedCard(onLocate: Locate): {
+  root: HTMLElement;
+  update(lines: readonly LineView[]): void;
+  mark(selection: FactorySelection | null): HTMLElement | null;
+} {
   const titleId = uniqueId('fb-unassigned');
   const root = el('section', 'fb-uht fb-unassigned card');
   root.dataset.testid = 'unassigned';
@@ -278,7 +330,7 @@ function createUnassignedCard(): { root: HTMLElement; update(lines: readonly Lin
   name.id = titleId;
   head.append(name);
   const note = el('p', 'fb-note', "These UHT lines name no UHT plant from Let Report's factory settings.");
-  const lines = createLineList();
+  const lines = createLineList(onLocate);
   root.append(head, note, lines.root);
   return {
     root,
@@ -286,6 +338,7 @@ function createUnassignedCard(): { root: HTMLElement; update(lines: readonly Lin
       lines.update(unassigned);
       show(root, unassigned.length > 0);
     },
+    mark: (selection) => lines.mark(selection),
   };
 }
 
@@ -297,6 +350,10 @@ export interface BoardOptions {
   /** The form was sent with an email and a password (both filled in). */
   onSignIn(email: string, password: string): void;
   onSignOut(): void;
+  /** The viewer picked Board or 3D in the header. */
+  onView(mode: FactoryViewMode): void;
+  /** "Show in 3D" on a card or a row. */
+  onLocate(selection: FactorySelection): void;
 }
 
 export interface Board {
@@ -313,6 +370,12 @@ export interface Board {
   setLive(info: LiveInfo, nowMs: number): void;
   /** A short message over the last view, or null to clear it. */
   setLoadError(message: string | null): void;
+  /** Where the 3D floor is drawn (phase 10): shown beside the cards in the 3D view, hidden on the board. */
+  readonly viewport: HTMLElement;
+  /** Board, or the cards beside the 3D floor: the switch, the viewport and the "Show in 3D" buttons follow. */
+  setView(mode: FactoryViewMode): void;
+  /** Marks the picked UHT's card or line's row, or none; with `reveal`, scrolls it into view. */
+  setSelection(selection: FactorySelection | null, reveal?: boolean): void;
 }
 
 export function createBoard(root: HTMLElement, options: BoardOptions): Board {
@@ -355,7 +418,21 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   user.append('Signed in as ', userEmail);
   const signOut = button('Sign out', 'btn', 'sign-out');
   signOut.addEventListener('click', () => options.onSignOut());
-  session.append(live, user, signOut);
+  // Board or 3D (phase 10): two toggle buttons, the pressed one showing.
+  const views = el('div', 'fb-views');
+  views.setAttribute('role', 'group');
+  views.setAttribute('aria-label', 'View');
+  const viewButtons: Record<FactoryViewMode, HTMLButtonElement> = {
+    board: button('Board', 'fb-view', 'view-board'),
+    '3d': button('3D', 'fb-view', 'view-3d'),
+  };
+  viewButtons['3d'].title = 'The factory floor in 3D, beside the cards';
+  for (const [mode, node] of Object.entries(viewButtons) as [FactoryViewMode, HTMLButtonElement][]) {
+    node.setAttribute('aria-pressed', 'false');
+    node.addEventListener('click', () => options.onView(mode));
+    views.append(node);
+  }
+  session.append(views, live, user, signOut);
   header.append(brand, session);
 
   // ── sign-in form ──
@@ -450,9 +527,17 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   const noUhts = el('p', 'fb-empty', "Let Report's factory settings list no UHT plants yet.");
   noUhts.hidden = true;
   const grid = el('div', 'fb-uhts');
-  const unassigned = createUnassignedCard();
+  const unassigned = createUnassignedCard(options.onLocate);
   grid.append(unassigned.root);
-  boardSection.append(summary, loadError, empty, noUhts, grid);
+  // In the 3D view the floor stands beside the cards (factory.css); on the board the viewport is hidden.
+  const viewport = el('div', 'fb-viewport');
+  viewport.dataset.testid = 'factory-3d';
+  viewport.setAttribute('aria-label', 'The factory floor in 3D');
+  viewport.setAttribute('role', 'region');
+  viewport.hidden = true;
+  const body = el('div', 'fb-body');
+  body.append(viewport, grid);
+  boardSection.append(summary, loadError, empty, noUhts, body);
 
   const main = el('main', 'fb-main');
   main.append(form, boardSection);
@@ -460,10 +545,19 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
 
   let cardsKey: string | null = null;
   let cards: UhtCardView[] = [];
+  let selection: FactorySelection | null = null;
+
+  /** Marks the selection on the cards; returns what it marked. */
+  const mark = (): HTMLElement | null => {
+    let found: HTMLElement | null = null;
+    for (const card of cards) found = card.mark(selection) ?? found;
+    return unassigned.mark(selection) ?? found;
+  };
 
   function clearView(): void {
     cardsKey = null;
     cards = [];
+    selection = null;
     grid.replaceChildren(unassigned.root);
     unassigned.update([]);
     show(empty, true);
@@ -533,11 +627,12 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
       const nextKey = view.uhts.map((uht) => uht.name).join('\n');
       if (nextKey !== cardsKey) {
         cardsKey = nextKey;
-        cards = view.uhts.map(() => createUhtCard());
+        cards = view.uhts.map(() => createUhtCard(options.onLocate));
         grid.replaceChildren(...cards.map((card) => card.root), unassigned.root);
       }
       view.uhts.forEach((uht, index) => cards[index].update(uht));
       unassigned.update(view.unassigned);
+      mark();
     },
     setLive(info, nowMs) {
       setText(liveWords, liveText(info, nowMs));
@@ -547,6 +642,23 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
     setLoadError(message) {
       setText(loadError, message ?? '');
       show(loadError, message !== null);
+    },
+    viewport,
+    setView(mode) {
+      setAttr(root, 'data-view', mode);
+      setAttr(boardSection, 'data-view', mode);
+      for (const [each, node] of Object.entries(viewButtons) as [FactoryViewMode, HTMLButtonElement][]) {
+        setAttr(node, 'aria-pressed', each === mode ? 'true' : 'false');
+      }
+      show(viewport, mode === '3d');
+    },
+    setSelection(next, reveal = false) {
+      selection = next;
+      const marked = mark();
+      if (reveal && marked) {
+        const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+        marked.scrollIntoView({ block: 'nearest', behavior: smooth ? 'smooth' : 'auto' });
+      }
     },
   };
 }
