@@ -26,6 +26,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D18](#d18-reporting-a-fault-in-let-report) | What each fault is reported as in Let Report, through a prefilled link | — | Proposed |
 | [D19](#d19-the-factory-board) | The factory board: the real factory's UHT plants and lines, mirrored live from Let Report | — | Proposed |
 | [D20](#d20-the-factory-floor-in-3d) | The factory floor in 3D: a bay per UHT with its tank and fillers, drawn from the board's view | — | Proposed |
+| [D21](#d21-the-control-room-look) | The control-room look: dark by default, light kept, one palette for the simulation and Let Report | — | Proposed |
 
 ## D1. Batch size
 
@@ -394,6 +395,30 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Using it:** a click on a machine or its label flies the camera to it and marks its card or row on the board beside the floor; each card and row has a "Show in 3D" button that does the reverse. Esc, or "Whole factory", flies back to the whole floor. Labels are buttons, so the floor can be used from the keyboard.
 - **Why:** the board shows the factory's state in words; the floor shows where each line stands and what runs, as the 3D plant does for the teaching line, with the same data. Built on the board, it needs no second sign-in or Let Report change, and the sizes can be corrected when the developer measures the hall.
 - **What it changes:** `src/factory/layout.ts` and `src/factory/scene/` (new), the switch, the viewport and the "Show in 3D" buttons in `board.ts`, `main.ts` and `factory.css`, the contracts in `view.ts` and `types.ts`, and `src/scene/equipmentHost.ts`, which now hands out its loading context. The teaching plant is unchanged.
+
+## D21. The control-room look
+
+- **Status:** Proposed
+- **Date:** 2026-10-30
+- **Review note:** none (the developer asked for a more modern interface on all three screens, in a dark control-room style; [phase 11](agent-plan/phase-11-control-room.md))
+- **Decision:** the 3D simulation, the factory board with its floor, and Let Report share one look: a dark control room, like a plant's operations screen. Dark is the default; the light theme is kept, as it was. Each viewer's choice is kept in their browser.
+- **The palette** (`src/styles/tokens.css`, and Let Report's `tokens/theme.css` with the same values):
+
+| Role | Dark | Light |
+|---|---|---|
+| Page, panel, raised | #070b0e, #0c1317, #111a20 | as before |
+| Text, muted, line | #e4ecf1, #8a9cab, #1f2c35 | as before |
+| Accent (selection, focus, links) | #38bdf8 | as before (#1767b0) |
+| Running, warning, stopped | #22d37a, #f5b134, #ff5b4a, each with a glow | as before, no glow |
+
+- **Rules with no key:**
+  - Lamps keep 3:1 against every background they sit on and text 4.5:1, in both themes (`tests/ui/lampContrast.test.ts`, `tests/scene/labels.test.ts`).
+  - The page sets its theme before its CSS loads, so it never flashes the other one.
+  - Motion is small (150–250 ms) and stops under `prefers-reduced-motion`.
+  - The look changes nothing a screen shows or does: tests, roles and keyboard paths stay.
+- **Why:** an operations screen is read at a glance, often in a dim control room; dark surfaces make the coloured lamps and live numbers stand out. Keeping light serves bright rooms, printing and those who prefer it.
+- **What it changes:** the tokens and styles of the three screens, a theme switch on each, and the 3D views' lamps and floors in the dark theme.
+
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →
