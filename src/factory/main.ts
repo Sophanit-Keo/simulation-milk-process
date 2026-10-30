@@ -8,11 +8,17 @@
 // Phase 10 (D20): the 3D view. Picking 3D in the header (or opening factory.html#3d) loads the floor,
 // src/factory/scene/, by import() the first time, so three.js comes only then, in chunks of its own. The floor
 // draws each view the board draws, and what one picks the other marks.
+//
+// Phase 11 (D21): the demo. With ?demo in the address the page uses the demo's client (demoClient.ts) in place of
+// Let Report's: it starts signed in, sends nothing anywhere and stores nothing, and the board says its data is
+// made up. Everything else (the reloads on its change events, the poll, the clocks, the 3D view and #3d) is the
+// same. Leaving the demo opens the page without ?demo, in the same view.
 import '../styles/fonts.css';
 import '../styles/tokens.css';
 import '../styles/factory.css';
 import letReport from '../data/letReport.json';
-import { clockTime, createBoard, type LiveInfo } from './board';
+import { HASH_3D, boardHref, clockTime, createBoard, type LiveInfo } from './board';
+import { createDemoClient } from './demoClient';
 import { buildFactory } from './model';
 import { createFactoryClient } from './supabase';
 import {
@@ -34,8 +40,7 @@ const TICK_MS = 1000;
 const SESSION_ENDED = 'Your session has ended. Sign in again.';
 const POLL_S = POLL_MS / 1000;
 
-/** The 3D view's place in the address (D20): factory.html#3d opens it. */
-const HASH_3D = '#3d';
+/** factory.html#3d opens the 3D view (D20). */
 const modeOf = (hash: string): FactoryViewMode => (hash === HASH_3D ? '3d' : 'board');
 const SCENE_FAILED = 'The 3D view could not load. Reload the page to try again; the cards still show the factory.';
 
@@ -76,8 +81,21 @@ function start(): void {
   if (!root) throw new Error('factory.html must contain #factory');
 
   const params = new URLSearchParams(location.search);
-  const client = createFactoryClient({ supabaseUrl: letReport.supabaseUrl, publishableKey: letReport.publishableKey });
-  const board = createBoard(root, { appUrl: letReport.appUrl, onSignIn: signIn, onSignOut: signOut, onView: setMode, onLocate: locate });
+  /** factory.html?demo: a made-up day at the factory, for anyone without a Let Report account (D21). */
+  const demo = params.has('demo');
+  const client = demo
+    ? createDemoClient()
+    : createFactoryClient({ supabaseUrl: letReport.supabaseUrl, publishableKey: letReport.publishableKey });
+  const board = createBoard(root, {
+    appUrl: letReport.appUrl,
+    demo,
+    search: location.search,
+    onSignIn: signIn,
+    onSignOut: signOut,
+    onView: setMode,
+    onLocate: locate,
+  });
+  if (demo) document.title = `Demo · ${document.title}`;
   let mode = modeOf(location.hash);
   board.setView(mode);
 
@@ -128,6 +146,12 @@ function start(): void {
   function signOut(): void {
     // Stopped first, so the client's onSession(null) finds nothing running and the form shows no message.
     end();
+    if (demo) {
+      // "Leave demo" goes where the banner's "Leave the demo" link goes: the page without ?demo, in the same view.
+      client.signOut().catch(() => undefined);
+      location.assign(boardHref(location.search, false, mode));
+      return;
+    }
     board.showSignIn();
     // The client forgets the session even when Let Report can't be told.
     client.signOut().catch(() => undefined);

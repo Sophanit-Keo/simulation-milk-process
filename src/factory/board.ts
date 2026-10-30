@@ -7,10 +7,23 @@
 // Phase 10 (D20) adds the 3D view: a Board / 3D switch in the header, the viewport the floor is drawn in
 // (src/factory/scene/, which main.ts loads), beside the cards in 3D, and a "Show in 3D" button on each card
 // and row there. What the floor or a button picks is marked on its card or row.
+//
+// Phase 11 (D21): each row tells the line's story (how long in its status and who changed it, its note, and
+// while it cleans the CIP's reason and how far it has come), and the demo (factory.html?demo): a banner that
+// says its data is made up, "Leave the demo" in place of Sign out, and "Try the demo" on the sign-in form.
 import type { Status } from '../contracts';
 import { createLamp, el, setAttr, setLamp, setText } from '../ui/dom';
 import { formatDuration, formatNumber } from '../ui/format';
-import { POLL_MS, type FactorySelection, type FactoryView, type FactoryViewMode, type LineView, type LiveState, type UhtView } from './types';
+import {
+  DEMO_USER,
+  POLL_MS,
+  type FactorySelection,
+  type FactoryView,
+  type FactoryViewMode,
+  type LineView,
+  type LiveState,
+  type UhtView,
+} from './types';
 
 // ───── Texts (pure, so tests can call them) ─────
 
@@ -91,6 +104,49 @@ export function summaryText(view: FactoryView): string {
   return `${formatNumber(running)} of ${formatNumber(lines.length)} ${lineWord} running${draw}`;
 }
 
+/** "for 12 min · by Shift lead": how long the line has been in its status, and who changed it; either alone, '' with neither. */
+export function storyText(line: Pick<LineView, 'statusForS' | 'changedBy'>): string {
+  const since = line.statusForS === null || !Number.isFinite(line.statusForS) ? '' : `for ${formatDuration(Math.max(0, line.statusForS))}`;
+  const by = line.changedBy ? `by ${line.changedBy}` : '';
+  return [since, by].filter(Boolean).join(' · ');
+}
+
+/** The share of its CIP a cleaning line has done, 0 to 1; null when it is not cleaning or Let Report gives no share. */
+function cipShare(line: Pick<LineView, 'status' | 'cipDoneFrac'>): number | null {
+  if (line.status !== 'cleaning' || line.cipDoneFrac === null || !Number.isFinite(line.cipDoneFrac)) return null;
+  return Math.min(1, Math.max(0, line.cipDoneFrac));
+}
+
+/**
+ * "Standard CIP · 40 % done" while the line cleans with a share done, its reason with a capital first letter;
+ * "CIP · 40 % done" with no reason; '' otherwise. Whole percent, rounded down, so it reads 100 % only once done.
+ */
+export function cipText(line: Pick<LineView, 'status' | 'cipReason' | 'cipDoneFrac'>): string {
+  const share = cipShare(line);
+  if (share === null) return '';
+  // A hair over before rounding down, so a share such as 0.29 (28.999… × 100 in floating point) reads 29 %.
+  const pct = Math.floor(share * 100 + 1e-9);
+  const reason = line.cipReason ? `${line.cipReason.charAt(0).toUpperCase()}${line.cipReason.slice(1)} ` : '';
+  return `${reason}CIP · ${formatNumber(pct)} % done`;
+}
+
+/** The 3D view's place in the address (D20): factory.html#3d opens it. */
+export const HASH_3D = '#3d';
+
+/**
+ * The board's page, into the demo ("factory.html?demo#3d") or out of it ("factory.html#3d"), from the address's
+ * query (location.search): it keeps the other parameters (?greybox) and the 3D view. Relative, as the page's other
+ * links, so the GitHub Pages base path holds.
+ */
+export function boardHref(search: string, demo: boolean, mode: FactoryViewMode): string {
+  const rest = search
+    .replace(/^\?/, '')
+    .split('&')
+    .filter((part) => part !== '' && part.split('=')[0] !== 'demo');
+  const query = (demo ? ['demo', ...rest] : rest).join('&');
+  return `factory.html${query ? `?${query}` : ''}${mode === '3d' ? HASH_3D : ''}`;
+}
+
 // ───── DOM helpers ─────
 
 function show(node: HTMLElement, visible: boolean): void {
@@ -151,6 +207,28 @@ function createLineRow(onLocate: Locate): LineRowView {
   const locate = locateButton('locate-line', () => onLocate({ kind: 'line', id: lineId }));
   top.append(name, status, locate);
 
+  // The line's story (phase 11): how long in its status and who changed it, under its name.
+  const story = el('p', 'fb-line-story');
+  story.dataset.testid = 'line-story';
+
+  // While it cleans: the CIP's reason and share done, and a thin bar of the same share. The bar draws the text,
+  // so it stays out of the accessibility tree, as the UHT card's draw bar does.
+  const cip = el('div', 'fb-cip');
+  cip.dataset.testid = 'line-cip';
+  const cipWords = el('p', 'fb-cip-text');
+  const cipBar = el('div', 'fb-cip-bar');
+  cipBar.setAttribute('aria-hidden', 'true');
+  const cipFill = el('span', 'fb-cip-fill');
+  cipBar.append(cipFill);
+  cip.append(cipWords, cipBar);
+  let cipWidth = '';
+
+  // The note people keep on the line in Let Report: their own words, so text only, never HTML.
+  const note = el('p', 'fb-line-note');
+  const noteText = el('span', 'fb-line-note-text');
+  noteText.dataset.testid = 'line-note';
+  note.append(el('span', 'fb-line-note-label', 'Note:'), ' ', noteText);
+
   const filler = el('p', 'fb-line-filler');
   filler.dataset.testid = 'line-filler';
 
@@ -168,7 +246,7 @@ function createLineRow(onLocate: Locate): LineRowView {
   troubles.dataset.testid = 'line-troubles';
   outRow.append(output, troubles);
 
-  body.append(top, filler, lotRow, outRow);
+  body.append(top, story, cip, note, filler, lotRow, outRow);
   root.append(lamp, body);
 
   return {
@@ -181,6 +259,23 @@ function createLineRow(onLocate: Locate): LineRowView {
       setText(name, line.name);
       setAttr(locate, 'aria-label', `Show ${line.name} in 3D`);
       setText(status, line.statusText);
+
+      const storyLine = storyText(line);
+      setText(story, storyLine);
+      show(story, storyLine !== '');
+
+      const cipLine = cipText(line);
+      setText(cipWords, cipLine);
+      const width = `${formatNumber((cipShare(line) ?? 0) * 100, 1)}%`;
+      if (width !== cipWidth) {
+        cipWidth = width;
+        cipFill.style.width = width;
+      }
+      show(cip, cipLine !== '');
+
+      setText(noteText, line.note);
+      show(note, line.note !== '');
+
       setText(filler, fillerText(line));
 
       const productLine = productText(line);
@@ -347,8 +442,16 @@ function createUnassignedCard(onLocate: Locate): {
 export interface BoardOptions {
   /** Let Report's address, linked from the sign-in text. */
   appUrl: string;
+  /**
+   * The demo (phase 11, D21, factory.html?demo): the board says its data is made up, the header shows DEMO_USER,
+   * and Sign out reads "Leave demo". Outside it, the sign-in form offers "Try the demo".
+   */
+  demo: boolean;
+  /** The address's query (location.search): the links into and out of the demo keep its other parameters. */
+  search: string;
   /** The form was sent with an email and a password (both filled in). */
   onSignIn(email: string, password: string): void;
+  /** Sign out; in the demo, "Leave demo". */
   onSignOut(): void;
   /** The viewer picked Board or 3D in the header. */
   onView(mode: FactoryViewMode): void;
@@ -379,6 +482,10 @@ export interface Board {
 }
 
 export function createBoard(root: HTMLElement, options: BoardOptions): Board {
+  const { demo } = options;
+  /** Who the header names: the session's email, or the demo's user. */
+  const userName = (address: string): string => (demo ? DEMO_USER : address);
+
   // ── header ──
   const header = el('header', 'fb-head card');
   const brand = el('div', 'fb-brand');
@@ -399,7 +506,7 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   const siteSep = el('span', '', ' · ');
   siteSep.hidden = true;
   siteSep.setAttribute('aria-hidden', 'true');
-  sub.append(site, siteSep, 'UHT plants and lines, from Let Report');
+  sub.append(site, siteSep, demo ? 'UHT plants and lines, made up for the demo' : 'UHT plants and lines, from Let Report');
   brand.append(titleRow, sub);
 
   const session = el('div', 'fb-session');
@@ -415,8 +522,14 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   const user = el('p', 'fb-user');
   const userEmail = el('span', 'fb-user-email');
   userEmail.dataset.testid = 'user';
-  user.append('Signed in as ', userEmail);
-  const signOut = button('Sign out', 'btn', 'sign-out');
+  // The demo signs no one in: the header names the demo, and its button leaves it.
+  if (demo) {
+    user.dataset.demo = 'true';
+    user.append(userEmail);
+  } else {
+    user.append('Signed in as ', userEmail);
+  }
+  const signOut = button(demo ? 'Leave demo' : 'Sign out', 'btn', 'sign-out');
   signOut.addEventListener('click', () => options.onSignOut());
   // Board or 3D (phase 10): two toggle buttons, the pressed one showing.
   const views = el('div', 'fb-views');
@@ -487,6 +600,16 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   actions.append(submit);
   form.append(formTitle, note, email.wrap, password.wrap, errorLine, actions);
 
+  // Under the form, for anyone without an account (phase 11): the demo, in the view the page shows (setView).
+  const tryLink = el('a', '', 'Try the demo');
+  tryLink.href = boardHref(options.search, true, 'board');
+  tryLink.dataset.testid = 'try-demo';
+  if (!demo) {
+    const tryDemo = el('p', 'fb-try-demo');
+    tryDemo.append('No Let Report account? ', tryLink);
+    form.append(tryDemo);
+  }
+
   let busy = false;
   const markInvalid = (input: HTMLInputElement | null): void => {
     for (const each of [email.input, password.input]) setAttr(each, 'aria-invalid', each === input ? 'true' : null);
@@ -522,7 +645,19 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   const loadError = el('p', 'fb-load-error');
   loadError.dataset.testid = 'load-error';
   loadError.hidden = true;
-  const empty = el('p', 'fb-empty', 'Loading the factory from Let Report…');
+  // The demo's banner, at the top of the board: the data is made up, and the way back out (phase 11).
+  const leaveLink = el('a', 'link fb-demo-leave', 'Leave the demo');
+  leaveLink.href = boardHref(options.search, false, 'board');
+  leaveLink.dataset.testid = 'leave-demo';
+  if (demo) {
+    const banner = el('div', 'fb-demo');
+    banner.dataset.testid = 'demo-banner';
+    const words = el('p', 'fb-demo-text');
+    words.append(el('strong', '', 'Demo:'), " a made-up day at the factory, not Let Report's data. Lines stop, clean and change over on their own.");
+    banner.append(words, leaveLink);
+    boardSection.append(banner);
+  }
+  const empty = el('p', 'fb-empty', demo ? 'Loading the demo…' : 'Loading the factory from Let Report…');
   empty.dataset.testid = 'board-loading';
   const noUhts = el('p', 'fb-empty', "Let Report's factory settings list no UHT plants yet.");
   noUhts.hidden = true;
@@ -608,12 +743,12 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
       password.input.value = '';
       setText(errorLine, '');
       show(session, true);
-      setText(userEmail, address);
+      setText(userEmail, userName(address));
       show(boardSection, true);
       if (fromForm) title.focus();
     },
     setUser(address) {
-      setText(userEmail, address);
+      setText(userEmail, userName(address));
     },
     render(view) {
       show(empty, false);
@@ -647,6 +782,9 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
     setView(mode) {
       setAttr(root, 'data-view', mode);
       setAttr(boardSection, 'data-view', mode);
+      // Into and out of the demo in the same view: #3d stays.
+      setAttr(tryLink, 'href', boardHref(options.search, true, mode));
+      setAttr(leaveLink, 'href', boardHref(options.search, false, mode));
       for (const [each, node] of Object.entries(viewButtons) as [FactoryViewMode, HTMLButtonElement][]) {
         setAttr(node, 'aria-pressed', each === mode ? 'true' : 'false');
       }

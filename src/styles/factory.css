@@ -472,6 +472,64 @@ input {
   color: var(--bad);
 }
 
+/* ───── phase 11: each line's story (D21) ───── */
+
+/* How long the line has been in its status, and who changed it last, under its name. */
+.fb-line-story {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* While it cleans: the CIP's reason and share done in words, and under them a thin bar of the same share, in
+   the cleaning colour of the floor's pipes and rings. The bar is out of the accessibility tree; the words say it. */
+.fb-cip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 2px 0;
+}
+.fb-cip-text {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.fb-cip-bar {
+  max-width: 280px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.fb-cip-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--clean-lye);
+  transition: width 0.4s ease;
+}
+
+/* The note people keep on the line in Let Report, as they typed it (their line breaks kept). */
+.fb-line-note {
+  margin: 2px 0;
+  padding: 1px 0 1px 8px;
+  border-left: 2px solid var(--line);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.fb-line-note-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+.fb-line-note-text {
+  white-space: pre-line;
+}
+
 .fb-unassigned .fb-note {
   font-size: 13.5px;
 }
@@ -673,6 +731,53 @@ input {
   pointer-events: none;
 }
 
+/* ───── phase 11: the demo (D21) ───── */
+
+/* At the top of the board: the data is made up, in words, with the way out beside them. */
+.fb-demo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 8px 10px 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--accent-soft);
+}
+.fb-demo-text {
+  flex: 1 1 260px;
+  margin: 0;
+  font-size: 14px;
+}
+.fb-demo-leave {
+  flex: none;
+  padding: 6px 4px;
+}
+
+/* In the header the demo's name stands where the email would, as a tag. */
+.fb-user[data-demo='true'] .fb-user-email {
+  display: inline-block;
+  padding: 3px 9px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+}
+
+/* Under the sign-in form, for anyone without an account. */
+.fb-try-demo {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+.fb-try-demo a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .fb-board[data-view='3d'] .fb-body {
     grid-template-columns: minmax(0, 1fr);
@@ -704,7 +809,8 @@ input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fb-bar-fill {
+  .fb-bar-fill,
+  .fb-cip-fill {
     transition: none;
   }
 }
