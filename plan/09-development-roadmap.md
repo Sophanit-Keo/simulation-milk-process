@@ -34,7 +34,7 @@ Gate 2 is the safety net: if the run from silo to truck does not work by week 9,
 
 If the term runs past 12 weeks, the stretch list is: animated CIP cleaning, a steam and energy model, a switch between direct and indirect UHT, and a mobile layout. The first two are built, as phases 7 and 8 ([status](agent-plan/phase-6-polish-and-present.md#afterwards)); the switch and the mobile layout are not.
 
-After the term, the developer's own factory: phase 9 shows its three UHT plants and six lines on a live board fed by Let Report ([phase 9](agent-plan/phase-9-factory-board.md), [D19](DECISIONS.md#d19-the-factory-board)). Phase 10 and later will model the three UHT trains in 3D, each with its UHT, aseptic tank and fillers, and drive them from the same data; they get their own plan once the board is in use.
+After the term, the developer's own factory: phase 9 shows its three UHT plants and six lines on a live board fed by Let Report ([phase 9](agent-plan/phase-9-factory-board.md), [D19](DECISIONS.md#d19-the-factory-board)). Phase 10 puts the three UHT trains on a floor in 3D beside the board, each with its UHT, aseptic tank and fillers, driven from the same data ([phase 10](agent-plan/phase-10-factory-floor.md), [D20](DECISIONS.md#d20-the-factory-floor-in-3d)).
 
 The [agent plan](agent-plan/README.md) breaks each phase down into tasks for seven agents working in parallel, with hand-offs and an exit checklist per phase.
 

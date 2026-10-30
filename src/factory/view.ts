@@ -3,9 +3,12 @@
 // filler's speed and the pack size, and the plan lists the UHTs with their capacity. The board mirrors it live:
 // a line shows what Let Report says, as soon as it changes, and adds nothing of its own.
 //
+// Phase 10 adds the factory floor in 3D (D20): where each UHT, tank, filler and pipe stands, laid out from the
+// same view (layout.ts), at the end of this file.
+//
 // `lead` owns this file. It runs headless (tsconfig.headless.json), with the model that builds the view
-// (model.ts); the client's contracts, which need the browser's fetch and WebSocket, are in types.ts, which
-// re-exports this file.
+// (model.ts) and the floor's layout (layout.ts); the client's and the 3D view's contracts, which need the
+// browser, are in types.ts, which re-exports this file.
 import type { Status } from '../contracts';
 
 // ───── What Let Report holds (its REST rows, only the columns the board reads) ─────
@@ -139,3 +142,160 @@ export interface FactoryView {
 
 /** model.ts: the board's view of what Let Report holds, at the time `nowMs` (for the CIP and lot clocks). */
 export type BuildFactory = (data: FactoryData, nowMs: number) => FactoryView;
+
+// ───── Phase 10: the factory floor in 3D (layout.ts lays it out from the view; scene/ draws it) ─────
+//
+// The floor follows Let Report as the board does: a bay per UHT, in the order of `uht_units`, with the UHT
+// plant at the back, its aseptic tank in front of it and one filler per line in a row, each on its outfeed
+// belt; the lines no UHT claims stand in a bay of their own, last. Its sizes are the sim assumptions of D20.
+
+/**
+ * A point on the floor in metres (1 three.js unit = 1 m): x along the hall, the bays left to right; y up;
+ * z from the UHT plants at the back (−z) to the ends of the belts at the front (+z).
+ */
+export type FloorPointM = readonly [xM: number, yM: number, zM: number];
+
+/** A rectangle on the floor. */
+export interface FloorRectM {
+  xMinM: number;
+  xMaxM: number;
+  zMinM: number;
+  zMaxM: number;
+}
+
+/** Where the camera goes for a bay or a machine: the point it looks at, and its place relative to that point. */
+export interface CameraStopM {
+  targetM: FloorPointM;
+  offsetM: FloorPointM;
+}
+
+/** The filler models the floor knows by size (D20); any other name, or none, is 'other'. */
+export type FillerKind = 'TFA' | 'TBA/19' | 'TBA/22' | 'A3/Speed' | 'other';
+
+export const FILLER_KINDS: readonly FillerKind[] = ['TFA', 'TBA/19', 'TBA/22', 'A3/Speed', 'other'];
+
+/** One line's filler and its outfeed belt. */
+export interface FillerSpot {
+  /** The line it draws (LineView.id and name). */
+  lineId: string;
+  name: string;
+  kind: FillerKind;
+  /** The one roll-fed filler model, drawn at this scale: 1 for a TBA/19. */
+  scale: number;
+  /** The middle of the filler's footprint, on the floor; its outfeed faces +z. */
+  centreM: FloorPointM;
+  widthM: number;
+  depthM: number;
+  heightM: number;
+  /** Where its product pipe comes in: its back (−z) face. */
+  inletM: FloorPointM;
+  /** The outfeed belt, from the filler's front face along +z, its top at the height of `fromM`. */
+  belt: { fromM: FloorPointM; toM: FloorPointM; widthM: number };
+  /** Its label's anchor, just above it. */
+  labelM: FloorPointM;
+  camera: CameraStopM;
+}
+
+/** A UHT plant, drawn as one skid. */
+export interface UhtSpot {
+  name: string;
+  capacityLph: number;
+  /** The middle of the skid's footprint, on the floor; its product outlet faces +z. */
+  centreM: FloorPointM;
+  /** Along x, along z, and up. */
+  lengthM: number;
+  depthM: number;
+  heightM: number;
+  /** Where the sterile product leaves it, on its front face. */
+  outletM: FloorPointM;
+  labelM: FloorPointM;
+  camera: CameraStopM;
+}
+
+/** The UHT's aseptic tank, between it and its fillers. Let Report holds no level, so it is drawn closed. */
+export interface TankSpot {
+  /** The middle of its footprint, on the floor. */
+  centreM: FloorPointM;
+  radiusM: number;
+  /** To the top of its dome. */
+  heightM: number;
+  inletM: FloorPointM;
+  outletM: FloorPointM;
+}
+
+/**
+ * 'uht' runs from the UHT to its tank; 'header' from the tank along the row of fillers; 'line' is one line's
+ * drop from the header into its filler.
+ */
+export type PipeKind = 'uht' | 'header' | 'line';
+
+export interface PipeRoute {
+  /**
+   * Unique on the floor, by place rather than by name, so two UHTs Let Report names alike still get two:
+   * 'uht:<bay>', 'header:<bay>' and 'line:<bay>:<filler>', the indexes in `bays` and in the bay's `fillers`.
+   */
+  id: string;
+  kind: PipeKind;
+  /** For a 'line' pipe, the index in its bay's `fillers` of the filler it feeds; null otherwise. */
+  filler: number | null;
+  /** One or more runs of straight pieces, each in flow order (the header's two arms leave its tee). */
+  paths: readonly (readonly FloorPointM[])[];
+  radiusM: number;
+}
+
+export interface BayLayout {
+  /** The UHT's name; '' for the bay of the lines no UHT claims. */
+  uhtName: string;
+  /** Written on the floor in front of the bay: "UHT 2 · 8,000 L/h", or "Not assigned to a UHT". */
+  title: string;
+  titleM: FloorPointM;
+  rect: FloorRectM;
+  /** Both null in the bay of the lines no UHT claims. */
+  uht: UhtSpot | null;
+  tank: TankSpot | null;
+  /** In the view's order, left to right. */
+  fillers: FillerSpot[];
+  /** None in the bay of the lines no UHT claims, and no header in a bay without lines. */
+  pipes: PipeRoute[];
+  camera: CameraStopM;
+}
+
+export interface FactoryLayout {
+  /**
+   * Changes only when the floor must be built again: a UHT added, removed, renamed or resized, a line added,
+   * removed or moved, or a filler of another kind. A change of status leaves it alone.
+   */
+  key: string;
+  /** In the order of `uht_units`, then the bay of the lines no UHT claims, if any. */
+  bays: BayLayout[];
+  /** Everything on the floor, bays and belts; centred on x = 0. */
+  bounds: FloorRectM;
+  /** The tallest thing on the floor. */
+  heightM: number;
+  /** The whole factory from the front: the camera looks at `targetM` from `direction` and fits `halfWidthM` across the view. */
+  overview: { targetM: FloorPointM; direction: FloorPointM; halfWidthM: number };
+}
+
+/** layout.ts: where everything on the factory floor stands, from the board's view. Pure, like buildFactory. */
+export type LayoutFactory = (view: FactoryView) => FactoryLayout;
+
+/**
+ * What one bay draws, in the order of `FactoryLayout.bays` (layout.ts, floorBays): its UHT, null in the bay of
+ * the lines no UHT claims, and its lines, in the order of the bay's `fillers`. The floor matches its machines
+ * to the view by these places, never by name.
+ */
+export interface FloorBay {
+  uht: UhtView | null;
+  lines: readonly LineView[];
+}
+
+/** What flows in a pipe now: milk at the draw it carries, or the cleaning fluid. */
+export interface PipeFlow {
+  /** The L/h it carries: a line's draw, or its UHT's; 0 while nothing runs. */
+  flowLph: number;
+  /** In CIP: a line's drop while the line cleans, the UHT's pipe and header while the UHT does. */
+  cleaning: boolean;
+}
+
+/** A belt's packs: riding it while the line runs, standing on it while stopped, none while it cleans, changes over or idles. */
+export type BeltState = 'moving' | 'still' | 'empty';

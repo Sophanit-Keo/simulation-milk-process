@@ -479,6 +479,218 @@ input {
   display: none;
 }
 
+/* ───── phase 10: the 3D view (D20) ───── */
+
+/* Board or 3D: two toggle buttons in the header, the pressed one raised. */
+.fb-views {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+.fb-view {
+  min-width: 52px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: 600 13px/1 var(--font-ui);
+  cursor: pointer;
+}
+.fb-view:hover {
+  color: var(--ink);
+}
+.fb-view[aria-pressed='true'] {
+  background: var(--raised);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+/* In 3D the page takes a wide screen, the floor beside a column of cards; the floor stays in view as they scroll. */
+.fb[data-view='3d'] {
+  max-width: 1760px;
+}
+.fb-board[data-view='3d'] .fb-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
+  gap: 12px;
+  align-items: start;
+}
+.fb-board[data-view='3d'] .fb-uhts {
+  grid-template-columns: minmax(0, 1fr);
+  max-height: calc(100vh - 150px);
+  min-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.fb-viewport {
+  position: sticky;
+  top: 12px;
+  height: calc(100vh - 150px);
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--scene-bg);
+}
+.fs-canvas {
+  width: 100%;
+}
+
+/* "Show in 3D" on each card and row, in the 3D view only. */
+.fb-locate {
+  display: none;
+  padding: 2px 4px;
+  font-size: 13px;
+}
+.fb-board[data-view='3d'] .fb-locate {
+  display: inline-block;
+}
+
+/* What the floor or a button picked. */
+.fb-uht[data-selected='true'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.fb-line[data-selected='true'] {
+  margin: 0 -14px;
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* The floor's labels: buttons, so a click or the keyboard picks a machine. The layer itself lets clicks through. */
+.fs-labels {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.fs-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--raised);
+  color: var(--ink);
+  font: 500 12px/1.1 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.fs-label:hover {
+  border-color: var(--accent);
+}
+.fs-label.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.fs-name {
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.03em;
+}
+.fs-label-uht .fs-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.fs-value {
+  color: var(--muted);
+}
+.fs-trouble {
+  color: var(--bad);
+  font-weight: 600;
+}
+/* With less room on screen: the lamp and the name, then the lamp alone (scene.ts decides from the room). */
+.fs-label[data-detail='name'] .fs-value,
+.fs-label[data-detail='name'] .fs-trouble,
+.fs-label[data-detail='lamp'] .fs-value,
+.fs-label[data-detail='lamp'] .fs-trouble,
+.fs-label[data-detail='lamp'] .fs-name {
+  display: none;
+}
+.fs-label[data-detail='lamp'] {
+  gap: 0;
+  padding: 3px;
+}
+.fs-title.is-hidden {
+  visibility: hidden;
+}
+.fs-lamp {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px var(--muted);
+}
+.fs-label[data-status='ok'] .fs-lamp {
+  background: var(--ok);
+  box-shadow: none;
+}
+.fs-label[data-status='warn'] .fs-lamp {
+  background: var(--warn);
+  box-shadow: none;
+}
+.fs-label[data-status='bad'] .fs-lamp {
+  background: var(--bad);
+  box-shadow: none;
+}
+/* A bay's title, on the floor in front of it (as the 3D plant's zone names): ink, for contrast on the floor. */
+.fs-title {
+  padding: 2px 0;
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.fs-overview {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.fs-empty {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .fb-board[data-view='3d'] .fb-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Not much taller than wide: the floor is wider than deep, and a taller view would mostly show sky. */
+  .fb-viewport {
+    position: relative;
+    top: auto;
+    height: min(62vh, 110vw);
+    min-height: 320px;
+  }
+  .fb-board[data-view='3d'] .fb-uhts {
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+  }
+}
+
 @media (max-width: 720px) {
   .fb-head h1 {
     font-size: 19px;

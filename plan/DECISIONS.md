@@ -25,6 +25,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D17](#d17-phase-8-steam-and-energy) | The boiler's steam and gas, and the energy per tonne of raw milk: the two keys of schema 8 | — | Proposed |
 | [D18](#d18-reporting-a-fault-in-let-report) | What each fault is reported as in Let Report, through a prefilled link | — | Proposed |
 | [D19](#d19-the-factory-board) | The factory board: the real factory's UHT plants and lines, mirrored live from Let Report | — | Proposed |
+| [D20](#d20-the-factory-floor-in-3d) | The factory floor in 3D: a bay per UHT with its tank and fillers, drawn from the board's view | — | Proposed |
 
 ## D1. Batch size
 
@@ -367,6 +368,32 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - Changes arrive over Let Report's realtime feed, the one its own app uses, within a second; the page also reloads every 15 s, so a dropped socket loses nothing.
 - **Why:** the developer's factory has three UHT plants (4,000, 8,000 and 4,000 L/h) and six lines with four filler types, where the teaching plant has one UHT and two fillers. A board shows the real factory live now, without reworking the model; the three trains in 3D come in later phases.
 - **What it changes:** `factory.html` and `src/factory/` (contracts in `types.ts`, the model, the Let Report client, the page), a Factory link in the top bar, `src/data/letReport.json`, and, in Let Report, migration 0013 and the line and plan forms.
+
+## D20. The factory floor in 3D
+
+- **Status:** Proposed
+- **Date:** 2026-10-29
+- **Review note:** none (the roadmap's phase 10: the three UHT trains in 3D, each with its UHT, aseptic tank and fillers, driven from the board's data; [phase 10](agent-plan/phase-10-factory-floor.md))
+- **Decision:** the Factory board's page gets a 3D view of the factory floor, next to its cards: a switch between Board and 3D in its header, kept in the address as `factory.html#3d`. The floor is laid out from the board's view (D19) and moves with it: nothing new is read from Let Report, and nothing is written. three.js loads only when the viewer opens the 3D view, so the board alone still loads none.
+- **The floor** (`src/factory/layout.ts`): a bay per UHT, left to right in the order of Let Report's `uht_units`, 5 m apart. In each bay, from the back: the UHT plant as one skid, its aseptic tank, a header along the row of fillers, and one filler per line, left to right in Let Report's order, each on a 7 m outfeed belt. The lines of type UHT that name no UHT stand in a bay of their own, last, with no plant, tank or pipes. A bay with no lines keeps its plant and tank. The floor is built again only when its layout changes (a UHT or line added, removed, renamed, moved, resized or given another filler), not on a change of status.
+- **Sizes, all sim assumptions** (Tetra Pak publishes no footprints, and resale listings disagree):
+
+| Thing | Size | Basis |
+|---|---|---|
+| Filler | One roll-fed aseptic filler, the 3D plant's hero model (2.75 × 3.55 m, 3.6 m tall, facing its belt), scaled by model: TFA 0.85, TBA/19 1, TBA/22 1.1, A3/Speed 1.15, any other 1 | The hero model stands for a brick filler like the TBA/19; the larger, faster machines are drawn larger, the TFA smaller |
+| Gap between fillers | 2.5 m | Room to walk and to bring a reel |
+| UHT plant | A skid 3.5 m deep and 3 m tall, 6 m long plus 1 m per 2,000 L/h (8 m at 4,000 L/h, 10 m at 8,000 L/h; 6 to 16 m) | Shows the larger plant as larger |
+| Aseptic tank | 2.8 m across, 6 m tall, drawn closed | Let Report holds no tank size or level, so none is shown |
+| Bay margin | 2.5 m round the machines | |
+
+- **What moves:**
+  - A running line's packs ride its belt, one token for every 10 packs at a 0.5 m pitch: 0.33 m/s at 24,000 packs/h, 0.05 m/s at 3,600. Its filler's reel and jaws move, and its drop from the header flows.
+  - A stopped line, or one in maintenance, keeps its packs standing on the belt; one in CIP, changeover or idle has an empty belt.
+  - The pipes flow as the 3D plant's do, 1 m/s per 10,000 L/h, and at least 0.08 m/s while milk flows: a line's drop at what it draws, the UHT's pipe and header at its draw. They carry the product's colour (the 3D plant's 20 °C), and the lye colour while cleaning, flowing at 0.5 m/s: a line's drop while the line is in CIP, the UHT's pipe and header while the UHT is (all its lines cleaning). Let Report does not say which step of the CIP runs.
+  - The lamps on each filler and plant, and their labels, have the board's lamps and texts (D19): the line's status text, and the UHT's state with its draw.
+- **Using it:** a click on a machine or its label flies the camera to it and marks its card or row on the board beside the floor; each card and row has a "Show in 3D" button that does the reverse. Esc, or "Whole factory", flies back to the whole floor. Labels are buttons, so the floor can be used from the keyboard.
+- **Why:** the board shows the factory's state in words; the floor shows where each line stands and what runs, as the 3D plant does for the teaching line, with the same data. Built on the board, it needs no second sign-in or Let Report change, and the sizes can be corrected when the developer measures the hall.
+- **What it changes:** `src/factory/layout.ts` and `src/factory/scene/` (new), the switch, the viewport and the "Show in 3D" buttons in `board.ts`, `main.ts` and `factory.css`, the contracts in `view.ts` and `types.ts`, and `src/scene/equipmentHost.ts`, which now hands out its loading context. The teaching plant is unchanged.
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →
