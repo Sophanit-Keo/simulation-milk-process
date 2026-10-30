@@ -16,8 +16,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run test:assets",
-    "test:assets": "node --test assets/scripts/*.test.mjs"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run test:assets && npm run test:scripts",
+    "test:assets": "node --test assets/scripts/*.test.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs",
+    "lane": "node scripts/lane.mjs"
   },
   "dependencies": {
     "@fontsource/barlow": "5.3.0",

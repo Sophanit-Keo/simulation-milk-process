@@ -1,0 +1,96 @@
+{
+  "about": "One entry per agent lane (plan/agent-plan/README.md, 'Working together faster'): the paths it owns, the port its dev server and browser tests use, its unit tests, and the browser specs of its lane tier. scripts/lane.mjs reads this file; scripts/lanes.test.mjs checks that every file under src/ and every e2e spec belongs to a lane. Only lead edits it. A path ending in / owns everything under it.",
+  "alwaysE2e": ["e2e/smoke.spec.ts"],
+  "lanes": {
+    "lead": {
+      "port": 5900,
+      "owns": [
+        "src/main.ts",
+        "src/contracts/",
+        "src/factory/types.ts",
+        "src/factory/view.ts",
+        "package.json",
+        "package-lock.json",
+        "vite.config.ts",
+        "tsconfig.json",
+        "tsconfig.headless.json",
+        "eslint.config.js",
+        "playwright.config.ts",
+        ".github/",
+        "plan/",
+        "scripts/",
+        ".claude/agents/",
+        "README.md"
+      ],
+      "unit": ["tests/contracts/", "tests/architecture.test.ts"],
+      "e2e": []
+    },
+    "process": {
+      "port": 5910,
+      "owns": ["src/data/", "plan/"],
+      "unit": ["tests/config/", "tests/contracts/stages.test.ts", "tests/ui/markdown.test.ts"],
+      "e2e": ["e2e/about.spec.ts"]
+    },
+    "sim": {
+      "port": 5920,
+      "owns": ["src/sim/", "tests/sim/", "tests/config/", "tests/fixtures/", "tests/helpers/liquidRun.ts"],
+      "unit": ["tests/sim/", "tests/config/", "tests/fixtures/"],
+      "e2e": ["e2e/divert.spec.ts", "e2e/packs.spec.ts", "e2e/scenarios.spec.ts"]
+    },
+    "scene": {
+      "port": 5930,
+      "owns": ["src/scene/", "tests/scene/", "tests/perf/baseline.md"],
+      "unit": ["tests/scene/"],
+      "e2e": ["e2e/camera.spec.ts", "e2e/stages.spec.ts", "e2e/cleaning.spec.ts", "e2e/energy.spec.ts"]
+    },
+    "assets": {
+      "port": 5940,
+      "owns": ["assets/", "public/models/", "public/textures/"],
+      "unit": [],
+      "e2e": []
+    },
+    "ui": {
+      "port": 5950,
+      "owns": ["src/ui/", "src/styles/", "index.html", "src/data/stages.json", "tests/ui/"],
+      "unit": ["tests/ui/"],
+      "e2e": [
+        "e2e/controls.spec.ts",
+        "e2e/kpis.spec.ts",
+        "e2e/liquid.spec.ts",
+        "e2e/about.spec.ts",
+        "e2e/appStatus.spec.ts",
+        "e2e/shell.spec.ts"
+      ]
+    },
+    "qa": {
+      "port": 5960,
+      "owns": ["e2e/", "tests/"],
+      "unit": ["tests/"],
+      "e2e": ["e2e/"]
+    },
+    "factory-model": {
+      "port": 5970,
+      "owns": ["src/factory/model.ts", "src/factory/layout.ts", "tests/factory/model.test.ts", "tests/factory/layout.test.ts"],
+      "unit": ["tests/factory/model.test.ts", "tests/factory/layout.test.ts"],
+      "e2e": ["e2e/factory.spec.ts"]
+    },
+    "factory-client": {
+      "port": 5980,
+      "owns": ["src/factory/supabase.ts", "src/data/letReport.json", "src/ui/letReport.ts", "tests/factory/supabase.test.ts"],
+      "unit": ["tests/factory/supabase.test.ts"],
+      "e2e": ["e2e/factory.spec.ts"]
+    },
+    "factory-scene": {
+      "port": 5990,
+      "owns": ["src/factory/scene/", "tests/factory/floor.test.ts"],
+      "unit": ["tests/factory/floor.test.ts"],
+      "e2e": ["e2e/factoryFloor.spec.ts"]
+    },
+    "factory-ui": {
+      "port": 6000,
+      "owns": ["factory.html", "src/factory/main.ts", "src/factory/board.ts", "src/styles/factory.css", "vite.config.ts"],
+      "unit": [],
+      "e2e": ["e2e/factory.spec.ts", "e2e/factoryFloor.spec.ts"]
+    }
+  }
+}

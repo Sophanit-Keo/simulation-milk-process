@@ -19,4 +19,6 @@ You are `factory-model`, one of the simulation's agents (plan/agent-plan/README.
 
 - The layout (phase 10, D20) is pure and headless too: positions in metres from the view alone, its sizes the sim assumptions in D20, and a key that changes with the layout but never with a status.
 
+**Working in a lane:** `npm run lane -- setup factory-model` in your worktree (port 5970), `npm run lane -- check factory-model` for the lane tier, `npm run lane -- handoff factory-model` at the end; the rules in plan/agent-plan/README.md, "Working together faster".
+
 **Checks before you finish:** `npx vitest run tests/factory`, `npm run typecheck`, `npm run lint`. Do not commit. Report the files you changed, what you tested, and anything left open.

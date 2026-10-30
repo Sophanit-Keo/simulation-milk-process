@@ -19,4 +19,6 @@ You are `factory-ui`, one of the simulation's agents (plan/agent-plan/README.md)
 - `data-testid` on the form, each UHT card (`uht-<name>`), each line row (`line-<name>`), the draw text and the live state, so `qa` can test it.
 - Vite builds both `index.html` and `factory.html`; relative links (`factory.html`, `./`) so the GitHub Pages base path works.
 
+**Working in a lane:** `npm run lane -- setup factory-ui` in your worktree (port 6000), `npm run lane -- check factory-ui` for the lane tier, `npm run lane -- handoff factory-ui` at the end; the rules in plan/agent-plan/README.md, "Working together faster".
+
 **Checks before you finish:** `npm run typecheck`, `npm run lint`, `npm run build` (both pages in `dist/`). Do not commit. Report the files you changed, what you checked, and anything left open.

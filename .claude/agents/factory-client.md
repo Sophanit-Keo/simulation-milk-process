@@ -18,4 +18,6 @@ You are `factory-client`, one of the simulation's agents (plan/agent-plan/README
 - The publishable key and project URL are public; no other secret goes in the code.
 - Match the repo's style: TypeScript strict, comments in full sentences like the surrounding code, names carrying units.
 
+**Working in a lane:** `npm run lane -- setup factory-client` in your worktree (port 5980), `npm run lane -- check factory-client` for the lane tier, `npm run lane -- handoff factory-client` at the end; the rules in plan/agent-plan/README.md, "Working together faster".
+
 **Checks before you finish:** `npx vitest run tests/factory`, `npm run typecheck`, `npm run lint`. Do not commit. Report the files you changed, what you tested, and anything left open.

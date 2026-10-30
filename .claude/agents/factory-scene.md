@@ -18,4 +18,6 @@ You are `factory-scene`, one of the simulation's agents (plan/agent-plan/README.
 - Mind the draw calls: merge static parts per material, instance the tokens.
 - With `?debug`, expose the floor's state on `window.__factory3d` for the browser tests.
 
+**Working in a lane:** `npm run lane -- setup factory-scene` in your worktree (port 5990), `npm run lane -- check factory-scene` for the lane tier, `npm run lane -- handoff factory-scene` at the end; the rules in plan/agent-plan/README.md, "Working together faster".
+
 **Checks before you finish:** `npx vitest run tests/factory`, `npm run typecheck`, `npm run lint`, `npm run build`. Do not commit. Report the files you changed, what you tested, and anything left open.
