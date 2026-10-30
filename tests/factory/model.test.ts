@@ -34,6 +34,10 @@ function uhtLine(name: string, sort: number, uht: string, filler: string, packsP
     lot: '',
     lot_started_at: null,
     cip_until: null,
+    cip_started_at: null,
+    cip_reason: '',
+    note: '',
+    updated_by_name: 'Shift lead',
     uht,
     filler,
     filler_packs_per_h: packsPerH,
@@ -155,6 +159,11 @@ describe('buildFactory: the factory with every line running', () => {
       target: 100,
       openTroubles: 0,
       worstSev: null,
+      statusForS: 7_200,
+      changedBy: 'Shift lead',
+      note: '',
+      cipReason: '',
+      cipDoneFrac: null,
     } satisfies LineView);
   });
 
@@ -298,6 +307,140 @@ describe('buildFactory: the lot clock', () => {
   it('keeps the lot clock running while the line cleans', () => {
     const line = onLot({ status: 'cleaning', lot: 'L261029-06', lot_started_at: iso(NOW_MS - 60 * MIN_MS), cip_until: iso(NOW_MS + 10 * MIN_MS) });
     expect([line.lotRunS, line.cipLeftS, line.statusText]).toEqual([3_600, 600, 'CIP · 10 min left']);
+  });
+});
+
+describe("buildFactory: the line's story, how long in its status", () => {
+  const since = (statusSince: unknown, patch: Partial<LineRow> = {}, nowMs = NOW_MS): LineView =>
+    lineOf(board({ lines: withLine('UHT-line 3', { ...patch, status_since: statusSince as string }) }, nowMs), 'UHT-line 3');
+
+  it('counts the seconds since status_since: 2 hours on the factory running since 06:00', () => {
+    expect(lineOf(board(), 'UHT-line 3').statusForS).toBe(7_200);
+  });
+
+  it('counts whole seconds, rounded down', () => {
+    expect(since(iso(NOW_MS - 12 * MIN_MS - 59_600)).statusForS).toBe(779);
+  });
+
+  it.each(LINE_STATUSES)('counts in every status: %s', (status) => {
+    expect(since(iso(NOW_MS - 12 * MIN_MS), { status }).statusForS).toBe(720);
+  });
+
+  it('reads 0 for a time a little in the future (a clock ahead of this one), and 0 at the clock', () => {
+    expect(since(iso(NOW_MS + 30_000)).statusForS).toBe(0);
+    expect(since(iso(NOW_MS)).statusForS).toBe(0);
+  });
+
+  it('reads Let Report times with microseconds and an offset, and a time with no zone as UTC', () => {
+    expect(since('2026-10-29T07:48:00.000000+00:00').statusForS).toBe(720);
+    expect(since('2026-10-29T14:48:00+07:00').statusForS).toBe(720);
+    expect(since('2026-10-29T07:48:00').statusForS).toBe(720);
+    expect(since('2026-10-29 07:48:00').statusForS).toBe(720);
+  });
+
+  it.each([null, undefined, '', '   ', 'this morning', '2026-13-45T99:00:00Z', 1_761_724_800_000, {}])('has no clock when status_since is %s', (statusSince) => {
+    expect(since(statusSince).statusForS).toBeNull();
+  });
+
+  it('has no clock when the time it is given is not a number', () => {
+    expect(since(iso(NOW_MS - 12 * MIN_MS), {}, Number.NaN).statusForS).toBeNull();
+  });
+});
+
+describe("buildFactory: the line's story, who changed it and its note", () => {
+  const story = (patch: Record<string, unknown>): LineView => lineOf(board({ lines: withLine('UHT-line 3', patch as Partial<LineRow>) }), 'UHT-line 3');
+
+  it('says who changed the line last, trimmed', () => {
+    expect(story({ updated_by_name: '  Operator ' }).changedBy).toBe('Operator');
+  });
+
+  it("shows the line's note, trimmed", () => {
+    const line = story({ status: 'stopped', note: ' Jaws not sealing  ' });
+    expect([line.note, line.statusText]).toEqual(['Jaws not sealing', 'Stopped']);
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['null', null],
+    ['blank', '   '],
+    ['a number', 42],
+    ['a list', ['Operator']],
+  ])("reads '' for who changed it and for the note when the column is %s", (_case, value) => {
+    const line = story({ updated_by_name: value, note: value });
+    expect([line.changedBy, line.note]).toEqual(['', '']);
+  });
+
+  it('keeps who changed it and the note in every status', () => {
+    const line = story({ status: 'cleaning', updated_by_name: 'QA', note: 'Check the seals after' });
+    expect([line.changedBy, line.note]).toEqual(['QA', 'Check the seals after']);
+  });
+});
+
+describe("buildFactory: the line's story, its CIP", () => {
+  const cip = (patch: Record<string, unknown>, nowMs = NOW_MS): LineView =>
+    lineOf(board({ lines: withLine('UHT-line 7', { status: 'cleaning', ...patch } as Partial<LineRow>) }, nowMs), 'UHT-line 7');
+  const minutes = (fromMin: number, toMin: number) => ({ cip_started_at: iso(NOW_MS + fromMin * MIN_MS), cip_until: iso(NOW_MS + toMin * MIN_MS) });
+
+  it("says why it cleans, trimmed, with the CIP's share done: half of a 12-minute CIP 6 minutes in", () => {
+    const line = cip({ cip_reason: ' standard ', ...minutes(-6, 6) });
+    expect([line.cipReason, line.cipDoneFrac, line.statusText]).toEqual(['standard', 0.5, 'CIP · 6 min 00 s left']);
+  });
+
+  it.each([
+    ['a quarter 15 minutes into an hour', -15, 45, 0.25],
+    ['0 at its start', 0, 60, 0],
+    ['0 before its start (not started yet)', 5, 65, 0],
+    ['1 at its planned end', -60, 0, 1],
+    ['1 once overdue', -90, -10, 1],
+  ])('reads %s', (_case, fromMin, toMin, cipDoneFrac) => {
+    expect(cip(minutes(fromMin, toMin)).cipDoneFrac).toBe(cipDoneFrac);
+  });
+
+  it('has no share when the planned end is not after the start', () => {
+    expect(cip(minutes(-10, -10)).cipDoneFrac).toBeNull();
+    expect(cip(minutes(-10, -20)).cipDoneFrac).toBeNull();
+  });
+
+  it.each([
+    ['no start', { cip_started_at: null, cip_until: iso(NOW_MS + 10 * MIN_MS) }],
+    ['no start column (an older database)', { cip_started_at: undefined, cip_until: iso(NOW_MS + 10 * MIN_MS) }],
+    ['a start that does not parse', { cip_started_at: 'an hour ago', cip_until: iso(NOW_MS + 10 * MIN_MS) }],
+    ['a start that is a number', { cip_started_at: NOW_MS - 10 * MIN_MS, cip_until: iso(NOW_MS + 10 * MIN_MS) }],
+    ['no planned end', { cip_started_at: iso(NOW_MS - 10 * MIN_MS), cip_until: null }],
+    ['a planned end that does not parse', { cip_started_at: iso(NOW_MS - 10 * MIN_MS), cip_until: '2026-13-45T99:00:00Z' }],
+  ])('has no share with %s', (_case, patch) => {
+    expect(cip(patch).cipDoneFrac).toBeNull();
+  });
+
+  it('has no share when the time it is given is not a number', () => {
+    expect(cip(minutes(-6, 6), Number.NaN).cipDoneFrac).toBeNull();
+  });
+
+  it("reads a start with an offset or with no zone (as UTC) as Let Report's other times", () => {
+    expect(cip({ cip_started_at: '2026-10-29T14:54:00+07:00', cip_until: iso(NOW_MS + 6 * MIN_MS) }).cipDoneFrac).toBe(0.5);
+    expect(cip({ cip_started_at: '2026-10-29 07:54:00', cip_until: iso(NOW_MS + 6 * MIN_MS) }).cipDoneFrac).toBe(0.5);
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['null', null],
+    ['blank', '  '],
+    ['a number', 1],
+  ])("reads '' for the reason when cip_reason is %s", (_case, cipReason) => {
+    expect(cip({ cip_reason: cipReason, ...minutes(-6, 6) }).cipReason).toBe('');
+  });
+
+  it.each(LINE_STATUSES.filter((status) => status !== 'cleaning'))(
+    "ignores a CIP's reason, start and end left on a line that is %s: '' and no share",
+    (status) => {
+      const line = cip({ status, cip_reason: 'standard', ...minutes(-6, 6) });
+      expect([line.cipReason, line.cipDoneFrac, line.cipLeftS]).toEqual(['', null, null]);
+    },
+  );
+
+  it('treats a status it does not know as idle, with no CIP', () => {
+    const line = cip({ status: 'washing', cip_reason: 'standard', ...minutes(-6, 6) });
+    expect([line.status, line.cipReason, line.cipDoneFrac]).toEqual(['idle', '', null]);
   });
 });
 
@@ -493,7 +636,7 @@ describe('buildFactory: an older database', () => {
     status_since: '2026-10-29T07:00:00+00:00',
   } as LineRow;
 
-  it('shows a line without the newer columns as a UHT line no UHT claims, with no rating, filler or clocks', () => {
+  it('shows a line without the newer columns as a UHT line no UHT claims, with no rating, filler, CIP or lot clocks', () => {
     expect(board({ lines: [OLD_LINE], settings: { site_name: 'Main plant' } }).unassigned).toEqual([
       {
         id: 'old-4',
@@ -514,6 +657,11 @@ describe('buildFactory: an older database', () => {
         target: 90,
         openTroubles: 0,
         worstSev: null,
+        statusForS: 3_600,
+        changedBy: '',
+        note: '',
+        cipReason: '',
+        cipDoneFrac: null,
       } satisfies LineView,
     ]);
   });

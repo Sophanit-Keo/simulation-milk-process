@@ -1,7 +1,9 @@
 // Phase 9: the Factory board's view of what Let Report holds (D19), built afresh from each read. Each UHT
 // with its lines, what they draw from it, its load, state and lamp; each line's lamp, words, CIP and lot
-// clocks and open troubles; the UHT lines no UHT claims. Pure and headless: the time comes in as nowMs, and
-// tsconfig.headless.json checks this file without the DOM. The rules are the comments in types.ts.
+// clocks and open troubles; the UHT lines no UHT claims. Phase 11 (D21) adds each line's story: how long in
+// its status, who changed it, its note, and its CIP's reason and share done. Pure and headless: the time
+// comes in as nowMs, and tsconfig.headless.json checks this file without the DOM. The rules are the comments
+// in view.ts.
 //
 // The rows come from Let Report's REST API as JSON, so nothing here trusts their types: a column an older
 // database lacks, a null speed, a status this board does not know or a date that does not parse each fall
@@ -112,6 +114,16 @@ function buildLine(row: Row, troubles: Map<string, number[]>, nowMs: number | nu
   const lotStartMs = lot.trim() !== '' ? timeMs(row.lot_started_at) : null;
   // A start in the future (a clock ahead of this one) reads 0.
   const lotRunS = lotStartMs === null || nowMs === null ? null : Math.max(0, Math.floor((nowMs - lotStartMs) / MS_PER_S));
+  // The time in this status, counted as the lot's run is.
+  const sinceMs = timeMs(row.status_since);
+  const statusForS = sinceMs === null || nowMs === null ? null : Math.max(0, Math.floor((nowMs - sinceMs) / MS_PER_S));
+
+  // The share of the CIP done needs its start and a planned end after it; past the end it stays 1.
+  const cipStartMs = status === 'cleaning' ? timeMs(row.cip_started_at) : null;
+  const cipDoneFrac =
+    cipStartMs === null || cipUntilMs === null || nowMs === null || cipUntilMs <= cipStartMs
+      ? null
+      : Math.min(1, Math.max(0, (nowMs - cipStartMs) / (cipUntilMs - cipStartMs)));
 
   // A blank name matches no report: openTroublesByPlace keeps none at ''.
   const sevs = troubles.get(nameKey(name)) ?? [];
@@ -141,6 +153,11 @@ function buildLine(row: Row, troubles: Map<string, number[]>, nowMs: number | nu
     target: finite(row.target) ?? 0,
     openTroubles: sevs.length,
     worstSev: sevs.length > 0 ? Math.max(...sevs) : null,
+    statusForS,
+    changedBy: text(row.updated_by_name).trim(),
+    note: text(row.note).trim(),
+    cipReason: status === 'cleaning' ? text(row.cip_reason).trim() : '',
+    cipDoneFrac,
   };
 }
 
