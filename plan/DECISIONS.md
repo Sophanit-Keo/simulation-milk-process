@@ -26,6 +26,8 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D18](#d18-reporting-a-fault-in-let-report) | What each fault is reported as in Let Report, through a prefilled link | — | Proposed |
 | [D19](#d19-the-factory-board) | The factory board: the real factory's UHT plants and lines, mirrored live from Let Report | — | Proposed |
 | [D20](#d20-the-factory-floor-in-3d) | The factory floor in 3D: a bay per UHT with its tank and fillers, drawn from the board's view | — | Proposed |
+| [D21](#d21-phase-11-plant-type-and-phone-layout) | Phase 11: the plant runs as a direct or an indirect UHT plant, and the page works on a phone | [R5](REVIEW.md#r5-plant-type-mix) | Proposed |
+| [D22](#d22-faster-lanes-waves-the-lane-kit-and-test-tiers) | Faster lanes: waves, the lane kit and two test tiers | — | Proposed |
 
 ## D1. Batch size
 
@@ -394,6 +396,45 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Using it:** a click on a machine or its label flies the camera to it and marks its card or row on the board beside the floor; each card and row has a "Show in 3D" button that does the reverse. Esc, or "Whole factory", flies back to the whole floor. Labels are buttons, so the floor can be used from the keyboard.
 - **Why:** the board shows the factory's state in words; the floor shows where each line stands and what runs, as the 3D plant does for the teaching line, with the same data. Built on the board, it needs no second sign-in or Let Report change, and the sizes can be corrected when the developer measures the hall.
 - **What it changes:** `src/factory/layout.ts` and `src/factory/scene/` (new), the switch, the viewport and the "Show in 3D" buttons in `board.ts`, `main.ts` and `factory.css`, the contracts in `view.ts` and `types.ts`, and `src/scene/equipmentHost.ts`, which now hands out its loading context. The teaching plant is unchanged.
+## D21. Phase 11: plant type and phone layout
+
+- **Status:** Proposed
+- **Date:** 2026-10-30
+- **Review note:** [R5](REVIEW.md#r5-plant-type-mix) (the model mixes plant types); the roadmap's stretch list, whose last two items these are ([phase 11](agent-plan/phase-11-plant-type-and-phone.md))
+- **Decision:**
+  - **Plant type is a run setting.** A run is a direct UHT plant (today's) or an indirect one, set by `uht.plantType` in `plant.json` (direct by default) or `?plant=indirect` in the address. The top bar's switch reloads the page with the other type, so a run never changes type halfway, and the tests stay deterministic.
+  - **What an indirect plant changes.** It heats through a tubular heat exchanger. The milk going out preheats the milk coming in (about 75 °C, [stage research](03-stages-1-5-liquid-line.md#2-preheating--deaeration)), and no water is added or taken out. Stage 5 is regenerative cooling, then the cooler, with no flash vessel or condenser.
+  - **What stays the same.** The hold, F0, B\* and the divert rule (D4).
+  - **The phone layout.** Below 720 px the page becomes a touch layout: the 3D view first, a swipe rail, the info panel as a sheet, KPIs two to a row, 44 px targets, and pinch and drag on the camera.
+- **To settle in wave 1** (`process`, each with a source or "sim assumption"): the indirect preheat and regeneration, the heating medium's temperature, the temperatures along the line, and the H rows for an indirect run. The keys exist from wave 0 with placeholder values marked "to be settled, D21".
+- **Why:** the two plant types are the clearest lesson the stage research offers that the simulation doesn't show yet, and an indirect plant removes the mix R5 notes. A phone is how most viewers will first open the Pages link.
+- **What it changes:** contracts v7 (`PlantType`, `Snapshot.plantType`), `plant.json` schema 9, the liquid line's model and the 3D plant for stages 2–5, the top bar, the panels of stages 4 and 5, and a phone layout in files of its own (`src/styles/phone.css`, `src/ui/phone.ts`).
+
+## D22. Faster lanes: waves, the lane kit and test tiers
+
+- **Status:** Proposed
+- **Date:** 2026-10-30
+- **Review note:** none (what slowed the agent lanes in phases 2–10)
+- **Decision:**
+  - **Waves.** A phase runs in three waves ([Working together faster](agent-plan/README.md#working-together-faster)):
+    - wave 0: `lead` puts the contracts, the new keys and the mock first;
+    - wave 1: every other lane works at once;
+    - wave 2: `qa` and `lead` merge.
+  - **The lane kit.** `scripts/lanes.json` is the one map of who owns what. `npm run lane -- <command> <lane>` sets a lane up, checks it and writes its hand-off note.
+  - **Two test tiers.** A lane runs its lane tier. The full suite runs once on the merged head, on a production build (`E2E_SERVER=preview`).
+  - **Agent definitions.** Every lane has one in `.claude/agents/`.
+- **Why:** the lanes rarely clashed in the code. They lost time to waiting (the mock behind the model), to repeated 25-minute browser runs, to restarts after usage limits, and to small accidents:
+  - a `pkill -f` that killed other runs;
+  - a dev server that reloaded the page when a merge wrote a file;
+  - logs overwritten in a shared scratchpad.
+
+  Each rule in the kit removes one of these.
+- **What it changes:**
+  - `scripts/` (new), with its tests in `npm run check`;
+  - `playwright.config.ts` (`E2E_SERVER`, `E2E_CHROMIUM`);
+  - `.claude/agents/`;
+  - the agent plan's definition of done: a lane is done when its lane tier passes, and a merge when the full suite does.
+
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →

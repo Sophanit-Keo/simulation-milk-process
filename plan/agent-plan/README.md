@@ -16,6 +16,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 6. Polish & present | 12 | qa, lead | **G3** · final demo | [Phase 6](phase-6-polish-and-present.md) |
 | 9. Factory board | after the term | lead, factory-* agents | The real factory's lines live from Let Report | [Phase 9](phase-9-factory-board.md) |
 | 10. Factory floor in 3D | after the term | lead, factory-* agents | The three UHT trains in 3D, moving with the board | [Phase 10](phase-10-factory-floor.md) |
+| 11. Plant type & phone | three waves | lead (wave 0), then six lanes at once | A direct or indirect UHT plant, and a phone layout (planned) | [Phase 11](phase-11-plant-type-and-phone.md) |
 
 ## The agents
 
@@ -128,9 +129,50 @@ For others:  <follow-up tasks this creates, by agent>
 - **Wednesday:** integration run. `lead` runs the merged build at every speed preset and files what breaks.
 - **Friday:** demo build to the Pages preview, deliverables ticked in the [roadmap](../09-development-roadmap.md), next week's risks noted. At a gate, the developer walks through the gate checklist.
 
+### Working together faster
+
+Phases 2–10 showed where parallel lanes lose time. The lanes rarely clashed in the code. They lost time waiting for each other, rerunning the same slow checks, and starting again after an interruption. From phase 11 on, lanes work like this ([D22](../DECISIONS.md#d22-faster-lanes-waves-the-lane-kit-and-test-tiers)).
+
+**Waves, not weeks.** A phase runs in three waves:
+
+| Wave | Who | What it delivers |
+|---|---|---|
+| 0 | `lead` alone, in one sitting | The contracts and new `plant.json` keys (with placeholder values), the `?mock` sim answering for the new fields, new files' lanes in `scripts/lanes.json`, one task card per lane |
+| 1 | Every other lane, all at once | Each lane's work, built against the contracts, the mock and the recorded snapshots in `tests/fixtures/`, never against another lane's work in progress |
+| 2 | `qa`, then `lead` | Fixtures from the merged model, tests for the H rows, mutants; the merge train and one full run of every check |
+
+In phase 3, the mock lacked the new values until `sim` merged. The panels showed "—" behind a list of keys still awaited, and `scene` tested on snapshots it built by hand. Wave 0 puts the new fields in the mock first, so no lane in wave 1 waits on another. Keys come before values: code and tests read `plant.json` by key, so `process` can settle a number in wave 1 without breaking anyone.
+
+**The lane kit.** Run `npm run lane -- <command> <lane>`. The lane map, `scripts/lanes.json`, is the source of truth for who owns what, each lane's port, and its tests.
+
+| Command | What it does |
+|---|---|
+| `start <lane> <task>` | A worktree on branch `agent/<lane>/<task>`, with `node_modules` linked |
+| `setup <lane>` | The same inside a worktree the Agent tool made; prints the lane card |
+| `check <lane> [--e2e]` | The lane tier: owned paths, typecheck, lint of what changed, the lane's unit tests and those its change reaches; with `--e2e`, its browser specs |
+| `e2e <lane>` | The lane's browser specs on its own port, against a production build |
+| `owns <lane>` | Fails if the lane changed a path it does not own; the lead runs it before each merge |
+| `handoff <lane>` | The hand-off note, with what the diff can tell filled in: files, contract version, new `plant.json` keys, files for another owner |
+| `ports` | The port table (a reviewer of a lane uses its port + 5) |
+
+**Two test tiers.** The full browser suite takes about 25 minutes on software WebGL, so it runs once per merge, not once per lane.
+
+| Tier | Who runs it | What it runs | Time |
+|---|---|---|---|
+| Lane | Each lane, as often as it likes | `npm run lane -- check <lane> --e2e` | Minutes |
+| Merge | `qa` or `lead`, once on the merged head | `npm run check`, `npm run build`, `E2E_SERVER=preview npm run e2e` | About half an hour |
+
+**Rules learned the hard way:**
+- **Commit work in progress.** Commit `WIP <lane>: …` before any long run. After a usage limit, the lead resumes the same agent with a message instead of starting a new one, so its context and commits carry on. The lead squashes WIP commits at the merge.
+- **Stop only your own servers.** Stop a server by its PID, never with `pkill -f`: that pattern also matched the shell running it, and other lanes' runs.
+- **Test against a production build.** Browser runs during a merge use `E2E_SERVER=preview`. A dev server reloads the page when a merge writes a file, and fails tests that would pass.
+- **Keep your scratch files apart.** A lane keeps its scratch files in a folder named after itself, because lanes overwrote each other's logs in a shared scratchpad.
+- **Merge in contract order.** The merge train goes contracts → `sim` → `scene` and `ui` → tests, squashing each lane after `npm run lane -- owns <lane>` passes. Then one merge tier runs for the whole train.
+
 ### Definition of done
 
-- `npm run check` passes: typecheck, lint, Vitest and the asset-script tests.
+- A lane: `npm run lane -- check <lane> --e2e` passes, and the hand-off note from `npm run lane -- handoff <lane>` is filled in.
+- A merge: `npm run check` passes (typecheck, lint, Vitest, the asset-script and lane-kit tests), and so does the full browser suite on the merged head.
 - No `three` import under `src/sim/`, and units converted only in `units.ts`.
 - Any new snapshot fields appear in the hand-off note.
 - Any changed numbers have been reviewed by `process`.
@@ -151,7 +193,7 @@ Each open point in the [plan review](../REVIEW.md) is assigned to the phase that
 
 ## Running the agents
 
-With Claude Code, each agent can be a subagent defined in `.claude/agents/<id>.md`, whose instructions are its row in the agents table above plus the ownership rules. `lead` is the main session the developer talks to. It starts each subagent with one task card on its own branch (`agent/<id>/<task>`) in its own git worktree, so lanes don't overwrite each other. GitHub milestones (one per phase) and labels (one per agent) hold the task cards, and `plan/DECISIONS.md` logs every decision the developer approves.
+With Claude Code, each agent is a subagent defined in `.claude/agents/<id>.md`: `process`, `sim`, `scene`, `assets`, `ui`, `qa` and the four `factory-*` agents. Each definition gives the agent's row in the agents table, the ownership rules and the lane rules above. `lead` is the main session the developer talks to. It starts each subagent with one task card on its own branch (`agent/<id>/<task>`, or the branch the Agent tool's worktree has) in its own git worktree, so lanes don't overwrite each other. The subagent starts with `npm run lane -- setup <id>`. GitHub milestones (one per phase) and labels (one per agent) hold the task cards, and `plan/DECISIONS.md` logs every decision the developer approves.
 
 ---
 
