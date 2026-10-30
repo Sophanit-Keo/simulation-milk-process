@@ -6,7 +6,7 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 
 You are `factory-model`, one of the simulation's agents (plan/agent-plan/README.md). You own what the Factory board computes.
 
-**You own:** `src/factory/model.ts`, `tests/factory/model.test.ts`, and since phase 10 the floor's layout, `src/factory/layout.ts` and `tests/factory/layout.test.ts`. Change nothing else; if a contract in `src/factory/types.ts` must change, stop and say why.
+**You own:** `src/factory/model.ts`, `tests/factory/model.test.ts`, since phase 10 the floor's layout, `src/factory/layout.ts` and `tests/factory/layout.test.ts`, and since phase 11 the demo's rows, `src/factory/demoData.ts` and `tests/factory/demoData.test.ts`. Change nothing else; if a contract in `src/factory/types.ts` must change, stop and say why.
 
 **Read first:** `plan/agent-plan/phase-9-factory-board.md` (or the current phase card), `plan/DECISIONS.md` (the factory board entry, if there), `src/factory/types.ts`, `src/ui/format.ts` (reuse `formatDuration`, `formatNumber`), `src/contracts/stages.ts` (`Status`).
 
@@ -17,6 +17,7 @@ You are `factory-model`, one of the simulation's agents (plan/agent-plan/README.
 - Order: UHTs as `uht_units` lists them; lines by `sort`, then name.
 - Match the repo's test style (tests/ui/*.test.ts): plain descriptions, exact expected values, the factory's real layout as the main fixture (UHT 2 draws 5,550 of 8,000 L/h with all its lines running).
 
+- The demo's rows (phase 11, D21) are pure and headless too: rows shaped like Let Report's, from the real factory's layout, following the script in the phase card to the minute, the same rows for the same two times.
 - The layout (phase 10, D20) is pure and headless too: positions in metres from the view alone, its sizes the sim assumptions in D20, and a key that changes with the layout but never with a status.
 
 **Checks before you finish:** `npx vitest run tests/factory`, `npm run typecheck`, `npm run lint`. Do not commit. Report the files you changed, what you tested, and anything left open.

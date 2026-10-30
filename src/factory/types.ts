@@ -6,7 +6,7 @@
 // reads FactoryData and the changes from Let Report (supabase.ts), and factory-ui draws the view (board.ts).
 // Phase 10 (D20) adds the 3D view's contract at the end: factory-scene draws the same view on the factory
 // floor (scene/), laid out by layout.ts.
-import type { FactoryData, FactoryView } from './view';
+import type { DemoFactory, FactoryData, FactoryView } from './view';
 
 export * from './view';
 
@@ -102,3 +102,27 @@ export interface FactoryScene {
 
 /** scene/scene.ts, loaded only when the viewer first opens the 3D view: the board alone loads no three.js. */
 export type CreateFactoryScene = (host: HTMLElement, options: FactorySceneOptions) => FactoryScene;
+
+// ───── Phase 11: the demo's client (demoClient.ts) ─────
+
+export interface DemoClientOptions {
+  /** The clock, in ms since the epoch; defaults to Date.now. The demo begins at the first reading. */
+  now?: () => number;
+  /** The demo's rows (demoData.ts by default); a test hands in its own. */
+  factory?: DemoFactory;
+  /** How often the client looks for the demo's next change, in ms; defaults to DEMO_TICK_MS. */
+  tickMs?: number;
+}
+
+/** The demo client looks for its next change this often: a change shows within a second, as Let Report's do. */
+export const DEMO_TICK_MS = 1_000;
+
+/**
+ * demoClient.ts: a FactoryClient for the demo (D21), with nothing behind it: always signed in as the demo, and
+ * nothing sent anywhere. load() gives the demo's rows now; subscribe() reports live at once, then a change each
+ * time the rows change, as Let Report's socket would; signOut() ends the session (the page leaves the demo).
+ */
+export type CreateDemoClient = (options?: DemoClientOptions) => FactoryClient;
+
+/** The demo's session: its user, as the header shows it. Never stored. */
+export const DEMO_USER = 'Demo';

@@ -4,7 +4,8 @@
 // a line shows what Let Report says, as soon as it changes, and adds nothing of its own.
 //
 // Phase 10 adds the factory floor in 3D (D20): where each UHT, tank, filler and pipe stands, laid out from the
-// same view (layout.ts), at the end of this file.
+// same view (layout.ts), at the end of this file. Phase 11 (D21) adds each line's story (how long in its status,
+// who changed it and why, how far its CIP has come) and the demo's made-up factory (demoData.ts).
 //
 // `lead` owns this file. It runs headless (tsconfig.headless.json), with the model that builds the view
 // (model.ts) and the floor's layout (layout.ts); the client's and the 3D view's contracts, which need the
@@ -37,6 +38,13 @@ export interface LineRow {
   lot_started_at?: string | null;
   /** The planned end of the CIP while the status is 'cleaning' (migration 0008). */
   cip_until?: string | null;
+  /** When the CIP started, and why it runs ('standard' or another word Let Report gives), while cleaning. */
+  cip_started_at?: string | null;
+  cip_reason?: string;
+  /** A note people keep on the line; '' for none. */
+  note?: string;
+  /** The name of whoever changed the line last in Let Report; '' for none. */
+  updated_by_name?: string;
   /** The UHT that feeds the line, a name from `uht_units`; '' for none (migration 0013). */
   uht?: string;
   /** The filler model: 'TFA', 'TBA/19', 'TBA/22', 'A3/Speed' or another; '' for none (migration 0013). */
@@ -105,6 +113,21 @@ export interface LineView {
   openTroubles: number;
   /** The most serious of them, 0–3; null with none. */
   worstSev: number | null;
+
+  // ── Phase 11 (D21): the line's story ──
+  /** Whole seconds in this status, from `status_since` (0 for a time ahead of the clock); null without a time. */
+  statusForS: number | null;
+  /** Who changed the line last in Let Report, trimmed; '' when it does not say. */
+  changedBy: string;
+  /** The line's note in Let Report, trimmed; '' for none. */
+  note: string;
+  /** While cleaning: why, as Let Report words it, trimmed ('standard'); '' otherwise. */
+  cipReason: string;
+  /**
+   * While cleaning with a start and a planned end after it: the share of the CIP done at nowMs, 0 to 1 (1 once
+   * overdue); otherwise null.
+   */
+  cipDoneFrac: number | null;
 }
 
 export type UhtState = 'producing' | 'cip' | 'stopped';
@@ -278,6 +301,18 @@ export interface FactoryLayout {
 
 /** layout.ts: where everything on the factory floor stands, from the board's view. Pure, like buildFactory. */
 export type LayoutFactory = (view: FactoryView) => FactoryLayout;
+
+// ───── Phase 11: the demo (D21), a made-up day at the factory for anyone without a Let Report account ─────
+
+/**
+ * demoData.ts: what Let Report would hold at `nowMs` in the demo that began at `startMs`, as rows like Let Report's
+ * own (the real factory's layout, D19), so the model, the board and the floor treat it as they treat Let Report.
+ * Pure and repeatable: the same two times give the same rows. The script repeats every DEMO_CYCLE_MS.
+ */
+export type DemoFactory = (startMs: number, nowMs: number) => FactoryData;
+
+/** The demo's script runs this long, then starts again, so a viewer sees every kind of change within it. */
+export const DEMO_CYCLE_MS = 20 * 60_000;
 
 /**
  * What one bay draws, in the order of `FactoryLayout.bays` (layout.ts, floorBays): its UHT, null in the bay of

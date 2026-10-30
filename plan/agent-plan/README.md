@@ -16,6 +16,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 6. Polish & present | 12 | qa, lead | **G3** · final demo | [Phase 6](phase-6-polish-and-present.md) |
 | 9. Factory board | after the term | lead, factory-* agents | The real factory's lines live from Let Report | [Phase 9](phase-9-factory-board.md) |
 | 10. Factory floor in 3D | after the term | lead, factory-* agents | The three UHT trains in 3D, moving with the board | [Phase 10](phase-10-factory-floor.md) |
+| 11. Demo and line story | after the term | lead, all five factory agents | A demo anyone can open; each line's how long, who and why | [Phase 11](phase-11-demo-and-line-story.md) |
 
 ## The agents
 

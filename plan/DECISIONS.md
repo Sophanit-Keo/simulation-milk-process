@@ -26,6 +26,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D18](#d18-reporting-a-fault-in-let-report) | What each fault is reported as in Let Report, through a prefilled link | — | Proposed |
 | [D19](#d19-the-factory-board) | The factory board: the real factory's UHT plants and lines, mirrored live from Let Report | — | Proposed |
 | [D20](#d20-the-factory-floor-in-3d) | The factory floor in 3D: a bay per UHT with its tank and fillers, drawn from the board's view | — | Proposed |
+| [D21](#d21-the-factory-demo-and-each-lines-story) | A demo of the factory board with made-up data, and each line's story on the board and the floor | — | Proposed |
 
 ## D1. Batch size
 
@@ -394,6 +395,24 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Using it:** a click on a machine or its label flies the camera to it and marks its card or row on the board beside the floor; each card and row has a "Show in 3D" button that does the reverse. Esc, or "Whole factory", flies back to the whole floor. Labels are buttons, so the floor can be used from the keyboard.
 - **Why:** the board shows the factory's state in words; the floor shows where each line stands and what runs, as the 3D plant does for the teaching line, with the same data. Built on the board, it needs no second sign-in or Let Report change, and the sizes can be corrected when the developer measures the hall.
 - **What it changes:** `src/factory/layout.ts` and `src/factory/scene/` (new), the switch, the viewport and the "Show in 3D" buttons in `board.ts`, `main.ts` and `factory.css`, the contracts in `view.ts` and `types.ts`, and `src/scene/equipmentHost.ts`, which now hands out its loading context. The teaching plant is unchanged.
+
+## D21. The factory demo, and each line's story
+
+- **Status:** Proposed
+- **Date:** 2026-10-30
+- **Review note:** none (the developer's choice of phase 11; [phase 11](agent-plan/phase-11-demo-and-line-story.md))
+- **Decision, the demo:** `factory.html?demo` shows the board and its 3D floor with a made-up day at the factory, for anyone without a Let Report account; the sign-in form links to it as "Try the demo". It has the real layout (D19: three UHTs, six UHT lines, the SCM and Yogurt lines) and runs a 20-minute script that starts again, written out in the [phase card](agent-plan/phase-11-demo-and-line-story.md#the-demos-script): a line stops with a trouble, another cleans, another changes over, another goes into maintenance, troubles open and close. Nothing is read from or sent to Let Report, and nothing is stored. A banner says the data is made up, and "Leave the demo" goes back to the sign-in form. `factory.html?demo#3d` opens it on the floor.
+- **Decision, the line's story:** each line shows how long it has been in its status (from `status_since`), who changed it last (`updated_by_name`), its note (`note`) and, while it cleans, why (`cip_reason`) and how far its CIP has come (from `cip_started_at` to `cip_until`). The board already reads these columns; a database without one shows the line without it.
+- **On the floor:**
+  - A marker over a filler whose line has open troubles: amber for a worst severity of low or medium, red for high or critical; it bobs gently, and holds still with reduced motion.
+  - A ring on the floor round a cleaning filler, in the cleaning colour, that fills as its CIP goes.
+  - A line stopped, changing over or in maintenance says for how long in its label ("Stopped · 12 min"); a CIP already says its time left, and a running line needs no clock.
+- **Rules with no key:**
+  - The demo's changes name roles ("Shift lead", "Operator", "QA"), never real people.
+  - The demo's output counts up by one a minute on each running line, against a target of 100, as a person might type it into Let Report.
+  - A share of a CIP done is (now − start) ÷ (planned end − start), from 0 to 1, and 1 once overdue; with no start, or an end not after it, there is none.
+- **Why:** the board and the floor need a Let Report account, so the simulation's public site showed visitors only a sign-in form; the demo shows them, and the developer's presentations, what the board does. The board said what each line does but not since when, by whom or why, which is what a person at the board asks next.
+- **What it changes:** `src/factory/demoData.ts` and `demoClient.ts` (new), the line's fields in `model.ts`, the rows, the demo's banner and its entry in `board.ts`, `main.ts` and `factory.css`, the markers and rings on the floor (`src/factory/scene/`), and the contracts in `view.ts` and `types.ts`. Let Report is unchanged.
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →

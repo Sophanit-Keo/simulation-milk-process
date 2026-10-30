@@ -1,10 +1,10 @@
 {
   // The sim core and the contracts run headless in Node (Vitest) and in the browser,
-  // so they get neither the DOM lib nor Node's types (plan 07). So do the Factory board's model (phase 9) and its floor's layout (phase 10).
+  // so they get neither the DOM lib nor Node's types (plan 07). So do the Factory board's model (phase 9), its floor's layout (phase 10) and its demo's rows (phase 11).
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "lib": ["ES2022"],
     "types": []
   },
-  "include": ["src/sim", "src/contracts", "src/factory/view.ts", "src/factory/model.ts", "src/factory/layout.ts"]
+  "include": ["src/sim", "src/contracts", "src/factory/view.ts", "src/factory/model.ts", "src/factory/layout.ts", "src/factory/demoData.ts"]
 }
