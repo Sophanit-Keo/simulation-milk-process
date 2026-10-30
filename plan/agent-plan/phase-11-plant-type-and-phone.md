@@ -4,7 +4,7 @@
 
 Build the two items left on the roadmap's stretch list ([D21](../DECISIONS.md#d21-phase-11-plant-type-and-phone-layout)): the teaching plant runs as either a direct or an indirect UHT plant, and the page works on a phone by touch. It is the first phase planned for the faster way of working: three waves instead of weeks, the lane kit, and the two test tiers ([Working together faster](README.md#working-together-faster), [D22](../DECISIONS.md#d22-faster-lanes-waves-the-lane-kit-and-test-tiers)).
 
-- **Entry:** phase 10 is merged, and `npm run check` and the full browser suite pass on `master` (the one known failure, the pixel-ratio test, aside).
+- **Entry:** phase 10 is merged, and `npm run check` and the full browser suite pass on `master`. They did on 30 October, with the lane kit in place: 73 of 73 on a production build (`E2E_SERVER=preview`, 27 min), including the pixel-ratio test that fails on the dev server.
 - **Exit:** the checklist below.
 - **After it:** the plant type stays a run setting; switching inside a running sim, with the plant re-sterilized in between, would be a later phase.
 
