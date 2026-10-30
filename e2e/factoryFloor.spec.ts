@@ -65,7 +65,9 @@ test('the 3D view loads three.js only when opened, and shows the three trains wi
   await expect(page.getByTestId('view-board')).toHaveAttribute('aria-pressed', 'true');
   await expect(viewport(page)).toBeHidden();
   await expect(page.getByTestId('locate-uht').first()).toBeHidden();
-  const isFloor = (path: string): boolean => path.includes('/src/factory/scene/') || /three/i.test(path);
+  // The floor's code: its modules on the dev server, its chunk (assets/scene-<hash>.js) in a production build.
+  const isFloorCode = (path: string): boolean => path.includes('/src/factory/scene/') || /\/assets\/scene-[\w-]+\.js$/.test(path);
+  const isFloor = (path: string): boolean => isFloorCode(path) || /three/i.test(path);
   expect(requested.filter(isFloor), 'nothing of the floor or of three.js before the 3D view opens').toEqual([]);
 
   await page.getByTestId('view-3d').click();
@@ -73,7 +75,8 @@ test('the 3D view loads three.js only when opened, and shows the three trains wi
   await expect(page.getByTestId('view-3d')).toHaveAttribute('aria-pressed', 'true');
   await expect(viewport(page)).toBeVisible();
   await waitForFloor(page);
-  expect(requested.some((path) => path.includes('/src/factory/scene/scene.ts')), 'the floor loaded on the switch').toBe(true);
+  expect(requested.some(isFloorCode), 'the floor loaded on the switch').toBe(true);
+  expect(requested.some((path) => /three/i.test(path)), 'three.js loaded on the switch').toBe(true);
 
   // Each train's label says what its card says; each line's, its filler and status.
   await expect(uhtLabel(page, 'UHT 1')).toHaveAttribute('aria-label', 'UHT 1: Producing · 2,360 of 4,000 L/h');
