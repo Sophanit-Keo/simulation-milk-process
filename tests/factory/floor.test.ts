@@ -8,7 +8,7 @@ import { floorBays, layoutFactory, TOKEN_PITCH_M } from '../../src/factory/layou
 import { buildFloor, type Floor, type FloorState, type ReadColor } from '../../src/factory/scene/floor';
 import type { FactoryView } from '../../src/factory/types';
 import type { EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
-import type { SceneColorVar } from '../../src/scene/theme';
+import { LAMP_GLOW_HEX, type SceneColorVar } from '../../src/scene/theme';
 import { factoryView, LINES, uhtLine, withLine } from '../helpers/factory';
 
 const SHARED: readonly MaterialName[] = ['steel', 'steelDark', 'milk', 'glass', 'rubber', 'concrete', 'wood', 'carton', 'rack', 'paint', 'gauge'];
@@ -20,6 +20,21 @@ const COLORS: Partial<Record<SceneColorVar, string>> = {
   '--steel-dark': '#76858f',
 };
 const readColor: ReadColor = (name) => COLORS[name] ?? '#ffffff';
+/** The dark control-room set (tokens.css, phase 11, D21), as far as the floor reads it. */
+const DARK: Partial<Record<SceneColorVar, string>> = {
+  ...COLORS,
+  '--scene-bg': '#090e12',
+  '--zone-proc': '#10263a',
+  '--steel': '#7f8f9b',
+  '--steel-dark': '#4b5862',
+  '--accent': '#38bdf8',
+  '--ok': '#22d37a',
+  '--warn': '#f5b134',
+  '--bad': '#ff5b4a',
+  '--t80': '#ea8027',
+  '--grid': 'rgba(56, 189, 248, 0.05)',
+};
+const LIGHT: Partial<Record<SceneColorVar, string>> = { ...COLORS, '--scene-bg': '#dde5ea', '--grid': 'rgba(19, 33, 43, 0.035)', '--ok': '#1f8f57' };
 
 /** A hero filler with the nodes the swap needs, one mesh each, like the real GLB's. */
 function heroFiller(): THREE.Object3D {
@@ -241,15 +256,83 @@ describe('the hero filler', () => {
 });
 
 describe('the floor in the scene', () => {
-  it('stays within its draw budget: a dozen meshes a UHT and a dozen a line', () => {
-    const floor = floorFor(factoryView());
-    let meshes = 0;
-    floor.root.traverseVisible((node) => {
-      if (node instanceof THREE.Mesh) meshes += 1;
-    });
+  it('stays within its draw budget: a dozen meshes a UHT and a dozen a line, and two more in the dark theme', () => {
+    const draws = (colors: Partial<Record<SceneColorVar, string>>): number => {
+      const view = factoryView();
+      const floor = buildFloor(layoutFactory(view), makeContext(), (name) => colors[name] ?? '#ffffff');
+      floor.update(floorBays(view));
+      let count = 0;
+      floor.root.traverseVisible((node) => {
+        if (node instanceof THREE.Mesh || node instanceof THREE.Points) count += 1;
+      });
+      return count;
+    };
     // 3 UHTs × (skid 9 + tank 3) + 6 lines × (filler 9 + belt 3) + 12 pipes + the slabs: one mesh per
     // material and shadow setting per machine, and per moving part.
-    expect(meshes).toBeLessThanOrEqual(3 * 12 + 6 * 12 + 12 + 1);
+    const light = draws(LIGHT);
+    expect(light).toBeLessThanOrEqual(3 * 12 + 6 * 12 + 12 + 1);
+    // The dark theme adds the floor's grid and the lamps' halos, one draw each, and no shadow caster.
+    expect(draws(DARK)).toBe(light + 2);
+  });
+
+  it('lights the control room in the dark theme, from the tokens, and puts it out in the light one', () => {
+    const colors: Partial<Record<SceneColorVar, string>> = { ...DARK };
+    const view = factoryView({
+      lines: withLine('UHT-line 7', { status: 'cleaning', cip_until: '2026-10-29T09:10:00Z' }).map((line) =>
+        line.name === 'UHT-line 3' ? { ...line, status: 'stopped' as const } : line,
+      ),
+    });
+    const floor = buildFloor(layoutFactory(view), makeContext(), (name) => colors[name] ?? '#ffffff');
+    floor.update(floorBays(view));
+    const lampOf = (id: string): THREE.MeshStandardMaterial =>
+      (floor.machines.find((one) => one.id === id)?.object.getObjectByName('lamp') as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    const hex = (color: THREE.Color): string => `#${color.getHexString()}`;
+    const halos = floor.root.getObjectByName('lamp-halos') as THREE.Points;
+    const grid = floor.root.getObjectByName('floor-grid') as THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+    const outlines = floor.root.getObjectByName('bay-outlines') as THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+    const pipeMaterial = (id: string): THREE.MeshStandardMaterial =>
+      (floor.root.getObjectByName(`pipe:${id}`) as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    const beltOf = (id: string): THREE.MeshStandardMaterial =>
+      (floor.machines.find((one) => one.id === id)?.object.getObjectByName('belt-rubber') as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    const litHalos = (): number => {
+      const color = halos.geometry.getAttribute('color');
+      let lit = 0;
+      for (let i = 0; i < color.count; i++) if (color.getX(i) + color.getY(i) + color.getZ(i) > 0) lit += 1;
+      return lit;
+    };
+
+    // Lamps in the board's lamp colours, giving them off; a halo round each lit one, none round UHT 3 and line 7.
+    expect(hex(lampOf(LINE_IDS['UHT-line 1']).emissive)).toBe('#22d37a');
+    expect(hex(lampOf(LINE_IDS['UHT-line 3']).color)).toBe('#ff5b4a');
+    expect(hex(lampOf(LINE_IDS['UHT-line 7']).color)).toBe('#4b5862');
+    expect(hex(lampOf(LINE_IDS['UHT-line 7']).emissive)).toBe('#000000');
+    expect(halos.visible).toBe(true);
+    expect(halos.geometry.getAttribute('color').count).toBe(9);
+    expect(litHalos()).toBe(7);
+    // The grid in the page grid's colour, the outlines in the accent's.
+    expect(grid.visible).toBe(true);
+    expect(`#${(grid.material.uniforms.uColor.value as THREE.Color).getHexString()}`).toBe('#38bdf8');
+    expect(grid.material.uniforms.uMinor.value).toBeGreaterThan(0.05);
+    expect(hex(outlines.material.color)).toBe('#38bdf8');
+    // What runs gives off a little light: the flowing pipes more than the still ones, the running belts, not the stopped.
+    expect(pipeMaterial('uht:1').emissiveIntensity).toBeGreaterThan(pipeMaterial('line:1:1').emissiveIntensity);
+    expect(hex(pipeMaterial('uht:2').emissive)).toBe('#7d5cc6');
+    expect(beltOf(LINE_IDS['UHT-line 1']).emissiveIntensity).toBeGreaterThan(0);
+    expect(beltOf(LINE_IDS['UHT-line 3']).emissiveIntensity).toBe(0);
+
+    // A line that runs again lights its lamp's halo.
+    floor.update(floorBays(factoryView()));
+    expect(litHalos()).toBe(9);
+
+    // The light theme: the 3D plant's lamp colours, no halo, no grid, nothing aglow but the lamps and plates.
+    Object.assign(colors, LIGHT);
+    floor.applyTheme();
+    expect(lampOf(LINE_IDS['UHT-line 1']).color.getHex()).toBe(new THREE.Color(LAMP_GLOW_HEX.ok).getHex());
+    expect(halos.visible).toBe(false);
+    expect(grid.visible).toBe(false);
+    expect(hex(outlines.material.color)).toBe('#76858f');
+    expect(pipeMaterial('uht:1').emissiveIntensity).toBe(0);
+    expect(beltOf(LINE_IDS['UHT-line 1']).emissiveIntensity).toBe(0);
   });
 
   it('follows the theme: the slabs, outlines and pipes take the tokens again', () => {
@@ -275,7 +358,7 @@ describe('the floor in the scene', () => {
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     floor.root.traverse((node) => {
-      if (node instanceof THREE.Mesh || node instanceof THREE.LineSegments) {
+      if (node instanceof THREE.Mesh || node instanceof THREE.LineSegments || node instanceof THREE.Points) {
         geometries.add(node.geometry);
         for (const material of [node.material].flat()) if (!shared.has(material)) materials.add(material);
       }

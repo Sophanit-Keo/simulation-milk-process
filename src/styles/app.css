@@ -3,6 +3,12 @@
  * top bar for time, stage rail | 3D view | info panel, KPI strip along the bottom.
  * Every number that changes while the sim runs uses tabular figures and sits in a box
  * that doesn't take its width from it, so nothing moves when a value changes.
+ *
+ * The control-room look (phase 11, D21): a graphite page with a faint 24 px grid, panels with a 1 px
+ * border and a 1 px top highlight (--edge), uppercase condensed labels, big mono numbers, lamps that glow
+ * in the dark theme, one cyan accent for selection and focus, ghost buttons, glassy overlays over the
+ * 3D view. Colours come from tokens.css only; the light theme reads the same rules with its own tokens.
+ * Motion is 150–250 ms and stops under prefers-reduced-motion (end of the layout rules).
  */
 @import './fonts.css';
 @import './tokens.css';
@@ -18,12 +24,22 @@ body {
   height: 100%;
 }
 
+/* The grid is two 1 px line gradients; on a phone the page scrolls and the grid with it. */
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
   color: var(--ink);
   font: 15px/1.4 var(--font-ui);
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-soft);
 }
 
 button {
@@ -31,13 +47,28 @@ button {
   color: inherit;
 }
 
+/* Focus: the accent ring, with its glow in the dark theme. Rules below that draw their own box-shadow
+   repeat the glow in their :focus-visible state. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+  box-shadow: var(--glow-accent);
 }
 
 [hidden] {
   display: none !important;
+}
+
+/* Thin scrollbars in the line colour, where a box scrolls inside the screen. */
+.rail,
+.panel,
+.log,
+.menu,
+.batch-rows,
+.pallet-rows,
+.about-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
 }
 
 /* The middle rows and columns have a minimum of 0 (or a small fixed one) so the 3D canvas and long
@@ -59,23 +90,27 @@ button {
     'kpis kpis kpis';
 }
 
+/* A panel: the surface, a 1 px border and a 1 px highlight along its top edge; no drop shadow. */
 .card {
-  background: var(--raised);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
+  box-shadow: inset 0 1px 0 var(--edge);
 }
 
 .eyebrow {
   margin: 0;
   font: 600 13px/1 var(--font-label);
-  letter-spacing: 0.09em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--muted);
 }
 
 /* Lamp colours are the same everywhere (plan 08). Idle is a hollow ring, so "off"
-   reads as unlit rather than as a fourth colour, and stays visible in both themes. */
+   reads as unlit rather than as a fourth colour, and stays visible in both themes.
+   In the dark theme a lit lamp glows (--glow-*; none in light). */
 .lamp {
+  position: relative;
   display: inline-block;
   flex: none;
   width: 10px;
@@ -83,50 +118,90 @@ button {
   border-radius: 50%;
   background: transparent;
   box-shadow: inset 0 0 0 2px var(--muted);
+  transition:
+    background-color 200ms ease,
+    box-shadow 200ms ease;
 }
 .lamp[data-status='ok'] {
   background: var(--ok);
-  box-shadow: none;
+  box-shadow: var(--glow-ok);
 }
 .lamp[data-status='warn'] {
   background: var(--warn);
-  box-shadow: none;
+  box-shadow: var(--glow-warn);
 }
 .lamp[data-status='bad'] {
   background: var(--bad);
-  box-shadow: none;
+  box-shadow: var(--glow-bad);
+}
+/* A running lamp on the rail, the run chip and the panel's chip breathes: a second glow fades in and
+   out over the lamp's own, slowly. Only opacity moves, so it costs next to nothing; the lamp's colour,
+   and so its contrast, stays put. Not in the light theme (no glow) or under reduced motion. */
+.stage .lamp[data-status='ok']::after,
+.run .lamp[data-status='ok']::after,
+.chip .lamp[data-status='ok']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: var(--glow-ok);
+  opacity: 0;
+  animation: lamp-breathe 3.2s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+:root[data-theme='light'] .lamp::after {
+  content: none;
+}
+@keyframes lamp-breathe {
+  to {
+    opacity: 1;
+  }
 }
 
-/* buttons, as in the preview's bar */
+/* Buttons: ghost buttons, the border lit by the accent on hover, a tint when pressed. */
 .btn {
-  padding: 8px 11px;
+  padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: transparent;
   color: var(--ink);
   font: 600 14px/1 var(--font-ui);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
 }
 .btn:hover:not(:disabled) {
   border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 .btn[aria-pressed='true'] {
-  background: var(--accent);
+  background: var(--accent-soft);
   border-color: var(--accent);
-  color: var(--accent-ink);
+  color: var(--accent);
 }
 .btn:disabled {
   color: var(--muted);
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 /* The caret says it opens a menu, as the preview's Scenarios summary did. */
 .btn-menu::after {
   content: '▾';
   margin-left: 6px;
   font-size: 12px;
+  color: var(--muted);
+}
+.btn-menu[aria-expanded='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 /* top bar */
@@ -150,15 +225,28 @@ button {
   align-items: baseline;
   gap: 10px;
 }
-/* About sits on the title's row as a small text button (src/ui/about.ts). */
-.about-open {
+/* About, Factory and the theme switch sit on the title's row as small text buttons (src/ui/about.ts). */
+.about-open,
+.brand-title .theme-toggle {
   padding: 2px 4px;
   font-size: 13px;
+}
+/* The theme switch: a half-filled disc, as a contrast control, before its label ("Light" / "Dark"). */
+.theme-toggle::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+  vertical-align: -1px;
 }
 .brand h1 {
   margin: 0;
   font: 700 21px/1.05 var(--font-label);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .brand p {
@@ -174,15 +262,17 @@ button {
   gap: 8px;
 }
 
-/* min-width holds the box steady while the clock text changes length. */
+/* The sim clock, a read-out in a recessed well. min-width holds the box steady while the text changes length. */
 .clock {
   min-width: 15ch;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--line);
-  font: 500 15px/1 var(--font-data);
+  box-shadow: inset 0 1px 0 var(--edge);
+  font: 500 15px/16px var(--font-data);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
   text-align: center;
   white-space: nowrap;
 }
@@ -190,12 +280,13 @@ button {
 .run {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: 7px;
+  padding: 7px 11px;
   border-radius: 999px;
-  background: var(--surface);
   border: 1px solid var(--line);
-  font: 600 13px/1 var(--font-ui);
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .run .lamp {
@@ -214,14 +305,58 @@ button {
   visibility: hidden;
 }
 
+/* The clock controls as one segmented control: Pause, a divider, then the five speeds, on a recessed
+   track; the pressed segment is lit in the accent (paused in amber, as anything on hold). */
 .seg {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: inset 0 1px 0 var(--edge);
+}
+.seg > .btn {
+  padding: 6px 10px;
+  border-color: transparent;
+  border-radius: 7px;
+  color: var(--muted);
+}
+.seg > .btn:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+/* The tint over the panel's surface, not the darker track, keeps the accent text at 4.5:1 in light. */
+.seg > .btn[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: linear-gradient(var(--accent-soft), var(--accent-soft)) var(--surface);
+  color: var(--accent);
+}
+.seg > .btn:focus-visible {
+  outline-offset: 0;
 }
 /* Wide enough that the bar keeps its shape when the toggle is pressed. */
 .btn-pause {
+  position: relative;
   min-width: 66px;
+  margin-right: 5px;
+}
+.btn-pause::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  right: -5px;
+  width: 1px;
+  background: var(--line);
+}
+.seg > .btn-pause[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--warn) 55%, transparent);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  color: var(--ink);
 }
 
 /* stage rail */
@@ -252,7 +387,9 @@ button {
   background: none;
   color: var(--accent);
   font: 600 14px/1 var(--font-ui);
+  text-underline-offset: 3px;
   cursor: pointer;
+  transition: color 150ms ease;
 }
 /* A link styled as one, as "Factory" next to About, is underlined only on hover too. */
 a.link {
@@ -285,10 +422,20 @@ a.link {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  box-shadow: 0 8px 24px rgba(13, 20, 25, 0.18);
+  background: var(--raised);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 16px 40px rgba(0, 0, 0, 0.35);
+  animation: pop-in 150ms ease-out;
 }
 .menu[hidden] {
   display: none;
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 .menu-item {
   display: flex;
@@ -297,12 +444,13 @@ a.link {
   gap: 1px;
   padding: 5px 9px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   background: none;
   color: var(--ink);
   font: 400 13px/1.35 var(--font-ui);
   text-align: left;
   cursor: pointer;
+  transition: background-color 150ms ease;
 }
 .menu-item strong {
   font-weight: 600;
@@ -320,11 +468,13 @@ a.link {
 }
 .menu-item:hover:not([aria-disabled='true']),
 .menu-item:focus-visible {
-  background: var(--surface);
+  background: var(--accent-soft);
   outline: none;
 }
 .menu-item:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--accent);
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    var(--glow-accent);
 }
 .menu-item[aria-disabled='true'] {
   cursor: not-allowed;
@@ -348,7 +498,7 @@ a.link {
 }
 
 /* The lamp comes last in the DOM, so a screen reader reads "1 Standardization, Running";
-   the grid draws it first. */
+   the grid draws it first. The selected stage: a cyan edge on the left and a soft accent tint. */
 .stage {
   display: grid;
   grid-template-columns: 10px 20px minmax(0, 1fr);
@@ -364,13 +514,23 @@ a.link {
   font-size: 14.5px;
   line-height: 1.2;
   cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 .stage:hover {
-  background: var(--surface);
+  background: var(--raised);
 }
 .stage[aria-current='true'] {
   background: var(--accent-soft);
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.stage[aria-current='true']:focus-visible {
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    var(--glow-accent);
 }
 .stage .lamp {
   grid-area: lamp;
@@ -391,15 +551,28 @@ a.link {
 .stage[aria-current='true'] .n {
   color: var(--accent);
 }
+.stage[aria-current='true'] .name {
+  font-weight: 600;
+}
 
 /* 3D view. #viewport fills the view absolutely, so the canvas inside it gets the
-   view's size without its own size ever feeding back into the grid. */
+   view's size without its own size ever feeding back into the grid. The card's top highlight
+   is drawn over the canvas (::after), as the canvas covers the card's own. */
 .view {
   grid-area: view;
   position: relative;
   min-height: 0;
   overflow: hidden;
   background: var(--scene-bg);
+}
+.view::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 var(--edge);
+  pointer-events: none;
 }
 #viewport {
   position: absolute;
@@ -410,7 +583,8 @@ a.link {
   touch-action: none;
 }
 
-/* Notes over the 3D view; clicks pass through them to the machines underneath. */
+/* Notes over the 3D view, as frosted glass: the view shows blurred through them where the browser
+   can blur (backdrop-filter), else they are solid. Clicks pass through them to the machines underneath. */
 .overlay {
   position: absolute;
   z-index: 2;
@@ -420,27 +594,37 @@ a.link {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
-  padding: 5px 9px;
+  padding: 5px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--raised);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.3);
+  backdrop-filter: blur(10px) saturate(1.3);
+  box-shadow: inset 0 1px 0 var(--edge);
   color: var(--muted);
   font-size: 12.5px;
   line-height: 1.3;
   pointer-events: none;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .overlay {
+    background: var(--surface);
+  }
 }
 .overlay-hint {
   left: 10px;
 }
 .overlay-legend {
   right: 10px;
+  color: var(--ink);
+  font: 500 11.5px/1.3 var(--font-data);
 }
 .swatch {
   display: inline-block;
   width: 16px;
-  height: 5px;
-  margin-right: 5px;
-  border-radius: 3px;
+  height: 4px;
+  margin-right: 6px;
+  border-radius: 2px;
   vertical-align: middle;
 }
 .swatch.t4 {
@@ -465,6 +649,9 @@ a.link {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  color: var(--muted);
 }
 .legend-clean-title {
   color: var(--ink);
@@ -487,7 +674,7 @@ a.link {
   background: var(--clean-acid);
 }
 /* The running scenario (src/ui/scenarioLog.ts) and the tour's caption (src/ui/tour.ts) sit at the top
-   of the 3D view, as cards that take clicks, out of the way of the hint and the legend below. */
+   of the 3D view, as glass cards that take clicks, out of the way of the hint and the legend below. */
 .overlay-scenario,
 .overlay-tour {
   top: 10px;
@@ -497,15 +684,35 @@ a.link {
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
-  padding: 8px 11px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 10px 30px rgba(0, 0, 0, 0.25);
   color: var(--ink);
   font-size: 13px;
   pointer-events: auto;
-  box-shadow: 0 4px 14px rgba(13, 20, 25, 0.12);
+  animation: pop-in 200ms ease-out;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .overlay-scenario,
+  .overlay-tour {
+    background: var(--surface);
+  }
 }
 .overlay-scenario[hidden],
 .overlay-tour[hidden] {
   display: none;
+}
+/* The scenario's banner wears an amber edge on its left, as a fault does. */
+.overlay-scenario {
+  box-shadow:
+    inset 3px 0 0 var(--warn),
+    inset 0 1px 0 var(--edge),
+    0 10px 30px rgba(0, 0, 0, 0.25);
 }
 /* The tour's caption takes the top of the view while it runs. */
 .view:has(.overlay-tour:not([hidden])) .overlay-scenario {
@@ -521,28 +728,28 @@ a.link {
   transform: translate(-50%, -50%);
 }
 .overlay-loading {
-  padding: 8px 14px;
+  gap: 9px;
+  padding: 9px 15px;
+  border-radius: 999px;
   color: var(--ink);
-  font-size: 14px;
+  font: 600 13px/1.3 var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 .overlay-loading[hidden] {
   display: none;
 }
 .loading-dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--accent);
+  box-shadow: var(--glow-accent);
   animation: loading-pulse 1s ease-in-out infinite alternate;
 }
 @keyframes loading-pulse {
   from {
     opacity: 0.25;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .loading-dot {
-    animation: none;
   }
 }
 .overlay-stopped {
@@ -552,14 +759,19 @@ a.link {
   align-items: flex-start;
   gap: 6px;
   padding: 14px 16px;
+  border-top: 3px solid var(--bad);
+  border-radius: 10px;
+  background: var(--surface);
   color: var(--ink);
   font-size: 14px;
   pointer-events: auto;
-  box-shadow: 0 4px 14px rgba(13, 20, 25, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
 }
 .overlay-stopped h2 {
   margin: 0;
-  font: 600 17px/1.2 var(--font-label);
+  font: 700 17px/1.2 var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .overlay-stopped p {
   margin: 0;
@@ -581,7 +793,9 @@ a.link {
   flex: none;
 }
 .sc-name {
-  font-weight: 600;
+  font: 700 14px/1.2 var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .sc-summary {
@@ -595,10 +809,15 @@ a.link {
   margin-left: auto;
   padding: 0 4px;
   border: 0;
+  border-radius: 6px;
   background: none;
   color: var(--muted);
   font: 600 16px/1 var(--font-ui);
   cursor: pointer;
+  transition: color 150ms ease;
+}
+.sc-hide:hover {
+  color: var(--ink);
 }
 .sc-last {
   margin: 0;
@@ -628,11 +847,12 @@ a.link {
   transform: translateX(-50%);
   width: min(560px, calc(100% - 20px));
   max-width: none;
+  animation: none;
 }
 .tour-step {
   margin: 0;
   font: 600 12.5px/1.2 var(--font-label);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -647,15 +867,19 @@ a.link {
   background: var(--line);
   overflow: hidden;
 }
+/* The bar's width is set at each HUD update; the transition fills in between them. */
 .tour-progress i {
   display: block;
   height: 100%;
   width: 0;
+  border-radius: 2px;
   background: var(--accent);
+  box-shadow: var(--glow-accent);
+  transition: width 250ms linear;
 }
 .tour-stop {
   align-self: flex-end;
-  padding: 5px 9px;
+  padding: 6px 10px;
   font-size: 13px;
 }
 /* Where the view gets narrow, the legend matters more than the mouse hint. */
@@ -696,7 +920,7 @@ a.link {
 .panel h2 {
   margin: 0;
   font: 700 22px/1.05 var(--font-label);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   text-wrap: balance;
 }
 .p-sub {
@@ -704,16 +928,34 @@ a.link {
   font-size: 13px;
   color: var(--muted);
 }
+/* A status chip: tinted in its lamp's colour, never a solid block. */
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   margin-top: 3px;
-  padding: 4px 9px;
+  padding: 4px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: var(--surface);
-  font: 600 12.5px/1 var(--font-ui);
+  background: var(--raised);
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease;
+}
+.chip:has(.lamp[data-status='ok']) {
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+}
+.chip:has(.lamp[data-status='warn']) {
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+}
+.chip:has(.lamp[data-status='bad']) {
+  border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+  background: color-mix(in srgb, var(--bad) 10%, transparent);
 }
 .chip .lamp {
   width: 8px;
@@ -728,7 +970,7 @@ a.link {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
 }
 .vals {
@@ -772,7 +1014,7 @@ kbd {
   border: 1px solid var(--line);
   border-bottom-width: 2px;
   border-radius: 5px;
-  background: var(--surface);
+  background: var(--raised);
   color: var(--ink);
   font: 500 12px/1.4 var(--font-data);
   text-align: center;
@@ -798,7 +1040,8 @@ kbd {
 }
 .val[data-derived-key] dt::before {
   content: '└ ';
-  color: var(--line);
+  color: var(--muted);
+  opacity: 0.6;
 }
 
 /* Charts and set-point sliders under the live values. */
@@ -806,14 +1049,21 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding-top: 10px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
 }
+/* A chart sits in a recessed well, as an instrument's screen; Chart.js draws in the theme's tokens
+   (trendCanvas.ts): the lines in the accent and red, the grid in --line, the ticks in --muted. */
 .trend {
   margin: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 9px 10px 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: inset 0 1px 0 var(--edge);
 }
 .trend-head {
   display: flex;
@@ -868,11 +1118,15 @@ kbd {
   font-size: 14px;
 }
 .sp-head label {
-  font-weight: 600;
+  font: 600 13px/1.2 var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .sp-value {
   font: 500 13.5px/1.35 var(--font-data);
   font-variant-numeric: tabular-nums;
+  color: var(--accent);
   white-space: nowrap;
 }
 .sp-range {
@@ -880,6 +1134,9 @@ kbd {
   margin: 4px 0;
   accent-color: var(--accent);
   cursor: pointer;
+}
+.sp-range:focus-visible {
+  box-shadow: none;
 }
 .sp-ends {
   display: flex;
@@ -925,13 +1182,23 @@ kbd {
   text-align: left;
   font-size: 13px;
   cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
 }
 .batch-row:hover {
   border-color: var(--line);
+  background: var(--raised);
 }
 .batch-row[aria-pressed='true'] {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
   background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.batch-row[aria-pressed='true']:focus-visible {
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    var(--glow-accent);
 }
 .batch-row .lamp {
   grid-area: lamp;
@@ -984,7 +1251,11 @@ kbd {
   gap: 6px;
 }
 .qa-button[data-result='fail'] {
+  border-color: color-mix(in srgb, var(--bad) 60%, var(--line));
+}
+.qa-button[data-result='fail']:hover:not(:disabled) {
   border-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
 }
 .pallet-rows {
   max-height: 200px;
@@ -1013,7 +1284,8 @@ kbd {
   flex: none;
 }
 .stock-rows .tag {
-  padding: 1px 6px;
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
@@ -1023,7 +1295,7 @@ kbd {
 }
 
 /* Event log under the rail. The card keeps the size the grid gives it and the list scrolls inside, so
-   new entries move nothing else on screen. */
+   new entries move nothing else on screen. Entries hang on a thin timeline from lamp to lamp. */
 .log-card {
   grid-area: log;
   min-height: 0;
@@ -1046,11 +1318,37 @@ kbd {
   line-height: 1.3;
 }
 .log-entry {
+  position: relative;
   display: grid;
   grid-template-columns: 8px minmax(0, 1fr);
   grid-template-areas: 'lamp time' '. text';
-  column-gap: 7px;
+  column-gap: 8px;
   align-items: center;
+  animation: log-in 250ms ease-out;
+}
+.log-entry + .log-entry::before {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: -9px;
+  height: 8px;
+  width: 1px;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+.log-entry:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 3.5px;
+  top: 13px;
+  bottom: 2px;
+  width: 1px;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+}
+@keyframes log-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
 }
 .log-entry .lamp {
   grid-area: lamp;
@@ -1090,14 +1388,21 @@ kbd {
   gap: 3px;
   min-width: 0;
   padding: 8px 10px;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    background-color 200ms ease;
 }
+/* A KPI out of bounds: a lit top edge and a faint wash of its colour down the card. */
 .kpi[data-s='warn'] {
-  border-color: var(--warn);
-  box-shadow: inset 0 3px 0 var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--line));
+  background: linear-gradient(color-mix(in srgb, var(--warn) 10%, transparent), transparent 75%) var(--surface);
+  box-shadow: inset 0 2px 0 var(--warn);
 }
 .kpi[data-s='bad'] {
-  border-color: var(--bad);
-  box-shadow: inset 0 3px 0 var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 55%, var(--line));
+  background: linear-gradient(color-mix(in srgb, var(--bad) 10%, transparent), transparent 75%) var(--surface);
+  box-shadow: inset 0 2px 0 var(--bad);
 }
 .k-l {
   font: 600 12.5px/1 var(--font-label);
@@ -1225,40 +1530,59 @@ kbd {
   .brand h1 {
     font-size: 19px;
   }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    scroll-behavior: auto;
+  /* Narrower segments, so Pause and the five speeds keep to one row of the track on a phone. */
+  .seg > .btn {
+    padding: 6px 7px;
+  }
+  .btn-pause {
+    min-width: 58px;
   }
 }
 
-/* "About this model" (src/ui/about.ts): a modal over the whole screen, text from src/data/about.md */
+/* "About this model" (src/ui/about.ts) and the scenario log (scenarioLog.ts): modals over the whole
+   screen on a dark scrim, the text from src/data/about.md. They rise in over 200 ms. */
 .about {
   width: min(720px, calc(100vw - 32px));
   max-height: min(80vh, 760px);
   padding: 0;
   color: var(--ink);
   font: 400 15px/1.5 var(--font-ui);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 24px 80px rgba(0, 0, 0, 0.5);
 }
 .about[open] {
   display: flex;
   flex-direction: column;
+  animation: dialog-in 200ms ease-out;
 }
 .about::backdrop {
-  background: rgba(13, 20, 25, 0.55);
+  background: rgba(3, 6, 9, 0.72);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
 }
 .about-body {
   overflow-y: auto;
-  padding: 4px 22px 8px;
+  padding: 6px 24px 10px;
 }
 .about-body h2 {
-  margin: 16px 0 8px;
-  font: 600 22px/1.2 var(--font-label);
+  margin: 16px 0 10px;
+  font: 700 22px/1.2 var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .about-body h3 {
-  margin: 18px 0 6px;
-  font: 600 17px/1.25 var(--font-label);
+  margin: 20px 0 6px;
+  font: 600 15px/1.25 var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .about-body p,
 .about-body ul {
@@ -1267,13 +1591,17 @@ kbd {
 .about-body ul {
   padding-left: 20px;
 }
+.about-body li::marker {
+  color: var(--muted);
+}
 .about-body a {
   color: var(--accent);
+  text-underline-offset: 3px;
 }
 .about-foot {
   display: flex;
   justify-content: flex-end;
-  padding: 10px 22px 14px;
+  padding: 10px 24px 14px;
   border-top: 1px solid var(--line);
 }
 /* The scenario log: each scenario's steps, oldest first, each with why it happened. */
@@ -1326,4 +1654,15 @@ kbd {
 }
 .sc-none {
   color: var(--muted);
+}
+
+/* No motion for those who ask for none: no transitions, no breathing lamps, no pulsing dot. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

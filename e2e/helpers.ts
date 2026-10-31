@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
 import { parseStages, type PlantConfig, type StageInfo, type StageValueInfo } from '../src/contracts';
 import { createSim } from '../src/sim';
+import type { ThemePref } from '../src/ui/theme';
 import { expect } from './fixtures';
 
 /** The app's own data files, read as the app reads them (parseStages checks stages.json the same way). */
@@ -122,6 +123,17 @@ export async function clockAndNow(page: Page): Promise<{ timeS: number; nowMs: n
     timeS: Number(document.querySelector('[data-testid="sim-clock"]')?.getAttribute('data-time-s') ?? Number.NaN),
     nowMs: performance.now(),
   }));
+}
+
+/**
+ * Shows `theme` on an open page the way a viewer switches it: the theme button (data-testid theme-toggle), pressed
+ * only when the page shows the other theme. The colour scheme the browser emulates no longer chooses the theme: a
+ * page without a choice opens dark (src/ui/theme.ts).
+ */
+export async function showTheme(page: Page, theme: ThemePref): Promise<void> {
+  const html = page.locator('html');
+  if ((await html.getAttribute('data-theme')) !== theme) await page.getByTestId('theme-toggle').click();
+  await expect(html).toHaveAttribute('data-theme', theme);
 }
 
 export const railButton = (page: Page, stage: number): Locator => page.locator(`#rail [data-testid="rail-stage-${stage}"]`);

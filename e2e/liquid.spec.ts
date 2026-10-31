@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { afterHudUpdates, railButton, waitForClock } from './helpers';
+import { afterHudUpdates, railButton, showTheme, waitForClock } from './helpers';
 
 // The live panels of the liquid line (phase 3, ui lane): the stage 4 read-outs that make R6 visible, the
 // set-point sliders of stages 4 and 3, the trend charts of stages 4 and 6, the event log, and the ?debug
@@ -269,8 +269,9 @@ test.describe('trend charts', () => {
 
 test('the one-screen layout holds with the stage 4 panel and the log, at 1280 × 720 and 1440 × 900, light and dark', async ({ page }) => {
   await openStage(page, '/?mock', 4);
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme });
+  // Each theme through the top bar's theme button, as a viewer switches it (the page opens dark).
+  for (const theme of ['light', 'dark'] as const) {
+    await showTheme(page, theme);
     for (const [width, height] of [
       [1280, 720],
       [1440, 900],
@@ -294,7 +295,7 @@ test('the one-screen layout holds with the stage 4 panel and the log, at 1280 ×
           kpis: box('#kpis'),
         };
       });
-      const size = `${width} × ${height} (${colorScheme})`;
+      const size = `${width} × ${height} (${theme})`;
       expect(layout.across, `scrolls sideways at ${size}`).toBe(false);
       expect(layout.down, `scrolls down at ${size}`).toBe(false);
       const lowestTop = Math.max(...layout.barParts.map((part) => part.top));

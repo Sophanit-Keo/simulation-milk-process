@@ -229,3 +229,18 @@ test('#3d opens the 3D view after a reload; Board shows the cards alone and keep
   await expect(viewport(page).locator('canvas')).toHaveCount(0);
   expect(await page.evaluate(() => window.__factory3d === undefined), 'the debug hook went with the floor').toBe(true);
 });
+
+for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }]) {
+  test(`the 3D view keeps the page to one screen at ${size.width} × ${size.height}: only the column of cards scrolls (phase 11)`, async ({
+    page,
+    letReport,
+  }) => {
+    void letReport;
+    await page.setViewportSize(size);
+    await openSignedIn(page, '?debug');
+    await page.getByTestId('view-3d').click();
+    await waitForFloor(page);
+    // The screen-reader-only separators once stretched the page past the column's scroll box (phase 11 qa).
+    expect(await page.evaluate(() => document.scrollingElement!.scrollHeight), 'the page is one screen high').toBe(size.height);
+  });
+}

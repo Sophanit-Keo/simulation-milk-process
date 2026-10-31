@@ -81,3 +81,69 @@ describe('zone names', () => {
     }
   });
 });
+
+// The machine labels are tags over the 3D view (phase 11, D21): a chip, a little see-through, so what shows through
+// it may be anything from a black tyre to a white carton. Its text keeps WCAG AA (4.5:1) and its lamps the 3:1 of
+// WCAG 1.4.11 against the chip over either, in every theme.
+
+/** WCAG 1.4.11: a lamp is a graphical object that carries the status. */
+const NON_TEXT = 3;
+
+function rgb(hex: string): [number, number, number] {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!match) throw new Error(`not a #rrggbb colour: ${hex}`);
+  return [parseInt(match[1], 16), parseInt(match[2], 16), parseInt(match[3], 16)];
+}
+
+const toHex = (channels: readonly number[]): string => `#${channels.map((c) => Math.round(c).toString(16).padStart(2, '0')).join('')}`;
+
+/**
+ * The chip's colour over `under`: its background is `color-mix(in srgb, <colour> <p>%, transparent)` (or an opaque
+ * colour), which shows as the colour at p % opacity.
+ */
+function chipOver(background: string, under: string, tokens: Map<string, string>): string {
+  const mix = /^color-mix\(in srgb, (\S+) (\d+(?:\.\d+)?)%, transparent\)$/.exec(background);
+  const [color, share] = mix ? [mix[1], Number(mix[2]) / 100] : [background, 1];
+  const top = rgb(resolve(color, tokens));
+  const bottom = rgb(under);
+  return toHex(top.map((c, i) => c * share + bottom[i] * (1 - share)));
+}
+
+describe('machine labels', () => {
+  const chip = declarations(rule(LABELS, '.equipment-label'));
+  const name = declarations(rule(LABELS, '.equipment-name'));
+  const value = declarations(rule(LABELS, '.equipment-value'));
+  const selectedName = declarations(rule(LABELS, '.equipment-label.is-selected .equipment-name'));
+  const lamp = (status: string | null): string => {
+    const selector = status ? `.equipment-label[data-status='${status}'] .equipment-lamp` : '.equipment-lamp';
+    const background = declarations(rule(LABELS, selector)).get('background');
+    if (!background) throw new Error(`${selector} sets no background`);
+    return background;
+  };
+
+  it('stand on a chip that is at least a little opaque', () => {
+    const background = chip.get('background');
+    expect(background, '.equipment-label background').toBeDefined();
+    expect(background).toMatch(/^color-mix\(in srgb, var\(--[\w-]+\) \d+%, transparent\)$|^var\(--[\w-]+\)$/);
+  });
+
+  it.each(THEMES)('keep their text at WCAG AA and their lamps at 3:1 over black or white: $name theme', ({ tokens }) => {
+    const background = chip.get('background') as string;
+    const texts = {
+      name: name.get('color'),
+      'selected name': selectedName.get('color'),
+      value: value.get('color'),
+    };
+    for (const under of ['#000000', '#ffffff']) {
+      const ground = luminance(chipOver(background, under, tokens));
+      for (const [what, color] of Object.entries(texts)) {
+        if (!color) throw new Error(`the ${what} sets no color`);
+        expect(contrast(luminance(resolve(color, tokens)), ground), `${what} (${color}) over ${under}`).toBeGreaterThanOrEqual(AA);
+      }
+      for (const status of [null, 'ok', 'warn', 'bad']) {
+        const color = lamp(status);
+        expect(contrast(luminance(resolve(color, tokens)), ground), `${status ?? 'idle'} lamp (${color}) over ${under}`).toBeGreaterThanOrEqual(NON_TEXT);
+      }
+    }
+  });
+});

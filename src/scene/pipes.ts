@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CLEANING_FLUIDS, degToRad, LINE_POINT_IDS, type CleaningFluid, type LinePoint, type LinePointId, type StageId } from '../contracts';
 import type { PointM } from './layout';
 import { advancePhase } from './motion';
+import { createLampPalette } from './lamps';
 import { LAMP_GLOW_HEX, readSceneColor, type SceneColorVar } from './theme';
 
 /**
@@ -296,6 +297,12 @@ const STRIPE_MPS_PER_LPH = 1e-4;
  * speed, they would seem to stand still or run backwards.
  */
 const MAX_STRIPE_STEP_M = STRIPE_M / 4;
+/**
+ * In the dark theme the milk in the pipes lights itself by this share of its colour (phase 11, D21): the plant's
+ * light is dimmer there, and the temperature colours are what the pipes teach. No light and no draw call: a term
+ * in the pipes' own shader.
+ */
+const DARK_PIPE_GLOW = 0.28;
 /** How brightly the divert route glows, in the lamps' red, while the plant diverts. */
 const DIVERT_LIT_INTENSITY = 0.6;
 /** Slots in the phase table: one per line point, then one that never moves (joint balls), then the cleaning flow's. */
@@ -330,6 +337,8 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
   // One phase per line point. The vertex shader looks a vertex's phase up by its slot, so each part of
   // a run flows at its own point's speed, and all runs share one material and one texture.
   const phaseM = new Float32Array(FLOW_SLOTS);
+  // How much the milk lights itself (DARK_PIPE_GLOW in the dark theme, none in the light one); one uniform for both materials.
+  const pipeGlow = { value: 0 };
   const makeMilkMaterial = (name: string): THREE.MeshStandardMaterial => {
     const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.35, metalness: 0.2, map: flowTexture });
     material.name = name;
@@ -340,6 +349,11 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
     material.onBeforeCompile = (shader) => {
       shader.uniforms.flowPhaseM = { value: phaseM };
       shader.uniforms.stripeM = { value: STRIPE_M };
+      shader.uniforms.pipeGlow = pipeGlow;
+      // In the dark theme the milk lights itself a little in its own colour, a mimic diagram's lit lines.
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float pipeGlow;')
+        .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * pipeGlow;');
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
@@ -356,7 +370,9 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
   // The divert route has a material of its own, the same but for an emissive red it shows while diverting.
   // It is its own mesh anyway, so this costs no draw call.
   const divertMaterial = makeMilkMaterial('milk-pipe-divert');
-  divertMaterial.emissive.setHex(LAMP_GLOW_HEX.bad);
+  // The lamps' red: LAMP_GLOW_HEX's in the light theme, the dark theme's --bad there (lamps.ts).
+  const divertGlow = createLampPalette({ bad: LAMP_GLOW_HEX.bad }, { bad: '--bad' });
+  divertMaterial.emissive.copy(divertGlow.color('bad'));
   divertMaterial.emissiveIntensity = 0;
   let divertLit = false;
 
@@ -457,6 +473,9 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
     for (const [i, stop] of TEMP_STOPS.entries()) stops[i].color.set(readSceneColor(stop.colorVar));
     for (const fluid of CLEANING_FLUIDS) fluidColors[fluid].set(readSceneColor(FLUID_COLOR_VAR[fluid]));
     idleLineColor.set(readSceneColor('--steel'));
+    divertGlow.applyTheme();
+    divertMaterial.emissive.copy(divertGlow.color('bad'));
+    pipeGlow.value = divertGlow.dark ? DARK_PIPE_GLOW : 0;
     if (coloured) recolour();
   };
   applyTheme();

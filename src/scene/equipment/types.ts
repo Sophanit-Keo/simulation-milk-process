@@ -70,6 +70,12 @@ export interface Equipment {
   selectBatch?(batchId: number | null): void;
   /** Optional: a point on the batch's block, in world metres, for the ?debug hook's batchScreenPoint; null for none. */
   batchPointM?(batchId: number): PointM | null;
+  /**
+   * Optional: re-reads the theme into the machine's own materials (its lamps glow in the dark theme, lamps.ts).
+   * The host calls it once the plant is built and on every theme change, never per frame. Until then a machine
+   * shows the light theme, so it builds without a DOM.
+   */
+  applyTheme?(): void;
   /** Disposes the module's own geometries and materials (never the shared ones). */
   dispose(): void;
 }

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { StageId } from '../contracts';
+import type { FloorGrid } from './floorGrid';
 import { APRON, ZONES, type PointM, type RectM, type Zone } from './layout';
 import { readSceneColor } from './theme';
 
@@ -55,7 +56,8 @@ export function zoneLabelPlacement(zone: Zone): { anchorM: PointM; center: reado
   };
 }
 
-export function createZones(scene: THREE.Scene, labelRoot: THREE.Object3D): Zones {
+/** `grid`, if given, draws the dark theme's floor grid on the slabs too, so its lines run on across the zones. */
+export function createZones(scene: THREE.Scene, labelRoot: THREE.Object3D, grid?: FloorGrid): Zones {
   // All slabs are one mesh with a colour per vertex: eight boxes would cost eight draw calls for nothing.
   const slabs = [
     ...ZONES.map((zone) => ({ rect: zone.rect, heightM: SLAB_HEIGHT_M, colorVar: zone.colorVar })),
@@ -73,6 +75,7 @@ export function createZones(scene: THREE.Scene, labelRoot: THREE.Object3D): Zone
   const colors = new THREE.BufferAttribute(new Float32Array(slabGeometry.getAttribute('position').count * 3), 3);
   slabGeometry.setAttribute('color', colors);
   const slabMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+  grid?.add(slabMaterial);
   const slabMesh = new THREE.Mesh(slabGeometry, slabMaterial);
   slabMesh.name = 'zone-slabs';
   slabMesh.receiveShadow = true;

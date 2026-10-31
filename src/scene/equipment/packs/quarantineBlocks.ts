@@ -7,6 +7,8 @@
 // fault scenario, phase 5) blinks its lamp until it is judged.
 import * as THREE from 'three';
 import type { BatchSnapshot, BatchStatus } from '../../../contracts';
+import { createLampPalette, DARK_LAMP_GLOW } from '../../lamps';
+import { LAMP_COLOR_VAR, readSceneColor, type LampStatus } from '../../theme';
 import { QUARANTINE, QUARANTINE_ROW_Z_M, type FloorPointM } from './layout';
 
 /** Blocks along a row and rows: 48 places, room for the 44 a full week needs (H49) and a blocked batch or two. */
@@ -25,13 +27,18 @@ export const BLOCK_PALLET_M = { widthM: 0.52, heightM: 0.2, depthM: 0.6 } as con
 /** The pallets stand on the zone floor, just above its slab and the floor markings. */
 const MARK_Y_M = 0.05;
 
-/** Lamp colours: the light theme's --ok, --warn, --bad (plan 08), as the other lamps in the scene. */
+/** Lamp colours: the light theme's --ok, --warn, --bad (plan 08), as the other lamps in the scene. The pallets' tint, in both themes. */
 const STATUS_COLOR: Record<BatchStatus, number> = { filling: 0x1f8f57, hold: 0xa87400, released: 0x1f8f57, blocked: 0xc63a2b };
+/** The lamp a batch's status lights; the lamps glow in the dark theme's colours there (lamps.ts). */
+const STATUS_LAMP: Record<BatchStatus, LampStatus> = { filling: 'ok', hold: 'warn', released: 'ok', blocked: 'bad' };
+const LIGHT_LAMP_HEX: Record<LampStatus, number> = { ok: STATUS_COLOR.filling, warn: STATUS_COLOR.hold, bad: STATUS_COLOR.blocked };
 /** How far a pallet's tint goes from the carton's white toward its lamp colour: enough to read, not a wall of paint. */
 const TINT_FRAC = 0.6;
 /** A batch under investigation blinks its lamp: lit, then pale, each half of this many real seconds. */
 export const INVESTIGATION_BLINK_S = 1;
-const _pale = new THREE.Color(STATUS_COLOR.hold).lerp(new THREE.Color(0xffffff), 0.75);
+/** The blink's off half: toward white in the light theme; in the dark theme the lamp dims to this share of its glow. */
+const PALE_TO_WHITE = 0.75;
+const DARK_PALE = 0.22;
 
 /** The centre of block place `place` on the floor: rows from the back (z 4.6) forward, columns west to east. */
 export function blockCentreM(place: number): FloorPointM {
@@ -72,6 +79,8 @@ export interface QuarantineBlocks {
   /** Shows the batches; only the blocks whose batch, status or pallets changed are rewritten. */
   /** The batches in quarantine; realDtS moves the blink of those under investigation on. */
   update(batches: readonly BatchSnapshot[], realDtS?: number): void;
+  /** Re-reads the theme: the lamps' colours and glow (lamps.ts) and the picked block's mark, in the accent. */
+  applyTheme(): void;
   /** The batch a hit on the pallets or lamps picks. */
   batchAt(object: THREE.Object3D, instanceId: number | undefined): number | null;
   select(batchId: number | null): void;
@@ -92,7 +101,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /**
  * The blocks on the shared box and sphere and the near-white shared carton material, which the tints
  * multiply; the lamps are unlit, so each shows its colour at full strength, and the mark under a picked block
- * takes the accent blue. Both materials are the module's own and go with dispose().
+ * takes the accent (light theme's blue until applyTheme reads the theme). Both materials are the module's own and go with dispose().
  */
 export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphereGeometry: THREE.BufferGeometry, palletMaterial: THREE.Material): QuarantineBlocks {
   const pallets = new THREE.InstancedMesh(boxGeometry, palletMaterial, BLOCK_PLACES * PALLETS_PER_BLOCK);
@@ -102,6 +111,14 @@ export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphere
   const lampMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const lamps = new THREE.InstancedMesh(sphereGeometry, lampMaterial, BLOCK_PLACES);
   lamps.name = 'quarantine-lamps';
+  const palette = createLampPalette(LIGHT_LAMP_HEX, LAMP_COLOR_VAR);
+  const pale = new THREE.Color();
+  const paintPale = (): void => {
+    pale.copy(palette.color('warn'));
+    if (palette.dark) pale.multiplyScalar(DARK_PALE);
+    else pale.lerp(_white, PALE_TO_WHITE);
+  };
+  paintPale();
   const markMaterial = new THREE.MeshStandardMaterial({ color: 0x1767b0, roughness: 0.6 });
   const mark = new THREE.Mesh(boxGeometry, markMaterial);
   mark.name = 'quarantine-mark';
@@ -152,7 +169,7 @@ export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphere
       const topM = MARK_Y_M + layers * BLOCK_PALLET_M.heightM;
       _matrix.compose(_position.set(centreM[0], topM + 0.3, centreM[1]), _noTurn, _scale.setScalar(0.18));
       lamps.setMatrixAt(place, _matrix);
-      lamps.setColorAt(place, _color.setHex(STATUS_COLOR[batch.status]));
+      lamps.setColorAt(place, palette.color(STATUS_LAMP[batch.status]));
     } else {
       lamps.setMatrixAt(place, HIDDEN);
     }
@@ -192,7 +209,7 @@ export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphere
       let blinking = false;
       shown.forEach((entry, place) => {
         if (!entry?.flagged) return;
-        lamps.setColorAt(place, lit ? _color.setHex(STATUS_COLOR[entry.status]) : _pale);
+        lamps.setColorAt(place, lit ? palette.color(STATUS_LAMP[entry.status]) : pale);
         blinking = true;
       });
       if (blinking && lamps.instanceColor) lamps.instanceColor.needsUpdate = true;
@@ -202,6 +219,17 @@ export function createQuarantineBlocks(boxGeometry: THREE.BufferGeometry, sphere
       if (pallets.instanceColor) pallets.instanceColor.needsUpdate = true;
       if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true;
       placeMark();
+    },
+    applyTheme() {
+      palette.applyTheme();
+      paintPale();
+      // Unlit, the lamps show their colour as it is; in the dark theme a little over, as the other lamps glow.
+      lampMaterial.color.setScalar(palette.dark ? DARK_LAMP_GLOW : 1);
+      markMaterial.color.set(readSceneColor('--accent'));
+      shown.forEach((entry, place) => {
+        if (entry) lamps.setColorAt(place, palette.color(STATUS_LAMP[entry.status]));
+      });
+      if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true;
     },
     batchAt(object, instanceId) {
       if (instanceId === undefined) return null;

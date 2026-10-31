@@ -7,12 +7,13 @@ import { debugRequested, installDebugHook, type DebugHook } from './debugHook';
 import { uhtModeOf } from './equipment/liquid/visuals';
 import { createEquipmentHost } from './equipmentHost';
 import { createEquipmentLabels } from './equipmentLabels';
+import { createFloorGrid } from './floorGrid';
 import './labels.css';
 import { FLOOR, OVERVIEW, PLANT_BOUNDS, PLANT_HEIGHT_M, overviewDistanceM, type RectM } from './layout';
 import { motionDtS } from './motion';
 import { createPicker, type PickTarget } from './picking';
 import { createPipes } from './pipes';
-import { readSceneColor, watchTheme } from './theme';
+import { readSceneColor, sceneIsDark, watchTheme } from './theme';
 import { createZones } from './zones';
 
 const FOV_DEG = 40;
@@ -38,6 +39,15 @@ const SUN_DISTANCE_M = 120;
 const SHADOW_MAP_PX = 2048;
 /** Soft shadow edge in shadow-map texels. three r186 dropped PCFSoftShadowMap; PCFShadowMap with a radius replaces it. */
 const SHADOW_RADIUS = 3;
+/**
+ * The two lights by theme. Light: the preview's white daylight. Dark (phase 11, D21): a control room's lower, cooler
+ * light, a blue-grey sky over a dark floor and a cooler, weaker sun, so the glowing lamps and the pipes' temperature
+ * colours stand out from the steel. Same lights, same shadow: only their colours and strengths change.
+ */
+const LIGHTING = {
+  light: { skyHex: 0xffffff, groundHex: 0x9aa7b2, skyIntensity: 1.3, sunHex: 0xffffff, sunIntensity: 1.9 },
+  dark: { skyHex: 0xbcd0e6, groundHex: 0x1b252e, skyIntensity: 0.95, sunHex: 0xdbe7f4, sunIntensity: 1.6 },
+} as const;
 /**
  * During the guided tour the camera drifts round each stop once it has landed (OrbitControls' autoRotate,
  * in its units of 2π/60 rad/s): 0.25 is 1.5° a second, about 25° over the tour's 18 s at a stop.
@@ -107,8 +117,9 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
   // Like the preview, the overview refits the window until the viewer takes the camera or picks a stage.
   let cameraTaken = false;
 
-  const sky = new THREE.HemisphereLight(0xffffff, 0x9aa7b2, 1.3);
-  const sun = new THREE.DirectionalLight(0xffffff, 1.9);
+  // Colours and strengths follow the theme (LIGHTING, in applyTheme below).
+  const sky = new THREE.HemisphereLight();
+  const sun = new THREE.DirectionalLight();
   sun.castShadow = true;
   sun.shadow.mapSize.set(SHADOW_MAP_PX, SHADOW_MAP_PX);
   sun.shadow.bias = -0.0004;
@@ -125,8 +136,11 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
   floor.position.set(floorCentre.xM, 0, floorCentre.zM);
   floor.receiveShadow = true;
   scene.add(floor);
+  // The dark theme's grid on the floor and the zone slabs, and the floor's margin fading into the room: in their shaders.
+  const floorGrid = createFloorGrid();
+  floorGrid.add(floorMaterial, { fadeEdges: true });
 
-  const zones = createZones(scene, labelScene);
+  const zones = createZones(scene, labelScene, floorGrid);
   const equipmentHost = createEquipmentHost(scene, undefined, { heroModels: options.heroModels });
   const pipes = createPipes(scene, equipmentHost.materials.steel);
   const labels = createEquipmentLabels(equipmentHost.equipment, labelScene);
@@ -179,8 +193,15 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
   });
 
   const applyTheme = (): void => {
+    const lighting = LIGHTING[sceneIsDark() ? 'dark' : 'light'];
+    sky.color.setHex(lighting.skyHex);
+    sky.groundColor.setHex(lighting.groundHex);
+    sky.intensity = lighting.skyIntensity;
+    sun.color.setHex(lighting.sunHex);
+    sun.intensity = lighting.sunIntensity;
     background.set(readSceneColor('--scene-bg'));
     floorMaterial.color.set(readSceneColor('--floor'));
+    floorGrid.applyTheme();
     zones.applyTheme();
     equipmentHost.applyTheme();
     pipes.applyTheme();

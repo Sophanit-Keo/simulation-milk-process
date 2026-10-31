@@ -7,9 +7,14 @@
 // Phase 10 (D20) adds the 3D view: a Board / 3D switch in the header, the viewport the floor is drawn in
 // (src/factory/scene/, which main.ts loads), beside the cards in 3D, and a "Show in 3D" button on each card
 // and row there. What the floor or a button picks is marked on its card or row.
+//
+// Phase 11 (D21), the control-room look: the theme button in the header, and the texts split into spans
+// (segments) so the stylesheet can set the numbers apart, e.g. the draw as a large readout. A segmented text
+// reads exactly as before (its spans joined), so the tests and screen readers get the same words.
 import type { Status } from '../contracts';
 import { createLamp, el, setAttr, setLamp, setText } from '../ui/dom';
 import { formatDuration, formatNumber } from '../ui/format';
+import { createThemeToggle } from '../ui/theme';
 import { POLL_MS, type FactorySelection, type FactoryView, type FactoryViewMode, type LineView, type LiveState, type UhtView } from './types';
 
 // ───── Texts (pure, so tests can call them) ─────
@@ -91,6 +96,84 @@ export function summaryText(view: FactoryView): string {
   return `${formatNumber(running)} of ${formatNumber(lines.length)} ${lineWord} running${draw}`;
 }
 
+// ───── Segments: a text as spans, for the look (pure, so tests can call them) ─────
+
+/** One span of a text: its class (the look) and its words. A text's segments joined are the text itself. */
+export type Segment = readonly [className: string, text: string];
+
+const SEP = ' · ';
+
+/** "5,550 of 8,000 L/h" → the draw, " of ", the capacity, " L/h"; "5,550 L/h" → the draw and " L/h". */
+function flowSegments(value: string): Segment[] {
+  const match = /^(.*?)(?:( of )(.*?))?( L\/h)?$/.exec(value);
+  if (!match) return [['fb-num', value]];
+  const [, draw, of, capacity, unit] = match;
+  const parts: Segment[] = [['fb-num', draw]];
+  if (of !== undefined && capacity !== undefined) parts.push(['fb-of', of], ['fb-num fb-num-of', capacity]);
+  if (unit !== undefined) parts.push(['fb-unit', unit]);
+  return parts.filter(([, text]) => text !== '');
+}
+
+/**
+ * A UHT's state as a readout: "Producing · 5,550 of 8,000 L/h" → the word, then the numbers; a state with no
+ * numbers ("CIP", "Stopped", "No lines") is the readout by itself.
+ */
+export function stateSegments(stateText: string): Segment[] {
+  const at = stateText.indexOf(SEP);
+  if (at < 0) return [['fb-state-only', stateText]];
+  return [['fb-state-word', stateText.slice(0, at)], ['fb-sep', SEP], ...flowSegments(stateText.slice(at + SEP.length))];
+}
+
+/** "TBA/19 · 7,500 packs/h · 100 ml" → the filler as a chip, then its speed and pack size. */
+export function fillerSegments(line: Pick<LineView, 'filler' | 'packsPerH' | 'packMl'>): Segment[] {
+  const text = fillerText(line);
+  const head = `${line.filler}${SEP}`;
+  if (line.filler && text.startsWith(head)) return [['fb-chip', line.filler], ['fb-sep', SEP], ['fb-spec', text.slice(head.length)]];
+  return [['fb-spec', text]];
+}
+
+/** Numbers (with their commas and points) apart from the words around them: "4 of 6 lines" → "4", " of ", "6", " lines". */
+export function numberSegments(text: string, numClass = 'fb-num', wordClass = 'fb-word'): Segment[] {
+  return text
+    .split(/(\d[\d,.]*)/)
+    .filter((part) => part !== '')
+    .map((part): Segment => [/^\d/.test(part) ? numClass : wordClass, part]);
+}
+
+/** "Output 42 of 100" → the word, then 42 / 100 as a readout. */
+export function outputSegments(text: string): Segment[] {
+  const match = /^(Output )(.*?)(?:( of )(.*))?$/.exec(text);
+  if (!match) return [['fb-num', text]];
+  const [, word, qty, of, target] = match;
+  const parts: Segment[] = [['fb-k', word], ['fb-num', qty]];
+  if (of !== undefined && target !== undefined) parts.push(['fb-of', of], ['fb-num fb-num-of', target]);
+  return parts.filter(([, part]) => part !== '');
+}
+
+/** The spans each segmented node holds now, by class, so an update with the same classes only sets texts. */
+const segmentKeys = new WeakMap<Element, string>();
+
+/** Writes `segments` as the spans of `node`; touches the DOM only where a text or the shape changed. */
+function setSegments(node: HTMLElement, segments: readonly Segment[]): void {
+  const key = segments.map(([className]) => className).join('|');
+  if (segmentKeys.get(node) !== key || node.childNodes.length !== segments.length) {
+    node.replaceChildren(...segments.map(([className, text]) => el('span', className, text)));
+    segmentKeys.set(node, key);
+    return;
+  }
+  segments.forEach(([, text], index) => setText(node.children[index], text));
+}
+
+/** The share of `part` in `whole` as a CSS width, 0–100 %. */
+function widthOf(part: number, whole: number): string {
+  const pct = whole > 0 && Number.isFinite(part) ? Math.min(100, Math.max(0, (part * 100) / whole)) : 0;
+  return `${formatNumber(pct, 1)}%`;
+}
+
+function setWidth(node: HTMLElement, width: string): void {
+  if (node.style.width !== width) node.style.width = width;
+}
+
 // ───── DOM helpers ─────
 
 function show(node: HTMLElement, visible: boolean): void {
@@ -146,6 +229,7 @@ function createLineRow(onLocate: Locate): LineRowView {
 
   const top = el('div', 'fb-line-top');
   const name = el('h3', 'fb-line-name');
+  // A chip tinted by the line's state (factory.css, by the row's data-status), its words beside the lamp.
   const status = el('span', 'fb-line-status');
   status.dataset.testid = 'line-status';
   const locate = locateButton('locate-line', () => onLocate({ kind: 'line', id: lineId }));
@@ -161,12 +245,18 @@ function createLineRow(onLocate: Locate): LineRowView {
   lotClock.dataset.testid = 'line-lot-clock';
   lotRow.append(product, lotClock);
 
-  const outRow = el('p', 'fb-line-out');
+  // The output as a mini bar of its target; the text beside it says the same, so the bar stays out of the
+  // accessibility tree.
+  const outRow = el('div', 'fb-line-out');
+  const outBar = el('span', 'fb-out-bar');
+  outBar.setAttribute('aria-hidden', 'true');
+  const outFill = el('span', 'fb-out-fill');
+  outBar.append(outFill);
   const output = el('span', 'fb-output');
   output.dataset.testid = 'line-output';
   const troubles = el('span', 'fb-trouble');
   troubles.dataset.testid = 'line-troubles';
-  outRow.append(output, troubles);
+  outRow.append(outBar, output, troubles);
 
   body.append(top, filler, lotRow, outRow);
   root.append(lamp, body);
@@ -181,17 +271,19 @@ function createLineRow(onLocate: Locate): LineRowView {
       setText(name, line.name);
       setAttr(locate, 'aria-label', `Show ${line.name} in 3D`);
       setText(status, line.statusText);
-      setText(filler, fillerText(line));
+      setSegments(filler, fillerSegments(line));
 
       const productLine = productText(line);
-      const clock = line.lotRunS === null ? '' : `running for ${formatDuration(line.lotRunS)}`;
+      const clock = line.lotRunS === null ? '' : formatDuration(line.lotRunS);
       setText(product, productLine);
-      setText(lotClock, clock);
+      setSegments(lotClock, clock === '' ? [] : [['fb-k', 'running for '], ['fb-num', clock]]);
       show(product, productLine !== '');
       show(lotClock, clock !== '');
       show(lotRow, productLine !== '' || clock !== '');
 
-      setText(output, outputText(line));
+      setSegments(output, outputSegments(outputText(line)));
+      show(outBar, line.target > 0);
+      setWidth(outFill, widthOf(line.qty, line.target));
       const trouble = troublesText(line);
       setText(troubles, trouble);
       setAttr(troubles, 'data-sev', line.worstSev === null ? null : String(line.worstSev));
@@ -261,8 +353,13 @@ function createUhtCard(onLocate: Locate): UhtCardView {
   const locate = locateButton('locate-uht', () => onLocate({ kind: 'uht', name: uhtName }));
   head.append(lamp, name, capacity, locate);
 
+  // The readout: the state's word over the draw of capacity in large figures, the load beside it.
+  const readout = el('div', 'fb-readout');
   const state = el('p', 'fb-state');
   state.dataset.testid = 'draw';
+  const pct = el('p', 'fb-pct');
+  pct.dataset.testid = 'load';
+  readout.append(state, pct);
 
   // The bar is the draw text drawn; the text says the same in words, so the bar itself stays out of the
   // accessibility tree and the percentage beside it is plain text.
@@ -271,16 +368,15 @@ function createUhtCard(onLocate: Locate): UhtCardView {
   bar.setAttribute('aria-hidden', 'true');
   const fill = el('span', 'fb-bar-fill');
   bar.append(fill);
-  const pct = el('span', 'fb-pct');
-  pct.dataset.testid = 'load';
-  meter.append(bar, pct);
+  meter.append(bar);
 
   const over = el('p', 'fb-over');
   over.dataset.testid = 'over-capacity';
   over.hidden = true;
 
+  const linesLabel = el('p', 'fb-label fb-lines-label', 'Lines');
   const lines = createLineList(onLocate);
-  root.append(head, state, meter, over, lines.root);
+  root.append(head, readout, meter, over, linesLabel, lines.root);
 
   return {
     root,
@@ -291,18 +387,19 @@ function createUhtCard(onLocate: Locate): UhtCardView {
       setAttr(root, 'data-state', uht.state);
       setLamp(lamp, uht.lamp);
       setText(name, uht.name);
-      setText(capacity, `Capacity ${formatNumber(uht.capacityLph)} L/h`);
-      setText(state, uht.stateText);
+      setSegments(capacity, [['fb-k', 'Capacity '], ['fb-num', formatNumber(uht.capacityLph)], ['fb-unit', ' L/h']]);
+      setSegments(state, stateSegments(uht.stateText));
 
       const loadPct = Number.isFinite(uht.loadPct) ? Math.max(0, uht.loadPct) : 0;
-      const width = `${formatNumber(Math.min(100, loadPct), 1)}%`;
-      if (fill.style.width !== width) fill.style.width = width;
+      setWidth(fill, widthOf(loadPct, 100));
       setAttr(meter, 'data-over', uht.overCapacity ? 'true' : null);
-      setText(pct, `${formatNumber(loadPct)} % load`);
+      setAttr(readout, 'data-over', uht.overCapacity ? 'true' : null);
+      setSegments(pct, [['fb-num', `${formatNumber(loadPct)} %`], ['fb-unit', ' load']]);
 
       setText(over, uht.overCapacity ? `Over capacity by ${formatNumber(uht.drawLph - uht.capacityLph)} L/h` : '');
       show(over, uht.overCapacity);
 
+      show(linesLabel, uht.lines.length > 0);
       lines.update(uht.lines);
     },
     mark(selection) {
@@ -382,6 +479,10 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   // ── header ──
   const header = el('header', 'fb-head card');
   const brand = el('div', 'fb-brand');
+  // The plant's drop, as in the favicon, drawn by factory.css.
+  const logo = el('span', 'fb-mark');
+  logo.setAttribute('aria-hidden', 'true');
+  const brandText = el('div', 'fb-brand-text');
   const titleRow = el('div', 'fb-title-row');
   const title = el('h1', '', 'Factory board');
   // Focus lands here after signing in, so it is not left on the hidden form.
@@ -400,10 +501,12 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   siteSep.hidden = true;
   siteSep.setAttribute('aria-hidden', 'true');
   sub.append(site, siteSep, 'UHT plants and lines, from Let Report');
-  brand.append(titleRow, sub);
+  brandText.append(titleRow, sub);
+  brand.append(logo, brandText);
 
   const session = el('div', 'fb-session');
   session.hidden = true;
+  // A pill: its dot breathes while the socket is live (factory.css); the words say the state.
   const live = el('p', 'fb-live');
   live.dataset.testid = 'live-state';
   live.setAttribute('aria-live', 'polite');
@@ -415,9 +518,16 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   const user = el('p', 'fb-user');
   const userEmail = el('span', 'fb-user-email');
   userEmail.dataset.testid = 'user';
-  user.append('Signed in as ', userEmail);
+  user.append(el('span', 'fb-user-lead', 'Signed in as '), userEmail);
+  // The theme button and Sign out: the theme button shows signed out too, Sign out only signed in.
+  const tools = el('div', 'fb-tools');
+  // The page lives as long as the board, so the theme button's listener is never taken off.
+  const theme = createThemeToggle(new AbortController().signal);
+  theme.classList.add('fb-theme');
   const signOut = button('Sign out', 'btn', 'sign-out');
+  signOut.hidden = true;
   signOut.addEventListener('click', () => options.onSignOut());
+  tools.append(theme, signOut);
   // Board or 3D (phase 10): two toggle buttons, the pressed one showing.
   const views = el('div', 'fb-views');
   views.setAttribute('role', 'group');
@@ -432,8 +542,8 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
     node.addEventListener('click', () => options.onView(mode));
     views.append(node);
   }
-  session.append(views, live, user, signOut);
-  header.append(brand, session);
+  session.append(views, live, user);
+  header.append(brand, session, tools);
 
   // ── sign-in form ──
   const form = el('form', 'fb-signin card');
@@ -516,9 +626,14 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   const boardSection = el('section', 'fb-board');
   boardSection.setAttribute('aria-label', 'UHT plants and lines');
   boardSection.hidden = true;
+  // A strip over the cards: the section's label, and the factory's lines and draw in figures.
+  const strip = el('div', 'fb-strip');
+  strip.hidden = true;
+  const stripLabel = el('p', 'fb-label', 'UHT plants');
   const summary = el('p', 'fb-summary');
   summary.dataset.testid = 'summary';
   summary.hidden = true;
+  strip.append(stripLabel, summary);
   const loadError = el('p', 'fb-load-error');
   loadError.dataset.testid = 'load-error';
   loadError.hidden = true;
@@ -537,7 +652,7 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
   viewport.hidden = true;
   const body = el('div', 'fb-body');
   body.append(viewport, grid);
-  boardSection.append(summary, loadError, empty, noUhts, body);
+  boardSection.append(strip, loadError, empty, noUhts, body);
 
   const main = el('main', 'fb-main');
   main.append(form, boardSection);
@@ -563,7 +678,8 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
     show(empty, true);
     show(noUhts, false);
     show(summary, false);
-    setText(summary, '');
+    show(strip, false);
+    setSegments(summary, []);
     show(loadError, false);
     setText(loadError, '');
     setText(site, '');
@@ -584,6 +700,8 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
       clearView();
       show(boardSection, false);
       show(session, false);
+      show(signOut, false);
+      setAttr(root, 'data-session', 'out');
       show(form, true);
       setBusy(false);
       password.input.value = '';
@@ -608,6 +726,8 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
       password.input.value = '';
       setText(errorLine, '');
       show(session, true);
+      show(signOut, true);
+      setAttr(root, 'data-session', 'in');
       setText(userEmail, address);
       show(boardSection, true);
       if (fromForm) title.focus();
@@ -620,8 +740,9 @@ export function createBoard(root: HTMLElement, options: BoardOptions): Board {
       setText(site, view.siteName);
       show(site, view.siteName !== '');
       show(siteSep, view.siteName !== '');
-      setText(summary, summaryText(view));
+      setSegments(summary, numberSegments(summaryText(view)));
       show(summary, true);
+      show(strip, true);
       show(noUhts, view.uhts.length === 0);
 
       const nextKey = view.uhts.map((uht) => uht.name).join('\n');

@@ -11,7 +11,8 @@ import * as THREE from 'three';
 import { pctToFrac, type Snapshot, type StageId, type UhtMode } from '../../contracts';
 import type { PointM } from '../layout';
 import { advancePhase, motionDtS } from '../motion';
-import { LAMP_GLOW_HEX, type LampStatus } from '../theme';
+import { createLampPalette, glowInDark } from '../lamps';
+import { LAMP_COLOR_VAR, LAMP_GLOW_HEX, type LampStatus } from '../theme';
 import { HERO_MODELS, swapInHero } from './heroes';
 import { MachineBuilder } from './liquid/builder';
 import { createKit, type Kit } from './liquid/kit';
@@ -102,6 +103,8 @@ interface MachineSpec {
   labelText?: (snapshot: Snapshot) => string;
   update?: (snapshot: Snapshot, realDtS: number) => void;
   debugState?: () => Readonly<Record<string, number | string | boolean>>;
+  /** Re-reads the theme into the machine's own materials (Equipment.applyTheme). */
+  applyTheme?: () => void;
   /** Frees what the machine made beside the builder's parts (a material of its own). */
   dispose?: () => void;
   /** Called once with the built root, and whether the machine is still in the scene, for a model that loads later. */
@@ -127,6 +130,7 @@ function machine(builder: MachineBuilder, spec: MachineSpec): Equipment {
     },
   };
   if (spec.debugState) equipment.debugState = spec.debugState;
+  if (spec.applyTheme) equipment.applyTheme = spec.applyTheme;
   spec.onBuilt?.(object, () => alive);
   return equipment;
 }
@@ -469,14 +473,26 @@ function divertValve(kit: Kit): Equipment {
   const flag = b.pivot('flag', [-12.6, 2.9, -14]);
   b.part('box', 'paint', [0.18, 0, 0], [0.36, 0.05, 0.1], { parent: flag });
   // The lamp on top: red while diverting, amber while the plant cleans or re-sterilizes, green in production.
+  // It glows in the dark theme's lamp colours there (lamps.ts), and keeps LAMP_GLOW_HEX in the light theme.
   const lampMaterial = kit.material('lamp');
   b.mesh('lamp', 'sphere', 'lamp', [-12.6, 3.02, -14], [0.07, 0.07, 0.07]);
+  const palette = createLampPalette(LAMP_GLOW_HEX, LAMP_COLOR_VAR);
   let lamp: LampStatus | null = null;
   let diverting = false;
+  const paintLamp = (status: LampStatus): void => {
+    if (!(lampMaterial instanceof THREE.MeshStandardMaterial)) return;
+    if (palette.dark) glowInDark(lampMaterial, palette.color(status));
+    else {
+      // The kit's lamp: a black body lit from inside.
+      lampMaterial.color.setHex(0x000000);
+      lampMaterial.emissive.copy(palette.color(status));
+      lampMaterial.emissiveIntensity = 1;
+    }
+  };
   const showLamp = (status: LampStatus): void => {
     if (status === lamp) return;
     lamp = status;
-    if (lampMaterial instanceof THREE.MeshStandardMaterial) lampMaterial.emissive.setHex(LAMP_GLOW_HEX[status]);
+    paintLamp(status);
   };
   showLamp('ok');
   return machine(b, {
@@ -493,6 +509,10 @@ function divertValve(kit: Kit): Equipment {
       flag.rotation.y = ease(flag.rotation.y, diverting ? -Math.PI / 2 : 0, VALVE_EASE_PER_S, realDtS);
     },
     debugState: () => ({ diverting, lamp: lamp ?? 'ok', flagRad: flag.rotation.y }),
+    applyTheme() {
+      palette.applyTheme();
+      paintLamp(lamp ?? 'ok');
+    },
   });
 }
 

@@ -10,8 +10,10 @@
 import * as THREE from 'three';
 import type { Snapshot, StageId, Status } from '../../contracts';
 import plantJson from '../../data/plant.json';
+import { createLampPalette, glowInDark } from '../lamps';
 import type { PointM } from '../layout';
 import { motionDtS as busyMotionDtS } from '../motion';
+import { LAMP_COLOR_VAR, type SceneColorVar } from '../theme';
 import { HERO_MODELS, swapInHero } from './heroes';
 import { createTokenStream, PACK_BELT_SPEED_MPS, TRAY_BELT_SPEED_MPS, type TokenStream } from './packs/belts';
 import { FixtureBuilder, type BuiltFixture, type InstanceM } from './packs/builder';
@@ -55,8 +57,11 @@ const FORKLIFT_SPEED_MPS = 2.2;
 /** A forklift keeps going this long of real time after the stock last changed, putting pallets away. */
 const FORKLIFT_BUSY_S = 12;
 
-/** Lamp colours: the light theme's --ok, --warn, --bad and --steel-dark (plan 08). */
+/** Lamp colours: the light theme's --ok, --warn, --bad and --steel-dark (plan 08); the dark theme's tokens there (lamps.ts). */
 const LAMP_COLORS: Record<Status, number> = { ok: 0x1f8f57, warn: 0xa87400, bad: 0xc63a2b, idle: 0x76858f };
+const LAMP_COLOR_VARS: Record<Status, SceneColorVar> = { ...LAMP_COLOR_VAR, idle: '--steel-dark' };
+/** An idle lamp gives off nothing. */
+const BLACK = new THREE.Color(0x000000);
 
 /** Stages 7–10, packs to trucks: one Equipment per machine or fixture. */
 export const packsLine: EquipmentFactory = (ctx) => {
@@ -118,6 +123,7 @@ interface MachineSpec {
   selectBatch?: Equipment['selectBatch'];
   batchPointM?: Equipment['batchPointM'];
   labelAnchorNowM?: Equipment['labelAnchorNowM'];
+  applyTheme?: Equipment['applyTheme'];
 }
 
 function machine(fixture: BuiltFixture, spec: MachineSpec, life: Lifetime = lifetime()): Equipment {
@@ -142,6 +148,7 @@ function machine(fixture: BuiltFixture, spec: MachineSpec, life: Lifetime = life
   if (spec.selectBatch) equipment.selectBatch = spec.selectBatch;
   if (spec.batchPointM) equipment.batchPointM = spec.batchPointM;
   if (spec.labelAnchorNowM) equipment.labelAnchorNowM = spec.labelAnchorNowM;
+  if (spec.applyTheme) equipment.applyTheme = spec.applyTheme;
   return equipment;
 }
 
@@ -599,6 +606,7 @@ function quarantine(kit: Kit, blocks: QuarantineBlocks): Equipment {
       },
       batchAt: (object, instanceId) => blocks.batchAt(object, instanceId),
       selectBatch: (batchId) => blocks.select(batchId),
+      applyTheme: () => blocks.applyTheme(),
       // Just under the top of its block's pallets, where a click lands on a pallet of the batch.
       batchPointM: (batchId) => {
         const [xM, yM, zM] = blocks.blockTopM(batchId);
@@ -633,14 +641,22 @@ function qaLab(kit: Kit): Equipment {
   b.instanced('lamps', 'sphere', lampMaterial, lamps);
   const life = lifetime();
   life.onEnd(() => lampMaterial.dispose());
+  const palette = createLampPalette(LAMP_COLORS, LAMP_COLOR_VARS);
   let shown: Status | null = null;
+  const paint = (status: Status): void => {
+    const color = palette.color(status);
+    if (status !== 'idle' && palette.dark) {
+      glowInDark(lampMaterial, color);
+      return;
+    }
+    lampMaterial.color.copy(color);
+    lampMaterial.emissive.copy(status === 'idle' ? BLACK : color);
+    lampMaterial.emissiveIntensity = status === 'idle' ? 0 : 0.85;
+  };
   const show = (status: Status): void => {
     if (status === shown) return;
     shown = status;
-    const color = LAMP_COLORS[status];
-    lampMaterial.color.setHex(color);
-    lampMaterial.emissive.setHex(status === 'idle' ? 0x000000 : color);
-    lampMaterial.emissiveIntensity = status === 'idle' ? 0 : 0.85;
+    paint(status);
   };
   show('idle');
   return machine(
@@ -654,6 +670,10 @@ function qaLab(kit: Kit): Equipment {
       labelAnchorM: [xM, heightM + 0.5, frontZM - 0.4],
       labelText: (s) => labelValue(stageValue(s, 9, 'incubationTempC'), 0, '°C'),
       update: (s) => show(stageStatus(s, 9) ?? 'idle'),
+      applyTheme() {
+        palette.applyTheme();
+        paint(shown ?? 'idle');
+      },
     },
     life,
   );
