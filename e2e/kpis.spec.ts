@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import type { Kpis } from '../src/contracts';
 import { fillerOeeText, formatKpi, kpiSubText, type KpiText } from '../src/ui/format';
 import { expect, test } from './fixtures';
-import { STATIC_KPIS, STATIC_PACKS, STATIC_VALUES, formatted, waitForClock } from './helpers';
+import { STATIC_KPIS, STATIC_PACKS, STATIC_VALUES, formatted, showTheme, waitForClock } from './helpers';
 
 // The KPI strip (phase-2 shared spec): the eight slots of index.html, each with one [data-kpi-value]
 // showing its formatted value from the snapshot, and the other KPIs of plan 06 as [data-kpi-sub]
@@ -312,10 +312,11 @@ test('the KPI strip cuts no value short from tablet to desktop widths, even the 
   await waitForClock(page);
   // The live plant's values in place, so the first widths measured are theirs.
   await expect(page.locator('#kpis [data-kpi="sterility"] [data-kpi-value]')).toHaveText(KPI_SHAPES.sterility);
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme });
+  // Each theme through the top bar's theme button, as a viewer switches it (the page opens dark).
+  for (const theme of ['light', 'dark'] as const) {
+    await showTheme(page, theme);
     for (const [width, height] of STRIP_SIZES) {
-      const size = `${width} × ${height} (${colorScheme})`;
+      const size = `${width} × ${height} (${theme})`;
       await page.setViewportSize({ width, height });
       const { fontsIn, shown, long } = await stripFit(page, LONG_TEXTS);
       expect(fontsIn, `the strip's fonts are loaded at ${size}`).toBe(true);

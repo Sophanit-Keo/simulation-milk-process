@@ -39,7 +39,18 @@ The agents' definitions are in `.claude/agents/`.
 
 ## Exit checklist
 
-- [ ] `npm run check` and `npm run build` pass; the contrast tests pass in both themes.
-- [ ] The browser suite passes as before (the pixel-ratio test fails on master too), with a test that the page opens dark, switches to light, and keeps the choice after a reload.
-- [ ] Screenshots of the 3D app, the board and its floor, in both themes, at 1440 × 900 and 390 × 844, reviewed.
-- [ ] The draw calls of both 3D views stay within the baseline.
+- [x] `npm run check` and `npm run build` pass; the contrast tests pass in both themes.
+- [x] The browser suite passes as before (the pixel-ratio test fails on master too), with a test that the page opens dark, switches to light, and keeps the choice after a reload.
+- [x] Screenshots of the 3D app, the board and its floor, in both themes, at 1440 × 900 and 390 × 844, reviewed.
+- [x] The draw calls of both 3D views stay within the baseline.
+
+## Status
+
+Built on 30 and 31 October by `ui`, `scene`, `factory-ui` and `factory-scene` in parallel (three runs, paused twice by the usage limit), then checked by `qa`:
+
+- `npm run check`: typecheck, lint, 1,346 unit tests in 61 files (the lamp and label contrast tests in light, dark by the OS and dark by the page among them), 69 asset tests; `npm run build` passes.
+- Browser suite: 75 of 76. The pixel-ratio test (`shell.spec.ts:58`) fails the same way on master. `e2e/kpis.spec.ts` and `e2e/liquid.spec.ts` switched themes through the OS setting, which the page no longer follows: they now press the theme button (`showTheme` in `e2e/helpers.ts`), so both themes are really covered. New `e2e/theme.spec.ts` (3): a new visitor gets dark, the button switches to light and the choice survives a reload, the 3D view follows, the board reads the same choice, and blocked storage still opens dark.
+- Draw calls at 1440 × 900: the plant's overview 222 in both themes, as before; the factory floor 188 in dark (its grid and lamp halos) and 186 in light, as before.
+- Found by `qa` and fixed by `lead`: in the factory's 3D view the page scrolled (1,333 px high in a 900 px window), because the screen-reader-only separators escaped the column of cards; the column is now positioned, and the floor's height takes the new header's extra pixel. Two new tests in `e2e/factoryFloor.spec.ts` keep the page one screen high at 1440 × 900 and 1280 × 720.
+- Seen and left as they were before this phase: the boiler house's dark box in the light theme (phase 8's colour), and the stage 4 trend chart under the panel's fold.
+- Open: the developer's own look at the three screens.
