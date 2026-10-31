@@ -66,7 +66,7 @@
   --font-label: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
   --font-data: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
-  --r: 10px;
+  --r: 12px;
 
   color-scheme: light;
 }
@@ -89,7 +89,7 @@
     --glow-warn: 0 0 10px rgba(245, 177, 52, 0.5);
     --glow-bad: 0 0 10px rgba(255, 91, 74, 0.55);
     --glow-accent: 0 0 14px rgba(56, 189, 248, 0.35);
-    --edge: rgba(255, 255, 255, 0.04);
+    --edge: rgba(255, 255, 255, 0.06);
     --grid: rgba(56, 189, 248, 0.05);
     --scene-bg: #090e12;
     --floor: #10181d;
@@ -121,7 +121,7 @@
   --glow-warn: 0 0 10px rgba(245, 177, 52, 0.5);
   --glow-bad: 0 0 10px rgba(255, 91, 74, 0.55);
   --glow-accent: 0 0 14px rgba(56, 189, 248, 0.35);
-  --edge: rgba(255, 255, 255, 0.04);
+  --edge: rgba(255, 255, 255, 0.06);
   --grid: rgba(56, 189, 248, 0.05);
   --scene-bg: #090e12;
   --floor: #10181d;

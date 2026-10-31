@@ -4,6 +4,7 @@
 import aboutText from '../data/about.md?raw';
 import { el } from './dom';
 import { parseMarkdown, type Block, type TextRun } from './markdown';
+import { createThemeToggle } from './theme';
 
 function runs(parent: HTMLElement, textRuns: TextRun[]): void {
   for (const run of textRuns) {
@@ -62,6 +63,8 @@ export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
   factory.href = 'factory.html';
   factory.dataset.testid = 'factory-link';
   factory.title = "Factory board: the real factory's UHT plants and lines, live from Let Report";
+  // The Light / Dark switch (phase 11, D21), after the two links.
+  const theme = createThemeToggle(signal);
 
   const dialog = el('dialog', 'about card');
   dialog.dataset.testid = 'about-dialog';
@@ -95,9 +98,9 @@ export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
   if (title) {
     titleRow = el('div', 'brand-title');
     title.replaceWith(titleRow);
-    titleRow.append(title, open, factory);
+    titleRow.append(title, open, factory, theme);
   } else {
-    bar.append(open, factory);
+    bar.append(open, factory, theme);
   }
   document.body.append(dialog);
 
@@ -107,6 +110,7 @@ export function createAbout(bar: HTMLElement, signal: AbortSignal): About {
       dialog.remove();
       open.remove();
       factory.remove();
+      theme.remove();
       const title = titleRow?.firstElementChild;
       if (titleRow && title) titleRow.replaceWith(title);
     },
