@@ -16,7 +16,7 @@ import { formatNumber } from '../../ui/format';
 import { fillerText, troublesText } from '../board';
 import { cameraPositionM, floorBays, layoutFactory } from '../layout';
 import type { CreateFactoryScene, FactoryLayout, FactoryScene, FactorySelection, FactoryView, FloorBay, FloorPointM, FloorRectM } from '../types';
-import { buildFloor, type Floor, type FloorMachine, type FloorState } from './floor';
+import { buildFloor, themeIsDark, type Floor, type FloorMachine, type FloorState } from './floor';
 
 const FOV_DEG = 40;
 const NEAR_M = 0.5;
@@ -53,6 +53,14 @@ const SUN_DIRECTION = new THREE.Vector3(40, 80, 44).normalize();
 const SUN_DISTANCE_M = 120;
 const SHADOW_MAP_PX = 2048;
 const SHADOW_RADIUS = 3;
+/**
+ * The light, as the 3D plant's in the light theme. The dark theme's control room is lit cooler and lower, so the lamps,
+ * the plates' glow and the flowing pipes stand out (phase 11, D21); the same two lights, no more.
+ */
+const LIGHTS = {
+  light: { sky: 0xffffff, ground: 0x9aa7b2, skyIntensity: 1.3, sun: 0xffffff, sunIntensity: 1.9 },
+  dark: { sky: 0xb9d6f2, ground: 0x1a2631, skyIntensity: 0.8, sun: 0xd9e7f7, sunIntensity: 1.45 },
+} as const;
 
 /** The floor's state for the browser tests, with ?debug in the address. */
 export interface FactorySceneDebug {
@@ -176,8 +184,8 @@ export const createFactoryScene: CreateFactoryScene = (host, options) => {
   controls.minDistance = MIN_DISTANCE_M;
   controls.maxDistance = MAX_DISTANCE_M;
 
-  const sky = new THREE.HemisphereLight(0xffffff, 0x9aa7b2, 1.3);
-  const sun = new THREE.DirectionalLight(0xffffff, 1.9);
+  const sky = new THREE.HemisphereLight(LIGHTS.light.sky, LIGHTS.light.ground, LIGHTS.light.skyIntensity);
+  const sun = new THREE.DirectionalLight(LIGHTS.light.sun, LIGHTS.light.sunIntensity);
   sun.castShadow = true;
   sun.shadow.mapSize.set(SHADOW_MAP_PX, SHADOW_MAP_PX);
   sun.shadow.bias = -0.0004;
@@ -540,6 +548,12 @@ export const createFactoryScene: CreateFactoryScene = (host, options) => {
   const applyTheme = (): void => {
     background.set(readSceneColor('--scene-bg'));
     floorMaterial.color.set(readSceneColor('--floor'));
+    const lights = LIGHTS[themeIsDark(readSceneColor) ? 'dark' : 'light'];
+    sky.color.setHex(lights.sky);
+    sky.groundColor.setHex(lights.ground);
+    sky.intensity = lights.skyIntensity;
+    sun.color.setHex(lights.sun);
+    sun.intensity = lights.sunIntensity;
     host3d.applyTheme();
     floor?.applyTheme();
   };

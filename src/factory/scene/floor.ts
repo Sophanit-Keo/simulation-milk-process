@@ -15,7 +15,7 @@ import { createKit, type Kit } from '../../scene/equipment/liquid/kit';
 import type { EquipmentContext } from '../../scene/equipment/types';
 import type { PointM } from '../../scene/layout';
 import { advancePhase } from '../../scene/motion';
-import { LAMP_GLOW_HEX, type SceneColorVar } from '../../scene/theme';
+import { LAMP_GLOW_HEX, type LampStatus, type SceneColorVar } from '../../scene/theme';
 import { BELT_LENGTH_M, beltSpeedMps, beltState, pipeFlow, pipeStripeMps, TOKEN_PITCH_M } from '../layout';
 import type {
   BayLayout,
@@ -33,15 +33,56 @@ import type {
 } from '../view';
 
 // ───── Looks ─────
+//
+// Every colour that stands for a theme colour is a token (tokens.css), read again when the theme changes. The
+// dark theme is the control room (phase 11, D21): lit lamps glow, a fine grid lies on the floor, the bays are
+// outlined in a faint cyan, and what runs (belts, flowing pipes, a producing UHT's plates) gives off a little light.
 
 /** An unlit lamp: the dark steel of the 3D plant's frames. */
-const UNLIT_LAMP_HEX = 0x56636d;
-/** The plate pack's glow while its UHT produces: the 3D plant's preheat orange, given off at this strength. */
-const GLOW_HEX = 0xea8027;
-const GLOW_INTENSITY = 0.35;
+const UNLIT_LAMP_VAR: SceneColorVar = '--steel-dark';
+/** A lit lamp's colour in the dark theme: the board's lamp tokens. The light theme keeps the 3D plant's (theme.ts). */
+const LAMP_VARS: Readonly<Record<LampStatus, SceneColorVar>> = { ok: '--ok', warn: '--warn', bad: '--bad' };
+/** The plate pack while its UHT produces: the 3D plant's preheat orange (80 °C), given off at this strength. */
+const GLOW_VAR: SceneColorVar = '--t80';
+const GLOW_INTENSITY = { light: 0.35, dark: 0.45 } as const;
+/** The plate pack's own colour: the stainless steel's. */
+const PLATES_VAR: SceneColorVar = '--steel';
 /** The pipes carry the product's colour (the 3D plant's 20 °C), and the lye's while they clean (D20). */
 const MILK_COLOR_VAR: SceneColorVar = '--t20';
 const CLEAN_COLOR_VAR: SceneColorVar = '--clean-lye';
+/** In the dark theme a pipe gives off its own colour, through its stripes, so the flow reads: more while it flows. */
+const PIPE_GLOW = { flowing: 0.45, still: 0.12 } as const;
+/** In the dark theme a running belt's rubber shows a touch of the steel's light, and the packs a little of their own. */
+const BELT_GLOW_VAR: SceneColorVar = '--steel';
+const BELT_GLOW_INTENSITY = 0.28;
+const PACK_GLOW_INTENSITY = 0.22;
+
+/** The bay outlines: the dark steel in light; in dark, the accent's cyan, faint. */
+const OUTLINE_OPACITY = { light: 0.7, dark: 0.32 } as const;
+
+/**
+ * A lit lamp's halo in the dark theme: a soft disc about this wide around the lamp, added to what is behind it.
+ * A point's size is in pixels at one unit from a 2-unit-high view; the floor's camera has a 40° field (scene.ts).
+ */
+const HALO_DIAMETER_M = 1.8;
+const HALO_POINT_SIZE = HALO_DIAMETER_M / Math.tan(THREE.MathUtils.degToRad(40) / 2);
+/** How bright a halo's middle is, as a share of its lamp's colour. */
+const HALO_STRENGTH = 0.85;
+const HALO_TEXTURE_PX = 64;
+
+/** The floor's grid in the dark theme: lines a metre apart, stronger every 5 m, over the bays and a margin round them. */
+const GRID_MINOR_M = 1;
+const GRID_MAJOR_M = 5;
+const GRID_MARGIN_M = 24;
+/** The grid fades out over this much of its edge, so it melts into the floor rather than stopping. */
+const GRID_EDGE_FADE_M = 16;
+/** Just above the slabs (SLAB_HEIGHT_M), under the outlines (OUTLINE_Y_M). */
+const GRID_Y_M = 0.05;
+/** The page grid's alpha (--grid, made for a flat backdrop) times these, for the minor and the major lines on the floor. */
+const GRID_GAIN = { minor: 1.8, major: 3.6 } as const;
+
+/** Below this relative luminance the scene's background (--scene-bg) is dark: light's #dde5ea is 0.77, dark's #090e12 0.004. */
+const DARK_BACKGROUND_LUMINANCE = 0.2;
 
 /** One stripe and its gap along a pipe, as in the 3D plant. */
 const STRIPE_M = 0.7;
@@ -128,22 +169,127 @@ export type ReadColor = (name: SceneColorVar) => string;
 
 // ───── Helpers ─────
 
-function lampMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color: UNLIT_LAMP_HEX, roughness: 0.3, emissiveIntensity: 1 });
+/** Whether the tokens are the dark theme's: the scene's background is dark. */
+export function themeIsDark(readColor: ReadColor): boolean {
+  // THREE.Color holds linear values, so this is the WCAG relative luminance of the sRGB token.
+  const background = new THREE.Color(readColor('--scene-bg'));
+  return 0.2126 * background.r + 0.7152 * background.g + 0.0722 * background.b < DARK_BACKGROUND_LUMINANCE;
 }
 
-/** Lit in the lamps' glow colours (theme.ts) for ok, warn and bad; unlit for idle. */
-function setLamp(material: THREE.MeshStandardMaterial, status: Status): void {
+/**
+ * A colour token that may carry an alpha, such as --grid's rgba(56, 189, 248, 0.05): the colour into `target`, and
+ * the alpha returned. Read here rather than by THREE.Color, which warns of an alpha it drops.
+ */
+function readRgba(value: string, target: THREE.Color): number {
+  const rgba = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/i.exec(value);
+  if (!rgba) {
+    target.set(value);
+    return 1;
+  }
+  const [, r, g, b, alpha, percent] = rgba;
+  target.setRGB(Number(r) / 255, Number(g) / 255, Number(b) / 255, THREE.SRGBColorSpace);
+  return alpha === undefined ? 1 : THREE.MathUtils.clamp(Number(alpha) / (percent ? 100 : 1), 0, 1);
+}
+
+/** The theme's colours for the lamps, read again on each change of theme. */
+interface LampLooks {
+  dark: boolean;
+  unlit: THREE.Color;
+  lit: Record<LampStatus, THREE.Color>;
+}
+
+function lampMaterial(looks: LampLooks): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ color: looks.unlit, roughness: 0.3, emissiveIntensity: 1 });
+}
+
+/** Lit in the lamp's colour for ok, warn and bad, and giving it off; unlit, in the dark steel, for idle. */
+function setLamp(material: THREE.MeshStandardMaterial, status: Status, looks: LampLooks): void {
   if (status === 'idle') {
-    material.color.setHex(UNLIT_LAMP_HEX);
+    material.color.copy(looks.unlit);
     material.emissive.setHex(0x000000);
   } else {
-    material.color.setHex(LAMP_GLOW_HEX[status]);
-    material.emissive.setHex(LAMP_GLOW_HEX[status]);
+    material.color.copy(looks.lit[status]);
+    material.emissive.copy(looks.lit[status]);
   }
 }
 
+/** A round soft spot, white, fading from its middle: the halo's shape. */
+function createHaloTexture(): THREE.DataTexture {
+  const size = HALO_TEXTURE_PX;
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const r = Math.hypot((x + 0.5) / size - 0.5, (y + 0.5) / size - 0.5) * 2; // 0 in the middle, 1 at the edge
+      // A bright core and a long soft tail, nothing at the square's edge.
+      const alpha = r >= 1 ? 0 : Math.exp(-r * r * 9) * 0.75 + Math.exp(-r * r * 2.6) * 0.25 * (1 - r);
+      data.set([255, 255, 255, Math.round(255 * Math.min(1, alpha))], (y * size + x) * 4);
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
+ * The floor's grid: fine lines a metre apart and stronger ones every 5 m, drawn from the floor's own x and z, so they
+ * stay one pixel wide at any distance; they fade where the cells grow too small to read, and toward the grid's edge.
+ */
+function createGridMaterial(rect: FloorRectM): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    name: 'floor-grid',
+    uniforms: {
+      uColor: { value: new THREE.Color() },
+      uMinor: { value: 0 },
+      uMajor: { value: 0 },
+      uRect: { value: new THREE.Vector4(rect.xMinM, rect.zMinM, rect.xMaxM, rect.zMaxM) },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vFloorM;
+      void main() {
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vFloorM = world.xz;
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      uniform float uMinor;
+      uniform float uMajor;
+      uniform vec4 uRect;
+      varying vec2 vFloorM;
+      float gridLine(float cellM) {
+        vec2 coord = vFloorM / cellM;
+        vec2 perPx = fwidth(coord);
+        vec2 off = abs(fract(coord - 0.5) - 0.5) / max(perPx, vec2(1e-4));
+        float line = 1.0 - min(min(off.x, off.y), 1.0);
+        // Cells under a few pixels would shimmer into a haze: they fade out first.
+        return line * smoothstep(3.0, 9.0, 1.0 / max(max(perPx.x, perPx.y), 1e-4));
+      }
+      void main() {
+        vec2 inside = min(vFloorM - uRect.xy, uRect.zw - vFloorM);
+        float edge = smoothstep(0.0, ${GRID_EDGE_FADE_M.toFixed(1)}, min(inside.x, inside.y));
+        float alpha = max(gridLine(${GRID_MINOR_M.toFixed(1)}) * uMinor, gridLine(${GRID_MAJOR_M.toFixed(1)}) * uMajor) * edge;
+        if (alpha <= 0.002) discard;
+        gl_FragColor = vec4(uColor, alpha);
+        #include <colorspace_fragment>
+      }`,
+    transparent: true,
+    depthWrite: false,
+    // Pulled toward the camera, so it never fights the slabs a few millimetres under it.
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -4,
+  });
+}
+
 const toPoint = (point: FloorPointM): PointM => [point[0], point[1], point[2]];
+
+/** A copy of a shared material the floor can light on its own (the host's are all MeshStandardMaterial). */
+function standardCopy(shared: THREE.Material): THREE.MeshStandardMaterial {
+  return shared instanceof THREE.MeshStandardMaterial ? shared.clone() : new THREE.MeshStandardMaterial({ roughness: 0.8 });
+}
 
 /** The same stripe as the 3D plant's pipes: a light pipe with a darker band, repeating along it. */
 function createStripeTexture(): THREE.DataTexture {
@@ -227,7 +373,7 @@ interface Built {
 }
 
 /** The UHT plant as one skid: plate heat exchanger, homogenizer, holding tube, steam injector, control cabinet. */
-function buildUht(kit: Kit, uht: UhtSpot, lamp: THREE.Material, glow: THREE.Material): Built & { plates: THREE.Mesh } {
+function buildUht(kit: Kit, uht: UhtSpot, lamp: THREE.Material, glow: THREE.Material): Built & { plates: THREE.Mesh; lamp: THREE.Mesh } {
   const [cx, , cz] = uht.centreM;
   const L = uht.lengthM;
   const D = uht.depthM;
@@ -269,7 +415,7 @@ function buildUht(kit: Kit, uht: UhtSpot, lamp: THREE.Material, glow: THREE.Mate
   b.part('box', 'steelDark', [ox, oy / 2, oz - 0.2], [0.1, oy, 0.1]);
 
   const { object, dispose } = b.build();
-  return { object, dispose, plates };
+  return { object, dispose, plates, lamp: lampMesh };
 }
 
 /** The aseptic tank: on legs, with a cone below, a dome above and its sterile-air filter; closed (D20). */
@@ -293,6 +439,8 @@ function buildTank(kit: Kit, tank: TankSpot): Built {
 }
 
 interface BuiltFiller extends Built {
+  /** The lamp on its post, which stays when the hero model swaps in. */
+  lamp: THREE.Mesh;
   reel: THREE.Object3D;
   jaws: THREE.Object3D;
   hero: boolean;
@@ -328,7 +476,7 @@ function buildFiller(kit: Kit, ctx: EquipmentContext, spot: FillerSpot, lamp: TH
   object.rotation.y = FACE_PLUS_Z_RAD;
   object.scale.setScalar(scale);
 
-  const built: BuiltFiller = { object, dispose, reel: greyReel, jaws: greyJaws, hero: false };
+  const built: BuiltFiller = { object, dispose, lamp: lampMesh, reel: greyReel, jaws: greyJaws, hero: false };
   swapInHero(
     ctx,
     object,
@@ -348,6 +496,8 @@ function buildFiller(kit: Kit, ctx: EquipmentContext, spot: FillerSpot, lamp: TH
 /** The outfeed belt on its legs and the tokens riding it. */
 interface BuiltBelt extends Built {
   tokens: THREE.InstancedMesh;
+  /** The belt's own rubber, which gives off a little light while it runs in the dark theme. */
+  surface: THREE.MeshStandardMaterial;
   /** Where the first token stands, in [0, TOKEN_PITCH_M). */
   phaseM: number;
   /** How far along the belt the tokens reach after it emptied; the belt's length once full. */
@@ -355,7 +505,7 @@ interface BuiltBelt extends Built {
   readonly slots: number;
 }
 
-function buildBelt(kit: Kit, ctx: EquipmentContext, spot: FillerSpot): BuiltBelt {
+function buildBelt(kit: Kit, ctx: EquipmentContext, spot: FillerSpot, packs: THREE.Material): BuiltBelt {
   const { fromM, toM, widthM } = spot.belt;
   const [x, top, z0] = fromM;
   const lengthM = toM[2] - z0;
@@ -367,10 +517,14 @@ function buildBelt(kit: Kit, ctx: EquipmentContext, spot: FillerSpot): BuiltBelt
     for (const legZ of [z0 + 0.4, midZ, toM[2] - 0.4]) b.part('box', 'steelDark', [x + side * (widthM / 2), (top - 0.08) / 2, legZ], [0.06, top - 0.08, 0.06]);
   }
   const { object, dispose } = b.build();
+  // The rubber is the belt's only part of its material, so its own copy costs no draw call.
+  const surface = standardCopy(ctx.materials.rubber);
+  const rubber = object.getObjectByName('belt-rubber');
+  if (rubber instanceof THREE.Mesh) rubber.material = surface;
 
   const slots = Math.max(1, Math.floor(lengthM / TOKEN_PITCH_M));
   // Too small for the floor's shadow map: the tokens receive shadows only, and cost no shadow-pass draw.
-  const tokens = new THREE.InstancedMesh(kit.shape('box'), ctx.materials.carton, slots);
+  const tokens = new THREE.InstancedMesh(kit.shape('box'), packs, slots);
   tokens.name = 'packs';
   tokens.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   tokens.receiveShadow = true;
@@ -381,11 +535,13 @@ function buildBelt(kit: Kit, ctx: EquipmentContext, spot: FillerSpot): BuiltBelt
   return {
     object,
     tokens,
+    surface,
     phaseM: 0,
     filledM: lengthM,
     slots,
     dispose() {
       tokens.dispose();
+      surface.dispose();
       dispose();
     },
   };
@@ -420,6 +576,8 @@ interface UhtMachine {
   machine: FloorMachine;
   lamp: THREE.MeshStandardMaterial;
   glow: THREE.MeshStandardMaterial;
+  /** Its lamp's point in the halos. */
+  halo: number;
   status: Status;
   glowing: boolean;
 }
@@ -430,6 +588,8 @@ interface LineMachine {
   filler: BuiltFiller;
   belt: BuiltBelt;
   lamp: THREE.MeshStandardMaterial;
+  /** Its lamp's point in the halos. */
+  halo: number;
   status: Status;
   beltState: BeltState;
   beltMps: number;
@@ -484,6 +644,48 @@ function buildSlabs(
   return { slabs, outlines, counts };
 }
 
+/** The lit lamps' halos in the dark theme: one point per lamp, all in one draw call, each in its lamp's colour. */
+function buildHalos(positions: readonly THREE.Vector3[]): THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial> | null {
+  if (positions.length === 0) return null;
+  const geometry = new THREE.BufferGeometry().setFromPoints([...positions]);
+  geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(positions.length * 3), 3));
+  const material = new THREE.PointsMaterial({
+    size: HALO_POINT_SIZE,
+    sizeAttenuation: true,
+    map: createHaloTexture(),
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    // Added to what is behind it, as light is: an unlit lamp's black halo adds nothing.
+    blending: THREE.AdditiveBlending,
+  });
+  const halos = new THREE.Points(geometry, material);
+  halos.name = 'lamp-halos';
+  halos.visible = false;
+  return halos;
+}
+
+/** The grid over the bays and a margin round them, flat on the floor. Shown in the dark theme only. */
+function buildGrid(bounds: FloorRectM): THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> {
+  const rect: FloorRectM = {
+    xMinM: bounds.xMinM - GRID_MARGIN_M,
+    xMaxM: bounds.xMaxM + GRID_MARGIN_M,
+    zMinM: bounds.zMinM - GRID_MARGIN_M,
+    zMaxM: bounds.zMaxM + GRID_MARGIN_M,
+  };
+  const geometry = new THREE.PlaneGeometry(rect.xMaxM - rect.xMinM, rect.zMaxM - rect.zMinM);
+  geometry.rotateX(-Math.PI / 2);
+  geometry.translate((rect.xMinM + rect.xMaxM) / 2, GRID_Y_M, (rect.zMinM + rect.zMaxM) / 2);
+  const grid = new THREE.Mesh(geometry, createGridMaterial(rect));
+  grid.name = 'floor-grid';
+  // Before the other see-through things (the fillers' glass), which then show the grid behind them.
+  grid.renderOrder = -1;
+  grid.visible = false;
+  return grid;
+}
+
+const LAMP_STATUSES: readonly LampStatus[] = ['ok', 'warn', 'bad'];
+
 /**
  * Builds the floor for `layout` on the host's shared materials and model loader (equipmentHost.ts `context`).
  * The machines show idle until the first update().
@@ -495,6 +697,7 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
   let alive = true;
   const isAlive = (): boolean => alive;
   const disposers: (() => void)[] = [];
+  const looks: LampLooks = { dark: false, unlit: new THREE.Color(), lit: { ok: new THREE.Color(), warn: new THREE.Color(), bad: new THREE.Color() } };
 
   const slabParts = buildSlabs(layout.bays);
   if (slabParts) {
@@ -506,19 +709,36 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
       slabParts.outlines.material.dispose();
     });
   }
+  const grid = layout.bays.length > 0 ? buildGrid(layout.bounds) : null;
+  if (grid) {
+    root.add(grid);
+    disposers.push(() => {
+      grid.geometry.dispose();
+      grid.material.dispose();
+    });
+  }
 
   const uhts: UhtMachine[] = [];
   const lines: LineMachine[] = [];
   const pipes: PipeMesh[] = [];
   const stripe = createStripeTexture();
   disposers.push(() => stripe.dispose());
+  /** Where each lamp stands, in the order of the halos' points. */
+  const lampPoints: THREE.Vector3[] = [];
+  const lampPoint = (mesh: THREE.Mesh): number => {
+    lampPoints.push(mesh.getWorldPosition(new THREE.Vector3()));
+    return lampPoints.length - 1;
+  };
+  // The packs on every belt: one material of the floor's, so they can give off a little light in the dark theme.
+  const packs = standardCopy(ctx.materials.carton);
+  disposers.push(() => packs.dispose());
 
   layout.bays.forEach((bay, bayIndex) => {
     if (bay.uht && bay.tank) {
       const group = new THREE.Group();
       group.name = `uht:${bayIndex}`;
-      const lamp = lampMaterial();
-      const glow = new THREE.MeshStandardMaterial({ color: 0xb4c0c8, metalness: 0.55, roughness: 0.35, emissive: GLOW_HEX, emissiveIntensity: 0 });
+      const lamp = lampMaterial(looks);
+      const glow = new THREE.MeshStandardMaterial({ metalness: 0.55, roughness: 0.35, emissiveIntensity: 0 });
       const skid = buildUht(kit, bay.uht, lamp, glow);
       const tank = buildTank(kit, bay.tank);
       group.add(skid.object, tank.object);
@@ -533,6 +753,7 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
         machine: { id: group.name, kind: 'uht', bay: bayIndex, filler: null, object: group, labelM: bay.uht.labelM, camera: bay.uht.camera },
         lamp,
         glow,
+        halo: lampPoint(skid.lamp),
         status: 'idle',
         glowing: false,
       });
@@ -541,9 +762,9 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
     bay.fillers.forEach((spot, fillerIndex) => {
       const group = new THREE.Group();
       group.name = `line:${bayIndex}:${fillerIndex}`;
-      const lamp = lampMaterial();
+      const lamp = lampMaterial(looks);
       const filler = buildFiller(kit, ctx, spot, lamp, isAlive);
-      const belt = buildBelt(kit, ctx, spot);
+      const belt = buildBelt(kit, ctx, spot, packs);
       group.add(filler.object, belt.object);
       root.add(group);
       disposers.push(() => {
@@ -557,6 +778,7 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
         filler,
         belt,
         lamp,
+        halo: lampPoint(filler.lamp),
         status: 'idle',
         beltState: 'empty',
         beltMps: 0,
@@ -570,7 +792,8 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
     for (const route of bay.pipes) {
       const texture = stripe.clone();
       texture.needsUpdate = true;
-      const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.35, metalness: 0.2 });
+      // The stripes light the pipe too (the dark theme's glow), so they show as they move.
+      const material = new THREE.MeshStandardMaterial({ map: texture, emissiveMap: texture, emissiveIntensity: 0, roughness: 0.35, metalness: 0.2 });
       const mesh = new THREE.Mesh(pipeGeometry(route), material);
       mesh.name = `pipe:${route.id}`;
       mesh.castShadow = true;
@@ -585,28 +808,93 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
     }
   });
 
+  const halos = buildHalos(lampPoints);
+  if (halos) {
+    root.add(halos);
+    disposers.push(() => {
+      halos.geometry.dispose();
+      halos.material.map?.dispose();
+      halos.material.dispose();
+    });
+  }
+
   const milkColor = new THREE.Color();
   const cleanColor = new THREE.Color();
+  const beltGlow = new THREE.Color();
+  const gridColor = new THREE.Color();
+  const slabColor = new THREE.Color();
+
+  /** A lamp's halo: its lit colour in the dark theme, nothing in the light one or while it is unlit. */
+  const lightHalo = (index: number, status: Status): void => {
+    if (!halos) return;
+    const colors = halos.geometry.getAttribute('color') as THREE.BufferAttribute;
+    if (looks.dark && status !== 'idle') {
+      const lit = looks.lit[status];
+      colors.setXYZ(index, lit.r * HALO_STRENGTH, lit.g * HALO_STRENGTH, lit.b * HALO_STRENGTH);
+    } else {
+      colors.setXYZ(index, 0, 0, 0);
+    }
+    colors.needsUpdate = true;
+  };
+  const lightUht = (uht: UhtMachine): void => {
+    setLamp(uht.lamp, uht.status, looks);
+    lightHalo(uht.halo, uht.status);
+    uht.glow.emissiveIntensity = uht.glowing ? GLOW_INTENSITY[looks.dark ? 'dark' : 'light'] : 0;
+  };
+  const lightLine = (line: LineMachine): void => {
+    setLamp(line.lamp, line.status, looks);
+    lightHalo(line.halo, line.status);
+    line.belt.surface.emissiveIntensity = looks.dark && line.beltState === 'moving' ? BELT_GLOW_INTENSITY : 0;
+  };
   const colorPipe = (pipe: PipeMesh): void => {
-    pipe.material.color.copy(pipe.flow.cleaning ? cleanColor : milkColor);
+    const color = pipe.flow.cleaning ? cleanColor : milkColor;
+    pipe.material.color.copy(color);
+    pipe.material.emissive.copy(color);
+    pipe.material.emissiveIntensity = looks.dark ? (pipe.stripeMps > 0 ? PIPE_GLOW.flowing : PIPE_GLOW.still) : 0;
   };
 
   const applyTheme = (): void => {
+    looks.dark = themeIsDark(readColor);
+    looks.unlit.set(readColor(UNLIT_LAMP_VAR));
+    for (const status of LAMP_STATUSES) {
+      if (looks.dark) looks.lit[status].set(readColor(LAMP_VARS[status]));
+      else looks.lit[status].setHex(LAMP_GLOW_HEX[status]);
+    }
     milkColor.set(readColor(MILK_COLOR_VAR));
     cleanColor.set(readColor(CLEAN_COLOR_VAR));
+    beltGlow.set(readColor(BELT_GLOW_VAR));
+    for (const uht of uhts) {
+      uht.glow.color.set(readColor(PLATES_VAR));
+      uht.glow.emissive.set(readColor(GLOW_VAR));
+      lightUht(uht);
+    }
+    for (const line of lines) {
+      line.belt.surface.emissive.copy(beltGlow);
+      lightLine(line);
+    }
+    packs.emissive.copy(packs.color);
+    packs.emissiveIntensity = looks.dark ? PACK_GLOW_INTENSITY : 0;
     for (const pipe of pipes) colorPipe(pipe);
+    if (halos) halos.visible = looks.dark;
+    if (grid) {
+      const alpha = readRgba(readColor('--grid'), gridColor);
+      grid.material.uniforms.uColor.value.copy(gridColor);
+      grid.material.uniforms.uMinor.value = alpha * GRID_GAIN.minor;
+      grid.material.uniforms.uMajor.value = alpha * GRID_GAIN.major;
+      grid.visible = looks.dark && alpha > 0;
+    }
     if (!slabParts) return;
     const colors = slabParts.slabs.geometry.getAttribute('color') as THREE.BufferAttribute;
-    const color = new THREE.Color();
     let offset = 0;
     layout.bays.forEach((bay, i) => {
       // The bay of the lines no UHT claims takes the packing hall's tint, so it reads apart.
-      color.set(readColor(bay.uht ? '--zone-proc' : '--zone-pack'));
-      for (let k = offset; k < offset + slabParts.counts[i]; k++) colors.setXYZ(k, color.r, color.g, color.b);
+      slabColor.set(readColor(bay.uht ? '--zone-proc' : '--zone-pack'));
+      for (let k = offset; k < offset + slabParts.counts[i]; k++) colors.setXYZ(k, slabColor.r, slabColor.g, slabColor.b);
       offset += slabParts.counts[i];
     });
     colors.needsUpdate = true;
-    slabParts.outlines.material.color.set(readColor('--steel-dark'));
+    slabParts.outlines.material.color.set(readColor(looks.dark ? '--accent' : '--steel-dark'));
+    slabParts.outlines.material.opacity = OUTLINE_OPACITY[looks.dark ? 'dark' : 'light'];
   };
   applyTheme();
 
@@ -621,24 +909,19 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
       for (const uht of uhts) {
         const view = bays[uht.machine.bay]?.uht ?? null;
         const status = view?.lamp ?? 'idle';
-        if (status !== uht.status) {
-          uht.status = status;
-          setLamp(uht.lamp, status);
-        }
         const glowing = view?.state === 'producing';
-        if (glowing !== uht.glowing) {
+        if (status !== uht.status || glowing !== uht.glowing) {
+          uht.status = status;
           uht.glowing = glowing;
-          uht.glow.emissiveIntensity = glowing ? GLOW_INTENSITY : 0;
+          lightUht(uht);
         }
       }
       for (const line of lines) {
         const view = bays[line.machine.bay]?.lines[line.machine.filler ?? -1];
         const status = view?.lamp ?? 'idle';
-        if (status !== line.status) {
-          line.status = status;
-          setLamp(line.lamp, status);
-        }
         const state = view ? beltState(view.status) : 'empty';
+        const relight = status !== line.status || state !== line.beltState;
+        line.status = status;
         if (line.fresh) {
           line.fresh = false;
           line.belt.filledM = state === 'empty' ? 0 : BELT_LENGTH_M;
@@ -650,15 +933,14 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
           line.beltState = state;
           placeTokens(line.belt, line.spot);
         }
+        if (relight) lightLine(line);
         line.beltMps = state === 'moving' ? beltSpeedMps(view?.packsPerH ?? null) : 0;
       }
       for (const pipe of pipes) {
         const bay = bays[pipe.bay];
-        const flow = bay ? pipeFlow(pipe.route, bay) : { flowLph: 0, cleaning: false };
-        const recolour = flow.cleaning !== pipe.flow.cleaning;
-        pipe.flow = flow;
-        pipe.stripeMps = pipeStripeMps(flow);
-        if (recolour) colorPipe(pipe);
+        pipe.flow = bay ? pipeFlow(pipe.route, bay) : { flowLph: 0, cleaning: false };
+        pipe.stripeMps = pipeStripeMps(pipe.flow);
+        colorPipe(pipe);
       }
     },
     tick(dtS) {
