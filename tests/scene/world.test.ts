@@ -60,7 +60,12 @@ vi.mock('../../src/scene/pipes', () => ({
 }));
 vi.mock('../../src/scene/zones', () => ({ createZones: () => ({ updateLabels() {}, applyTheme() {}, dispose() {} }) }));
 vi.mock('../../src/scene/picking', () => ({ createPicker: () => ({ update() {}, dispose() {}, stageScreenPoint: () => null, batchScreenPoint: () => null }) }));
-vi.mock('../../src/scene/theme', () => ({ readSceneColor: () => '#ffffff', watchTheme: () => () => {} }));
+vi.mock('../../src/scene/theme', () => ({
+  readSceneColor: () => '#ffffff',
+  readSceneRgba: () => 1,
+  sceneIsDark: () => false,
+  watchTheme: () => () => {},
+}));
 vi.mock('../../src/scene/debugHook', () => ({ debugRequested: () => false, installDebugHook: vi.fn() }));
 
 const MAX_FRAME_S = plantConfig.clock.maxFrameS;

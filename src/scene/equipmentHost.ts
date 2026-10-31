@@ -38,7 +38,7 @@ export interface EquipmentHost {
    * frees. The Factory board's 3D floor (phase 10) builds its machines on it, with no module of its own here.
    */
   readonly context: EquipmentContext;
-  /** Re-reads the theme colours into the shared materials. */
+  /** Re-reads the theme colours into the shared materials and every machine's own (Equipment.applyTheme). */
   applyTheme(): void;
   update(snapshot: Snapshot, realDtS: number): void;
   dispose(): void;
@@ -58,12 +58,12 @@ export function createEquipmentHost(
     Object.entries(MATERIAL_SETTINGS).map(([name, settings]) => [name, new THREE.MeshStandardMaterial(settings)]),
   ) as Record<MaterialName, THREE.MeshStandardMaterial>;
 
-  const applyTheme = (): void => {
+  const applyMaterials = (): void => {
     for (const [name, colorVar] of Object.entries(THEMED_MATERIALS) as [MaterialName, SceneColorVar][]) {
       materials[name].color.set(readSceneColor(colorVar));
     }
   };
-  applyTheme();
+  applyMaterials();
 
   // What the loads have brought in, freed in dispose() before it returns: world.ts disposes the renderer
   // straight after, and a free left waiting on a promise would no longer reach the GPU. A load that
@@ -133,7 +133,17 @@ export function createEquipmentHost(
     equipment,
     materials,
     context: ctx,
-    applyTheme,
+    applyTheme() {
+      applyMaterials();
+      // The machines' own materials, their lamps above all (lamps.ts). A machine that throws keeps its colours.
+      for (const item of equipment) {
+        try {
+          item.applyTheme?.();
+        } catch (error) {
+          console.error(`Equipment "${item.id}" could not follow the theme:`, error);
+        }
+      }
+    },
     update(snapshot, realDtS) {
       for (const item of equipment) {
         if (failed.has(item)) continue;

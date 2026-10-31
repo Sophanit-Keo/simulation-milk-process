@@ -33,58 +33,85 @@
   letter-spacing: 0;
 }
 
-/* one label per machine: lamp, name, live value (after the preview's .badge) */
+/*
+ * One label per machine: lamp, name, live value, as a control-room tag (phase 11, D21): a dark translucent chip in
+ * the dark theme, a light one in the light theme, with a 1 px border and the panels' 1 px top highlight; the name in
+ * condensed capitals, the value in the data font, the lamp glowing in the dark theme (--glow-*, none in light).
+ * The chip is 90 % opaque so that its text keeps 4.5:1 and its lamp 3:1 whatever stands behind it, black or white
+ * (tests/scene/labels.test.ts).
+ */
 .equipment-label {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 7px 2px 4px;
+  padding: 3px 7px 3px 5px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--raised);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--raised) 90%, transparent);
   color: var(--ink);
   font: 500 11.5px/1.1 var(--font-data);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 1px 3px rgba(0, 0, 0, 0.18);
 }
 .equipment-name {
-  font: 600 12px/1 var(--font-label);
-  letter-spacing: 0.04em;
+  color: var(--muted);
+  font: 600 11px/1 var(--font-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .equipment-value {
-  color: var(--muted);
+  padding-left: 5px;
+  border-left: 1px solid var(--line);
+  color: var(--ink);
 }
 .equipment-value:empty {
   display: none;
 }
+/* the selected stage's tags: the accent outline, and its glow in the dark theme (--glow-accent, none in light) */
 .equipment-label.is-selected {
   border-color: var(--accent);
 }
-/* far away: the lamp alone */
+.equipment-label.is-selected::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: var(--glow-accent);
+}
+.equipment-label.is-selected .equipment-name {
+  color: var(--ink);
+}
+/* far away: the lamp alone, in a round chip */
 .equipment-label.is-compact {
   gap: 0;
   padding: 2px;
+  border-radius: 999px;
 }
 .equipment-label.is-compact .equipment-name,
 .equipment-label.is-compact .equipment-value {
   display: none;
 }
 
-/* status lamp (plan 08 colours): green running, amber hold or warning, red stopped, grey idle */
+/* status lamp (plan 08 colours): green running, amber hold or warning, red stopped, grey idle; lit ones glow in the dark theme */
 .equipment-lamp {
   flex: none;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: var(--steel-dark);
+  background: var(--muted);
 }
 .equipment-label[data-status='ok'] .equipment-lamp {
   background: var(--ok);
+  box-shadow: var(--glow-ok);
 }
 .equipment-label[data-status='warn'] .equipment-lamp {
   background: var(--warn);
+  box-shadow: var(--glow-warn);
 }
 .equipment-label[data-status='bad'] .equipment-lamp {
   background: var(--bad);
+  box-shadow: var(--glow-bad);
 }

@@ -7,9 +7,10 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CLEANING_FLUIDS, type CleaningFluid, type Snapshot } from '../../contracts';
+import { DARK_LAMP_BODY_HEX, DARK_LAMP_GLOW } from '../lamps';
 import { motionDtS } from '../motion';
 import { FLUID_COLOR_VAR } from '../pipes';
-import { readSceneColor } from '../theme';
+import { readSceneColor, sceneIsDark } from '../theme';
 import { MachineBuilder } from './liquid/builder';
 import { createKit, type Kit } from './liquid/kit';
 import { createPuffs } from './liquid/puffs';
@@ -47,8 +48,10 @@ export const CIP_STATION = {
   lampRadiusM: 0.13,
 } as const;
 const TANK_SIDES = 24;
-/** A lit lamp's glow, and the dark it shows while its fluid stands. */
+/** A lit lamp's glow, and the dark it shows while its fluid stands. The dark theme's glow is lamps.ts's. */
 const LAMP_LIT_INTENSITY = 0.9;
+/** A lamp's body in the light theme. */
+const LAMP_BODY_HEX = 0x2c343b;
 
 export const utilities: EquipmentFactory = (ctx) => [boilerHouse(createKit(ctx), ctx.materials.steelDark), cipStation(ctx.materials.steel, ctx.materials.steelDark)];
 
@@ -114,7 +117,7 @@ function cipStation(steel: THREE.Material, dark: THREE.Material): Equipment {
     const band = new THREE.Mesh(bandGeometry, bandMaterial);
     band.name = `cip-station-band-${fluid}`;
     band.position.set(x, S.tankTopM - 0.3, z);
-    const lampMaterial = new THREE.MeshStandardMaterial({ color: 0x2c343b, emissive: colour, emissiveIntensity: 0, roughness: 0.4 });
+    const lampMaterial = new THREE.MeshStandardMaterial({ color: LAMP_BODY_HEX, emissive: colour, emissiveIntensity: 0, roughness: 0.4 });
     const lamp = new THREE.Mesh(lampGeometry, lampMaterial);
     lamp.name = `cip-station-lamp-${fluid}`;
     lamp.position.set(x, S.tankTopM + S.tankRadiusM * 0.35 + S.lampRadiusM * 0.6, z);
@@ -133,10 +136,18 @@ function cipStation(steel: THREE.Material, dark: THREE.Material): Equipment {
   }
 
   let lit: CleaningFluid | null = null;
+  // In the dark theme the lamps are black glass and the lit one glows harder (lamps.ts); the fluids' colours stay.
+  let darkTheme = false;
+  const paint = (): void => {
+    for (const each of CLEANING_FLUIDS) {
+      lamps[each].color.setHex(darkTheme ? DARK_LAMP_BODY_HEX : LAMP_BODY_HEX);
+      lamps[each].emissiveIntensity = each === lit ? (darkTheme ? DARK_LAMP_GLOW : LAMP_LIT_INTENSITY) : 0;
+    }
+  };
   const light = (fluid: CleaningFluid | null): void => {
     if (fluid === lit) return;
     lit = fluid;
-    for (const each of CLEANING_FLUIDS) lamps[each].emissiveIntensity = each === fluid ? LAMP_LIT_INTENSITY : 0;
+    paint();
   };
 
   return {
@@ -155,6 +166,10 @@ function cipStation(steel: THREE.Material, dark: THREE.Material): Equipment {
       light(fluidOf(snapshot));
     },
     debugState: () => ({ lit: lit ?? 'none' }),
+    applyTheme() {
+      darkTheme = sceneIsDark();
+      paint();
+    },
     dispose() {
       bodyGeometry.dispose();
       pumpGeometry.dispose();
