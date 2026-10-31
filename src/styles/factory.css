@@ -1,8 +1,14 @@
 /*
- * The Factory board (factory.html, src/factory/board.ts): the 3D app's look without its one-screen grid.
- * Colours, fonts and radius come from tokens.css (light and dark), which src/factory/main.ts imports with
- * fonts.css before this file. The few shared rules (.card, .lamp, .btn, .link) are copies of app.css's, so
- * this page does not load the 3D app's stylesheet; keep them equal.
+ * The Factory board (factory.html, src/factory/board.ts) in the control-room look (phase 11, D21): a graphite
+ * page on a faint 24 px grid, panels with a 1 px border and a 1 px top highlight, labels in Barlow Condensed
+ * (uppercase, letter-spaced, muted), live numbers in IBM Plex Mono with tabular figures, lamps that glow in the
+ * dark theme, status chips tinted (never solid), one cyan accent for selection, focus and links.
+ *
+ * Every colour is a token of tokens.css (light and dark), which src/factory/main.ts imports with fonts.css
+ * before this file; tints are those tokens mixed with transparent or with --ink, never a colour of their own.
+ * A tinted text is its tone mixed 65 / 35 with --ink, which keeps it 4.5:1 on its tint in both themes. This
+ * page does not load the 3D app's stylesheet: the few rules it shares (.card, .lamp, .btn, .link) are its own.
+ * Motion is 150–250 ms, and none under prefers-reduced-motion.
  */
 
 *,
@@ -11,9 +17,28 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--bg);
+}
+
+/* The backdrop: a soft wash of the accent at the top, over the 24 px grid. */
 body {
   margin: 0;
-  background: var(--bg);
+  min-height: 100vh;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1100px 420px at 50% -160px, color-mix(in srgb, var(--accent) 8%, transparent), transparent 70%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:
+    auto,
+    24px 24px,
+    24px 24px;
+  background-position:
+    0 0,
+    -1px -1px,
+    -1px -1px;
+  background-attachment: fixed;
   color: var(--ink);
   font: 15px/1.4 var(--font-ui);
   -webkit-font-smoothing: antialiased;
@@ -34,15 +59,41 @@ input {
   display: none !important;
 }
 
-/* ───── shared with app.css ───── */
-
-.card {
-  background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+/* Only for screen readers: the " · " between a readout's word and its numbers. */
+.fb-sep {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: pre;
 }
 
-/* Idle is a hollow ring, so "off" reads as unlit rather than as a fourth colour. */
+/* "8,000 of 100" reads "8,000 / 100": the word stays in the text (and the tests and screen readers read it),
+   the eye gets a slash. The second content is the slash with no words of its own, where the browser knows it. */
+.fb-of {
+  font-size: 0;
+}
+.fb-of::after {
+  content: '/';
+  content: '/' / '';
+  margin: 0 0.18em;
+  font-size: var(--fb-of-size, 12px);
+  color: var(--muted);
+}
+
+/* ───── shared with the 3D app, in this page's look ───── */
+
+/* A panel: the surface, a 1 px border, a 1 px highlight along the top, 12 px corners. */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 var(--edge);
+}
+
+/* Lamps glow in the dark theme (--glow-* are none in light). Idle is a hollow ring, so "off" reads as unlit
+   rather than as a fourth colour. */
 .lamp {
   display: inline-block;
   flex: none;
@@ -51,37 +102,64 @@ input {
   border-radius: 50%;
   background: transparent;
   box-shadow: inset 0 0 0 2px var(--muted);
+  transition:
+    background-color 200ms ease,
+    box-shadow 200ms ease;
 }
 .lamp[data-status='ok'] {
   background: var(--ok);
-  box-shadow: none;
+  box-shadow: var(--glow-ok);
 }
 .lamp[data-status='warn'] {
   background: var(--warn);
-  box-shadow: none;
+  box-shadow: var(--glow-warn);
 }
 .lamp[data-status='bad'] {
   background: var(--bad);
-  box-shadow: none;
+  box-shadow: var(--glow-bad);
 }
 
+/* Ghost buttons: a line, no fill; the accent on hover. */
 .btn {
-  padding: 8px 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: transparent;
   color: var(--ink);
-  font: 600 14px/1 var(--font-ui);
+  font: 600 13.5px/1 var(--font-ui);
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    color 180ms ease;
 }
 .btn:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 .btn:disabled {
   color: var(--muted);
   cursor: not-allowed;
   opacity: 0.7;
+}
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 86%, var(--ink));
+  box-shadow: var(--glow-accent);
+}
+.btn-primary:disabled {
+  color: var(--accent-ink);
 }
 
 .link {
@@ -98,35 +176,78 @@ input {
   text-decoration: underline;
 }
 
+/* A section label: Barlow Condensed, uppercase, letter-spaced, muted. */
+.fb-label {
+  margin: 0;
+  color: var(--muted);
+  font: 600 12px/1 var(--font-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
 /* ───── the page ───── */
 
 /* A 16 px gutter at every width; the board stays readable on a wide screen. */
 .fb {
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
-  padding: 12px 16px 24px;
+  padding: 14px 16px 28px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .fb-boot {
   margin: 24px 0;
   color: var(--muted);
+  font: 600 13px/1 var(--font-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
-/* header */
+/* ───── header ───── */
+
 .fb-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 16px;
-  padding: 10px 14px;
+  gap: 10px 14px;
+  padding: 10px 12px 10px 12px;
 }
 .fb-brand {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   margin-right: auto;
+  min-width: 0;
+}
+/* The plant's drop (the favicon's), in the accent, on a tinted tile. */
+.fb-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: inset 0 1px 0 var(--edge);
+}
+.fb-mark::before {
+  content: '';
+  width: 18px;
+  height: 18px;
+  background: var(--accent);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 55%, transparent));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.5C10.7 10.4 6.5 15 6.5 20.3a9.5 9.5 0 0 0 19 0C25.5 15 21.3 10.4 16 2.5z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2.5C10.7 10.4 6.5 15 6.5 20.3a9.5 9.5 0 0 0 19 0C25.5 15 21.3 10.4 16 2.5z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+.fb-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
 }
 .fb-title-row {
@@ -136,8 +257,8 @@ input {
 }
 .fb-head h1 {
   margin: 0;
-  font: 700 21px/1.05 var(--font-label);
-  letter-spacing: 0.05em;
+  font: 700 22px/1 var(--font-label);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .fb-head h1:focus {
@@ -145,7 +266,14 @@ input {
 }
 .fb-back {
   padding: 2px 4px;
-  font-size: 13px;
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.fb-back::before {
+  content: '\2190';
+  content: '\2190' / '';
+  margin-right: 4px;
 }
 .fb-sub {
   margin: 0;
@@ -157,30 +285,111 @@ input {
   font-weight: 600;
 }
 
-.fb-session {
+.fb-session,
+.fb-tools {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 14px;
+  gap: 8px 12px;
   min-width: 0;
 }
+.fb-tools {
+  gap: 8px;
+}
+
+/* Board or 3D: a segmented control, the pressed segment lit in the accent. */
+.fb-views {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+.fb-view {
+  min-width: 58px;
+  padding: 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: 600 13px/1 var(--font-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.fb-view:hover {
+  color: var(--ink);
+}
+.fb-view[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--raised));
+  color: color-mix(in srgb, var(--accent) 60%, var(--ink));
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    var(--glow-accent);
+}
+
+/* The live state as a pill in its tone: green and breathing when live, amber while (re)connecting, muted
+   when only the poll brings changes. */
 .fb-live {
+  --tone: var(--warn);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 9px;
   margin: 0;
-  padding: 6px 10px;
+  padding: 7px 13px 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--tone) 38%, var(--line));
   border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  font: 600 13px/1 var(--font-ui);
+  background: color-mix(in srgb, var(--tone) 9%, transparent);
+  color: color-mix(in srgb, var(--tone) 65%, var(--ink));
+  font: 600 13px/1 var(--font-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  transition:
+    color 200ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease;
+}
+.fb-live[data-state='live'] {
+  --tone: var(--ok);
+}
+.fb-live[data-state='offline'] {
+  --tone: var(--muted);
 }
 .fb-live .lamp {
+  position: relative;
   width: 8px;
   height: 8px;
 }
+/* The breath: a ring that swells from the dot and fades, every 2.4 s; the dot itself stays lit. */
+.fb-live[data-state='live'] .lamp::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: fb-breathe 2.4s ease-out infinite;
+}
+@keyframes fb-breathe {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}
+
 .fb-user {
   margin: 0;
   min-width: 0;
@@ -193,23 +402,75 @@ input {
   font-weight: 600;
 }
 
-/* sign-in */
+/* Light / Dark: a ghost button with a half-lit disc before the theme it switches to. */
+.fb-theme {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font: 600 13.5px/1 var(--font-ui);
+  white-space: nowrap;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+.fb-theme::before {
+  content: '';
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  background: linear-gradient(90deg, currentColor 50%, transparent 50%);
+}
+.fb-theme:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  text-decoration: none;
+}
+
+/* ───── sign-in ───── */
+
 .fb-main {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+}
+/* Signed out, the form stands in the middle of the screen. */
+.fb[data-session='out'] .fb-main {
+  min-height: calc(100vh - 130px);
+  justify-content: center;
+  padding-bottom: 6vh;
 }
 .fb-signin {
-  width: min(420px, 100%);
-  margin: 24px auto 0;
-  padding: 18px 20px 20px;
+  position: relative;
+  width: min(400px, 100%);
+  margin: 0 auto;
+  padding: 28px 26px 26px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  overflow: hidden;
+}
+/* A lit hairline along the card's top, in the accent. */
+.fb-signin::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 12%;
+  right: 12%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: var(--glow-accent);
 }
 .fb-signin h2 {
   margin: 0;
-  font: 600 22px/1.2 var(--font-label);
+  font: 700 26px/1 var(--font-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .fb-note {
   margin: 0;
@@ -222,23 +483,34 @@ input {
 .fb-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .fb-field label {
-  font: 600 13px/1.2 var(--font-ui);
+  color: var(--muted);
+  font: 600 12.5px/1.2 var(--font-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .fb-field input {
   width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
+  min-height: 44px;
+  padding: 9px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--raised);
   color: var(--ink);
+  font-size: 15px;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.fb-field input:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
 .fb-field input:focus-visible {
   border-color: var(--accent);
-  outline-offset: 0;
+  outline-offset: 1px;
+  box-shadow: var(--glow-accent);
 }
 .fb-field input[aria-invalid='true'] {
   border-color: var(--bad);
@@ -246,7 +518,11 @@ input {
 /* Empty until there is something to say; it keeps no height then, so the form does not jump on load. */
 .fb-form-error {
   margin: 0;
-  color: var(--bad);
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--bad) 38%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bad) 11%, transparent);
+  color: color-mix(in srgb, var(--bad) 65%, var(--ink));
   font-weight: 600;
   font-size: 14px;
 }
@@ -255,92 +531,223 @@ input {
 }
 .fb-actions {
   display: flex;
-  justify-content: flex-end;
+  margin-top: 2px;
 }
-.btn-primary {
-  min-width: 96px;
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-}
-.btn-primary:disabled {
-  color: var(--accent-ink);
+.fb-actions .btn-primary {
+  flex: 1;
+  min-height: 44px;
+  font: 700 14px/1 var(--font-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
-/* the board */
+/* ───── the board ───── */
+
 .fb-board {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-.fb-summary,
-.fb-empty {
+/* Over the cards: the section's label, a rule, and the factory's lines and draw in figures. */
+.fb-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 0 2px;
+}
+.fb-strip::after {
+  content: '';
+  order: 1;
+  flex: 1 1 40px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line), transparent);
+}
+.fb-strip .fb-summary {
+  order: 2;
+}
+.fb-summary {
   margin: 0;
   color: var(--muted);
-  font-size: 14px;
+  font: 500 12.5px/1.3 var(--font-data);
   font-variant-numeric: tabular-nums;
+}
+.fb-summary .fb-num {
+  color: var(--ink);
+}
+.fb-empty {
+  margin: 0;
+  padding: 18px 2px;
+  color: var(--muted);
+  font: 600 13px/1.3 var(--font-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .fb-load-error {
   margin: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--bad);
+  padding: 9px 12px;
+  border: 1px solid color-mix(in srgb, var(--bad) 38%, transparent);
   border-radius: 8px;
-  background: var(--raised);
+  background: color-mix(in srgb, var(--bad) 10%, var(--surface));
   font-size: 14px;
 }
 
-/* Three across on a wide screen, stacked on a phone. */
+/* Three across on a wide screen, stacked on a phone. Positioned, so the screen-reader-only separators
+   (.fb-sep, absolute) stay inside this column's scroll box instead of stretching the page. */
 .fb-uhts {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr));
+  gap: 14px;
   align-items: start;
 }
+
+/* ───── a UHT's panel ───── */
 
 .fb-uht {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
-  padding: 12px 14px 6px;
+  padding: 14px 16px 16px;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
 }
 .fb-uht-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.fb-uht-head .lamp {
+  width: 11px;
+  height: 11px;
 }
 .fb-uht-name {
   margin: 0;
-  font: 700 19px/1.1 var(--font-label);
-  letter-spacing: 0.04em;
+  font: 700 20px/1 var(--font-label);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .fb-cap {
   margin-left: auto;
   color: var(--muted);
-  font-size: 13px;
+  font: 500 12px/1 var(--font-data);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.fb-state {
-  margin: 0;
-  font: 500 15px/1.3 var(--font-data);
-  font-variant-numeric: tabular-nums;
+.fb-cap .fb-k {
+  margin-right: 2px;
+  font: 600 11.5px/1 var(--font-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.fb-cap .fb-num {
+  color: var(--ink);
 }
 
-/* The draw bar: the UHT's lines' draw as a share of its capacity; amber when they draw more than it makes. */
+/* The readout: the state's word over the draw of capacity in large figures; the load at the right. */
+.fb-readout {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 12px;
+  min-width: 0;
+}
+.fb-state {
+  --fb-of-size: 22px;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  color: var(--ink);
+  font: 500 30px/1.05 var(--font-data);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.fb-state-word {
+  --tone: var(--muted);
+  flex: 0 0 100%;
+  margin-bottom: 7px;
+  color: color-mix(in srgb, var(--tone) 65%, var(--ink));
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.fb-uht[data-state='producing'] .fb-state-word {
+  --tone: var(--ok);
+}
+.fb-readout[data-over='true'] .fb-state-word {
+  --tone: var(--warn);
+}
+.fb-state .fb-num-of {
+  color: var(--muted);
+  font-size: 22px;
+}
+.fb-state .fb-unit {
+  margin-left: 0.4em;
+  color: var(--muted);
+  font: 600 14px/1 var(--font-label);
+  letter-spacing: 0.06em;
+}
+/* A state without numbers (CIP, Stopped, No lines) is the readout itself, in its tone. */
+.fb-state-only {
+  --tone: var(--muted);
+  padding-top: 19px;
+  color: color-mix(in srgb, var(--tone) 65%, var(--ink));
+  font: 700 30px/1.05 var(--font-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.fb-uht[data-state='stopped'] .fb-state-only {
+  --tone: var(--bad);
+}
+.fb-pct {
+  margin: 0 0 2px;
+  flex: none;
+  color: var(--muted);
+  font: 500 12px/1 var(--font-data);
+  text-align: right;
+  white-space: nowrap;
+}
+.fb-pct .fb-num {
+  color: var(--ink);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.fb-pct .fb-unit {
+  margin-left: 3px;
+  font: 600 11.5px/1 var(--font-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.fb-readout[data-over='true'] .fb-pct .fb-num {
+  color: color-mix(in srgb, var(--warn) 65%, var(--ink));
+}
+
+/* The load bar: the lines' draw as a share of the UHT's capacity, cyan and glowing; amber when they draw
+   more than it makes. Gaps at each quarter make it read as a gauge. */
 .fb-meter {
   display: flex;
   align-items: center;
-  gap: 10px;
 }
 .fb-bar {
+  position: relative;
   flex: 1;
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line);
-  overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 18%, transparent);
+}
+.fb-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(25% - 2px), var(--surface) calc(25% - 2px) 25%);
+  pointer-events: none;
 }
 .fb-bar-fill {
   display: block;
@@ -348,52 +755,88 @@ input {
   width: 0;
   border-radius: inherit;
   background: var(--accent);
-  transition: width 0.4s ease;
+  box-shadow: var(--glow-accent);
+  transition:
+    width 250ms ease,
+    background-color 200ms ease;
 }
 .fb-meter[data-over='true'] .fb-bar-fill {
   background: var(--warn);
-}
-.fb-pct {
-  min-width: 8ch;
-  color: var(--muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  white-space: nowrap;
-}
-.fb-meter[data-over='true'] .fb-pct {
-  color: var(--ink);
-  font-weight: 600;
+  box-shadow: var(--glow-warn);
 }
 .fb-over {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
-  font-size: 14px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--warn) 38%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: color-mix(in srgb, var(--warn) 65%, var(--ink));
+  font-size: 13.5px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .fb-over::before {
   content: '';
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--warn);
+  box-shadow: var(--glow-warn);
 }
 
-/* a row per line */
+.fb-lines-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+.fb-lines-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* ───── a row per line: an instrument row ───── */
+
 .fb-lines {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .fb-line {
+  --tone: var(--muted);
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr);
   gap: 10px;
-  padding: 10px 0;
-  border-top: 1px solid var(--line);
+  padding: 10px 12px 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 9px;
+  background: var(--raised);
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+.fb-line:hover {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+.fb-line[data-status='running'] {
+  --tone: var(--ok);
+}
+.fb-line[data-status='stopped'],
+.fb-line[data-status='maintenance'] {
+  --tone: var(--bad);
+}
+.fb-line[data-status='changeover'] {
+  --tone: var(--warn);
 }
 .fb-line > .lamp {
   margin-top: 5px;
@@ -401,77 +844,183 @@ input {
 .fb-line-body {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
   min-width: 0;
 }
 .fb-line-top {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 2px 10px;
+  align-items: center;
+  gap: 4px 8px;
 }
 .fb-line-name {
-  margin: 0;
-  font: 600 16px/1.25 var(--font-ui);
+  margin: 0 auto 0 0;
+  font: 600 15.5px/1.2 var(--font-ui);
 }
+/* The status: a chip tinted by the line's state, never a solid block. CIP's has a dashed edge. */
 .fb-line-status {
-  font-weight: 600;
-  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--tone) 38%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+  color: color-mix(in srgb, var(--tone) 65%, var(--ink));
+  font: 600 12px/1 var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition:
+    color 200ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease;
 }
+.fb-line[data-status='cleaning'] .fb-line-status {
+  border-style: dashed;
+}
+
 .fb-line-filler,
 .fb-line-lot,
 .fb-line-out {
   margin: 0;
-  font-size: 13.5px;
+  min-width: 0;
   color: var(--muted);
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
 }
+/* The filler as a chip, then its speed and pack size in the data font. */
 .fb-line-filler {
-  font-family: var(--font-data);
-  font-size: 12.5px;
-}
-.fb-line-lot,
-.fb-line-out {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font: 500 12px/1.3 var(--font-data);
+  overflow-wrap: anywhere;
+}
+.fb-chip {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 11.5px/1.2 var(--font-data);
+}
+.fb-line-lot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
   gap: 2px 12px;
 }
 .fb-product {
+  margin-right: auto;
   color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.fb-lot-clock {
+  white-space: nowrap;
+}
+.fb-lot-clock .fb-k {
+  font: 600 11.5px/1 var(--font-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.fb-lot-clock .fb-num {
+  color: var(--ink);
+  font: 500 12px/1 var(--font-data);
 }
 
-/* Open troubles: a dot in the worst severity's colour, and the severity in words beside the count. */
+/* Output as a mini bar of its target and the figures; open troubles as a tinted badge at the right. */
+.fb-line-out {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+.fb-out-bar {
+  flex: none;
+  width: 56px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 20%, transparent);
+  overflow: hidden;
+}
+.fb-out-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent) 80%, transparent);
+  transition: width 250ms ease;
+}
+.fb-output {
+  --fb-of-size: 12px;
+  margin-right: auto;
+  white-space: nowrap;
+}
+.fb-output .fb-k {
+  margin-right: 6px;
+  font: 600 11.5px/1 var(--font-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.fb-output .fb-num {
+  color: var(--ink);
+  font: 500 12px/1 var(--font-data);
+}
+.fb-output .fb-num-of {
+  color: var(--muted);
+}
+
+/* Open troubles: the worst severity's tint, and the severity in words beside the count. */
 .fb-trouble {
+  --tone: var(--muted);
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--ink);
-  font-weight: 600;
+  padding: 3px 8px 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--tone) 38%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+  color: color-mix(in srgb, var(--tone) 65%, var(--ink));
+  font: 600 12px/1.1 var(--font-ui);
+  white-space: nowrap;
 }
 .fb-trouble::before {
   content: '';
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  box-shadow: inset 0 0 0 2px var(--muted);
+  background: var(--tone);
+}
+.fb-trouble[data-sev='0']::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--muted);
+}
+.fb-trouble[data-sev='1'] {
+  --tone: var(--warn);
 }
 .fb-trouble[data-sev='1']::before {
-  background: var(--warn);
-  box-shadow: none;
+  box-shadow: var(--glow-warn);
+}
+.fb-trouble[data-sev='2'],
+.fb-trouble[data-sev='3'] {
+  --tone: var(--bad);
 }
 .fb-trouble[data-sev='2']::before,
 .fb-trouble[data-sev='3']::before {
-  background: var(--bad);
-  box-shadow: none;
+  box-shadow: var(--glow-bad);
 }
 .fb-trouble[data-sev='3'] {
-  color: var(--bad);
+  background: color-mix(in srgb, var(--tone) 20%, transparent);
 }
 
+/* The lines no UHT claims: a panel with a dashed edge, as something to sort out in Let Report. */
+.fb-unassigned {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--warn) 40%, var(--line));
+}
 .fb-unassigned .fb-note {
   font-size: 13.5px;
 }
@@ -481,87 +1030,85 @@ input {
 
 /* ───── phase 10: the 3D view (D20) ───── */
 
-/* Board or 3D: two toggle buttons in the header, the pressed one raised. */
-.fb-views {
-  display: inline-flex;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface);
-}
-.fb-view {
-  min-width: 52px;
-  padding: 6px 12px;
-  border: 0;
-  border-radius: 7px;
-  background: none;
-  color: var(--muted);
-  font: 600 13px/1 var(--font-ui);
-  cursor: pointer;
-}
-.fb-view:hover {
-  color: var(--ink);
-}
-.fb-view[aria-pressed='true'] {
-  background: var(--raised);
-  color: var(--ink);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
-}
-
 /* In 3D the page takes a wide screen, the floor beside a column of cards; the floor stays in view as they scroll. */
 .fb[data-view='3d'] {
   max-width: 1760px;
 }
 .fb-board[data-view='3d'] .fb-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 400px);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 410px);
+  gap: 14px;
   align-items: start;
 }
+/* 151 px: the page's padding, the header, the strip label and the gaps above the body (phase 11's header). */
 .fb-board[data-view='3d'] .fb-uhts {
   grid-template-columns: minmax(0, 1fr);
-  max-height: calc(100vh - 150px);
+  max-height: calc(100vh - 151px);
   min-height: 420px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+  padding-right: 2px;
 }
 .fb-viewport {
   position: sticky;
-  top: 12px;
-  height: calc(100vh - 150px);
+  top: 14px;
+  height: calc(100vh - 151px);
   min-height: 420px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--r);
+  border-radius: 12px;
   background: var(--scene-bg);
+  box-shadow: inset 0 1px 0 var(--edge);
 }
 .fs-canvas {
   width: 100%;
 }
 
-/* "Show in 3D" on each card and row, in the 3D view only. */
+/* "Show in 3D" on each card and row, in the 3D view only: a small ghost button in the accent. */
 .fb-locate {
   display: none;
-  padding: 2px 4px;
-  font-size: 13px;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 6px;
+  font: 600 11.5px/1 var(--font-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease;
+}
+.fb-locate:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  text-decoration: none;
 }
 .fb-board[data-view='3d'] .fb-locate {
   display: inline-block;
 }
 
-/* What the floor or a button picked. */
+/* What the floor or a button picked: the accent's edge, and its glow in the dark theme. */
 .fb-uht[data-selected='true'] {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--accent),
+    var(--glow-accent);
 }
 .fb-line[data-selected='true'] {
-  margin: 0 -14px;
-  padding: 10px 14px;
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--raised));
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    var(--glow-accent);
 }
 
-/* The floor's labels: buttons, so a click or the keyboard picks a machine. The layer itself lets clicks through. */
+/* The floor's overlays: tags in the panels' glass, the data font and the lamps' glow. */
+
+/* The floor's labels: buttons, so a click or the keyboard picks a machine. The layer itself lets clicks through.
+   Their sizes stay as scene.ts measures them (about 6.2 px a character and 26 px of frame). */
 .fs-labels {
   position: absolute;
   top: 0;
@@ -573,40 +1120,47 @@ input {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px 3px 5px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--raised);
+  padding: 3px 8px 3px 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, var(--muted));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
   color: var(--ink);
   font: 500 12px/1.1 var(--font-data);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 1px 0 var(--edge);
+  backdrop-filter: blur(4px);
   cursor: pointer;
   pointer-events: auto;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease;
 }
 .fs-label:hover {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
 }
 .fs-label.is-selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 1px 3px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    inset 0 1px 0 var(--edge),
+    0 0 0 1px var(--accent),
+    var(--glow-accent);
 }
 .fs-name {
   font: 600 12.5px/1 var(--font-label);
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 .fs-label-uht .fs-name {
   font-size: 13.5px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .fs-value {
   color: var(--muted);
 }
 .fs-trouble {
-  color: var(--bad);
+  color: color-mix(in srgb, var(--bad) 65%, var(--ink));
   font-weight: 600;
 }
 /* With less room on screen: the lamp and the name, then the lamp alone (scene.ts decides from the room). */
@@ -619,7 +1173,8 @@ input {
 }
 .fs-label[data-detail='lamp'] {
   gap: 0;
-  padding: 3px;
+  padding: 4px;
+  border-radius: 999px;
 }
 .fs-title.is-hidden {
   visibility: hidden;
@@ -633,32 +1188,46 @@ input {
 }
 .fs-label[data-status='ok'] .fs-lamp {
   background: var(--ok);
-  box-shadow: none;
+  box-shadow: var(--glow-ok);
 }
 .fs-label[data-status='warn'] .fs-lamp {
   background: var(--warn);
-  box-shadow: none;
+  box-shadow: var(--glow-warn);
 }
 .fs-label[data-status='bad'] .fs-lamp {
   background: var(--bad);
-  box-shadow: none;
+  box-shadow: var(--glow-bad);
 }
-/* A bay's title, on the floor in front of it (as the 3D plant's zone names): ink, for contrast on the floor. */
+/* A bay's title, on the floor in front of it (as the 3D plant's zone names): a letter-spaced label in ink,
+   with a halo of the floor's colour for contrast. */
 .fs-title {
   padding: 2px 0;
-  font: 600 12.5px/1 var(--font-label);
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
   color: var(--ink);
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow:
+    0 0 6px var(--scene-bg),
+    0 0 2px var(--scene-bg);
   white-space: nowrap;
 }
+/* "Whole factory": a glass button in the floor's corner. */
 .fs-overview {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 12px;
+  left: 12px;
   z-index: 2;
-  padding: 6px 10px;
-  font-size: 13px;
+  padding: 8px 12px;
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  box-shadow: inset 0 1px 0 var(--edge);
+  backdrop-filter: blur(6px);
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.fs-overview:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
 }
 .fs-empty {
   position: absolute;
@@ -672,6 +1241,8 @@ input {
   text-align: center;
   pointer-events: none;
 }
+
+/* ───── narrower screens ───── */
 
 @media (max-width: 900px) {
   .fb-board[data-view='3d'] .fb-body {
@@ -688,23 +1259,81 @@ input {
     max-height: none;
     min-height: 0;
     overflow: visible;
+    padding-right: 0;
   }
 }
 
+/* A phone: the header's controls take their own rows under the title; the cards stack. */
 @media (max-width: 720px) {
-  .fb-head h1 {
-    font-size: 19px;
+  .fb {
+    padding-top: 12px;
+    gap: 12px;
   }
-  .fb-session {
+  .fb-head {
+    padding: 10px 12px 12px;
+  }
+  .fb-brand {
     width: 100%;
   }
-  .fb-session .btn {
+  .fb-mark {
+    width: 32px;
+    height: 32px;
+  }
+  .fb-head h1 {
+    font-size: 20px;
+  }
+  /* The session's controls join the header's rows: Board / 3D with the live state, then who with the buttons. */
+  .fb-session {
+    display: contents;
+  }
+  .fb[data-session='in'] .fb-brand {
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  .fb-live {
     margin-left: auto;
+  }
+  .fb-user {
+    flex: 1 1 0;
+  }
+  /* "Signed in as" stays for screen readers; the address alone shows. */
+  .fb-user-lead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: pre;
+  }
+  .fb-tools {
+    margin-left: auto;
+  }
+  .fb[data-session='out'] .fb-brand {
+    width: auto;
+  }
+  .fb[data-session='out'] .fb-main {
+    min-height: calc(100vh - 110px);
+  }
+  .fb-signin {
+    padding: 24px 20px 22px;
+  }
+  .fb-uht {
+    padding: 12px 12px 14px;
+  }
+  .fb-state {
+    --fb-of-size: 19px;
+    font-size: 27px;
+  }
+  .fb-state .fb-num-of {
+    font-size: 19px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fb-bar-fill {
-    transition: none;
+  .fb *,
+  .fb *::before,
+  .fb *::after {
+    transition: none !important;
+    animation: none !important;
   }
 }
