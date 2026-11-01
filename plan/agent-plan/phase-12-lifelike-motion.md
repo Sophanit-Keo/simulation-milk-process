@@ -19,9 +19,11 @@ The numbers are visual assumptions, set so the motion reads like the real machin
 | Step | What you see | Joint (hero node) | Time (motion s) |
 |---|---|---|---|
 | 1. To pick | The arm swings to the end of the tray line, the long way round via −z as now | `arm` rotation.y → pick angle | 1.6 |
-| 2. Pick | The gripper drops to the tray on the belt (belt surface 0.86 m), the clamps close, it lifts the tray clear | `arm_lift` down 0 → about 1.0 m, `arm_clamp_1`/`_2` in 0.10 m each, `arm_lift` up | 1.4 |
+| 2. Pick | The gripper drops to the tray on the belt (belt surface 0.86 m), the clamps close, it lifts the tray clear | `arm_lift` down 0 → about 0.6 m, `arm_clamp_1`/`_2` in 0.045 m each (where they meet a 0.24 m tray; the hero allows 0.10), `arm_lift` up | 1.4 |
 | 3. To place | The arm swings to the pallet with the tray; the wrist turns so the tray stays square to the pallet | `arm`, `arm_wrist` rotation.y = −arm + tray angle | 1.8 |
-| 4. Place | The gripper lowers the tray onto its place in the current layer, the clamps open, the tray joins the stack, the gripper lifts | `arm_lift`, clamps | 1.4 |
+| 4. Place | The gripper lowers the tray onto its place in the current layer (down to about 1.07 m for the bottom layer), the clamps open, the tray joins the stack, the gripper lifts | `arm_lift`, clamps | 1.4 |
+
+- **Reach (added by lane A):** `arm_lift` also slides out along the boom, `position.x` from about 1.9 to 2.95 m, because a fixed 2.45 m reach cannot set trays on all 12 places of a layer; the boom is about 3.05 m long.
 
 - One pick and place in about 6.2 motion seconds (now 12.6 with no pick). A real robot palletizer with a single-tray gripper makes about 10 to 20 picks a minute; 1,250 trays an hour is 21 a minute, so the arm shows a sample, like the belts.
 - **The stack is trays, not a box:** 84 trays per pallet (`traysPerPallet`) stand as **7 layers of 12**, 3 × 4 trays of 0.40 × 0.25 m in plan (the trays' 0.60 × 0.50 m token, laid in a column-stack pattern; adjust the pattern, not the count, if the token's size does not fit a 1.2 × 1.0 m pallet). The number shown is the sim's own `palletTrays` (the fuller lane's, as now); the tray in the gripper is the one being added. One `InstancedMesh` with the tray print; the old scaled `stack` box goes.
@@ -37,7 +39,7 @@ The numbers are visual assumptions, set so the motion reads like the real machin
 | 1. In | The pallet rides onto the turntable and stops; the film tail is clamped at the base | — |
 | 2. Base wraps | The turntable turns at 24 rpm; the film carriage at the bottom winds 2 turns round the base | 5 |
 | 3. Up | The carriage climbs the mast over 3 turns, the film band rising up the load | 7.5 |
-| 4. Top wraps | 1 turn at the top | 2.5 |
+| 4. Top wraps | 1 turn at the top, with the carriage at about 0.88 m, where the roll still covers the load's top edge (it does from 0.37 to 0.90 m) | 2.5 |
 | 5. Down | The carriage comes down over 2 turns | 5 |
 | 6. Cut | The turntable stops square, the film is cut and wiped on; the wrapped pallet rides off | 1 |
 
@@ -82,11 +84,11 @@ Nothing in `src/contracts/` changes. The lanes share these names instead:
 | Model | Node | Parent | Origin (model frame, m) | Motion |
 |---|---|---|---|---|
 | `vehicles/truck.glb` | `tractor` | scene | the fifth wheel's kingpin, (0, 1.3, 3.7) | Turns about +y, ±0.6 rad: everything ahead of the trailer's landing legs that belongs to the tractor (cab, chassis, both tractor axles, tank, steps, exhaust) |
-| | `door_left`, `door_right` | scene | the rear hinges, (∓1.255, 1.3, −8.25) | Turn about +y, 0 (shut) to 3π/2 (open, folded against the side); left is −x |
+| | `door_left`, `door_right` | scene | the rear hinges on the posts' outer edges, (∓1.275, 1.3, −8.25) | Turn about +y from 0 (shut): `door_left` to **+3π/2**, `door_right` to **−3π/2** (open, folded flat against its own side; the other sign swings a door through the trailer). Left is −x. The open trailer shows its load space: floor at 1.3 m, walls at ±1.215 m, z −8.1 to 5.29 (`TRUCK_CARGO_M`) |
 | `vehicles/forklift.glb` | `beacon` | scene | the beacon's foot on the guard, (0, 2.15, −0.95) | Its own material, `forklift_beacon` (amber, emissive), so the scene can flash it |
 | | `forks`, `mast_inner` | scene | as now | as now |
-| `hero/stretch-wrapper.glb` (new) | `turntable` | scene | (0, 0.125, 0), the turntable's centre | Turns about +y |
-| | `carriage` | scene | (−1.25, 0.45, −0.9), the carriage's foot on the mast | Slides along +y, 0 to 1.05 m; carries the film roll and its rollers |
+| `hero/stretch-wrapper.glb` (new) | `turntable` | scene | (0, 0.125, 0), the turntable's centre | Turns about +y; its rollers line up with the pallet rollers at multiples of π, so it stops there |
+| | `carriage` | scene | (−1.25, 0.45, −0.9), the carriage's foot on the mast | Slides along +y, 0 to 1.05 m; carries the film roll and its rollers. The film leaves from the exit roller, at (−1.191, −0.709) in the model frame at rest (`WRAPPER_FILM`) |
 
 The stretch wrapper's machine origin is world (21.6, 0, 14.4), the turntable's centre (`WRAPPER_M`). Turntable radius 1.05 m, top flush with the pallet rollers at 0.25 m; mast at (−1.45, 0, −1.05), 2.7 m tall; the model stays below 3.0 m (the label at 3.1 m). The truck keeps its outer size and facing, so `fitVehicle` still fits it at scale 1; the truck may have at most 7 meshes, the forklift 5, the stretch wrapper 6.
 
