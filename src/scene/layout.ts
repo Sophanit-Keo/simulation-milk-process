@@ -53,12 +53,13 @@ export const ZONES: readonly Zone[] = [
 
 /**
  * Truck yard in front of the warehouse's dock doors. Deeper than the preview's 14 m, whose 12 m truck fit
- * it: a docked 16.5 m articulated truck (packs/layout.ts, TRUCK_SIZE_M) reaches z 36.1, and the yard
- * leaves about 2 m clear round its cab.
+ * it: a docked 16.5 m articulated truck (packs/layout.ts, TRUCK_SIZE_M) reaches z 36.1. Since phase 12 the
+ * trucks drive in along a lane behind the docked ones (z 39.5 to 42) and back into the dock along a curve
+ * whose cab swings out to z 45.6 (packs/truckMoves.ts), so the yard runs to z 47.
  */
 export const APRON: { colorVar: ZoneColorVar; rect: RectM } = {
   colorVar: '--apron',
-  rect: { xMinM: -63, xMaxM: -14, zMinM: 19, zMaxM: 38 },
+  rect: { xMinM: -63, xMaxM: -14, zMinM: 19, zMaxM: 47 },
 };
 
 /** Where the camera and the labels go for each stage. One table, so the guided tour can reuse it (phase 2, "Watch for"). */

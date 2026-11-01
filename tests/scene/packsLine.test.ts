@@ -592,20 +592,37 @@ describe('packsLine', () => {
     expect(empty.ctx.requested).toEqual(expect.arrayContaining(['vehicles/truck.glb', 'vehicles/forklift.glb']));
     for (const id of ['truck', 'forklift-1', 'forklift-2']) expect(node(byId(empty.machines, id), 'grey-box')).toBeDefined();
     // A grey truck at each of the three doors, hidden until the sim docks one there.
-    const doors = node(byId(empty.machines, 'truck'), 'trucks').children.filter((child) => child.name !== 'yard');
+    const doors = node(byId(empty.machines, 'truck'), 'trucks').children.filter((child) => child.name.startsWith('truck-'));
     expect(doors.map((truck) => truck.name)).toEqual(['truck-1', 'truck-2', 'truck-3']);
-    // And four spots in the yard, for trucks that find every door taken (phase 5).
-    expect(node(byId(empty.machines, 'truck'), 'yard').children.map((truck) => truck.name)).toEqual(['yard-1', 'yard-2', 'yard-3', 'yard-4']);
+    // And four spots in the yard, for trucks that find every door taken (phase 5): instanced copies of the truck.
+    const yard = node(byId(empty.machines, 'truck'), 'yard').children;
+    expect(yard.length).toBeGreaterThan(0);
+    for (const copies of yard) {
+      expect(copies, copies.name).toBeInstanceOf(THREE.InstancedMesh);
+      expect((copies as THREE.InstancedMesh).instanceMatrix.count, copies.name).toBe(at.YARD_X_M.length);
+    }
     for (const truck of doors) expect(truck.getObjectByName('grey-box'), truck.name).toBeDefined();
 
-    // Stand-ins that lie along x, at a different scale and off-centre, as a downloaded model might.
-    const box = (x: number, y: number, z: number) => () =>
-      new THREE.Mesh(new THREE.BoxGeometry(x, y, z).translate(5, 3, -2), new THREE.MeshStandardMaterial());
-    const { machines } = build(makeContext({ 'vehicles/truck.glb': box(33, 8, 5), 'vehicles/forklift.glb': box(70, 50, 30) }));
+    // Stand-ins that lie along x, at a different scale and off-centre, as a downloaded model might, with the
+    // moving nodes the grey boxes have (phase 12).
+    const box = (x: number, y: number, z: number, nodes: readonly string[]) => () => {
+      const model = new THREE.Group();
+      model.add(new THREE.Mesh(new THREE.BoxGeometry(x, y, z).translate(5, 3, -2), new THREE.MeshStandardMaterial()));
+      for (const name of nodes) model.add(Object.assign(new THREE.Group(), { name }));
+      return model;
+    };
+    const { machines } = build(
+      makeContext({
+        'vehicles/truck.glb': box(33, 8, 5, ['tractor', 'door_left', 'door_right']),
+        'vehicles/forklift.glb': box(70, 50, 30, ['forks', 'mast_inner', 'beacon']),
+      }),
+    );
     await settle();
+    // Forklift-1 parks facing the quarantine's west edge, along x.
+    const parkedM: at.FloorPointM = [-15.3 + 0.535, 8.7];
     const fits: [string, THREE.Object3D, at.FloorPointM, VehicleSizeM][] = [
       ['truck', node(byId(machines, 'truck'), 'truck-2'), [at.DOOR_X_M[1], at.DOCKED_TAIL_Z_M + at.TRUCK_SIZE_M.lengthM / 2], at.TRUCK_SIZE_M],
-      ['forklift-1', byId(machines, 'forklift-1').object, [-24, 10.6], at.FORKLIFT_SIZE_M],
+      ['forklift-1', node(byId(machines, 'forklift-1'), 'forklift-1-vehicle'), parkedM, at.FORKLIFT_SIZE_M],
     ];
     for (const [id, object, centreM, size] of fits) {
       expect(object.getObjectByName('grey-box'), id).toBeUndefined();
@@ -665,17 +682,20 @@ describe('packsLine', () => {
     const truck = (id: number, door: number) => ({ id, door, state: door < 0 ? ('waiting' as const) : ('loading' as const), arrivedS: 0, remainingS: 0, pallets: 22 });
     snapshot.packs.warehouse.trucks = [truck(1, 0), truck(2, 1), truck(3, 2), truck(4, -1), truck(5, -1)];
     trucks.update(snapshot, 0.1);
-    const parked = node(trucks, 'yard').children;
-    expect(parked.filter((each) => each.visible).map((each) => each.name)).toEqual(['yard-1', 'yard-2']);
+    // The yard's trucks are instanced copies, one draw a mesh of the truck: as many copies shown as trucks wait.
+    const parked = node(trucks, 'yard').children as THREE.InstancedMesh[];
+    const shown = (): number[] => [...new Set(parked.map((copies) => (copies.visible ? copies.count : 0)))];
+    expect(shown()).toEqual([2]);
     expect(trucks.labelText(snapshot)).toBe('1 loading · 2 in the yard');
     expect(trucks.debugState?.().yard).toBe(2);
     snapshot.packs.warehouse.trucks = [...snapshot.packs.warehouse.trucks, ...[6, 7, 8].map((id) => truck(id, -1))];
     trucks.update(snapshot, 0.1);
-    expect(parked.every((each) => each.visible)).toBe(true);
+    expect(shown()).toEqual([at.YARD_X_M.length]);
     expect(trucks.labelText(snapshot)).toBe('1 loading · 5 in the yard');
     snapshot.packs.warehouse.trucks = [];
     trucks.update(snapshot, 0.1);
-    expect(parked.some((each) => each.visible)).toBe(false);
+    expect(shown()).toEqual([0]);
+    expect(parked.some((copies) => copies.visible)).toBe(false);
   });
 
   it('shows no label value, rather than NaN, when the snapshot lacks it', () => {

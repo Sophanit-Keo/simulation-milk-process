@@ -10,13 +10,14 @@
 import * as THREE from 'three';
 import type { Snapshot, StageId, Status } from '../../contracts';
 import plantJson from '../../data/plant.json';
-import { createLampPalette, glowInDark } from '../lamps';
+import { createLampPalette, DARK_LAMP_GLOW, glowInDark, type LampPalette } from '../lamps';
 import type { PointM } from '../layout';
-import { motionDtS as busyMotionDtS } from '../motion';
+import { motionDtS as busyMotionDtS, motionRate } from '../motion';
 import { LAMP_COLOR_VAR, type SceneColorVar } from '../theme';
 import { HERO_MODELS, swapInHero } from './heroes';
 import { createTokenStream, PACK_BELT_SPEED_MPS, TRAY_BELT_SPEED_MPS, type TokenStream } from './packs/belts';
 import { FixtureBuilder, type BuiltFixture, type InstanceM } from './packs/builder';
+import { createAisleLocks, createForkliftDriver, type AisleLocks, type ForkliftInputs, type ForkliftRole, type PalletPose } from './packs/forkliftJobs';
 import { beltPlacements, createKitLoader, greyBelt, greyRollers, repeatPlacements, swapInKit, type KitLoader, type Placement } from './packs/conveyors';
 import { createKit, type Kit, type PrintName } from './packs/kit';
 import * as at from './packs/layout';
@@ -55,7 +56,21 @@ import {
   wrapPoseAt,
 } from './packs/stretchWrap';
 import { CARTON_PITCH_M, CARTON_SIZE_M, LINE_A_START_M, LINE_B_START_M, TRAY_PITCH_M, TRAY_SIZE_M, cartonPlaces, tokenInstances, trayPlaces } from './packs/tokens';
-import { fitVehicle, greyForklift, greyTruck, type VehicleSizeM } from './packs/vehicles';
+import { createBays, stepBays, type Bay, type DoorTruck, type SimClock } from './packs/truckMoves';
+import {
+  CARGO_FRONT_Z_M,
+  CARGO_TAIL_Z_M,
+  DOOR_OPEN_RAD,
+  FORKLIFT_NODES,
+  TRAILER_DECK_M,
+  TRUCK_NODES,
+  fitVehicle,
+  greyForklift,
+  greyTruck,
+  nodeUnitM,
+  type TruckNode,
+  type VehicleSizeM,
+} from './packs/vehicles';
 import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
 
 // Grey-box motion. It shows what runs, so it stays on under prefers-reduced-motion, but it is slower than
@@ -72,15 +87,6 @@ const FILLER_COUNT = plantJson.fillers.count;
 /** Pallets of stock a rack place stands for: the racks' 384 places then hold 1,920, D11's 634 and about 39 days of growth (H43). */
 export const PALLETS_PER_RACK_PLACE = 5;
 
-/** A truck drives in from the road and out again over this much real time (before the motion rate). */
-const TRUCK_DRIVE_S = 3;
-/** How far beyond its docked spot a truck starts and ends its drive, off the apron. */
-const TRUCK_ROAD_M = 45;
-/** Forklifts drive at this speed (before the motion rate) while there is stock to move. */
-const FORKLIFT_SPEED_MPS = 2.2;
-/** A forklift keeps going this long of real time after the stock last changed, putting pallets away. */
-const FORKLIFT_BUSY_S = 12;
-
 /** Lamp colours: the light theme's --ok, --warn, --bad and --steel-dark (plan 08); the dark theme's tokens there (lamps.ts). */
 const LAMP_COLORS: Record<Status, number> = { ok: 0x1f8f57, warn: 0xa87400, bad: 0xc63a2b, idle: 0x76858f };
 const LAMP_COLOR_VARS: Record<Status, SceneColorVar> = { ...LAMP_COLOR_VAR, idle: '--steel-dark' };
@@ -94,6 +100,8 @@ export const packsLine: EquipmentFactory = (ctx) => {
   // Shared by the fixtures that hand pallets on: the quarantine's blocks, and the pallets riding to them.
   const blocks = createQuarantineBlocks(kit.shape('box'), kit.shape('sphere'), kit.material('carton'));
   const traffic = createPalletTraffic(kit.shape('box'), kit.material('wood'), kit.material('carton'));
+  // Shared by the warehouse's fixtures: the trucks' bays, the forklifts' aisle locks and pallets (stage 10).
+  const warehouse = createWarehouse(kit);
   return [
     filler(kit, ctx, 'a'),
     filler(kit, ctx, 'b'),
@@ -107,10 +115,10 @@ export const packsLine: EquipmentFactory = (ctx) => {
     quarantine(kit, blocks),
     qaLab(kit),
     racks(kit),
-    docks(kit),
-    forklift(kit, ctx, 'forklift-1', { fromM: [-24, 10.6], toM: [-56, 10.6] }),
-    forklift(kit, ctx, 'forklift-2', { fromM: [-24, 17.95], toM: [-50, 17.95] }),
-    trucks(kit, ctx),
+    docks(kit, warehouse),
+    forklift(kit, ctx, 'forklift-1', 'putAway', warehouse),
+    forklift(kit, ctx, 'forklift-2', 'loading', warehouse),
+    trucks(kit, ctx, warehouse),
   ];
 };
 
@@ -891,203 +899,579 @@ export function rackLoadsShown(palletsInStock: number | undefined, places: numbe
   return Math.min(Math.ceil(Math.round(palletsInStock) / palletsPerPlace), places);
 }
 
-function docks(kit: Kit): Equipment {
+/**
+ * What the warehouse's fixtures share (phase 12): the trucks' bays, which the trucks write and the docks and
+ * forklift-2 read; the aisle locks that keep the two forklifts' routes from crossing; the forklifts' lit beacon
+ * and the dock lamps' material; and the pallets the forklifts show (on their forks, set down, waiting at the
+ * quarantine's edge), one instanced draw for both. Each fixture holds it while it stands; the last to go frees it.
+ */
+interface Warehouse {
+  readonly bays: Bay[];
+  readonly locks: AisleLocks;
+  readonly beaconLit: THREE.MeshStandardMaterial;
+  readonly lampMaterial: THREE.MeshBasicMaterial;
+  readonly lampPalette: LampPalette<'red' | 'green'>;
+  readonly pallets: { readonly bases: THREE.InstancedMesh; readonly loads: THREE.InstancedMesh; readonly shown: Uint8Array };
+  /** prefers-reduced-motion, where there is a page to ask: the beacon then shines steadily. */
+  readonly reducedMotion: MediaQueryList | null;
+  applyBeaconTheme(): void;
+  hold(): () => void;
+}
+
+/** The forklifts' pallets: each forklift's carried and set-down one, and the one waiting at the quarantine's edge. */
+const FORKLIFT_PALLET_SLOTS = 5;
+const WAITING_SLOT = 4;
+/** A pallet token as the racks draw it: the wooden pallet and its stretch-wrapped load. */
+const PALLET_LOAD_SIZE_M = [at.RACK_PALLET.widthM - 0.04, at.RACK_PALLET.loadHeightM, at.RACK_PALLET.depthM - 0.08] as const;
+/** The beacon's amber: the light theme's --warn (plan 08), glowing in the dark theme's (lamps.ts). */
+const BEACON_LIGHT_HEX = { lit: LAMP_COLORS.warn };
+const BEACON_DARK_VAR: Record<'lit', SceneColorVar> = { lit: LAMP_COLOR_VAR.warn };
+/** Dock lamps: red while a truck stands at the dock, green otherwise. */
+const DOCK_LAMP_HEX = { red: LAMP_COLORS.bad, green: LAMP_COLORS.ok };
+const DOCK_LAMP_VAR: Record<'red' | 'green', SceneColorVar> = { red: LAMP_COLOR_VAR.bad, green: LAMP_COLOR_VAR.ok };
+/** A full truck load and the sim seconds it takes (D3). */
+const PALLETS_PER_TRUCK = plantJson.warehouse.palletsPerTruck;
+const TRUCK_LOAD_S = plantJson.warehouse.truckLoadS;
+const RACK_PLACES = at.rackSlots().length;
+
+const _matrix = new THREE.Matrix4();
+const _position = new THREE.Vector3();
+const _quaternion = new THREE.Quaternion();
+const _scale = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
+
+function createWarehouse(kit: Kit): Warehouse {
+  const beaconLit = new THREE.MeshStandardMaterial({ roughness: 0.3 });
+  beaconLit.name = 'forklift-beacon-lit';
+  const beaconPalette = createLampPalette(BEACON_LIGHT_HEX, BEACON_DARK_VAR);
+  const lampMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  lampMaterial.name = 'dock-lamps';
+  const lampPalette = createLampPalette(DOCK_LAMP_HEX, DOCK_LAMP_VAR);
+  const bases = new THREE.InstancedMesh(kit.shape('box'), kit.material('wood'), FORKLIFT_PALLET_SLOTS);
+  const loads = new THREE.InstancedMesh(kit.shape('box'), kit.material('carton'), FORKLIFT_PALLET_SLOTS);
+  bases.name = 'forklift-pallets';
+  loads.name = 'forklift-loads';
+  // Hidden copies stand at forklift-1's spot, so the fixture's bounds are its own until a pallet shows.
+  const hiddenAt = new THREE.Matrix4().makeTranslation(-14.8, 0, 8.7).multiply(HIDDEN);
+  for (const mesh of [bases, loads]) {
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    for (let i = 0; i < FORKLIFT_PALLET_SLOTS; i++) mesh.setMatrixAt(i, hiddenAt);
+    // They go wherever the forklifts go: bounds over the racks, the lanes, the quarantine's edge and the doors.
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(-37, 1.5, 11), 30);
+    mesh.receiveShadow = true;
+  }
+  loads.castShadow = true;
+  // With no pallet shown they draw nothing.
+  bases.visible = false;
+  loads.visible = false;
+  const paintBeacon = (): void => {
+    const color = beaconPalette.color('lit');
+    if (beaconPalette.dark) {
+      glowInDark(beaconLit, color);
+      return;
+    }
+    beaconLit.color.copy(color);
+    beaconLit.emissive.copy(color);
+    beaconLit.emissiveIntensity = 0.9;
+  };
+  paintBeacon();
+  let holders = 0;
+  return {
+    bays: createBays(at.DOOR_X_M),
+    locks: createAisleLocks(),
+    beaconLit,
+    lampMaterial,
+    lampPalette,
+    pallets: { bases, loads, shown: new Uint8Array(FORKLIFT_PALLET_SLOTS) },
+    reducedMotion: typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null,
+    applyBeaconTheme() {
+      beaconPalette.applyTheme();
+      paintBeacon();
+    },
+    hold() {
+      holders += 1;
+      let held = true;
+      return () => {
+        if (!held) return;
+        held = false;
+        holders -= 1;
+        if (holders > 0) return;
+        beaconLit.dispose();
+        lampMaterial.dispose();
+        bases.dispose();
+        loads.dispose();
+      };
+    },
+  };
+}
+
+/** Writes pallet `slot` of the forklifts' pallets at `pose`, or hides it; the meshes draw while one shows. */
+function writePallet(pallets: Warehouse['pallets'], slot: number, pose: PalletPose): void {
+  const { bases, loads, shown } = pallets;
+  shown[slot] = pose.shown ? 1 : 0;
+  const any = shown.includes(1);
+  bases.visible = any;
+  loads.visible = any;
+  if (!pose.shown) {
+    bases.getMatrixAt(slot, _matrix);
+    _matrix.multiply(HIDDEN); // keeps its spot, at no size
+    bases.setMatrixAt(slot, _matrix);
+    loads.setMatrixAt(slot, _matrix);
+    return;
+  }
+  const p = at.RACK_PALLET;
+  _quaternion.setFromAxisAngle(_up, pose.headingRad);
+  _position.set(pose.xM, pose.yM + p.heightM / 2, pose.zM);
+  bases.setMatrixAt(slot, _matrix.compose(_position, _quaternion, _scale.set(p.widthM, p.heightM, p.depthM)));
+  _position.y = pose.yM + p.heightM + p.loadHeightM / 2;
+  loads.setMatrixAt(slot, _matrix.compose(_position, _quaternion, _scale.set(...PALLET_LOAD_SIZE_M)));
+}
+
+/**
+ * The dock doors along the warehouse's +z edge: each an open frame with a roller door that rises while a truck
+ * stands docked there in the 3D view (about 3 motion seconds), bumpers, guide lines on the apron, and a lamp on
+ * the frame outside, red while a truck is docked (do not drive off) and green otherwise. It reads the trucks'
+ * bays (`warehouse.bays`, written by the trucks' fixture).
+ */
+function docks(kit: Kit, warehouse: Warehouse): Equipment {
   const midXM = at.DOOR_X_M[1];
   const b = new FixtureBuilder(kit, 'docks', [midXM, 0, at.DOOR_Z_M]);
+  const openingM = { widthM: 3.2, heightM: 3.4 };
+  const jambM = 0.2;
+  const frameHeightM = 3.8;
+  const rollerZM = at.DOOR_Z_M + 0.1;
+  const rollers: InstanceM[] = [];
+  const lamps: InstanceM[] = [];
   for (const xM of at.DOOR_X_M) {
-    b.part('box', 'rubber', [xM, 1.9, at.DOOR_Z_M], [3.4, 3.8, 0.3], { castShadow: true }); // door frame
-    b.part('box', 'steel', [xM, 1.8, at.DOOR_Z_M + 0.17], [3.0, 3.4, 0.06]); // roller door
     for (const side of [-1, 1]) {
+      b.part('box', 'rubber', [xM + side * (openingM.widthM / 2 + jambM / 2), frameHeightM / 2, at.DOOR_Z_M], [jambM, frameHeightM, 0.3], { castShadow: true }); // jamb
       b.part('box', 'rubber', [xM + side * 1.35, 1.0, at.DOOR_Z_M + 0.25], [0.3, 0.45, 0.2]); // bumper
       // Guide lines on the apron, a truck's width apart.
       b.part('box', 'marking', [xM + side * 1.65, MARKING_Y_M, at.DOCKED_TAIL_Z_M + 6], [0.12, MARKING_THICK_M, 11]);
     }
+    // The header over the opening hides the roller door's drum.
+    b.part('box', 'rubber', [xM, (openingM.heightM + frameHeightM) / 2, at.DOOR_Z_M], [openingM.widthM + 2 * jambM, frameHeightM - openingM.heightM, 0.45], { castShadow: true });
+    rollers.push({ atM: [xM, openingM.heightM / 2, rollerZM], sizeM: [openingM.widthM, openingM.heightM, 0.06] });
+    lamps.push({ atM: [xM + openingM.widthM / 2 + jambM / 2, 2.9, at.DOOR_Z_M + 0.27], sizeM: [0.28, 0.28, 0.28] });
   }
-  return machine(b.build(), {
-    id: 'docks',
-    stage: 10,
-    label: 'Loading docks',
-    labelAnchorM: [midXM, 4.3, at.DOOR_Z_M],
-    labelText(s) {
-      const trucks = kpiValue(s, 'trucksShipped');
-      return trucks === undefined ? '' : `${labelValue(trucks, 0, '')} trucks out`;
+  const rollerMesh = b.instanced('roller-doors', 'box', 'steel', rollers);
+  rollerMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  const lampMesh = b.instanced('dock-lamps', 'sphere', warehouse.lampMaterial, lamps);
+  const life = lifetime();
+  life.onEnd(warehouse.hold());
+  const palette = warehouse.lampPalette;
+  const shownRoller = at.DOOR_X_M.map(() => 1);
+  const shownRed = at.DOOR_X_M.map(() => false);
+  const paintLamps = (): void => {
+    shownRed.forEach((red, door) => lampMesh.setColorAt(door, palette.color(red ? 'red' : 'green')));
+    if (lampMesh.instanceColor) lampMesh.instanceColor.needsUpdate = true;
+  };
+  paintLamps();
+  const fixture = b.build();
+  return machine(
+    fixture,
+    {
+      id: 'docks',
+      stage: 10,
+      label: 'Loading docks',
+      labelAnchorM: [midXM, 4.3, at.DOOR_Z_M],
+      labelText(s) {
+        const trucks = kpiValue(s, 'trucksShipped');
+        return trucks === undefined ? '' : `${labelValue(trucks, 0, '')} trucks out`;
+      },
+      update() {
+        let rollersMoved = false;
+        let lampsChanged = false;
+        for (const bay of warehouse.bays) {
+          const door = bay.door;
+          // The roller door's bottom edge rises into the drum behind the header.
+          const downFrac = 1 - bay.rollerFrac;
+          if (downFrac !== shownRoller[door]) {
+            shownRoller[door] = downFrac;
+            const heightM = Math.max(openingM.heightM * downFrac, 0.001);
+            _quaternion.identity();
+            _position.set(at.DOOR_X_M[door] as number, openingM.heightM - heightM / 2, rollerZM);
+            _scale.set(openingM.widthM, heightM, downFrac > 0 ? 0.06 : 0);
+            rollerMesh.setMatrixAt(door, _matrix.compose(_position.sub(fixture.object.position), _quaternion, _scale));
+            rollersMoved = true;
+          }
+          const red = bay.phase === 'docked';
+          if (red !== shownRed[door]) {
+            shownRed[door] = red;
+            lampsChanged = true;
+          }
+        }
+        if (rollersMoved) rollerMesh.instanceMatrix.needsUpdate = true;
+        if (lampsChanged) paintLamps();
+      },
+      applyTheme() {
+        palette.applyTheme();
+        // Unlit, the lamps show their colour as it is; in the dark theme a little over, as the other lamps glow.
+        warehouse.lampMaterial.color.setScalar(palette.dark ? DARK_LAMP_GLOW : 1);
+        paintLamps();
+      },
+      debugState: () => ({
+        doorsUp: shownRoller.filter((downFrac) => downFrac === 0).length,
+        lamps: shownRed.map((red) => (red ? 'red' : 'green')).join(','),
+      }),
     },
-  });
+    life,
+  );
+}
+
+/** A vehicle and the nodes that move on it: the grey box's at first, the model's once it is in. */
+interface Vehicle<Node extends string> {
+  fixture: BuiltFixture;
+  nodes: Record<Node, THREE.Object3D>;
+  /** Each node's rest height and turn, and vehicle metres per unit of its frame. */
+  restY: Record<Node, number>;
+  restTurn: Record<Node, number>;
+  unitM: Record<Node, number>;
+}
+
+function bindNodes<Node extends string>(vehicle: Vehicle<Node>, found: Record<Node, THREE.Object3D>): void {
+  for (const name of Object.keys(found) as Node[]) {
+    const node = found[name];
+    vehicle.nodes[name] = node;
+    vehicle.restY[name] = node.position.y;
+    vehicle.restTurn[name] = node.rotation.y;
+    vehicle.unitM[name] = nodeUnitM(node);
+  }
+}
+
+function findNodes<Node extends string>(root: THREE.Object3D, names: readonly Node[]): Record<Node, THREE.Object3D> | null {
+  const found = {} as Record<Node, THREE.Object3D>;
+  for (const name of names) {
+    const node = root.getObjectByName(name);
+    if (!node) return null;
+    found[name] = node;
+  }
+  return found;
 }
 
 /**
- * A vehicle: its grey box at once, the assets lane's model in its place when it loads (the grey box
- * stays if the file is missing). Built facing +z round its own centre; place() turns it to `dir` and puts it at `atM`.
+ * A vehicle: its grey box at once, the assets lane's model in its place when it loads, built facing +z round its
+ * own footprint centre. The model must have every moving node the grey box has (`spec.nodes`); a model short of
+ * one keeps the grey box, as a missing file does. `onSwap` hears when the model is in.
  */
-function buildVehicle(
+function buildVehicle<Node extends string>(
   kit: Kit,
   ctx: EquipmentContext,
-  spec: { id: string; modelPath: string; size: VehicleSizeM },
+  spec: { id: string; modelPath: string; size: VehicleSizeM; nodes: readonly Node[] },
   buildGrey: (b: FixtureBuilder, layer: THREE.Object3D, size: VehicleSizeM) => void,
   life: Lifetime,
-): BuiltFixture {
+  onSwap: () => void = () => {},
+): Vehicle<Node> {
   const b = new FixtureBuilder(kit, spec.id, [0, 0, 0]);
   const greyLayer = b.layer('grey-box');
   buildGrey(b, greyLayer, spec.size);
   const fixture = b.build();
+  const grey = findNodes(greyLayer, spec.nodes);
+  if (!grey) throw new Error(`${spec.id}: the grey box lacks a moving node`);
+  const vehicle: Vehicle<Node> = {
+    fixture,
+    nodes: {} as Record<Node, THREE.Object3D>,
+    restY: {} as Record<Node, number>,
+    restTurn: {} as Record<Node, number>,
+    unitM: {} as Record<Node, number>,
+  };
+  bindNodes(vehicle, grey);
   // The model belongs to the host's cache (the host clones it per call), so it is never disposed here.
   ctx.loadModel(spec.modelPath).then(
     (model) => {
       if (!life.isAlive()) return;
       const fitted = fitVehicle(model, spec.size);
+      const nodes = findNodes(fitted, spec.nodes);
+      if (!nodes) {
+        console.warn(`${spec.modelPath} lacks one of ${spec.nodes.join(', ')}: ${spec.id} keeps its grey box`);
+        return;
+      }
       fixture.release(greyLayer);
       fixture.object.add(fitted);
+      bindNodes(vehicle, nodes);
+      onSwap();
     },
     () => {}, // no model (yet): the grey box stays
   );
-  return fixture;
-}
-
-/** Puts a vehicle at a floor point, turned so its front (+z) faces `dir`. */
-function place(object: THREE.Object3D, atM: at.FloorPointM, dir: at.FloorPointM): void {
-  object.position.set(atM[0], 0, atM[1]);
-  object.rotation.y = Math.atan2(dir[0], dir[1]); // turns +z toward dir
-}
-
-/** A stretch of floor a forklift shuttles along: from its parking spot to the far end and back. */
-interface ForkliftRun {
-  fromM: at.FloorPointM;
-  toM: at.FloorPointM;
+  return vehicle;
 }
 
 /**
- * A forklift on an aisle of the warehouse: parked at the run's start, it shuttles along the run while a truck
- * loads or stock has just come in from quarantine, forks first on the way out and turning at each end.
+ * A forklift with one job (packs/forkliftJobs.ts): forklift-1 puts released pallets away into the racks,
+ * forklift-2 takes them to a loading truck. It drives, turns and lifts in motion seconds; its forks rise by the
+ * lift and its inner mast by half of it; its pallet rides on the forks between pick and drop; its beacon
+ * flashes while it works. Forklift-1's fixture also holds both forklifts' pallets (one instanced draw).
  */
-function forklift(kit: Kit, ctx: EquipmentContext, id: string, run: ForkliftRun): Equipment {
+function forklift(kit: Kit, ctx: EquipmentContext, id: string, role: ForkliftRole, warehouse: Warehouse): Equipment {
   const life = lifetime();
-  const fixture = buildVehicle(kit, ctx, { id, modelPath: 'vehicles/forklift.glb', size: at.FORKLIFT_SIZE_M }, greyForklift, life);
-  const lengthM = Math.hypot(run.toM[0] - run.fromM[0], run.toM[1] - run.fromM[1]);
-  const dirOut: at.FloorPointM = [(run.toM[0] - run.fromM[0]) / lengthM, (run.toM[1] - run.fromM[1]) / lengthM];
-  const dirBack: at.FloorPointM = [-dirOut[0], -dirOut[1]];
-  let alongM = 0;
-  let outward = true;
-  let busyS = 0;
-  let lastStock: number | undefined;
-  const at_ = (): at.FloorPointM => [run.fromM[0] + dirOut[0] * alongM, run.fromM[1] + dirOut[1] * alongM];
-  place(fixture.object, at_(), dirOut);
+  life.onEnd(warehouse.hold());
+  const driver = createForkliftDriver(role, warehouse.locks);
+  const dark = kit.material('rubber');
+  let beaconMeshes: THREE.Mesh[] = [];
+  const findBeacon = (): void => {
+    beaconMeshes = [];
+    vehicle.nodes.beacon.traverse((child) => {
+      if (child instanceof THREE.Mesh) beaconMeshes.push(child);
+    });
+    for (const mesh of beaconMeshes) mesh.material = litShown ? warehouse.beaconLit : dark;
+  };
+  let litShown = false;
+  const buildGrey = (b: FixtureBuilder, layer: THREE.Object3D, size: VehicleSizeM): void => greyForklift(b, layer, size, dark);
+  const vehicle = buildVehicle(kit, ctx, { id: `${id}-vehicle`, modelPath: 'vehicles/forklift.glb', size: at.FORKLIFT_SIZE_M, nodes: FORKLIFT_NODES }, buildGrey, life, () => findBeacon());
+  findBeacon();
+  const root = new THREE.Group();
+  root.name = id;
+  root.add(vehicle.fixture.object);
+  const { bases, loads } = warehouse.pallets;
+  const slots = role === 'putAway' ? { carried: 0, setDown: 2 } : { carried: 1, setDown: 3 };
+  if (role === 'putAway') {
+    // Both forklifts' pallets, in world metres: the root stands at the origin.
+    const holder = new THREE.Group();
+    holder.name = 'pallets';
+    holder.add(bases, loads);
+    root.add(holder);
+    printOn(kit, 'pallet', [bases], life);
+  }
+  const inputs: ForkliftInputs = {
+    placesShown: 0,
+    places: RACK_PLACES,
+    loadingDoor: -1,
+    loadingLeftS: 0,
+    dockedMask: 0,
+    doorsXM: at.DOOR_X_M,
+    steadyBeacon: false,
+  };
+  const heightM = at.FORKLIFT_SIZE_M.heightM + 0.4;
+  const anchor: [number, number, number] = [driver.xM, heightM, driver.zM];
+  let palletsShown = false;
+  const pose = (): void => {
+    const object = vehicle.fixture.object;
+    object.position.set(driver.xM, 0, driver.zM);
+    object.rotation.y = driver.headingRad;
+    const { nodes, restY, unitM } = vehicle;
+    nodes.forks.position.y = restY.forks + driver.liftM / unitM.forks;
+    nodes.mast_inner.position.y = restY.mast_inner + driver.liftM / 2 / unitM.mast_inner;
+    if (driver.beacon !== litShown) {
+      litShown = driver.beacon;
+      for (const mesh of beaconMeshes) mesh.material = litShown ? warehouse.beaconLit : dark;
+    }
+    const anyShown = driver.carried.shown || driver.setDown.shown || driver.waiting.shown;
+    if (anyShown || palletsShown) {
+      writePallet(warehouse.pallets, slots.carried, driver.carried);
+      writePallet(warehouse.pallets, slots.setDown, driver.setDown);
+      if (role === 'putAway') writePallet(warehouse.pallets, WAITING_SLOT, driver.waiting);
+      bases.instanceMatrix.needsUpdate = true;
+      loads.instanceMatrix.needsUpdate = true;
+    }
+    palletsShown = anyShown;
+  };
+  pose();
+  const fixture: BuiltFixture = { object: root, dispose: () => vehicle.fixture.dispose(), release: () => {} };
   return machine(
     fixture,
     {
       id,
       stage: 10,
       label: 'Forklift',
-      // Parked at the start of its run; while it drives, the label rides with it (labelAnchorNowM).
-      labelAnchorM: [run.fromM[0], at.FORKLIFT_SIZE_M.heightM + 0.4, run.fromM[1]],
+      // Parked at its spot; while it drives, the label rides with it (labelAnchorNowM).
+      labelAnchorM: [driver.xM, heightM, driver.zM],
       update(s, realDtS) {
-        const stock = kpiValue(s, 'palletsInStock');
-        if (stock !== undefined && lastStock !== undefined && stock !== lastStock) busyS = FORKLIFT_BUSY_S;
-        lastStock = stock;
-        const loading = s.packs?.warehouse.trucks.some((truck) => truck.state === 'loading') ?? false;
-        busyS = Math.max(0, busyS - (s.paused ? 0 : realDtS));
-        // Idle, it finishes its trip back to its spot and parks there.
-        if (!loading && busyS === 0 && alongM === 0) return;
-        const stepM = FORKLIFT_SPEED_MPS * busyMotionDtS(s, realDtS);
-        if (!(stepM > 0)) return;
-        if (!loading && busyS === 0) outward = false;
-        alongM += outward ? stepM : -stepM;
-        if (alongM >= lengthM) {
-          alongM = lengthM;
-          outward = false;
-        } else if (alongM <= 0) {
-          alongM = 0;
-          outward = true;
+        inputs.placesShown = rackLoadsShown(kpiValue(s, 'palletsInStock'), RACK_PLACES);
+        inputs.loadingDoor = -1;
+        inputs.loadingLeftS = 0;
+        inputs.dockedMask = 0;
+        for (const bay of warehouse.bays) {
+          if (bay.phase !== 'docked') continue;
+          inputs.dockedMask |= 1 << bay.door;
+          if (inputs.loadingDoor < 0 && bay.simLoading && bay.rollerFrac >= 1) {
+            inputs.loadingDoor = bay.door;
+            inputs.loadingLeftS = bay.closeInS;
+          }
         }
-        place(fixture.object, at_(), outward ? dirOut : dirBack);
+        inputs.steadyBeacon = warehouse.reducedMotion?.matches ?? false;
+        driver.update(busyMotionDtS(s, realDtS), inputs);
+        pose();
       },
       labelAnchorNowM: () => {
-        const [xM, zM] = at_();
-        return [xM, at.FORKLIFT_SIZE_M.heightM + 0.4, zM];
+        anchor[0] = driver.xM;
+        anchor[2] = driver.zM;
+        return anchor;
       },
-      debugState: () => ({ alongM, outward }),
+      applyTheme: () => warehouse.applyBeaconTheme(),
+      debugState: () => ({
+        job: driver.job,
+        carrying: driver.carrying,
+        liftM: driver.liftM,
+        xM: driver.xM,
+        zM: driver.zM,
+        headingRad: driver.headingRad,
+        beacon: driver.beacon,
+        place: driver.place,
+        model: !vehicle.fixture.object.getObjectByName('grey-box'),
+      }),
     },
     life,
   );
 }
 
-/** Where a truck stands docked at a door: its tail at the bumpers, facing out (+z). */
-const dockedAtM = (door: number): at.FloorPointM => [at.DOOR_X_M[door] ?? at.DOOR_X_M[1], at.DOCKED_TAIL_Z_M + at.TRUCK_SIZE_M.lengthM / 2];
-
-/** One dock door's truck, as the 3D view shows it: away, driving in, at the door, or driving off. */
-interface Bay {
-  fixture: BuiltFixture;
-  door: number;
-  phase: 'away' | 'arriving' | 'docked' | 'leaving';
-  /** Real time into the drive, and the truck the bay shows (null while away). */
-  driveS: number;
-  shownId: number | null;
+/**
+ * Instanced copies of a vehicle (the trucks parked in the yard): one InstancedMesh for each of its meshes, with
+ * a copy at each spot. They start with none shown.
+ */
+function instanceVehicle(template: THREE.Object3D, spots: readonly at.FloorPointM[], name: string): THREE.InstancedMesh[] {
+  template.updateMatrixWorld(true);
+  const meshes: THREE.InstancedMesh[] = [];
+  template.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return;
+    const copies = new THREE.InstancedMesh(child.geometry, child.material, spots.length);
+    copies.name = `${name}-${meshes.length}`;
+    spots.forEach(([xM, zM], i) => copies.setMatrixAt(i, _matrix.makeTranslation(xM, 0, zM).multiply(child.matrixWorld)));
+    copies.castShadow = child.castShadow;
+    copies.receiveShadow = true;
+    showCopies(copies, 0);
+    meshes.push(copies);
+  });
+  return meshes;
 }
 
 /**
- * The trucks at the three dock doors (D2, D3): each door's truck drives in when the sim docks one there, stands
- * while it loads or waits for stock, and drives off when it leaves; a truck backs in tail first. A truck that
- * waits in the yard for a free door is not drawn. The label, over the middle door, names the first truck there.
+ * The trucks at the three dock doors (D2, D3), moved by packs/truckMoves.ts: a truck drives in when the sim
+ * docks one at a door, opens its rear doors, backs in articulated and stands while it loads or waits for
+ * stock, its trailer filling from the front; then it closes up, pulls out and drives away. Trucks that wait
+ * in the yard for a free door stand parked east of the doors with their doors shut, drawn as instanced copies.
+ * The label, over the middle door, names the first truck there.
  */
-function trucks(kit: Kit, ctx: EquipmentContext): Equipment {
+function trucks(kit: Kit, ctx: EquipmentContext, warehouse: Warehouse): Equipment {
   const life = lifetime();
+  life.onEnd(warehouse.hold());
   const root = new THREE.Group();
   root.name = 'trucks';
-  const bays: Bay[] = at.DOOR_X_M.map((_, door) => {
-    const fixture = buildVehicle(kit, ctx, { id: `truck-${door + 1}`, modelPath: 'vehicles/truck.glb', size: at.TRUCK_SIZE_M }, greyTruck, life);
-    place(fixture.object, dockedAtM(door), [0, 1]);
-    fixture.object.visible = false;
-    root.add(fixture.object);
-    return { fixture, door, phase: 'away', driveS: 0, shownId: null };
+  const size = at.TRUCK_SIZE_M;
+  const vehicles = warehouse.bays.map((bay) => {
+    const vehicle = buildVehicle(kit, ctx, { id: `truck-${bay.door + 1}`, modelPath: 'vehicles/truck.glb', size, nodes: TRUCK_NODES }, greyTruck, life);
+    const object = vehicle.fixture.object;
+    object.position.set(bay.pose.xM, 0, bay.pose.zM);
+    object.visible = false;
+    root.add(object);
+    return vehicle;
   });
-  // Trucks waiting in the yard park side by side east of the doors; they come and go without driving.
+
+  // Trucks waiting in the yard park side by side east of the doors, level with the docked ones.
   const yard = new THREE.Group();
   yard.name = 'yard';
-  const yardTrucks = at.YARD_X_M.map((xM, slot) => {
-    const parked = buildVehicle(kit, ctx, { id: `yard-${slot + 1}`, modelPath: 'vehicles/truck.glb', size: at.TRUCK_SIZE_M }, greyTruck, life);
-    place(parked.object, [xM, dockedAtM(0)[1]], [0, 1]);
-    parked.object.visible = false;
-    yard.add(parked.object);
-    return parked;
-  });
   root.add(yard);
+  const yardSpots = at.YARD_X_M.map((xM): at.FloorPointM => [xM, at.DOCKED_TAIL_Z_M + size.lengthM / 2]);
+  const greyTemplate = (() => {
+    const b = new FixtureBuilder(kit, 'yard-truck', [0, 0, 0]);
+    greyTruck(b, b.layer('grey-box'), size);
+    return b.build();
+  })();
+  let templateLive = true;
+  let yardMeshes = instanceVehicle(greyTemplate.object, yardSpots, 'yard-truck');
+  yard.add(...yardMeshes);
+  /** Trucks waiting in the yard, and the copies shown (one a spot; more show as a number on the label). */
   let inYard = 0;
-  const roadZ = (bay: Bay, frac: number): number => dockedAtM(bay.door)[1] + TRUCK_ROAD_M * frac;
-  const drive = (bay: Bay, s: Snapshot, realDtS: number): void => {
-    const targetId = s.packs?.warehouse.trucks.find((truck) => truck.door === bay.door)?.id ?? null;
-    const dtS = busyMotionDtS(s, realDtS);
-    if ((bay.phase === 'docked' || bay.phase === 'arriving') && targetId !== bay.shownId) {
-      bay.phase = 'leaving';
-      bay.driveS = 0;
-    }
-    if (bay.phase === 'away' && targetId !== null) {
-      bay.phase = 'arriving';
-      bay.driveS = 0;
-      bay.shownId = targetId;
-    }
-    if (bay.phase === 'arriving' || bay.phase === 'leaving') bay.driveS += dtS;
-    const k = Math.min(1, bay.driveS / TRUCK_DRIVE_S);
-    const object = bay.fixture.object;
-    if (bay.phase === 'arriving') {
-      // Backs in, slowing to a stop at the bumpers.
-      object.position.z = roadZ(bay, (1 - k) ** 3);
-      if (k >= 1) bay.phase = 'docked';
-    } else if (bay.phase === 'leaving') {
-      // Pulls away, gathering speed.
-      object.position.z = roadZ(bay, k ** 3);
-      if (k >= 1) {
-        bay.phase = 'away';
-        bay.shownId = null;
+  let yardShown = 0;
+  ctx.loadModel('vehicles/truck.glb').then(
+    (model) => {
+      if (!life.isAlive()) return;
+      const fitted = fitVehicle(model, size);
+      if (!findNodes(fitted, TRUCK_NODES)) return; // as the docked trucks do, the yard keeps the grey box
+      for (const mesh of yardMeshes) {
+        mesh.removeFromParent();
+        mesh.dispose();
       }
-    } else if (bay.phase === 'docked') {
-      object.position.z = roadZ(bay, 0);
+      greyTemplate.dispose();
+      templateLive = false;
+      yardMeshes = instanceVehicle(fitted, yardSpots, 'yard-truck');
+      yard.add(...yardMeshes);
+      for (const mesh of yardMeshes) showCopies(mesh, yardShown);
+    },
+    () => {},
+  );
+
+  // The trailers' loads, every door's in one draw: wooden pallets and their loads, filling two by two from the front.
+  const capacity = warehouse.bays.length * PALLETS_PER_TRUCK;
+  const loadBases = new THREE.InstancedMesh(kit.shape('box'), kit.material('wood'), capacity);
+  const loadLoads = new THREE.InstancedMesh(kit.shape('box'), kit.material('carton'), capacity);
+  loadBases.name = 'trailer-pallets';
+  loadLoads.name = 'trailer-loads';
+  for (const mesh of [loadBases, loadLoads]) {
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    // Inside the trailers, out of the sun: they cast no shadow. Bounds over the docked trailers and their creep out.
+    mesh.boundingSphere = new THREE.Sphere(new THREE.Vector3(at.DOOR_X_M[1], 2, at.DOCKED_TAIL_Z_M + 7), 16);
+    mesh.receiveShadow = true;
+    showCopies(mesh, 0);
+    root.add(mesh);
+  }
+  printOn(kit, 'pallet', [loadBases], life);
+  const shownLoad = new Float64Array(warehouse.bays.length * 4).fill(NaN);
+  const writeLoads = (): void => {
+    let changed = false;
+    for (const bay of warehouse.bays) {
+      const count = bay.loadShown ? bay.loaded : 0;
+      const k = bay.door * 4;
+      if (shownLoad[k] !== count || (count > 0 && (shownLoad[k + 1] !== bay.pose.xM || shownLoad[k + 2] !== bay.pose.zM || shownLoad[k + 3] !== bay.pose.headingRad))) changed = true;
+      shownLoad[k] = count;
+      shownLoad[k + 1] = bay.pose.xM;
+      shownLoad[k + 2] = bay.pose.zM;
+      shownLoad[k + 3] = bay.pose.headingRad;
     }
-    object.visible = bay.phase !== 'away';
+    if (!changed) return;
+    const p = at.RACK_PALLET;
+    const pitchM = (CARGO_FRONT_Z_M - CARGO_TAIL_Z_M) / Math.ceil(PALLETS_PER_TRUCK / 2);
+    let n = 0;
+    for (const bay of warehouse.bays) {
+      if (!bay.loadShown) continue;
+      const { xM, zM, headingRad } = bay.pose;
+      const sin = Math.sin(headingRad);
+      const cos = Math.cos(headingRad);
+      _quaternion.setFromAxisAngle(_up, headingRad);
+      for (let k = 0; k < bay.loaded; k++) {
+        const localX = (k % 2 === 0 ? -1 : 1) * 0.55;
+        const localZ = CARGO_FRONT_Z_M - pitchM / 2 - Math.floor(k / 2) * pitchM;
+        _position.set(xM + localX * cos + localZ * sin, TRAILER_DECK_M + p.heightM / 2, zM - localX * sin + localZ * cos);
+        loadBases.setMatrixAt(n, _matrix.compose(_position, _quaternion, _scale.set(p.widthM, p.heightM, p.depthM)));
+        _position.y = TRAILER_DECK_M + p.heightM + p.loadHeightM / 2;
+        loadLoads.setMatrixAt(n, _matrix.compose(_position, _quaternion, _scale.set(...PALLET_LOAD_SIZE_M)));
+        n += 1;
+      }
+    }
+    for (const mesh of [loadBases, loadLoads]) {
+      mesh.count = n;
+      mesh.visible = n > 0;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
   };
+
+  const atDoor: (DoorTruck | null)[] = warehouse.bays.map(() => null);
+  const doorTrucks: DoorTruck[] = warehouse.bays.map(() => ({ id: 0, loading: false, remainingS: 0, loadedPallets: 0 }));
+  const clock: SimClock = { speed: 1, rate: 1, palletsPerTruck: PALLETS_PER_TRUCK };
+  const pose = (): void => {
+    for (let i = 0; i < warehouse.bays.length; i++) {
+      const bay = warehouse.bays[i] as Bay;
+      const vehicle = vehicles[i] as Vehicle<TruckNode>;
+      const object = vehicle.fixture.object;
+      object.visible = bay.phase !== 'away';
+      if (!object.visible) continue;
+      object.position.set(bay.pose.xM, 0, bay.pose.zM);
+      object.rotation.y = bay.pose.headingRad;
+      const { nodes, restTurn } = vehicle;
+      nodes.tractor.rotation.y = restTurn.tractor + bay.pose.tractorRad;
+      const open = bay.doorsFrac * bay.doorsFrac * (3 - 2 * bay.doorsFrac);
+      nodes.door_left.rotation.y = restTurn.door_left + DOOR_OPEN_RAD.door_left * open;
+      nodes.door_right.rotation.y = restTurn.door_right + DOOR_OPEN_RAD.door_right * open;
+    }
+    writeLoads();
+  };
+
   const fixture: BuiltFixture = {
     object: root,
     dispose: () => {
-      for (const bay of bays) bay.fixture.dispose();
-      for (const parked of yardTrucks) parked.dispose();
+      for (const vehicle of vehicles) vehicle.fixture.dispose();
+      for (const mesh of [...yardMeshes, loadBases, loadLoads]) mesh.dispose();
+      if (templateLive) greyTemplate.dispose();
     },
     release: () => {},
   };
@@ -1097,7 +1481,7 @@ function trucks(kit: Kit, ctx: EquipmentContext): Equipment {
       id: 'truck',
       stage: 10,
       label: 'Trucks',
-      labelAnchorM: [at.DOOR_X_M[1], at.TRUCK_SIZE_M.heightM + 0.4, dockedAtM(1)[1]],
+      labelAnchorM: [at.DOOR_X_M[1], size.heightM + 0.4, at.DOCKED_TAIL_Z_M + size.lengthM / 2],
       labelText(s) {
         const first = s.packs?.warehouse.trucks.find((truck) => truck.door >= 0);
         const waiting = s.packs?.warehouse.trucks.filter((truck) => truck.door < 0).length ?? 0;
@@ -1106,15 +1490,42 @@ function trucks(kit: Kit, ctx: EquipmentContext): Equipment {
         return `${first.state === 'loading' ? `${first.id} loading` : `${first.id} waiting for stock`}${yardText}`;
       },
       update(s, realDtS) {
-        for (const bay of bays) drive(bay, s, realDtS);
-        inYard = s.packs?.warehouse.trucks.filter((truck) => truck.door < 0).length ?? 0;
-        yardTrucks.forEach((parked, slot) => (parked.object.visible = slot < inYard));
+        const simTrucks = s.packs?.warehouse.trucks ?? [];
+        atDoor.fill(null);
+        let waiting = 0;
+        for (const truck of simTrucks) {
+          if (truck.door < 0) {
+            waiting += 1;
+            continue;
+          }
+          const slot = doorTrucks[truck.door];
+          if (!slot || atDoor[truck.door]) continue;
+          slot.id = truck.id;
+          slot.loading = truck.state === 'loading';
+          slot.remainingS = truck.remainingS;
+          slot.loadedPallets = slot.loading ? Math.round(PALLETS_PER_TRUCK * (1 - truck.remainingS / TRUCK_LOAD_S)) : 0;
+          atDoor[truck.door] = slot;
+        }
+        clock.speed = s.speed;
+        clock.rate = motionRate(s.speed);
+        stepBays(warehouse.bays, atDoor, busyMotionDtS(s, realDtS), clock);
+        pose();
+        inYard = waiting;
+        if (Math.min(waiting, yardSpots.length) !== yardShown) {
+          yardShown = Math.min(waiting, yardSpots.length);
+          for (const mesh of yardMeshes) showCopies(mesh, yardShown);
+        }
       },
       debugState: () => ({
-        shown: bays.filter((bay) => bay.phase !== 'away').length,
-        docked: bays.filter((bay) => bay.phase === 'docked').length,
-        doors: bays.map((bay) => bay.shownId ?? '-').join(','),
+        shown: warehouse.bays.filter((bay) => bay.phase !== 'away').length,
+        docked: warehouse.bays.filter((bay) => bay.phase === 'docked').length,
+        doors: warehouse.bays.map((bay) => bay.shownId ?? '-').join(','),
         yard: inYard,
+        phases: warehouse.bays.map((bay) => bay.phase).join(','),
+        doorsOpen: warehouse.bays.filter((bay) => bay.phase !== 'away' && bay.doorsFrac >= 1).length,
+        loaded: warehouse.bays.map((bay) => (bay.phase === 'away' ? '-' : String(bay.loaded))).join(','),
+        maxTractorRad: Math.max(...warehouse.bays.map((bay) => Math.abs(bay.pose.tractorRad))),
+        playRate: Math.max(...warehouse.bays.map((bay) => bay.playRate)),
       }),
     },
     life,
