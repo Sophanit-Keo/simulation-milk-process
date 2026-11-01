@@ -120,6 +120,16 @@ export const EXPECTED_QUERIES: Readonly<Record<string, Readonly<Record<string, s
   reports: { select: 'id,loc,sev,status', status: 'neq.closed' },
 };
 
+/** A reports row (a trouble) as Let Report's REST API returns it for the board's query: where, how serious, how far along. */
+export interface LetReportReport {
+  id: string;
+  /** A line's name, or another place. */
+  loc: string;
+  /** 0 low to 3 critical. */
+  sev: number;
+  status: 'open' | 'action' | 'verify' | 'closed';
+}
+
 /** One request the page sent to Let Report. */
 export interface SentRequest {
   method: string;
@@ -145,10 +155,10 @@ export interface FakeSocket {
 }
 
 export interface FakeLetReport {
-  /** Let Report's lines, the plan and the open reports: change them, then push a change. */
+  /** Let Report's lines, the plan and its reports (the board is given those not closed): change them, then push a change. */
   lines: LetReportLine[];
   settings: Record<string, unknown>;
-  reports: Record<string, unknown>[];
+  reports: LetReportReport[];
   /** Every request the page sent to Let Report, in order (preflights left out). */
   requests: SentRequest[];
   /** What the fake could not answer: each fails the test. */
@@ -289,7 +299,13 @@ export async function fakeLetReport(page: Page): Promise<FakeLetReport> {
         const expected = EXPECTED_QUERIES[table];
         if (!expected) return refuse(`no table ${table} on the board`);
         if (JSON.stringify(sent.params) !== JSON.stringify(expected)) return refuse(`query ${JSON.stringify(sent.params)}`);
-        const rows = table === 'production_lines' ? fake.lines : table === 'factory_settings' ? [fake.settings] : fake.reports;
+        // The reports as the query asks for them (status=neq.closed): a report closed in Let Report leaves the board.
+        const rows =
+          table === 'production_lines'
+            ? fake.lines
+            : table === 'factory_settings'
+              ? [fake.settings]
+              : fake.reports.filter((report) => report.status !== 'closed');
         return jsonResponse(route, 200, rows);
       }
       return refuse('no such path in the fake');
@@ -379,3 +395,36 @@ export async function uhtCards(page: Page): Promise<CardState[]> {
 }
 
 export const running = (name: string, filler: string): CardState['lines'][number] => ({ testId: `line-${name}`, status: 'Running', filler, lamp: 'ok' });
+
+/** A line's row as it reads (phase 11, D21): its status and its story, each line's text, '' for one hidden. */
+export interface LineStory {
+  status: string;
+  /** "for 12 min · by Shift lead". */
+  story: string;
+  /** The note with its label: "Note: Jaws not sealing". */
+  note: string;
+  /** "Standard CIP · 40 % done". */
+  cip: string;
+  troubles: string;
+}
+
+/** A line's row, read in one go. */
+export async function lineStory(row: Locator): Promise<LineStory> {
+  return row.evaluate((node) => {
+    const shown = (testId: string, part?: string): string => {
+      const element = node.querySelector(`[data-testid="${testId}"]`);
+      const box = part ? element?.closest(part) : element;
+      return box instanceof HTMLElement && box.checkVisibility() ? (box.textContent ?? '').replace(/\s+/g, ' ').trim() : '';
+    };
+    return {
+      status: shown('line-status'),
+      story: shown('line-story'),
+      note: shown('line-note', '.fb-line-note'),
+      cip: shown('line-cip'),
+      troubles: shown('line-troubles'),
+    };
+  });
+}
+
+/** The width of a cleaning line's CIP bar, as the page set it ("40%"). */
+export const cipBarWidth = (row: Locator): Promise<string> => row.locator('.fb-cip-fill').evaluate((node) => (node as HTMLElement).style.width);

@@ -11,8 +11,10 @@ import {
   SUPABASE_ORIGIN,
   TOPIC,
   UHT_CARDS,
+  cipBarWidth,
   drawOf,
   lineRow,
+  lineStory,
   openSignedIn,
   running,
   signIn,
@@ -174,6 +176,8 @@ test('a line in CIP shows the time left, and the clock counts down', async ({ pa
   const status = row.getByTestId('line-status');
   // 70 minutes from when the row was written: "1 h 10 min left" in its first second, then "1 h 09 min left".
   await expect(status).toHaveText(/^CIP · 1 h (09|10) min left$/);
+  // Its reason and the share done (phase 11): from cip_started_at to cip_until, just begun.
+  await expect(row.getByTestId('line-cip')).toHaveText('Standard CIP · 0 % done');
   await expect(row.locator('.lamp')).toHaveAttribute('data-status', 'idle');
   await expect(row).toHaveAttribute('data-status', 'cleaning');
   // Its UHT has no other line, so it is in CIP too and draws nothing.
@@ -182,6 +186,80 @@ test('a line in CIP shows the time left, and the clock counts down', async ({ pa
   // Five minutes on, with no change in Let Report, the clock has counted down five minutes.
   await page.clock.fastForward('05:00');
   await expect(status).toHaveText(/^CIP · 1 h (04|05) min left$/);
+  // 5 of its 70 minutes done.
+  await expect(row.getByTestId('line-cip')).toHaveText('Standard CIP · 7 % done');
+});
+
+test("each row tells its line's story: how long in its status and who changed it, its note, and while it cleans the CIP's reason and share done", async ({
+  page,
+  letReport,
+}) => {
+  // The page's clock stands at t0 while its timers run on, so each time on the board reads exactly; it moves on when set.
+  const t0Ms = Date.now();
+  await page.clock.setFixedTime(t0Ms);
+  const iso = (ms: number): string => new Date(ms).toISOString();
+  // The fake's lines all run, since an hour before it was made, changed last by Dara. In Let Report someone stopped
+  // UHT line 3 twelve minutes ago, with a note; UHT line 4 names no one; UHT line 7 has done half of a standard CIP.
+  const line3 = letReport.line('UHT-line 3');
+  line3.status = 'stopped';
+  line3.status_since = iso(t0Ms - 12 * MIN_MS);
+  line3.updated_by_name = 'Sokha';
+  line3.note = 'Jaws not sealing, waiting for the fitter';
+  letReport.line('UHT line 4').updated_by_name = '';
+  const line7 = letReport.line('UHT-line 7');
+  line7.status = 'cleaning';
+  line7.status_since = iso(t0Ms - 30 * MIN_MS);
+  line7.cip_reason = 'standard';
+  line7.cip_started_at = line7.status_since;
+  line7.cip_until = iso(t0Ms + 30 * MIN_MS);
+  await openSignedIn(page);
+
+  const story = (name: string): ReturnType<typeof lineStory> => lineStory(lineRow(page, name));
+  const quiet = { note: '', cip: '', troubles: '' };
+  expect(await story('UHT-line 1')).toEqual({ status: 'Running', story: 'for 1 h 00 min · by Dara', ...quiet });
+  expect(await story('UHT-line 3')).toEqual({
+    status: 'Stopped',
+    story: 'for 12 min · by Sokha',
+    note: 'Note: Jaws not sealing, waiting for the fitter',
+    cip: '',
+    troubles: '',
+  });
+  await expect(lineRow(page, 'UHT-line 3').getByTestId('line-note')).toHaveText('Jaws not sealing, waiting for the fitter');
+  expect(await story('UHT line 4'), 'no name: how long alone').toEqual({ status: 'Running', story: 'for 1 h 00 min', ...quiet });
+  expect(await story('UHT-line 7')).toEqual({
+    status: 'CIP · 30 min left',
+    story: 'for 30 min · by Dara',
+    note: '',
+    cip: 'Standard CIP · 50 % done',
+    troubles: '',
+  });
+  // The bar draws the same share; the words say it, so the bar stays out of the accessibility tree.
+  expect(await cipBarWidth(lineRow(page, 'UHT-line 7'))).toBe('50%');
+  await expect(lineRow(page, 'UHT-line 7').locator('.fb-cip-bar')).toHaveAttribute('aria-hidden', 'true');
+
+  // Ten minutes on, with no change in Let Report, every story's clock and the CIP's share have moved on.
+  await page.clock.setFixedTime(t0Ms + 10 * MIN_MS);
+  await expect(lineRow(page, 'UHT-line 7').getByTestId('line-cip')).toHaveText('Standard CIP · 66 % done');
+  expect(await story('UHT-line 1')).toEqual({ status: 'Running', story: 'for 1 h 10 min · by Dara', ...quiet });
+  expect((await story('UHT-line 3')).story).toBe('for 22 min · by Sokha');
+  expect(await story('UHT-line 7')).toEqual({
+    status: 'CIP · 20 min left',
+    story: 'for 40 min · by Dara',
+    note: '',
+    cip: 'Standard CIP · 66 % done',
+    troubles: '',
+  });
+  expect(await cipBarWidth(lineRow(page, 'UHT-line 7'))).toBe('66.7%');
+
+  // Dara runs UHT line 3 again and clears its note; the realtime feed brings the change, and its story starts again.
+  line3.status = 'running';
+  line3.status_since = iso(t0Ms + 10 * MIN_MS);
+  line3.updated_at = line3.status_since;
+  line3.updated_by_name = 'Dara';
+  line3.note = '';
+  expect(letReport.pushChange('production_lines', { ...line3 })).toBe(1);
+  await expect(lineRow(page, 'UHT-line 3').getByTestId('line-status')).toHaveText('Running');
+  expect(await story('UHT-line 3')).toEqual({ status: 'Running', story: 'for 0 s · by Dara', ...quiet });
 });
 
 test('a reload keeps the session; signing out returns to the form and closes the socket', async ({ page, letReport }) => {
