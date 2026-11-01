@@ -242,7 +242,7 @@ describe('packsLine', () => {
     }
     // The palletizer's sub-joints hang under their joints, as in the model: arm > arm_lift > arm_wrist > clamps.
     const palletizer = byId(machines, 'palletizer');
-    const parents: [string, string][] = [['arm', 'palletizer'], ['arm_lift', 'arm'], ['arm_wrist', 'arm_lift'], ['arm_clamp_1', 'arm_wrist'], ['arm_clamp_2', 'arm_wrist']];
+    const parents: [string, string][] = [['arm', 'palletizer'], ['arm_trolley', 'arm'], ['arm_lift', 'arm'], ['arm_wrist', 'arm_lift'], ['arm_clamp_1', 'arm_wrist'], ['arm_clamp_2', 'arm_wrist']];
     for (const [name, parent] of parents) {
       expect(node(palletizer, name), name).toBeInstanceOf(THREE.Group);
       expect(node(palletizer, name).parent?.name, name).toBe(parent);

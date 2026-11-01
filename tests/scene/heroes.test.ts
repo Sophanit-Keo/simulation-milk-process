@@ -18,7 +18,7 @@ const MODEL_NODES: Record<string, readonly string[]> = {
   [HERO_MODELS.separator]: ['bowl'],
   [HERO_MODELS.homogenizer]: ['piston_1', 'piston_2', 'piston_3'],
   [HERO_MODELS.filler]: ['reel', 'jaws'],
-  [HERO_MODELS.palletizer]: ['arm', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2'],
+  [HERO_MODELS.palletizer]: ['arm', 'arm_trolley', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2'],
   [HERO_MODELS.stretchWrapper]: ['turntable', 'carriage'],
 };
 

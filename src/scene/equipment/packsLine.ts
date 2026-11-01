@@ -451,6 +451,7 @@ function trayConveyor(kit: Kit, loader: KitLoader): Equipment {
 /** The palletizer's moving joints: the grey box's groups, or the hero model's nodes once it has swapped in. */
 interface ArmJoints {
   arm: THREE.Object3D;
+  trolley: THREE.Object3D;
   lift: THREE.Object3D;
   wrist: THREE.Object3D;
   clamp1: THREE.Object3D;
@@ -471,10 +472,11 @@ function palletizer(kit: Kit, ctx: EquipmentContext): Equipment {
   // Named for the hero model (assets' hero spec), at its rest transforms: the arm turns about y on top of the
   // column; the lift slides down from the boom, and out along it to reach each tray's place; the wrist turns the
   // gripper so the tray stays square to the pallet; the clamps close on the tray. The boom runs out past the
-  // farthest place.
+  // farthest place; the hero's trolley (`arm_trolley`) rides along it with the lift, at the same reach.
   const arm = b.group('arm', [xM, at.ARM_HINGE_Y_M, zM]);
   const boomM = MAX_REACH_M + 0.1;
   b.part('box', 'paint', [boomM / 2, 0, 0], [boomM, 2 * BOOM_TOP_M, 0.26], { parent: arm, castShadow: true });
+  const trolley = b.group('arm_trolley', ARM_LIFT_AT_M, arm);
   const lift = b.group('arm_lift', ARM_LIFT_AT_M, arm);
   // The lift rod runs from the gripper up into the boom however far the lift is down: stretched to fit every frame.
   const rod = b.mesh('lift-rod', 'cylLo', 'steelDark', [0, 0, 0], [0.07, 1, 0.07], { parent: lift });
@@ -513,9 +515,10 @@ function palletizer(kit: Kit, ctx: EquipmentContext): Equipment {
 
   const cycle = createPalletizing();
   const pose = cycle.pose;
-  let joints: ArmJoints = { arm, lift, wrist, clamp1, clamp2 };
+  let joints: ArmJoints = { arm, trolley, lift, wrist, clamp1, clamp2 };
   const applyPose = (): void => {
     joints.arm.rotation.y = pose.armRad;
+    joints.trolley.position.x = pose.reachM;
     joints.lift.position.set(pose.reachM, ARM_LIFT_AT_M[1] - pose.liftM, ARM_LIFT_AT_M[2]);
     joints.wrist.rotation.y = pose.wristRad;
     joints.clamp1.position.z = -clampZM + pose.clampM;
@@ -547,9 +550,9 @@ function palletizer(kit: Kit, ctx: EquipmentContext): Equipment {
   // The model is the machine alone: the pallet, its load and the fence stay. The lift rod and the tray in the
   // gripper ride on with the model's lift and wrist.
   const keep = [stack, ...(pallet ? [pallet] : []), ...(fence ? [fence] : [])];
-  const swap = { path: HERO_MODELS.palletizer, nodes: ['arm', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2'] as const, keep };
+  const swap = { path: HERO_MODELS.palletizer, nodes: ['arm', 'arm_trolley', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2'] as const, keep };
   swapInHero(ctx, fixture.object, swap, (nodes) => {
-    joints = { arm: nodes.arm, lift: nodes.arm_lift, wrist: nodes.arm_wrist, clamp1: nodes.arm_clamp_1, clamp2: nodes.arm_clamp_2 };
+    joints = { arm: nodes.arm, trolley: nodes.arm_trolley, lift: nodes.arm_lift, wrist: nodes.arm_wrist, clamp1: nodes.arm_clamp_1, clamp2: nodes.arm_clamp_2 };
     nodes.arm_lift.add(rod);
     nodes.arm_wrist.add(carried);
     applyPose();

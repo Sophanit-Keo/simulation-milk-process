@@ -58,6 +58,7 @@ function stubHero(path: string): THREE.Object3D {
   };
   if (path === HERO_MODELS.palletizer) {
     const arm = joint('arm', [0, 2.35, 0], scene);
+    joint('arm_trolley', [2.45, 0, 0], arm);
     const lift = joint('arm_lift', [2.45, 0, 0], arm);
     const wrist = joint('arm_wrist', [0, -0.63, 0], lift);
     joint('arm_clamp_1', [0, -0.07, -0.225], wrist);
@@ -206,6 +207,8 @@ describe('palletizer: pick and place', () => {
     const { machines } = { machines: packsLine(makeContext()) };
     const palletizer = byId(machines, 'palletizer');
     const carried = named(palletizer.object, 'carried-tray');
+    const trolley = named(palletizer.object, 'arm_trolley');
+    const lift = named(palletizer.object, 'arm_lift');
     const s = snapshot(30);
     let placedAt: THREE.Vector3 | null = null;
     let lowest = Infinity;
@@ -214,6 +217,9 @@ describe('palletizer: pick and place', () => {
       frame(machines, s, 1 / 60);
       const now = state(palletizer);
       expect(carried.visible).toBe(now.carrying);
+      // The trolley rides along the boom at the lift's reach, and stays up on the boom while the lift goes down.
+      expect(trolley.position.x).toBe(lift.position.x);
+      expect(trolley.position.y).toBe(0);
       if (now.carrying && now.phase === 'toPlace') {
         carried.updateWorldMatrix(true, false);
         const yM = new THREE.Vector3().setFromMatrixPosition(carried.matrixWorld).y;
@@ -434,7 +440,7 @@ describe('stage 8 motion', () => {
       return names.map((name) => named(root, name));
     };
     const joints: [string, readonly string[]][] = [
-      ['palletizer', ['arm', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2']],
+      ['palletizer', ['arm', 'arm_trolley', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2']],
       ['stretch-wrapper', ['turntable', 'carriage']],
     ];
     const pairs = joints.flatMap(([id, names]) => {

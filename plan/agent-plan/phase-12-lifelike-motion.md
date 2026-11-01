@@ -87,6 +87,7 @@ Nothing in `src/contracts/` changes. The lanes share these names instead:
 | | `door_left`, `door_right` | scene | the rear hinges on the posts' outer edges, (∓1.275, 1.3, −8.25) | Turn about +y from 0 (shut): `door_left` to **+3π/2**, `door_right` to **−3π/2** (open, folded flat against its own side; the other sign swings a door through the trailer). Left is −x. The open trailer shows its load space: floor at 1.3 m, walls at ±1.215 m, z −8.1 to 5.29 (`TRUCK_CARGO_M`) |
 | `vehicles/forklift.glb` | `beacon` | scene | the beacon's foot on the guard, (0, 2.15, −0.95) | Its own material, `forklift_beacon` (amber, emissive), so the scene can flash it |
 | | `forks`, `mast_inner` | scene | as now | as now |
+| `hero/palletizer.glb` | `arm_trolley` (new) | `arm` | (2.45, 0, 0), on the boom | Slides along the boom (x) at the lift's reach, 1.9 to 2.95 m; stays up on the boom while `arm_lift` goes down. The boom now ends at 3.13 m; the rod from the trolley to the gripper is the scene's stretched `lift-rod` |
 | `hero/stretch-wrapper.glb` (new) | `turntable` | scene | (0, 0.125, 0), the turntable's centre | Turns about +y; its rollers line up with the pallet rollers at multiples of π, so it stops there |
 | | `carriage` | scene | (−1.25, 0.45, −0.9), the carriage's foot on the mast | Slides along +y, 0 to 1.05 m; carries the film roll and its rollers. The film leaves from the exit roller, at (−1.191, −0.709) in the model frame at rest (`WRAPPER_FILM`) |
 
