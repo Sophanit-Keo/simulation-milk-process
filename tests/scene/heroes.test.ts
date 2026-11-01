@@ -18,7 +18,8 @@ const MODEL_NODES: Record<string, readonly string[]> = {
   [HERO_MODELS.separator]: ['bowl'],
   [HERO_MODELS.homogenizer]: ['piston_1', 'piston_2', 'piston_3'],
   [HERO_MODELS.filler]: ['reel', 'jaws'],
-  [HERO_MODELS.palletizer]: ['arm'],
+  [HERO_MODELS.palletizer]: ['arm', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2'],
+  [HERO_MODELS.stretchWrapper]: ['turntable', 'carriage'],
 };
 
 /** A stand-in model: a static body, each moving node with a mesh in it, and glass on the filler. */
@@ -51,7 +52,10 @@ function makeContext(heroModels: boolean, without: readonly string[] = []): Equi
   };
 }
 
-const HERO_IDS = ['separator', 'homogenizer', 'filler-a', 'filler-b', 'palletizer'] as const;
+const HERO_IDS = ['separator', 'homogenizer', 'filler-a', 'filler-b', 'palletizer', 'stretch-wrapper'] as const;
+
+/** What the scene hangs on a model's nodes: the palletizer's lift rod and the tray in its gripper (packsLine.ts). */
+const RIDERS = new Set(['lift-rod', 'carried-tray']);
 
 function build(ctx: EquipmentContext): Map<string, Equipment> {
   return new Map([...liquidLine(ctx), ...packsLine(ctx)].map((item) => [item.id, item]));
@@ -80,7 +84,7 @@ describe('hero models (off with ?greybox)', () => {
     expect(new Set(ctx.requested.filter((path) => path.startsWith('hero/')))).toEqual(new Set(Object.values(HERO_MODELS)));
     const kept: Record<string, readonly string[]> = {
       homogenizer: ['needle_1', 'needle_2'],
-      palletizer: ['stack', 'palletizer-wood'],
+      palletizer: ['stack', 'palletizer-wood', 'palletizer-marking'],
     };
     for (const id of HERO_IDS) {
       const item = machines.get(id) as Equipment;
@@ -98,7 +102,7 @@ describe('hero models (off with ?greybox)', () => {
     await loaded();
     for (const id of HERO_IDS) {
       heroOf(machines.get(id) as Equipment)?.traverse((object) => {
-        if (!(object instanceof THREE.Mesh)) return;
+        if (!(object instanceof THREE.Mesh) || RIDERS.has(object.name)) return;
         expect(object.castShadow, `${id} ${object.material.name}`).toBe(!object.material.transparent);
         expect(object.receiveShadow).toBe(true);
       });
@@ -116,7 +120,7 @@ describe('hero models (off with ?greybox)', () => {
       reelA: node('filler-a', 'reel').rotation.z,
       reelB: node('filler-b', 'reel').rotation.z,
       jaws: node('filler-a', 'jaws').position.y,
-      arm: node('palletizer', 'arm').rotation.y,
+      lift: node('palletizer', 'arm_lift').position.y,
     };
     for (const id of HERO_IDS) (machines.get(id) as Equipment).update(snap, 0.2);
     expect(node('separator', 'bowl').rotation.y).not.toBe(before.bowl);
@@ -124,7 +128,8 @@ describe('hero models (off with ?greybox)', () => {
     expect(node('filler-a', 'reel').rotation.z).not.toBe(before.reelA);
     expect(node('filler-b', 'reel').rotation.z).not.toBe(before.reelB);
     expect(node('filler-a', 'jaws').position.y).toBeLessThan(before.jaws);
-    expect(node('palletizer', 'arm').rotation.y).not.toBe(before.arm);
+    // The palletizer starts parked over the pick point: its first move is the lift down to a tray.
+    expect(node('palletizer', 'arm_lift').position.y).toBeLessThan(before.lift);
     // The debug hook reads the driven nodes too.
     expect((machines.get('separator') as Equipment).debugState?.().angleRad).toBe(node('separator', 'bowl').rotation.y);
   });
@@ -134,10 +139,14 @@ describe('hero models (off with ?greybox)', () => {
     const machines = build(ctx);
     const grey = (id: string, name: string) => (machines.get(id) as Equipment).object.getObjectByName(name) as THREE.Object3D;
     const armRad = grey('palletizer', 'arm').rotation.y;
+    const liftAt = grey('palletizer', 'arm_lift').position.clone();
+    const wristRad = grey('palletizer', 'arm_wrist').rotation.y;
     const pistonZ = grey('homogenizer', 'piston_2').position.z;
     await loaded();
     const hero = (id: string, name: string) => heroOf(machines.get(id) as Equipment)?.getObjectByName(name) as THREE.Object3D;
     expect(hero('palletizer', 'arm').rotation.y).toBe(armRad);
+    expect(hero('palletizer', 'arm_lift').position.toArray()).toEqual(liftAt.toArray());
+    expect(hero('palletizer', 'arm_wrist').rotation.y).toBe(wristRad);
     expect(hero('homogenizer', 'piston_2').position.z).toBe(pistonZ);
   });
 

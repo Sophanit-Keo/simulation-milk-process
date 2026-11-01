@@ -20,9 +20,40 @@ import { FixtureBuilder, type BuiltFixture, type InstanceM } from './packs/build
 import { beltPlacements, createKitLoader, greyBelt, greyRollers, repeatPlacements, swapInKit, type KitLoader, type Placement } from './packs/conveyors';
 import { createKit, type Kit, type PrintName } from './packs/kit';
 import * as at from './packs/layout';
+import {
+  ARM_CLAMP_AT_M,
+  ARM_LIFT_AT_M,
+  ARM_WRIST_AT_M,
+  BOOM_TOP_M,
+  CARRIED_TRAY_Y_M,
+  CLAMP_FACE_M,
+  createPalletizing,
+  fenceParts,
+  GRIPPER_BOTTOM_M,
+  MAX_REACH_M,
+  PALLET_M,
+  STACK_CAPACITY,
+  STACK_TRAY_SIZE_M,
+  stackInstances,
+} from './packs/palletizing';
 import { createPalletTraffic, PALLET_SPEED_MPS, type PalletTraffic } from './packs/palletTraffic';
 import { createQuarantineBlocks, type QuarantineBlocks } from './packs/quarantineBlocks';
 import { fillerFlowLph, kpiValue, labelValue, stageStatus, stageValue } from './packs/readings';
+import {
+  CARRIAGE_AT_M,
+  createFilmWeb,
+  createWrapPose,
+  FILM_EXIT_AT_M,
+  FILM_EXIT_RADIUS_M,
+  MAST_AT_M,
+  MAST_HEIGHT_M,
+  ROLL_AT_M,
+  ROLL_HEIGHT_M,
+  ROLL_RADIUS_M,
+  TURNTABLE_AT_M,
+  WRAP_CYCLE_S,
+  wrapPoseAt,
+} from './packs/stretchWrap';
 import { CARTON_PITCH_M, CARTON_SIZE_M, LINE_A_START_M, LINE_B_START_M, TRAY_PITCH_M, TRAY_SIZE_M, cartonPlaces, tokenInstances, trayPlaces } from './packs/tokens';
 import { fitVehicle, greyForklift, greyTruck, type VehicleSizeM } from './packs/vehicles';
 import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
@@ -33,17 +64,10 @@ const REEL_RAD_PER_S = 0.9;
 /** The sealing jaws ride down with the paper tube and back, once every 2.6 s or so. */
 const JAW_RAD_PER_S = 2.4;
 const JAW_TRAVEL_M = 0.12;
-/** The palletizer arm swings from pick to place and back in about 12 s. */
-const ARM_RAD_PER_S = 0.5;
-/** The stretch wrapper's turntable turns about once in 2.6 s while it wraps a pallet. */
-const WRAP_RAD_PER_S = 2.4;
 
 /** Litres in one pack, to count the running fillers from the flow they draw. */
 const PACK_VOLUME_L = plantJson.product.packVolumeL;
 const FILLER_COUNT = plantJson.fillers.count;
-
-/** The load on a full pallet at the palletizer; it grows with the trays placed (phase 4). */
-const STACK_HEIGHT_M = 1.1;
 
 /** Pallets of stock a rack place stands for: the racks' 384 places then hold 1,920, D11's 634 and about 39 days of growth (H43). */
 export const PALLETS_PER_RACK_PLACE = 5;
@@ -78,7 +102,7 @@ export const packsLine: EquipmentFactory = (ctx) => {
     trayShrinkTunnel(kit),
     trayConveyor(kit, kitLoader),
     palletizer(kit, ctx),
-    stretchWrapper(kit, traffic),
+    stretchWrapper(kit, ctx, traffic),
     palletConveyor(kit, kitLoader, traffic, blocks),
     quarantine(kit, blocks),
     qaLab(kit),
@@ -416,44 +440,111 @@ function trayConveyor(kit: Kit, loader: KitLoader): Equipment {
   );
 }
 
-/** Arm angle (about y) that points the arm from its hinge at a floor point. */
-function armRadToward(pointM: at.FloorPointM): number {
-  return Math.atan2(-(pointM[1] - at.PALLETIZER_M[2]), pointM[0] - at.PALLETIZER_M[0]);
+/** The palletizer's moving joints: the grey box's groups, or the hero model's nodes once it has swapped in. */
+interface ArmJoints {
+  arm: THREE.Object3D;
+  lift: THREE.Object3D;
+  wrist: THREE.Object3D;
+  clamp1: THREE.Object3D;
+  clamp2: THREE.Object3D;
 }
 
+/**
+ * The palletizer (phase 12): the arm picks a tray off the end of the tray line, swings it over the long way via -z
+ * and sets it on its place in the stack (packs/palletizing.ts), while a packer lane packs; idle, it parks over the
+ * pick point. The stack is the sim's trays in layers of 12; when the pallet closes it rides off (palletTraffic.ts)
+ * and a fresh pallet stands under the place point.
+ */
 function palletizer(kit: Kit, ctx: EquipmentContext): Equipment {
   const [xM, , zM] = at.PALLETIZER_M;
   const b = new FixtureBuilder(kit, 'palletizer', at.PALLETIZER_M);
   b.part('cyl', 'paint', [xM, 0.3, zM], [0.55, 0.6, 0.55], { castShadow: true }); // base
   b.part('cylLo', 'paint', [xM, 1.45, zM], [0.22, 1.7, 0.22], { castShadow: true }); // column
-  // Named for the hero model (assets' hero spec): the arm turns about y on top of the column.
-  let arm: THREE.Object3D = b.group('arm', [xM, at.ARM_HINGE_Y_M, zM]);
-  b.part('box', 'paint', [1.22, 0, 0], [2.45, 0.2, 0.26], { parent: arm, castShadow: true });
-  b.part('cylLo', 'steelDark', [2.45, -0.35, 0], [0.06, 0.6, 0.06], { parent: arm });
-  b.part('box', 'steelDark', [2.45, -0.7, 0], [0.55, 0.14, 0.45], { parent: arm, castShadow: true }); // gripper
-  // The pallet being built, on the pallet rollers under the place point.
+  // Named for the hero model (assets' hero spec), at its rest transforms: the arm turns about y on top of the
+  // column; the lift slides down from the boom, and out along it to reach each tray's place; the wrist turns the
+  // gripper so the tray stays square to the pallet; the clamps close on the tray. The boom runs out past the
+  // farthest place.
+  const arm = b.group('arm', [xM, at.ARM_HINGE_Y_M, zM]);
+  const boomM = MAX_REACH_M + 0.1;
+  b.part('box', 'paint', [boomM / 2, 0, 0], [boomM, 2 * BOOM_TOP_M, 0.26], { parent: arm, castShadow: true });
+  const lift = b.group('arm_lift', ARM_LIFT_AT_M, arm);
+  // The lift rod runs from the gripper up into the boom however far the lift is down: stretched to fit every frame.
+  const rod = b.mesh('lift-rod', 'cylLo', 'steelDark', [0, 0, 0], [0.07, 1, 0.07], { parent: lift });
+  const wrist = b.group('arm_wrist', ARM_WRIST_AT_M, lift);
+  b.part('box', 'steelDark', [0, GRIPPER_BOTTOM_M / 2, 0], [0.55, -GRIPPER_BOTTOM_M, 0.45], { parent: wrist, castShadow: true }); // gripper
+  const [clampXM, clampYM, clampZM] = ARM_CLAMP_AT_M;
+  const clamp1 = b.group('arm_clamp_1', [clampXM, clampYM, -clampZM], wrist);
+  const clamp2 = b.group('arm_clamp_2', [clampXM, clampYM, clampZM], wrist);
+  // Plates on the gripper's z faces, their inner faces CLAMP_FACE_M out, reaching down over the tray's top.
+  const plateM = 0.05;
+  b.part('box', 'steelDark', [0, -0.03, clampZM - CLAMP_FACE_M - plateM / 2], [0.52, 0.2, plateM], { parent: clamp1 });
+  b.part('box', 'steelDark', [0, -0.03, CLAMP_FACE_M - clampZM + plateM / 2], [0.52, 0.2, plateM], { parent: clamp2 });
+  // The tray in the gripper, shown only while it carries one.
+  const carried = b.mesh('carried-tray', 'box', 'carton', [0, CARRIED_TRAY_Y_M, 0], STACK_TRAY_SIZE_M, { parent: wrist });
+  carried.visible = false;
+  // The pallet being built, on the pallet rollers under the place point: as big as the pallet that rides off.
   const [placeXM, placeZM] = at.PLACE_M;
-  const palletTopM = at.PALLET_ROLLER_TOP_M + 0.16;
-  b.part('box', 'wood', [placeXM, at.PALLET_ROLLER_TOP_M + 0.08, placeZM], [1.5, 0.16, 1.15]);
-  // The load grows with the trays placed: the fuller of the two lines' pallets, built in turn here.
-  const stack = b.mesh('stack', 'box', 'carton', [placeXM, palletTopM + STACK_HEIGHT_M / 4, placeZM], [1.42, STACK_HEIGHT_M / 2, 1.08], { castShadow: true });
-  let shownFrac = 0.5;
-
-  // The preview's angles: the long way round would sweep over the tray line, so it swings via -z.
-  const pickRad = armRadToward(at.PICK_M);
-  const placeRad = armRadToward(at.PLACE_M) + 2 * Math.PI;
-  arm.rotation.y = pickRad;
-  let swingRad = 0;
+  b.part('box', 'wood', [placeXM, at.PALLET_ROLLER_TOP_M + PALLET_M.heightM / 2, placeZM], [PALLET_M.widthM, PALLET_M.heightM, PALLET_M.depthM]);
+  // A low fence round the cell, open where the trays come in and the pallets leave; one merged mesh.
+  for (const { atM, sizeM } of fenceParts()) b.part('box', 'marking', atM, sizeM);
+  // The trays on the pallet, one copy a place: the first `count` show (the sim's, the fuller lane's pallet).
+  const stack = b.instanced('stack', 'box', 'carton', stackInstances(), { castShadow: true });
+  const slotMatrices = Array.from({ length: STACK_CAPACITY }, (_, slot) => {
+    const matrix = new THREE.Matrix4();
+    stack.getMatrixAt(slot, matrix);
+    return matrix;
+  });
+  const emptySlot = new THREE.Matrix4().makeScale(0, 0, 0);
   const fixture = b.build();
   const life = lifetime();
-  // The pallet is the fixture's only wooden part, so its merged mesh is the pallet alone.
+  // The pallet and the fence are the fixture's only wooden and yellow parts: their merged meshes are them alone.
   const pallet = fixture.object.getObjectByName('palletizer-wood');
+  const fence = fixture.object.getObjectByName('palletizer-marking');
   if (pallet instanceof THREE.Mesh) printOn(kit, 'pallet', [pallet], life);
-  // The model is the machine alone: the pallet and its load stay.
-  const swap = { path: HERO_MODELS.palletizer, nodes: ['arm'] as const, keep: [stack, ...(pallet ? [pallet] : [])] };
+  printOn(kit, 'tray', [stack, carried], life);
+
+  const cycle = createPalletizing();
+  const pose = cycle.pose;
+  let joints: ArmJoints = { arm, lift, wrist, clamp1, clamp2 };
+  const applyPose = (): void => {
+    joints.arm.rotation.y = pose.armRad;
+    joints.lift.position.set(pose.reachM, ARM_LIFT_AT_M[1] - pose.liftM, ARM_LIFT_AT_M[2]);
+    joints.wrist.rotation.y = pose.wristRad;
+    joints.clamp1.position.z = -clampZM + pose.clampM;
+    joints.clamp2.position.z = clampZM - pose.clampM;
+    // From the top of the gripper up to the top of the boom, in the lift's frame.
+    const rodM = BOOM_TOP_M + pose.liftM - ARM_WRIST_AT_M[1];
+    rod.position.y = ARM_WRIST_AT_M[1] + rodM / 2;
+    rod.scale.y = rodM;
+    carried.visible = cycle.carrying();
+  };
+  // Until the first snapshot with the packs model, half a pallet, as the grey box has always shown.
+  let shownFrac = 0.5;
+  let heldShown = -1;
+  const showStack = (): void => {
+    // A place the sim has counted while its tray is still in the gripper stays empty until the tray is set down.
+    const held = cycle.heldSlot();
+    if (held !== heldShown) {
+      if (heldShown >= 0) stack.setMatrixAt(heldShown, slotMatrices[heldShown] as THREE.Matrix4);
+      if (held >= 0) stack.setMatrixAt(held, emptySlot);
+      heldShown = held;
+      stack.instanceMatrix.needsUpdate = true;
+    }
+    showCopies(stack, cycle.traysShown());
+  };
+  cycle.update(0, false, shownFrac * STACK_CAPACITY);
+  applyPose();
+  showStack();
+
+  // The model is the machine alone: the pallet, its load and the fence stay. The lift rod and the tray in the
+  // gripper ride on with the model's lift and wrist.
+  const keep = [stack, ...(pallet ? [pallet] : []), ...(fence ? [fence] : [])];
+  const swap = { path: HERO_MODELS.palletizer, nodes: ['arm', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2'] as const, keep };
   swapInHero(ctx, fixture.object, swap, (nodes) => {
-    nodes.arm.rotation.y = arm.rotation.y;
-    arm = nodes.arm;
+    joints = { arm: nodes.arm, lift: nodes.arm_lift, wrist: nodes.arm_wrist, clamp1: nodes.arm_clamp_1, clamp2: nodes.arm_clamp_2 };
+    nodes.arm_lift.add(rod);
+    nodes.arm_wrist.add(carried);
+    applyPose();
   }, life.isAlive);
   return machine(
     fixture,
@@ -465,17 +556,23 @@ function palletizer(kit: Kit, ctx: EquipmentContext): Equipment {
       labelText: (s) => labelValue(stageValue(s, 8, 'traysPerPallet'), 0, 'trays/pallet'),
       update(s, realDtS) {
         const fullFrac = palletFullFrac(s);
-        if (fullFrac !== null && fullFrac !== shownFrac) {
-          shownFrac = fullFrac;
-          stack.visible = fullFrac > 0;
-          stack.scale.y = Math.max(STACK_HEIGHT_M * fullFrac, 0.001);
-          stack.position.y = palletTopM + stack.scale.y / 2;
-        }
-        if (!packerRuns(s)) return;
-        swingRad = (swingRad + ARM_RAD_PER_S * motionDtS(s, realDtS)) % (2 * Math.PI);
-        arm.rotation.y = pickRad + (placeRad - pickRad) * (0.5 - 0.5 * Math.cos(swingRad));
+        if (fullFrac !== null) shownFrac = fullFrac;
+        cycle.update(busyMotionDtS(s, realDtS), packerRuns(s), shownFrac * STACK_CAPACITY);
+        applyPose();
+        showStack();
       },
-      debugState: () => ({ stackFrac: shownFrac, armRad: arm.rotation.y }),
+      debugState: () => ({
+        stackFrac: shownFrac,
+        armRad: joints.arm.rotation.y,
+        phase: cycle.phase(),
+        liftM: pose.liftM,
+        carrying: cycle.carrying(),
+        traysShown: cycle.traysShown(),
+        layers: cycle.layers(),
+        reachM: pose.reachM,
+        clampM: pose.clampM,
+        targetSlot: cycle.targetSlot(),
+      }),
     },
     life,
   );
@@ -489,34 +586,78 @@ function palletFullFrac(snapshot: Snapshot): number | null {
   return Math.min(1, Math.max(...lanes.map((lane) => lane.palletTrays)) / traysPerPallet);
 }
 
-function stretchWrapper(kit: Kit, traffic: PalletTraffic): Equipment {
+/**
+ * The stretch wrapper (phase 12): while a pallet stands on the turntable it turns with it, the carriage winds the
+ * film round the base, up, over the top and down, and the web runs from the roll to the load (packs/stretchWrap.ts).
+ * The pallet's wrap clock is the pallets' own (palletTraffic.ts), so the pallet turns as the turntable does.
+ */
+function stretchWrapper(kit: Kit, ctx: EquipmentContext, traffic: PalletTraffic): Equipment {
   const [xM, zM] = at.WRAPPER_M;
   const b = new FixtureBuilder(kit, 'stretch-wrapper', [xM, 0, zM]);
+  /** The machine's frame (stretchWrap.ts) to world metres. */
+  const inWorld = ([dxM, yM, dzM]: PointM): PointM => [xM + dxM, yM, zM + dzM];
   const radiusM = at.TURNTABLE_RADIUS_M;
-  // The turntable is flush with the pallet rollers either side of it, and turns while a pallet is wrapped;
-  // a bar across it shows the turn.
-  const turntable = b.group('turntable', [xM, at.PALLET_ROLLER_TOP_M / 2, zM]);
-  b.part('cyl', 'steelDark', [0, 0, 0], [radiusM, at.PALLET_ROLLER_TOP_M, radiusM], { parent: turntable });
-  b.part('box', 'paint', [0, at.PALLET_ROLLER_TOP_M / 2 + 0.005, 0], [radiusM * 1.8, 0.01, 0.12], { parent: turntable });
-  b.part('box', 'steelDark', [20.15, 0.05, 13.35], [0.5, 0.1, 0.5]); // mast foot
-  b.part('box', 'paint', [20.15, 1.35, 13.35], [0.2, 2.7, 0.2], { castShadow: true }); // mast
-  // The film carriage rides up and down the mast while a pallet turns.
-  const carriage = b.mesh('carriage', 'box', 'steelDark', [20.35, 0.6, 13.5], [0.32, 0.22, 0.5]);
-  let wrapRad = 0;
-  return machine(b.build(), {
-    id: 'stretch-wrapper',
-    stage: 8,
-    label: 'Stretch wrapper',
-    labelAnchorM: [xM - 0.6, 3.1, zM - 0.5],
-    update(s, realDtS) {
-      if (!traffic.wrapping()) return;
-      const dtS = busyMotionDtS(s, realDtS);
-      turntable.rotation.y = (turntable.rotation.y + WRAP_RAD_PER_S * dtS) % (2 * Math.PI);
-      wrapRad = (wrapRad + (WRAP_RAD_PER_S / 4) * dtS) % (2 * Math.PI);
-      carriage.position.y = 0.6 + 0.8 * (0.5 - 0.5 * Math.cos(wrapRad));
+  // Named for the hero model (phase-12 card): the turntable, flush with the pallet rollers either side of it,
+  // turns while a pallet on it is wrapped; a bar across it shows the turn.
+  const turntableGrey = b.group('turntable', inWorld(TURNTABLE_AT_M));
+  turntableGrey.position.set(...TURNTABLE_AT_M); // the contract's rest transform exactly, as the model has it
+  b.part('cyl', 'steelDark', [0, 0, 0], [radiusM, at.PALLET_ROLLER_TOP_M, radiusM], { parent: turntableGrey });
+  b.part('box', 'paint', [0, at.PALLET_ROLLER_TOP_M / 2 + 0.005, 0], [radiusM * 1.8, 0.01, 0.12], { parent: turntableGrey });
+  const [mastXM, , mastZM] = inWorld(MAST_AT_M);
+  b.part('box', 'steelDark', [mastXM, 0.05, mastZM], [0.5, 0.1, 0.5]); // mast foot
+  b.part('box', 'paint', [mastXM, MAST_HEIGHT_M / 2, mastZM], [0.2, MAST_HEIGHT_M, 0.2], { castShadow: true }); // mast
+  // The film carriage rides up and down the mast: its frame on the mast's side, the film roll and the exit roller
+  // the film leaves from (as in the model, assets' WRAPPER_FILM).
+  const carriageGrey = b.group('carriage', inWorld(CARRIAGE_AT_M));
+  carriageGrey.position.set(...CARRIAGE_AT_M);
+  b.part('box', 'steelDark', [-0.06, ROLL_AT_M[1], -0.07], [0.26, 0.6, 0.26], { parent: carriageGrey });
+  b.part('cylLo', 'steelDark', [FILM_EXIT_AT_M[0], ROLL_AT_M[1], FILM_EXIT_AT_M[1]], [FILM_EXIT_RADIUS_M, ROLL_HEIGHT_M, FILM_EXIT_RADIUS_M], { parent: carriageGrey });
+  b.part('cylLo', 'carton', ROLL_AT_M, [ROLL_RADIUS_M, ROLL_HEIGHT_M, ROLL_RADIUS_M], { parent: carriageGrey });
+  const fixture = b.build();
+  const life = lifetime();
+  // The web from the roll to the load: its own geometry and material, freed with the fixture.
+  const web = createFilmWeb();
+  fixture.object.add(web.mesh);
+  life.onEnd(() => web.dispose());
+
+  let turntable: THREE.Object3D = turntableGrey;
+  let carriage: THREE.Object3D = carriageGrey;
+  const pose = createWrapPose();
+  const applyPose = (): void => {
+    turntable.rotation.y = pose.turnRad % (2 * Math.PI);
+    carriage.position.y = CARRIAGE_AT_M[1] + pose.carriageM;
+    web.update(pose);
+  };
+  // The model is the machine alone: the film web stays.
+  const swap = { path: HERO_MODELS.stretchWrapper, nodes: ['turntable', 'carriage'] as const, keep: [web.mesh] };
+  swapInHero(ctx, fixture.object, swap, (nodes) => {
+    ({ turntable, carriage } = nodes);
+    applyPose();
+  }, life.isAlive);
+  return machine(
+    fixture,
+    {
+      id: 'stretch-wrapper',
+      stage: 8,
+      label: 'Stretch wrapper',
+      labelAnchorM: [xM - 0.6, 3.1, zM - 0.5],
+      update(s, realDtS) {
+        // The pallets move after this fixture in the frame (palletConveyor), by the same motion time: the wrap is
+        // drawn where the pallet's clock will stand, so the turntable and its pallet turn as one.
+        const wrapS = traffic.wrapS();
+        wrapPoseAt(wrapS < 0 ? -1 : Math.min(wrapS + busyMotionDtS(s, realDtS), WRAP_CYCLE_S), pose);
+        applyPose();
+      },
+      debugState: () => ({
+        wrapping: traffic.wrapping(),
+        turnRad: turntable.rotation.y,
+        filmFrac: pose.filmFrac,
+        carriageM: pose.carriageM,
+        phase: pose.phase,
+      }),
     },
-    debugState: () => ({ wrapping: traffic.wrapping(), turnRad: turntable.rotation.y }),
-  });
+    life,
+  );
 }
 
 function palletConveyor(kit: Kit, loader: KitLoader, traffic: PalletTraffic, blocks: QuarantineBlocks): Equipment {
@@ -530,10 +671,11 @@ function palletConveyor(kit: Kit, loader: KitLoader, traffic: PalletTraffic, blo
   const riders = new THREE.Group();
   riders.name = 'riders';
   riders.position.set(-20.8, 0, -14.4);
-  riders.add(traffic.bases, traffic.loads);
+  riders.add(traffic.bases, traffic.loads, traffic.films);
   fixture.object.add(riders);
   life.onEnd(() => traffic.dispose());
   printOn(kit, 'pallet', [traffic.bases], life);
+  printOn(kit, 'tray', [traffic.loads], life);
   return machine(
     fixture,
     {
@@ -548,7 +690,7 @@ function palletConveyor(kit: Kit, loader: KitLoader, traffic: PalletTraffic, blo
         const dtS = busyMotionDtS(s, realDtS);
         traffic.update(packaging.lastPallet, packaging.palletsMade, dtS, PALLET_SPEED_MPS * dtS, s.paused ? 0 : realDtS, (batchId) => blocks.blockTopM(batchId)[1]);
       },
-      debugState: () => ({ riding: traffic.riding(), wrapping: traffic.wrapping() }),
+      debugState: () => ({ riding: traffic.riding(), wrapping: traffic.wrapping(), queued: traffic.queued(), onTurntable: traffic.onTurntable() }),
     },
     life,
   );

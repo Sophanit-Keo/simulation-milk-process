@@ -7,6 +7,7 @@ import { CARTON_SIZE_M, TRAY_SIZE_M, cartonPlaces, trayPlaces } from '../../src/
 import type { VehicleSizeM } from '../../src/scene/equipment/packs/vehicles';
 import { createTokenStream } from '../../src/scene/equipment/packs/belts';
 import { CARTON_PITCH_M, LINE_A_START_M, LINE_B_START_M, TRAY_PITCH_M } from '../../src/scene/equipment/packs/tokens';
+import { motionRate } from '../../src/scene/motion';
 import { PALLETS_PER_RACK_PLACE, packsLine, rackLoadsShown } from '../../src/scene/equipment/packsLine';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
 import { createSim } from '../../src/sim';
@@ -239,7 +240,14 @@ describe('packsLine', () => {
       expect(node(byId(machines, id), 'reel')).toBeInstanceOf(THREE.Group);
       expect(node(byId(machines, id), 'jaws')).toBeInstanceOf(THREE.Group);
     }
-    expect(node(byId(machines, 'palletizer'), 'arm')).toBeInstanceOf(THREE.Group);
+    // The palletizer's sub-joints hang under their joints, as in the model: arm > arm_lift > arm_wrist > clamps.
+    const palletizer = byId(machines, 'palletizer');
+    const parents: [string, string][] = [['arm', 'palletizer'], ['arm_lift', 'arm'], ['arm_wrist', 'arm_lift'], ['arm_clamp_1', 'arm_wrist'], ['arm_clamp_2', 'arm_wrist']];
+    for (const [name, parent] of parents) {
+      expect(node(palletizer, name), name).toBeInstanceOf(THREE.Group);
+      expect(node(palletizer, name).parent?.name, name).toBe(parent);
+    }
+    for (const name of ['turntable', 'carriage']) expect(node(byId(machines, 'stretch-wrapper'), name), name).toBeInstanceOf(THREE.Group);
   });
 
   it('uses the shared materials, adding at most five of its own', () => {
@@ -756,10 +764,11 @@ describe('packsLine', () => {
     expect(a.labelText(oneDown)).toBe('stopped');
   });
 
-  it('swings the palletizer arm between the pick and place points, and not while paused', () => {
+  it('swings the palletizer arm from the pick point to the tray’s place on the pallet, the long way via -z, and not while paused', () => {
     const { machines } = build();
     const palletizer = byId(machines, 'palletizer');
     const arm = node(palletizer, 'arm');
+    const lift = node(palletizer, 'arm_lift');
     const pointing = (): [number, number] => [Math.cos(arm.rotation.y), -Math.sin(arm.rotation.y)];
     const towards = ([xM, zM]: at.FloorPointM): [number, number] => {
       const dx = xM - at.PALLETIZER_M[0];
@@ -767,15 +776,30 @@ describe('packsLine', () => {
       const lengthM = Math.hypot(dx, dz);
       return [dx / lengthM, dz / lengthM];
     };
+    // Parked over the pick point.
     const [pickX, pickZ] = towards(at.PICK_M);
     expect(pointing()[0]).toBeCloseTo(pickX, 6);
     expect(pointing()[1]).toBeCloseTo(pickZ, 6);
+    const pickRad = arm.rotation.y;
     const snapshot = staticSnapshot();
-    // Half a swing (π at 0.5 rad/s) reaches the place point.
-    for (let i = 0; i < 100; i++) palletizer.update(snapshot, Math.PI / 0.5 / 100);
-    const [placeX, placeZ] = towards(at.PLACE_M);
-    expect(pointing()[0]).toBeCloseTo(placeX, 6);
-    expect(pointing()[1]).toBeCloseTo(placeZ, 6);
+    // The pick (1.4 motion s), the swing over (1.8) and the first moment of setting the tray down, at the snapshot's motion rate.
+    const realS = (1.4 + 1.8 + 0.05) / motionRate(snapshot.speed);
+    let leastRad = Infinity;
+    let mostRad = -Infinity;
+    for (let i = 0; i < 100; i++) {
+      palletizer.update(snapshot, realS / 100);
+      leastRad = Math.min(leastRad, arm.rotation.y);
+      mostRad = Math.max(mostRad, arm.rotation.y);
+    }
+    expect(palletizer.debugState?.().phase).toBe('place');
+    // The gripper stands over the pallet, on the first place of the empty pallet.
+    lift.updateWorldMatrix(true, false);
+    const gripperM = new THREE.Vector3().setFromMatrixPosition(lift.matrixWorld);
+    expect(Math.abs(gripperM.x - at.PLACE_M[0])).toBeLessThan(0.6);
+    expect(Math.abs(gripperM.z - at.PLACE_M[1])).toBeLessThan(0.5);
+    // Via -z: the angle only grows from the pick's, through a quarter turn (pointing at -z), to the place's.
+    expect(leastRad).toBeCloseTo(pickRad, 6);
+    expect(mostRad).toBeGreaterThan(Math.PI);
     const held = arm.rotation.y;
     palletizer.update({ ...snapshot, paused: true }, 1);
     expect(arm.rotation.y).toBe(held);
@@ -835,12 +859,15 @@ describe('packsLine', () => {
 
     machines.slice(0, -1).forEach((machine) => machine.dispose());
     // The unit shapes and the module's materials stay while one fixture still uses them (the QA lab's
-    // lamp material and the quarantine's block lamps and plate are their fixtures' own, and go with them).
+    // lamp material, the quarantine's block lamps and plate, the stretch wrapper's film web and the riding
+    // pallets' film are their fixtures' own, and go with them).
     const quarantine = byId(machines, 'quarantine');
     const fixtureOwn = new Set([
       (node(byId(machines, 'qa-lab'), 'lamps') as THREE.Mesh).material,
       (node(quarantine, 'quarantine-lamps') as THREE.Mesh).material,
       (node(quarantine, 'quarantine-mark') as THREE.Mesh).material,
+      (node(byId(machines, 'stretch-wrapper'), 'film-web') as THREE.Mesh).material,
+      (node(byId(machines, 'pallet-conveyor'), 'riding-films') as THREE.Mesh).material,
     ]);
     expect([...own].some((material) => !fixtureOwn.has(material) && disposed.has(material))).toBe(false);
     machines.at(-1)?.dispose();
