@@ -16,11 +16,16 @@ import { plantConfig } from '../helpers/plantConfig';
 
 /**
  * The module adds light panels and amber floor markings to the shared set, the QA lab its lamp, and the
- * quarantine its block lamps and the plate under a picked block (phase 4).
+ * quarantine its block lamps and the plate under a picked block (phase 4). Phase 12 allows five more: the
+ * stretch wrapper's film and film shell, the forklifts' lit beacon, the dock lamps and one spare.
  */
-const MAX_OWN_MATERIALS = 5;
-/** The lane's budget is about 150 draw calls for stages 7–10, shadow pass included. */
-const DRAW_CALL_BUDGET = 150;
+const MAX_OWN_MATERIALS = 10;
+/**
+ * The lane's budget for stages 7–10, shadow pass included: about 150 until phase 12 (145 with grey boxes),
+ * then 185 for the palletizer's tray stack, the wrapper's film, the carried pallets, the trucks' doors and
+ * tractors, and the docks' roller doors and lamps (phase-12-lifelike-motion.md, Budgets).
+ */
+const DRAW_CALL_BUDGET = 185;
 
 /** src/styles/tokens.css's light theme: the declarations of its first :root block. */
 const LIGHT_TOKENS = (() => {
