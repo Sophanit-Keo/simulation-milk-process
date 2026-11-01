@@ -6,6 +6,11 @@
 //
 // Every machine is placed by the layout and matched to the view by its place on the floor (floorBays), never
 // by a name. The floor is built for one layout; scene.ts builds a new one when the layout's key changes.
+//
+// Phase 11 (D21) adds each line's story on the floor: a marker over a filler whose line has open troubles, lit
+// in its worst severity's lamp colour and bobbing gently (still with reduced motion), and a ring on the floor
+// round a cleaning filler that fills as its CIP goes. Both are built with the floor, hidden, and only shown,
+// recoloured or refilled by update().
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Status } from '../../contracts';
@@ -26,6 +31,7 @@ import type {
   FloorBay,
   FloorPointM,
   FloorRectM,
+  LineView,
   PipeFlow,
   PipeRoute,
   TankSpot,
@@ -73,6 +79,48 @@ const FULL_TURN_RAD = 2 * Math.PI;
  */
 const HERO_FOOTPRINT_CENTRE = { xM: 0.135, zM: -0.2325 } as const;
 const FACE_PLUS_Z_RAD = -Math.PI / 2;
+/** The filler's lamp on its post, in the same frame: toward the outfeed and to the operator's side of the roof. */
+const LAMP_FRAME_M = { xM: 0.9, zM: 0.55 } as const;
+
+/**
+ * The trouble marker (D21): a diamond over the filler's roof, at the lamp's place along the filler and this far
+ * inboard of it, in the same frame. It stands between the roof and the label's anchor, so the label, which is
+ * drawn over the canvas upward from its anchor (scene.ts), never covers it, and it stays on the roof's front
+ * edge, nearer the usual cameras than the anchor, which puts it further below the label on screen.
+ */
+const MARKER_BESIDE_LAMP_M = 0.5;
+/** It bobs this far up and down, once a second, and holds still with reduced motion. */
+const MARKER_BOB_M = 0.1;
+const MARKER_BOB_HZ = 1;
+/** Room kept between it and the roof below and the label's anchor above, at the ends of its bob. */
+const MARKER_CLEARANCE_M = 0.02;
+/** Its half height at most (the room between the roof and the label sets it), and its half width as a share of that. */
+const MARKER_MAX_HALF_HEIGHT_M = 0.25;
+const MARKER_MIN_HALF_HEIGHT_M = 0.05;
+const MARKER_WIDTH_FRAC = 0.8;
+/** The board's severities run 0 low to 3 critical: high (2) and above light the marker red, below it amber. */
+const BAD_SEVERITY = 2;
+const MAX_SEVERITY = 3;
+
+/**
+ * The CIP ring (D21): an ellipse on the floor round the filler's footprint, through its corners (the half sizes
+ * × √2) and this far beyond them, so it rings the whole machine yet never meets a neighbour's ring, which stands
+ * at least 2.5 m away (FILLER_GAP_M). Its band is this wide.
+ */
+const RING_GAP_M = 0.15;
+const RING_BAND_M = 0.25;
+/** Each segment is 3°: a 12-minute CIP fills one every 6 s. */
+const RING_SEGMENTS = 120;
+const RING_VERTICES_PER_SEGMENT = 6;
+/** Just above the slab (0.04 m) and under its outline (0.06 m). */
+const RING_Y_M = 0.05;
+/** The full track under the fill: the cleaning colour, faint. */
+const RING_TRACK_ALPHA = 0.22;
+/**
+ * A hair over before rounding down, so a share that comes out a hair under a segment in floating point still fills
+ * it: 1 − 0.9 is 0.0999…98, or 11.99… of 120 segments.
+ */
+const SHARE_EPSILON = 1e-9;
 
 // ───── The floor's contract with scene.ts ─────
 
@@ -104,6 +152,10 @@ export interface FloorState {
     /** The hero filler has replaced the grey box. */
     hero?: boolean;
     reelRad?: number;
+    /** A line's trouble marker: the worst severity it shows, 0 low to 3 critical; null while hidden (D21). */
+    trouble?: number | null;
+    /** A line's CIP ring: the share of it filled, 0 to 1, in whole segments; null while hidden (D21). */
+    cipRing?: number | null;
   }[];
   pipes: { id: string; flowLph: number; cleaning: boolean; stripeMps: number; phaseM: number; color: string }[];
 }
@@ -126,6 +178,15 @@ export interface Floor {
 /** A scene colour token's value now (theme.ts readSceneColor in the page). */
 export type ReadColor = (name: SceneColorVar) => string;
 
+export interface FloorOptions {
+  /**
+   * Whether what only decorates may move, asked every frame: the trouble markers bob while it says yes and hold
+   * still otherwise (scene.ts says no under prefers-reduced-motion). Moving by default. The belts, reels and
+   * pipes show what runs, so they move either way, as the 3D plant's do.
+   */
+  motion?: () => boolean;
+}
+
 // ───── Helpers ─────
 
 function lampMaterial(): THREE.MeshStandardMaterial {
@@ -144,6 +205,87 @@ function setLamp(material: THREE.MeshStandardMaterial, status: Status): void {
 }
 
 const toPoint = (point: FloorPointM): PointM => [point[0], point[1], point[2]];
+
+/**
+ * A point of the hero filler's frame (x along the filler toward its outfeed, z across it) on the floor, x and z,
+ * where buildFiller stands it: turned to face +z (the frame's x along world z, its z along world −x) and scaled.
+ */
+function fillerFrameToFloor(spot: FillerSpot, frameXM: number, frameZM: number): [xM: number, zM: number] {
+  return [spot.centreM[0] + (HERO_FOOTPRINT_CENTRE.zM - frameZM) * spot.scale, spot.centreM[2] + (frameXM - HERO_FOOTPRINT_CENTRE.xM) * spot.scale];
+}
+
+/**
+ * The severity a line's trouble marker shows: its worst open trouble's, 0 to 3 (one that is not a number as the
+ * lowest, as the model counts it); null with none open.
+ */
+function shownSeverity(view: LineView | undefined): number | null {
+  if (!view || !(view.openTroubles > 0)) return null;
+  const severity = view.worstSev;
+  if (severity === null || !Number.isFinite(severity)) return 0;
+  return Math.min(MAX_SEVERITY, Math.max(0, Math.round(severity)));
+}
+
+/**
+ * The CIP ring's segments a line fills: its share of the CIP done, rounded down to whole segments so the ring
+ * closes only once the CIP is done; null when the line is not cleaning or has no share (no start or end).
+ */
+function ringSegments(view: LineView | undefined): number | null {
+  if (!view || view.status !== 'cleaning') return null;
+  const share = view.cipDoneFrac;
+  if (share === null || !Number.isFinite(share)) return null;
+  return Math.floor(Math.min(1, Math.max(0, share)) * RING_SEGMENTS + SHARE_EPSILON);
+}
+
+/** The marker's half height: what the room between the roof and the label's anchor leaves once it bobs. */
+function markerHalfHeightM(spot: FillerSpot): number {
+  const roomM = (spot.labelM[1] - spot.heightM) / 2 - MARKER_BOB_M - MARKER_CLEARANCE_M;
+  return Math.min(MARKER_MAX_HALF_HEIGHT_M, Math.max(MARKER_MIN_HALF_HEIGHT_M, roomM));
+}
+
+/**
+ * A filler's CIP ring as one geometry, about the filler's footprint centre: the faint track's segments, then
+ * the fill's, each run from the front (+z, which the usual cameras see; the filler hides the back) clockwise
+ * seen from above. A draw range of RING_SEGMENTS segments from segment k then shows the fill's first k and the
+ * track's other segments, so a new share is a new draw range: nothing is rebuilt. Two triangles a segment, no
+ * index, facing up; white vertex colours, so the material's colour shows, with the track's alpha.
+ */
+function ringGeometry(spot: FillerSpot): THREE.BufferGeometry {
+  const innerXM = (spot.widthM / 2) * Math.SQRT2 + RING_GAP_M;
+  const innerZM = (spot.depthM / 2) * Math.SQRT2 + RING_GAP_M;
+  const radii = { inner: [innerXM, innerZM], outer: [innerXM + RING_BAND_M, innerZM + RING_BAND_M] } as const;
+  const vertices = 2 * RING_SEGMENTS * RING_VERTICES_PER_SEGMENT;
+  const positions = new Float32Array(vertices * 3);
+  const colors = new Float32Array(vertices * 4);
+  let vertex = 0;
+  const put = (angleRad: number, [rxM, rzM]: readonly [number, number], alpha: number): void => {
+    positions.set([-rxM * Math.sin(angleRad), 0, rzM * Math.cos(angleRad)], vertex * 3);
+    colors.set([1, 1, 1, alpha], vertex * 4);
+    vertex += 1;
+  };
+  for (const alpha of [RING_TRACK_ALPHA, 1]) {
+    for (let i = 0; i < RING_SEGMENTS; i++) {
+      const fromRad = (i / RING_SEGMENTS) * FULL_TURN_RAD;
+      const toRad = ((i + 1) / RING_SEGMENTS) * FULL_TURN_RAD;
+      // Wound counter-clockwise seen from above, so both triangles face up.
+      put(fromRad, radii.inner, alpha);
+      put(toRad, radii.outer, alpha);
+      put(fromRad, radii.outer, alpha);
+      put(fromRad, radii.inner, alpha);
+      put(toRad, radii.inner, alpha);
+      put(toRad, radii.outer, alpha);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+/** Shows `filled` of the ring's segments in the fill and the rest in the track. */
+function fillRing(geometry: THREE.BufferGeometry, filled: number): void {
+  geometry.setDrawRange(filled * RING_VERTICES_PER_SEGMENT, RING_SEGMENTS * RING_VERTICES_PER_SEGMENT);
+}
 
 /** The same stripe as the 3D plant's pipes: a light pipe with a darker band, repeating along it. */
 function createStripeTexture(): THREE.DataTexture {
@@ -317,8 +459,8 @@ function buildFiller(kit: Kit, ctx: EquipmentContext, spot: FillerSpot, lamp: TH
   const greyJaws = b.pivot('jaws', [-0.3, JAWS_TOP_M, 0]);
   for (const side of [-1, 1]) b.part('box', 'steelDark', [0, 0, side * 0.18], [0.34, 0.1, 0.08], { parent: greyJaws });
   // The lamp on a post above the roof, toward the operator's side: kept when the hero model swaps in.
-  const post = b.mesh('lamp-post', 'cylLo', 'steelDark', [0.9, 3.78, 0.55], [0.035, 0.44, 0.035]);
-  const lampMesh = b.mesh('lamp', 'cylLo', 'steelDark', [0.9, 4.1, 0.55], [0.1, 0.24, 0.1]);
+  const post = b.mesh('lamp-post', 'cylLo', 'steelDark', [LAMP_FRAME_M.xM, 3.78, LAMP_FRAME_M.zM], [0.035, 0.44, 0.035]);
+  const lampMesh = b.mesh('lamp', 'cylLo', 'steelDark', [LAMP_FRAME_M.xM, 4.1, LAMP_FRAME_M.zM], [0.1, 0.24, 0.1]);
   lampMesh.material = lamp;
 
   const { object, dispose } = b.build();
@@ -436,6 +578,13 @@ interface LineMachine {
   jawRad: number;
   /** Not yet updated: a line already running or stopped when the floor first shows has a full belt. */
   fresh: boolean;
+  /** The trouble marker, its height at rest, and the severity it shows (null while hidden). */
+  marker: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+  markerRestM: number;
+  trouble: number | null;
+  /** The CIP ring, and its segments filled (null while hidden). */
+  ring: THREE.Mesh;
+  ringFilled: number | null;
 }
 
 interface PipeMesh {
@@ -488,13 +637,33 @@ function buildSlabs(
  * Builds the floor for `layout` on the host's shared materials and model loader (equipmentHost.ts `context`).
  * The machines show idle until the first update().
  */
-export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readColor: ReadColor): Floor {
+export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readColor: ReadColor, options: FloorOptions = {}): Floor {
   const root = new THREE.Group();
   root.name = 'factory-floor';
   const kit = createKit(ctx);
   let alive = true;
   const isAlive = (): boolean => alive;
   const disposers: (() => void)[] = [];
+  const motion = options.motion ?? ((): boolean => true);
+
+  // The trouble markers share one diamond and the two lit colours; the CIP rings share one material, the
+  // cleaning colour (applyTheme), each ring with its own geometry. All are the floor's own, freed with it.
+  const markerShape = new THREE.OctahedronGeometry(1, 0);
+  const markerWarn = lampMaterial();
+  setLamp(markerWarn, 'warn');
+  const markerBad = lampMaterial();
+  setLamp(markerBad, 'bad');
+  // No depth writes: a flat band just above the slab, drawn after the machines, never hides anything.
+  const ringMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false });
+  ringMaterial.name = 'cip-ring';
+  disposers.push(() => {
+    markerShape.dispose();
+    markerWarn.dispose();
+    markerBad.dispose();
+    ringMaterial.dispose();
+  });
+  /** Where the markers are in their bob, shared, so they rise and fall together. */
+  let bobRad = 0;
 
   const slabParts = buildSlabs(layout.bays);
   if (slabParts) {
@@ -544,12 +713,30 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
       const lamp = lampMaterial();
       const filler = buildFiller(kit, ctx, spot, lamp, isAlive);
       const belt = buildBelt(kit, ctx, spot);
-      group.add(filler.object, belt.object);
+
+      // Both hidden until update() finds open troubles or a CIP; part of the line, so a click on them picks it.
+      const marker = new THREE.Mesh(markerShape, markerWarn);
+      marker.name = 'trouble-marker';
+      const [markerX, markerZ] = fillerFrameToFloor(spot, LAMP_FRAME_M.xM, LAMP_FRAME_M.zM - MARKER_BESIDE_LAMP_M);
+      const markerRestM = (spot.heightM + spot.labelM[1]) / 2;
+      const halfHeightM = markerHalfHeightM(spot);
+      marker.position.set(markerX, markerRestM, markerZ);
+      marker.scale.set(halfHeightM * MARKER_WIDTH_FRAC, halfHeightM, halfHeightM * MARKER_WIDTH_FRAC);
+      marker.visible = false;
+      const ring = new THREE.Mesh(ringGeometry(spot), ringMaterial);
+      ring.name = 'cip-ring';
+      ring.position.set(spot.centreM[0], RING_Y_M, spot.centreM[2]);
+      ring.updateMatrix();
+      ring.matrixAutoUpdate = false;
+      ring.visible = false;
+
+      group.add(filler.object, belt.object, marker, ring);
       root.add(group);
       disposers.push(() => {
         filler.dispose();
         belt.dispose();
         lamp.dispose();
+        ring.geometry.dispose();
       });
       lines.push({
         machine: { id: group.name, kind: 'line', bay: bayIndex, filler: fillerIndex, object: group, labelM: spot.labelM, camera: spot.camera },
@@ -562,6 +749,11 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
         beltMps: 0,
         jawRad: 0,
         fresh: true,
+        marker,
+        markerRestM,
+        trouble: null,
+        ring,
+        ringFilled: null,
       });
       belt.filledM = 0;
       placeTokens(belt, spot);
@@ -595,6 +787,7 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
     milkColor.set(readColor(MILK_COLOR_VAR));
     cleanColor.set(readColor(CLEAN_COLOR_VAR));
     for (const pipe of pipes) colorPipe(pipe);
+    ringMaterial.color.copy(cleanColor);
     if (!slabParts) return;
     const colors = slabParts.slabs.geometry.getAttribute('color') as THREE.BufferAttribute;
     const color = new THREE.Color();
@@ -651,6 +844,21 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
           placeTokens(line.belt, line.spot);
         }
         line.beltMps = state === 'moving' ? beltSpeedMps(view?.packsPerH ?? null) : 0;
+
+        const trouble = shownSeverity(view);
+        if (trouble !== line.trouble) {
+          // Shown again: at rest until the next tick() puts it in the bob.
+          if (line.trouble === null) line.marker.position.y = line.markerRestM;
+          line.trouble = trouble;
+          line.marker.visible = trouble !== null;
+          line.marker.material = trouble !== null && trouble >= BAD_SEVERITY ? markerBad : markerWarn;
+        }
+        const filled = ringSegments(view);
+        if (filled !== line.ringFilled) {
+          line.ringFilled = filled;
+          line.ring.visible = filled !== null;
+          if (filled !== null) fillRing(line.ring.geometry, filled);
+        }
       }
       for (const pipe of pipes) {
         const bay = bays[pipe.bay];
@@ -682,6 +890,11 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
         pipe.phaseM = advancePhase(pipe.phaseM, pipe.stripeMps * dtS, MAX_STRIPE_STEP_M, STRIPE_M);
         pipe.texture.offset.x = -pipe.phaseM / STRIPE_M;
       }
+      // The trouble markers bob together; with reduced motion they hold still at rest.
+      const moving = motion();
+      if (moving) bobRad = (bobRad + FULL_TURN_RAD * MARKER_BOB_HZ * dtS) % FULL_TURN_RAD;
+      const liftM = moving ? MARKER_BOB_M * Math.sin(bobRad) : 0;
+      for (const line of lines) if (line.trouble !== null) line.marker.position.y = line.markerRestM + liftM;
     },
     state() {
       return {
@@ -696,6 +909,8 @@ export function buildFloor(layout: FactoryLayout, ctx: EquipmentContext, readCol
             tokens: line.belt.tokens.count,
             hero: line.filler.hero,
             reelRad: line.filler.reel.rotation.z,
+            trouble: line.trouble,
+            cipRing: line.ringFilled === null ? null : line.ringFilled / RING_SEGMENTS,
           })),
         ],
         pipes: pipes.map((pipe) => ({

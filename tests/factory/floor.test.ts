@@ -1,14 +1,17 @@
 // The factory floor's machines, belts and pipes (src/factory/scene/floor.ts, phase 10, D20), checked without
 // WebGL: three.js objects work in Node. A machine per UHT and line where the layout puts it; lamps, belts and
 // pipes that follow each line's status; the hero filler over its grey box; and everything freed on dispose.
-// The main fixture is the real factory (tests/helpers/factory.ts).
+// Phase 11 (D21) adds each line's story: the trouble markers and their colours, the CIP rings' shares, and the
+// labels' words for how long a line has stood (scene/labelText.ts). The main fixture is the real factory
+// (tests/helpers/factory.ts); the story's fields are set on its views directly.
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { floorBays, layoutFactory, TOKEN_PITCH_M } from '../../src/factory/layout';
-import { buildFloor, type Floor, type FloorState, type ReadColor } from '../../src/factory/scene/floor';
-import type { FactoryView } from '../../src/factory/types';
+import { buildFloor, type Floor, type FloorOptions, type FloorState, type ReadColor } from '../../src/factory/scene/floor';
+import { lineStatusText, lineTitleText } from '../../src/factory/scene/labelText';
+import type { FactoryView, LineView } from '../../src/factory/types';
 import type { EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
-import type { SceneColorVar } from '../../src/scene/theme';
+import { LAMP_GLOW_HEX, type SceneColorVar } from '../../src/scene/theme';
 import { factoryView, LINES, uhtLine, withLine } from '../helpers/factory';
 
 const SHARED: readonly MaterialName[] = ['steel', 'steelDark', 'milk', 'glass', 'rubber', 'concrete', 'wood', 'carton', 'rack', 'paint', 'gauge'];
@@ -52,11 +55,30 @@ function makeContext(heroModels = false): Context {
 
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
-function floorFor(view: FactoryView, ctx: Context = makeContext()): Floor {
-  const floor = buildFloor(layoutFactory(view), ctx, readColor);
+function floorFor(view: FactoryView, ctx: Context = makeContext(), options?: FloorOptions): Floor {
+  const floor = buildFloor(layoutFactory(view), ctx, readColor, options);
   floor.update(floorBays(view));
   return floor;
 }
+
+/** The view with the named lines changed, as the model would give them: the story's fields set directly. */
+function withLines(view: FactoryView, patches: Record<string, Partial<LineView>>): FactoryView {
+  const patch = (line: LineView): LineView => ({ ...line, ...patches[line.name] });
+  return { ...view, uhts: view.uhts.map((uht) => ({ ...uht, lines: uht.lines.map(patch) })), unassigned: view.unassigned.map(patch) };
+}
+
+/** A line cleaning with this share of its CIP done. */
+const cleaning = (cipDoneFrac: number | null): Partial<LineView> => ({ status: 'cleaning', lamp: 'idle', statusText: 'CIP · 6 min left', cipDoneFrac });
+/** A line with one open trouble of this severity. */
+const troubled = (worstSev: number | null): Partial<LineView> => ({ openTroubles: 1, worstSev });
+
+/** A line's part by its name in the scene graph: its 'trouble-marker', 'cip-ring' or 'lamp'. */
+function partOf<T extends THREE.Object3D = THREE.Mesh>(floor: Floor, id: string, name: string): T {
+  const part = floor.machines.find((one) => one.id === id)?.object.getObjectByName(name);
+  if (!part) throw new Error(`no ${name} on ${id}`);
+  return part as T;
+}
+type MarkerMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
 
 type MachineState = FloorState['machines'][number];
 const machine = (floor: Floor, id: string): MachineState => {
@@ -240,16 +262,270 @@ describe('the hero filler', () => {
   });
 });
 
-describe('the floor in the scene', () => {
-  it('stays within its draw budget: a dozen meshes a UHT and a dozen a line', () => {
+describe("the trouble markers (D21)", () => {
+  it('shows none while no line has an open trouble', () => {
     const floor = floorFor(factoryView());
+    for (const id of Object.values(LINE_IDS)) {
+      expect(machine(floor, id).trouble).toBeNull();
+      expect(partOf(floor, id, 'trouble-marker').visible).toBe(false);
+    }
+  });
+
+  it("lights a marker over each filler with open troubles: amber for low or medium, red for high or critical", () => {
+    const view = factoryView({
+      reports: [
+        { id: 'r1', loc: 'UHT-line 3', sev: 3, status: 'open' },
+        { id: 'r2', loc: 'UHT-line 3', sev: 0, status: 'action' },
+        { id: 'r3', loc: 'UHT-line 1', sev: 1, status: 'verify' },
+        { id: 'r4', loc: 'UHT- line 2', sev: 2, status: 'open' },
+        { id: 'r5', loc: 'UHT-line 7', sev: 0, status: 'open' },
+      ],
+    });
+    const floor = floorFor(view);
+    const shown = { 'UHT-line 3': 3, 'UHT-line 1': 1, 'UHT- line 2': 2, 'UHT-line 7': 0 } as const;
+    for (const [name, severity] of Object.entries(shown)) {
+      expect(machine(floor, LINE_IDS[name]).trouble).toBe(severity);
+      const marker = partOf<MarkerMesh>(floor, LINE_IDS[name], 'trouble-marker');
+      expect(marker.visible).toBe(true);
+      const glow = severity >= 2 ? LAMP_GLOW_HEX.bad : LAMP_GLOW_HEX.warn;
+      expect(marker.material.emissive.getHex()).toBe(glow);
+      expect(marker.material.color.getHex()).toBe(glow);
+    }
+    for (const name of ['UHT line 4', 'UHT-line 6']) {
+      expect(machine(floor, LINE_IDS[name]).trouble).toBeNull();
+      expect(partOf(floor, LINE_IDS[name], 'trouble-marker').visible).toBe(false);
+    }
+
+    // Line 3's high trouble closes: its low one keeps the marker, now amber. Then all close: no marker.
+    floor.update(floorBays(withLines(view, { 'UHT-line 3': troubled(0) })));
+    expect(machine(floor, LINE_IDS['UHT-line 3']).trouble).toBe(0);
+    expect(partOf<MarkerMesh>(floor, LINE_IDS['UHT-line 3'], 'trouble-marker').material.emissive.getHex()).toBe(LAMP_GLOW_HEX.warn);
+    floor.update(floorBays(factoryView()));
+    expect(floor.state().machines.filter((one) => one.kind === 'line').map((one) => one.trouble)).toEqual(Array(6).fill(null));
+    expect(partOf(floor, LINE_IDS['UHT-line 3'], 'trouble-marker').visible).toBe(false);
+  });
+
+  it('shows a severity out of range at its nearest end, and one that is not a number as the lowest', () => {
+    const floor = floorFor(withLines(factoryView(), { 'UHT-line 3': troubled(7), 'UHT-line 1': troubled(-2), 'UHT-line 7': troubled(null), 'UHT-line 6': troubled(Number.NaN) }));
+    expect(machine(floor, LINE_IDS['UHT-line 3']).trouble).toBe(3);
+    expect(machine(floor, LINE_IDS['UHT-line 1']).trouble).toBe(0);
+    expect(machine(floor, LINE_IDS['UHT-line 7']).trouble).toBe(0);
+    expect(machine(floor, LINE_IDS['UHT-line 6']).trouble).toBe(0);
+    // A worst severity with no open trouble shows none.
+    floor.update(floorBays(withLines(factoryView(), { 'UHT-line 3': { openTroubles: 0, worstSev: 3 } })));
+    expect(machine(floor, LINE_IDS['UHT-line 3']).trouble).toBeNull();
+  });
+
+  it("stands above the filler's roof beside its lamp, clear of the label's anchor at either end of its bob", () => {
+    const view = factoryView();
+    const layout = layoutFactory(view);
+    const floor = floorFor(withLines(view, Object.fromEntries(Object.keys(LINE_IDS).map((name) => [name, troubled(1)]))));
+    for (const one of floor.machines.filter((candidate) => candidate.kind === 'line')) {
+      const spot = layout.bays[one.bay].fillers[one.filler ?? -1];
+      const marker = partOf<MarkerMesh>(floor, one.id, 'trouble-marker');
+      const lamp = partOf(floor, one.id, 'lamp');
+      one.object.updateWorldMatrix(true, true);
+      const lampM = lamp.getWorldPosition(new THREE.Vector3());
+      const markerM = marker.getWorldPosition(new THREE.Vector3());
+      // The diamond reaches its scale's height above and below its middle, and bobs 0.1 m either way.
+      const halfHeightM = marker.scale.y;
+      expect(markerM.y - halfHeightM - 0.1).toBeGreaterThan(spot.heightM);
+      expect(markerM.y + halfHeightM + 0.1).toBeLessThan(spot.labelM[1]);
+      expect(halfHeightM).toBeGreaterThan(0.15);
+      // At the lamp's place along the filler, toward its outfeed and in front of the label's anchor, 0.5 m inboard.
+      expect(markerM.z).toBeCloseTo(lampM.z, 6);
+      expect(markerM.z).toBeGreaterThan(spot.labelM[2] + 0.5);
+      expect(markerM.x - lampM.x).toBeCloseTo(0.5 * spot.scale, 6);
+    }
+  });
+
+  it('bobs about ±0.1 m once a second, and holds still without motion', () => {
+    let moving = true;
+    const floor = floorFor(withLines(factoryView(), { 'UHT-line 3': troubled(3) }), makeContext(), { motion: () => moving });
+    const marker = partOf(floor, LINE_IDS['UHT-line 3'], 'trouble-marker');
+    const restM = marker.position.y;
+    floor.tick(0.25);
+    expect(marker.position.y).toBeCloseTo(restM + 0.1, 9);
+    floor.tick(0.5);
+    expect(marker.position.y).toBeCloseTo(restM - 0.1, 9);
+    floor.tick(0.25);
+    expect(marker.position.y).toBeCloseTo(restM, 9);
+    floor.tick(0.25);
+    expect(marker.position.y).toBeCloseTo(restM + 0.1, 9);
+    // With reduced motion it comes to rest and stays there.
+    moving = false;
+    floor.tick(0.1);
+    expect(marker.position.y).toBe(restM);
+    floor.tick(0.3);
+    expect(marker.position.y).toBe(restM);
+
+    const still = floorFor(withLines(factoryView(), { 'UHT-line 3': troubled(3) }), makeContext(), { motion: () => false });
+    const stillMarker = partOf(still, LINE_IDS['UHT-line 3'], 'trouble-marker');
+    const stillRestM = stillMarker.position.y;
+    for (let i = 0; i < 7; i++) still.tick(0.1);
+    expect(stillMarker.position.y).toBe(stillRestM);
+  });
+});
+
+describe('the CIP rings (D21)', () => {
+  type RingMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  const ring = (floor: Floor, name: string): RingMesh => partOf<RingMesh>(floor, LINE_IDS[name], 'cip-ring');
+
+  it('shows none while no line cleans', () => {
+    const floor = floorFor(factoryView());
+    for (const name of Object.keys(LINE_IDS)) {
+      expect(machine(floor, LINE_IDS[name]).cipRing).toBeNull();
+      expect(ring(floor, name).visible).toBe(false);
+    }
+  });
+
+  it("fills the ring round a cleaning filler with its CIP's share: none, a half, all of it", () => {
+    const view = factoryView();
+    const floor = floorFor(withLines(view, { 'UHT-line 7': cleaning(0) }));
+    const mesh = ring(floor, 'UHT-line 7');
+    const { geometry } = mesh;
+    // The track's segments, then the fill's: the draw range is always one whole ring of segments.
+    const ringVertices = geometry.getAttribute('position').count / 2;
+    expect(ringVertices % 6).toBe(0);
+    expect(mesh.visible).toBe(true);
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBe(0);
+    expect(geometry.drawRange).toEqual({ start: 0, count: ringVertices });
+
+    floor.update(floorBays(withLines(view, { 'UHT-line 7': cleaning(0.5) })));
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBe(0.5);
+    expect(geometry.drawRange).toEqual({ start: ringVertices / 2, count: ringVertices });
+
+    floor.update(floorBays(withLines(view, { 'UHT-line 7': cleaning(1) })));
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBe(1);
+    expect(geometry.drawRange).toEqual({ start: ringVertices, count: ringVertices });
+    // The same geometry throughout, only its draw range moved on.
+    expect(ring(floor, 'UHT-line 7').geometry).toBe(geometry);
+
+    // A share fills whole segments, rounded down, so the ring closes only once the CIP is done; past 1 is 1.
+    floor.update(floorBays(withLines(view, { 'UHT-line 7': cleaning(0.999) })));
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBeLessThan(1);
+    // A share a hair under a whole segment in floating point (0.0999…98) still fills it.
+    floor.update(floorBays(withLines(view, { 'UHT-line 7': cleaning(1 - 0.9) })));
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBe(0.1);
+    floor.update(floorBays(withLines(view, { 'UHT-line 7': cleaning(1.5) })));
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBe(1);
+  });
+
+  it("draws the track faint and the fill in full, in the pipes' cleaning colour, facing up", () => {
+    const floor = floorFor(withLines(factoryView(), { 'UHT-line 7': cleaning(0.25) }));
+    const { geometry, material } = ring(floor, 'UHT-line 7');
+    expect(`#${material.color.getHexString()}`).toBe(COLORS['--clean-lye']);
+    expect(material.vertexColors).toBe(true);
+    const colors = geometry.getAttribute('color');
+    const half = colors.count / 2;
+    expect(colors.itemSize).toBe(4);
+    expect(colors.getW(0)).toBeGreaterThan(0.1);
+    expect(colors.getW(0)).toBeLessThan(0.4);
+    expect(colors.getW(half)).toBe(1);
+    const position = geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i += 3) {
+      const [a, b, c] = [i, i + 1, i + 2].map((k) => new THREE.Vector3().fromBufferAttribute(position, k));
+      expect(b.sub(a).cross(c.sub(a)).y).toBeGreaterThan(0);
+    }
+  });
+
+  it('rings the whole filler on the floor, and never meets the next filler or its ring', () => {
+    const view = factoryView();
+    const layout = layoutFactory(view);
+    const floor = floorFor(view);
+    for (const bay of layout.bays) {
+      const extents = bay.fillers.map((spot, index) => {
+        const mesh = partOf(floor, `line:${layout.bays.indexOf(bay)}:${index}`, 'cip-ring');
+        const position = mesh.geometry.getAttribute('position');
+        let reachXM = 0;
+        // The inner edge's half widths, where it crosses the axes.
+        let innerXM = Infinity;
+        let innerZM = Infinity;
+        for (let k = 0; k < position.count; k++) {
+          const xM = position.getX(k);
+          const zM = position.getZ(k);
+          expect(Math.abs(xM) > spot.widthM / 2 || Math.abs(zM) > spot.depthM / 2).toBe(true);
+          reachXM = Math.max(reachXM, Math.abs(xM));
+          if (Math.abs(zM) < 1e-6) innerXM = Math.min(innerXM, Math.abs(xM));
+          if (Math.abs(xM) < 1e-6) innerZM = Math.min(innerZM, Math.abs(zM));
+        }
+        // The footprint's corners lie inside the ring's inner edge.
+        expect((spot.widthM / 2 / innerXM) ** 2 + (spot.depthM / 2 / innerZM) ** 2).toBeLessThan(1);
+        expect(mesh.position.x).toBeCloseTo(spot.centreM[0], 9);
+        expect(mesh.position.z).toBeCloseTo(spot.centreM[2], 9);
+        expect(mesh.position.y).toBeGreaterThan(0.04); // above the slab
+        return { xM: spot.centreM[0], reachXM };
+      });
+      for (let i = 1; i < extents.length; i++) {
+        expect(extents[i - 1].xM + extents[i - 1].reachXM).toBeLessThan(extents[i].xM - extents[i].reachXM - 0.2);
+      }
+    }
+  });
+
+  it('hides the ring when the line is not cleaning, or cleans with no share', () => {
+    const view = factoryView();
+    const floor = floorFor(withLines(view, { 'UHT-line 7': cleaning(0.4), 'UHT-line 3': cleaning(null), 'UHT-line 1': { cipDoneFrac: 0.5 } }));
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBeCloseTo(0.4, 9);
+    expect(machine(floor, LINE_IDS['UHT-line 3']).cipRing).toBeNull();
+    expect(ring(floor, 'UHT-line 3').visible).toBe(false);
+    expect(machine(floor, LINE_IDS['UHT-line 1']).cipRing).toBeNull();
+    expect(ring(floor, 'UHT-line 1').visible).toBe(false);
+    // The CIP ends and the line runs again: its ring goes.
+    floor.update(floorBays(view));
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBeNull();
+    expect(ring(floor, 'UHT-line 7').visible).toBe(false);
+  });
+
+  it("fills from the model's own share of a CIP in Let Report's rows", () => {
+    const view = factoryView({
+      lines: withLine('UHT-line 7', { status: 'cleaning', cip_started_at: '2026-10-29T07:30:00Z', cip_until: '2026-10-29T08:30:00Z', cip_reason: 'standard' }),
+    });
+    const floor = floorFor(view);
+    expect(machine(floor, LINE_IDS['UHT-line 7']).cipRing).toBe(0.5);
+  });
+});
+
+describe("the labels' words for a line's story (D21)", () => {
+  const line = (patch: Partial<LineView>): LineView => ({ ...factoryView().uhts[1].lines[1], ...patch });
+
+  it('says how long a line has stood stopped, in maintenance or changing over, from a minute on', () => {
+    expect(lineStatusText(line({ status: 'stopped', statusText: 'Stopped', statusForS: 0 }))).toBe('Stopped');
+    expect(lineStatusText(line({ status: 'stopped', statusText: 'Stopped', statusForS: 59 }))).toBe('Stopped');
+    expect(lineStatusText(line({ status: 'stopped', statusText: 'Stopped', statusForS: 60 }))).toBe('Stopped · 1 min 00 s');
+    expect(lineStatusText(line({ status: 'stopped', statusText: 'Stopped', statusForS: 720 }))).toBe('Stopped · 12 min');
+    expect(lineStatusText(line({ status: 'maintenance', statusText: 'Maintenance', statusForS: 3_900 }))).toBe('Maintenance · 1 h 05 min');
+    expect(lineStatusText(line({ status: 'changeover', statusText: 'Changeover', statusForS: 245 }))).toBe('Changeover · 4 min 05 s');
+    expect(lineStatusText(line({ status: 'stopped', statusText: 'Stopped', statusForS: null }))).toBe('Stopped');
+  });
+
+  it('gives a running, cleaning or idle line its status text as the board words it', () => {
+    expect(lineStatusText(line({ status: 'running', statusText: 'Running', statusForS: 7_200 }))).toBe('Running');
+    expect(lineStatusText(line({ status: 'cleaning', statusText: 'CIP · 1 h 10 min left', statusForS: 600 }))).toBe('CIP · 1 h 10 min left');
+    expect(lineStatusText(line({ status: 'idle', statusText: 'Idle', statusForS: 600 }))).toBe('Idle');
+  });
+
+  it('adds the note and who changed the line to the tooltip, when there are any', () => {
+    const words = 'UHT-line 3, A3/Speed · 24,000 packs/h · 100 ml: Stopped · 4 min 00 s, 1 open trouble · High';
+    expect(lineTitleText(words, line({ note: 'Jaws not sealing', changedBy: 'Shift lead' }))).toBe(`${words}\nNote: Jaws not sealing\nChanged by Shift lead`);
+    expect(lineTitleText(words, line({ note: '', changedBy: 'QA' }))).toBe(`${words}\nChanged by QA`);
+    expect(lineTitleText(words, line({ note: 'Reel splice', changedBy: '' }))).toBe(`${words}\nNote: Reel splice`);
+    expect(lineTitleText(words, line({ note: '', changedBy: '' }))).toBe(words);
+  });
+});
+
+describe('the floor in the scene', () => {
+  it('stays within its draw budget: a dozen meshes a UHT and fourteen a line, with every marker and ring shown', () => {
+    const everything = Object.fromEntries(Object.keys(LINE_IDS).map((name) => [name, { ...cleaning(0.5), ...troubled(2) }]));
+    const floor = floorFor(withLines(factoryView(), everything));
     let meshes = 0;
     floor.root.traverseVisible((node) => {
       if (node instanceof THREE.Mesh) meshes += 1;
     });
-    // 3 UHTs × (skid 9 + tank 3) + 6 lines × (filler 9 + belt 3) + 12 pipes + the slabs: one mesh per
-    // material and shadow setting per machine, and per moving part.
-    expect(meshes).toBeLessThanOrEqual(3 * 12 + 6 * 12 + 12 + 1);
+    // 3 UHTs × (skid 9 + tank 3) + 6 lines × (filler 9 + belt 3 + trouble marker 1 + CIP ring 1) + 12 pipes + the
+    // slabs: one mesh per material and shadow setting per machine, and per moving part. A ring is one draw, its
+    // track and fill together; a line without troubles or a CIP draws neither.
+    expect(meshes).toBeLessThanOrEqual(3 * 12 + 6 * 14 + 12 + 1);
+    expect(floor.state().machines.filter((one) => one.kind === 'line').every((one) => one.trouble === 2 && one.cipRing === 0.5)).toBe(true);
   });
 
   it('follows the theme: the slabs, outlines and pipes take the tokens again', () => {
@@ -259,17 +535,21 @@ describe('the floor in the scene', () => {
     floor.update(floorBays(view));
     colors['--zone-proc'] = '#1d3141';
     colors['--t20'] = '#00ff00';
+    colors['--clean-lye'] = '#ff00ff';
     floor.applyTheme();
     const slabs = floor.root.getObjectByName('bay-slabs') as THREE.Mesh;
     const color = slabs.geometry.getAttribute('color');
     expect(`#${new THREE.Color(color.getX(0), color.getY(0), color.getZ(0)).getHexString()}`).toBe('#1d3141');
     expect(pipe(floor, 'uht:0').color).toBe('#00ff00');
+    const ring = partOf<THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>>(floor, LINE_IDS['UHT-line 7'], 'cip-ring');
+    expect(`#${ring.material.color.getHexString()}`).toBe('#ff00ff');
   });
 
-  it('frees what it made on dispose, never the shared materials, and leaves the scene', () => {
+  it('frees what it made on dispose, its markers and rings too, never the shared materials, and leaves the scene', () => {
     const ctx = makeContext();
     const scene = new THREE.Scene();
-    const floor = floorFor(factoryView(), ctx);
+    // A marker of each colour and a ring shown, so every material the floor made is on a mesh.
+    const floor = floorFor(withLines(factoryView(), { 'UHT-line 3': troubled(3), 'UHT-line 1': troubled(0), 'UHT-line 7': cleaning(0.5) }), ctx);
     scene.add(floor.root);
     const shared = new Set(Object.values(ctx.materials));
     const geometries = new Set<THREE.BufferGeometry>();

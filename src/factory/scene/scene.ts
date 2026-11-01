@@ -6,6 +6,10 @@
 // The renderer, lights and resize follow the 3D plant's world.ts; the labels are buttons, so a click or the
 // keyboard picks a machine as a click on its mesh does; the camera flies to what is picked. With ?debug in the
 // address, window.__factory3d shows the floor's state to the browser tests.
+//
+// Phase 11 (D21): a line's label says for how long it has been stopped, in maintenance or changing over, and
+// its tooltip adds its note and who changed it (labelText.ts); the floor's trouble markers hold still under
+// prefers-reduced-motion.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
@@ -17,6 +21,7 @@ import { fillerText, troublesText } from '../board';
 import { cameraPositionM, floorBays, layoutFactory } from '../layout';
 import type { CreateFactoryScene, FactoryLayout, FactoryScene, FactorySelection, FactoryView, FloorBay, FloorPointM, FloorRectM } from '../types';
 import { buildFloor, type Floor, type FloorMachine, type FloorState } from './floor';
+import { lineStatusText, lineTitleText } from './labelText';
 
 const FOV_DEG = 40;
 const NEAR_M = 0.5;
@@ -60,7 +65,7 @@ export interface FactorySceneDebug {
   key(): string | null;
   /** How many times the floor has been built: a change of status must not add one. */
   builds(): number;
-  /** Each machine as floor.ts reports it, with the name its label shows. */
+  /** Each machine as floor.ts reports it (a line's trouble marker and CIP ring too), with the name its label shows. */
   machines(): (FloorState['machines'][number] & { name: string })[];
   pipes(): FloorState['pipes'];
   /** What is marked now. */
@@ -347,6 +352,7 @@ export const createFactoryScene: CreateFactoryScene = (host, options) => {
       let trouble = '';
       let status = 'idle';
       let words = '';
+      let title = '';
       if (label.machine.kind === 'uht') {
         const uht = bay?.uht;
         if (uht) {
@@ -354,16 +360,19 @@ export const createFactoryScene: CreateFactoryScene = (host, options) => {
           value = uht.overCapacity ? `${uht.stateText} · over by ${formatNumber(uht.drawLph - uht.capacityLph)} L/h` : uht.stateText;
           status = uht.lamp;
           words = `${name}: ${value}`;
+          title = words;
         }
         setAttr(label.button, 'data-testid', `scene-uht-${name}`);
       } else {
         const line = bay?.lines[label.machine.filler ?? -1];
         if (line) {
           name = line.name;
-          value = line.statusText;
+          // "Stopped · 12 min" once a line has stood a minute (D21); the other parts as the board words them.
+          value = lineStatusText(line);
           trouble = troublesText(line);
           status = line.lamp;
           words = `${name}, ${fillerText(line)}: ${value}${trouble ? `, ${trouble}` : ''}`;
+          title = lineTitleText(words, line);
         }
         setAttr(label.button, 'data-testid', `scene-line-${name}`);
       }
@@ -373,7 +382,7 @@ export const createFactoryScene: CreateFactoryScene = (host, options) => {
       label.trouble.hidden = trouble === '';
       setAttr(label.button, 'data-status', status);
       setAttr(label.button, 'aria-label', words);
-      setAttr(label.button, 'title', words);
+      setAttr(label.button, 'title', title);
     }
   };
 
@@ -523,7 +532,7 @@ export const createFactoryScene: CreateFactoryScene = (host, options) => {
 
   const rebuild = (next: FactoryLayout): void => {
     floor?.dispose();
-    floor = buildFloor(next, host3d.context, readSceneColor);
+    floor = buildFloor(next, host3d.context, readSceneColor, { motion: () => !reducedMotion.matches });
     builds += 1;
     layout = next;
     scene.add(floor.root);
