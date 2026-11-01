@@ -54,15 +54,31 @@ Wave 1 runs at once: no two agents write the same file, and none commits. Until 
 
 ## Exit checklist
 
-- [ ] `npm run check` and `npm run build` pass; the board's page still loads no three.js until the 3D view opens.
-- [ ] `tests/factory/model.test.ts`: each new field, with its missing and malformed cases.
-- [ ] `tests/factory/demoData.test.ts`: the script's states at each minute mark, the same rows for the same times, the loop, rows the model reads as it reads Let Report's.
-- [ ] `tests/factory/demoClient.test.ts`: signed in at once, load, a change event per change of the rows and none otherwise, stop, sign out; nothing sent.
-- [ ] `tests/factory/floor.test.ts`: the trouble markers and their colours, the CIP ring's share, freed on dispose.
-- [ ] `e2e/factoryDemo.spec.ts`: the demo opens from the sign-in form and from `?demo#3d` with no request to Let Report; UHT-line 3 stops at 2:00 on the board and the floor, with its trouble marker; UHT-line 7's CIP fills its ring; leaving the demo returns to the sign-in form.
-- [ ] The board's and the floor's specs still pass, with the line's story checked against faked Let Report.
+- [x] `npm run check` and `npm run build` pass; the board's page still loads no three.js until the 3D view opens.
+- [x] `tests/factory/model.test.ts`: each new field, with its missing and malformed cases.
+- [x] `tests/factory/demoData.test.ts`: the script's states at each minute mark, the same rows for the same times, the loop, rows the model reads as it reads Let Report's.
+- [x] `tests/factory/demoClient.test.ts`: signed in at once, load, a change event per change of the rows and none otherwise, stop, sign out; nothing sent.
+- [x] `tests/factory/floor.test.ts`: the trouble markers and their colours, the CIP ring's share, freed on dispose.
+- [x] `e2e/factoryDemo.spec.ts`: the demo opens from the sign-in form and from `?demo#3d` with no request to Let Report; UHT-line 3 stops at 2:00 on the board and the floor, with its trouble marker; UHT-line 7's CIP fills its ring; leaving the demo returns to the sign-in form.
+- [x] The board's and the floor's specs still pass, with the line's story checked against faked Let Report.
 - [ ] The developer opens `factory.html?demo#3d` with no account and watches the script run.
 
 ## Status
 
-Not started.
+Built on 30 October and 1 November by the agents, as the table above has them. `lead` wrote the contracts, the card and D21. The four wave 1 agents worked at once in one checkout: `factory-client` and `factory-ui` finished in one run. `factory-model` and `factory-scene` stopped partway when the account hit its usage limit, and finished once it reset. `qa` then wrote the browser tests and ran the checks. `lead` reviewed each lane and committed it on its own.
+
+- `npm run check`, run twice: typecheck (both configs; `demoData.ts` checked headless), lint, 1,474 unit tests in 62 files, 69 asset tests. Of the unit tests, 185 are new: 52 for the line's story in the model, 60 for the demo's script, 17 for its client and 14 for the floor's markers, rings and label words. `npm run build`: the board's page still preloads only its shared chunk, and three.js and the floor come with the 3D view.
+- The factory's browser tests: 19 of 19, twice, on Chromium 153.
+  - `e2e/factoryDemo.spec.ts`, 5 tests:
+    - The demo from "Try the demo" and from `?demo#3d`.
+    - The script on the board and on the floor with the page's clock set, step by step: UHT-line 3's stop, note and trouble marker, and "Stopped · 1 min 00 s"; the marker staying through verification and going at 10:00.
+    - UHT-line 7's CIP: its bar and ring at 0, 25 and 50 %, UHT 3 in CIP and its pipes cleaning.
+    - Leaving the demo in the same view.
+    - Every test checks that nothing reached Let Report and nothing was stored.
+  - `e2e/factory.spec.ts` (7) and `e2e/factoryFloor.spec.ts` (7): the line's story against faked Let Report, the markers by worst severity as reports close over the socket, and a ring to overdue and gone.
+- The whole browser suite: 79 of 80 in 24.2 min. The one failure is the pixel-ratio test (`shell.spec.ts:58`, "buffer across at 2x"), which fails the same way on master, as phases 8 to 10 recorded. That run came before the plain `?demo#3d` test was added, which passed in both factory runs since.
+- Known:
+  - A demo change reaches the board up to 1.3 s after its mark: the client's 1 s look, then the page's 300 ms reload.
+  - From the whole-floor view a trouble marker is only about 4 px tall: clear from a bay or a filler.
+  - Under SwiftShader, Playwright's installed clock lets the page's timers fall behind the 3D floor's frames. So the demo's floor tests move the clock with the board alone in view, then read the floor. Phase 10's tests, with no clock, cover the floor updating while it shows.
+- Open: the developer's own look at `factory.html?demo#3d`. CI still starts no job (phase 9's status), so these local runs are the evidence.
