@@ -1,6 +1,6 @@
 # Hero model specs
 
-What the four hero models must be so they can replace their grey boxes in phase 5 with no code change: the separator (stage 1), homogenizer (stage 3), aseptic filler (stage 7, used twice) and palletizer (stage 8). Owned by the `assets` agent ([agent plan](../plan/agent-plan/README.md)); the general rules, budgets and Blender export checklist are in [README.md](README.md).
+What the hero models must be so they can replace their grey boxes with no code change: the separator (stage 1), homogenizer (stage 3), aseptic filler (stage 7, used twice) and palletizer (stage 8), swapped in since phase 5, and the stretch wrapper (stage 8), added in phase 12 ([Stretch wrapper](#stretch-wrapper)). Owned by the `assets` agent ([agent plan](../plan/agent-plan/README.md)); the general rules, budgets and Blender export checklist are in [README.md](README.md).
 
 The numbers come from the merged grey boxes in `src/scene/equipment/liquidLine.ts` and `packsLine.ts` (the code the heroes replace), checked against `uht-plant-preview.html`. The separator, homogenizer and palletizer match the preview exactly; the filler adds an outfeed hood and sealing jaws that the preview lacks.
 
@@ -10,6 +10,7 @@ The numbers come from the merged grey boxes in `src/scene/equipment/liquidLine.t
 | Homogenizer | `public/models/hero/homogenizer.glb` | `homogenizer` | 3 | `piston_1`, `piston_2`, `piston_3` |
 | Aseptic filler | `public/models/hero/aseptic-filler.glb` | `filler-a`, `filler-b` | 7 | `reel`, `jaws` |
 | Palletizer | `public/models/hero/palletizer.glb` | `palletizer` | 8 | `arm` (sub-joints `arm_lift`, `arm_wrist`, `arm_clamp_1`, `arm_clamp_2` for phase 4) |
+| Stretch wrapper | `public/models/hero/stretch-wrapper.glb` (phase 12) | `stretch-wrapper` | 8 | `turntable`, `carriage` (the grey box's carriage becomes a group in phase 12) |
 
 ## How the swap works, and what that requires
 
@@ -137,6 +138,40 @@ A column palletizer: a round base and column, a horizontal arm that swings on to
 
 Design notes: the lift rod, gripper and clamps hang under `arm_lift`, so the boom stays put when it lowers. Until phase 4 drives the sub-joints they stay at rest, which must look like the grey box: gripper raised, clamps open.
 
+## Stretch wrapper
+
+A turntable stretch wrapper in line on the pallet rollers, added in phase 12 ([phase card](../plan/agent-plan/phase-12-lifelike-motion.md)): a pallet rides on along +x and stops on the turntable, which turns while the film carriage climbs the mast and comes down again; then it rides off along +x. Machine origin: world (21.6, 0, 14.4) (`WRAPPER_M` in `src/scene/equipment/packs/layout.ts`), on the turntable's axis at the floor.
+
+| Part (grey box) | Shape and size (m) | Centre, from the origin (m) |
+|---|---|---|
+| `turntable`: disc | cylinder, radius 1.05, height 0.25 | (0, 0, 0) in `turntable` (y 0 to 0.25) |
+| `turntable`: bar across it | box 1.89 × 0.01 × 0.12 | (0, 0.13, 0) in `turntable` |
+| Mast foot | box 0.50 × 0.10 × 0.50 | (−1.45, 0.05, −1.05) |
+| Mast | box 0.20 × 2.70 × 0.20 | (−1.45, 1.35, −1.05) |
+| Carriage (a mesh in the grey box today) | box 0.32 × 0.22 × 0.50 | (−1.25, 0.60, −0.90) |
+
+- **Bounds (grey box):** x −1.70 to +1.05, y 0 to 2.70, z −1.30 to +1.05, so **2.75 × 2.70 × 2.35 m**. Envelope (5%): x −1.769 to +1.119, y 0 to 2.835, z −1.359 to +1.109.
+- **Turntable:** radius 1.05 m, its top flush with the pallet rollers either side at y 0.25 (`PALLET_ROLLER_TOP_M`).
+- **Label anchor:** (−0.6, 3.1, −0.5). Keep the model below 3.0 m.
+- **Pallet clearance:** a pallet is 1.2 m along x and 1.0 m along z, its load's top at 1.39 m. Riding through along x (z ±0.5 m, from the rollers' top up) and turning on the turntable (a circle of radius 0.79 m round the axis), it meets nothing but the turntable, at any carriage height.
+- **No nozzles.** The film web and the film shell on the load are the scene's (phase 12, lane A), not the model's.
+
+| Node | Parent | Rest position (m) | Motion | Driven by |
+|---|---|---|---|---|
+| `turntable` | scene | (0, 0.125, 0), on the axis at the turntable's mid-height | Turns about +y without limit. Its roller deck runs across the line at rotation.y = kπ, so a pallet rides on and off along x when the turntable stops at a multiple of π ("square"); at an odd multiple of π/2 the rollers lie along the line | Phase 12: `turntable.rotation.y` advancing while a pallet is wrapped (24 rpm) |
+| `carriage` | scene | (−1.25, 0.45, −0.9), the carriage's foot on the mast | Slides along +y, 0 to 1.05 m: `position.y` from 0.45 to 1.50. Carries the film roll, the two pre-stretch rollers and the exit roller | Phase 12: `carriage.position.y = 0.45 + carriageM` |
+
+Where the film runs, in the `carriage` node's frame (its origin the carriage's foot, its axes the model's; add the node's position for the model frame). `make-heroes.mjs` exports these as `WRAPPER_FILM`:
+
+| | Axis (x, z) | Radius | y in the node | Model frame at rest |
+|---|---|---|---|---|
+| Film roll | (0.194, 0.005) | 0.12 | 0.045 to 0.575 | axis at (−1.056, −0.895), y 0.495 to 1.025, 1.38 m from the turntable's axis |
+| Exit roller, where the film leaves for the load | (0.059, 0.191) | 0.025 | 0.04 to 0.58 | axis at (−1.191, −0.709), y 0.49 to 1.03 |
+
+The turntable turns the +y way, so the load's face nearest the carriage moves toward +z: the film runs off the exit roller on the operator side (+z) of the roll and meets the load at its tangent on that side.
+
+Design notes: the mast and the carriage face the turntable's centre, turned −35.9° about +y (`WRAPPER_YAW_RAD`), as on a real in-line wrapper. With the card's 1.05 m of travel the roll spans y 0.495 to 1.025 at the bottom and 1.545 to 2.075 at the top, so it covers the load's top edge (1.39 m) only while `carriageM` is between 0.37 and 0.90 m; above 0.90 m the whole roll is over the load. Wrap the top turns in that range, or clamp the film band to the load.
+
 ## Export checklist (heroes)
 
 The Blender checklist in [README.md](README.md#export-checklist-blender) applies, with these differences and additions:
@@ -226,6 +261,7 @@ The block-outs above, finished in the same script for the swap: every box face c
 | `homogenizer.glb` | 5,060 (2,328) | 5,439 | 5, 2 | 97.3 KB (226.5 KB) |
 | `aseptic-filler.glb` | 6,252 (1,116) | 5,174 | 7, 3 | 79.7 KB (220.5 KB) |
 | `palletizer.glb` | 2,048 (964) | 2,254 | 7, 2 | 42.7 KB (98.9 KB) |
+| `stretch-wrapper.glb` (phase 12, made final, no block-out) | 3,108 | 4,154 | 4, 2 | 82.2 KB (168.9 KB) |
 
 All four are within the budgets: at most 6,252 of 30,000 triangles, 7 of 20 meshes (under the 10 draw calls aimed for), 3 of 8 materials, and 97 KB of 2 MB. With the filler drawn twice the heroes come to 24,204 triangles a pass, 16,736 more than the block-outs (7,468), and the shadow pass draws them again. The first cut, 0.12 m cells, gave 49,964 a pass and took the overview to 280,986 triangles a frame, close to the 300,000 the README plans for; at 0.2 m the stage cameras show the same shading, since the AO varies over 0.4 m, for half the triangles ([perf baseline](../tests/perf/baseline.md#phase-5-hero-models)).
 
@@ -234,3 +270,25 @@ What the AO shows: contact shading where the cabinets, crankcase and frames stan
 **Deviations from the plan**, for `lead`: the AO is per vertex, not a 1024² ORM texture, because the models have no UVs; and there is no KTX2 step, because they have no textures. A Blender hero would follow the README's texture bake and the Blender checklist instead.
 
 `glb-load-check` loads all four in Chromium with three's meshopt decoder: OK, no console errors. `make-heroes.test.mjs` also checks the bake (darker in corners and at the floor, never by more than 85%, open faces nearly untouched, no shade cast between bodies) and that the compressed files decode to exactly what the script built.
+
+## Phase 12: the stretch wrapper model
+
+`buildStretchWrapper()` in `make-heroes.mjs` makes it the way the phase-5 models are made (faces cut for the AO, AO baked into the vertex colours, meshopt-compressed, two vertex-coloured materials `stretch_wrapper_paint` and `stretch_wrapper_matte`, plain greys), to the [spec above](#stretch-wrapper):
+
+- **Static (`body_paint`, `body_matte`):** a low round base (radius 0.98 m, 0.0625 m high) under the turntable; the mast, turned to face the turntable: a 0.40 m foot plate with four bolts, a base collar, the 0.22 m square column with a dark guide strip on its front face, a top cap at 2.70 m, the lift motor at the back of its foot, a control box (screen, three buttons, a stop button) on its operator side at 0.95 to 1.45 m, and a base frame from the foot to the turntable's base, under the turntable's rim.
+- **`turntable`:** a disc of radius 1.05 m (y 0.08 to 0.16) and on it a roller deck: 12 rollers of 0.08 m across the line, 0.13 m apart, between two side frames, their tops at y 0.25. A dark plate on the disc's +z side (at rest) breaks the deck's half-turn symmetry, so the turn shows. The rollers are not cut into rings: in a deck of like rollers the shade does not change along a roller.
+- **`carriage`:** guide shoes on the mast's front face and corners, a housing over the pre-stretch gearing with its motor on top, frame plates over and under the film roll (y 0 to 0.03 and 0.59 to 0.62 in the node), the film roll on its two chucks, the two rubber pre-stretch rollers and the steel exit roller on the operator side, and a photocell on the top plate. It is 0.69 m tall (y 0.45 to 1.14 at rest, 1.50 to 2.19 at the top).
+
+| | Bounds, x / y / z (m) | Against the grey box |
+|---|---|---|
+| At rest | −1.752…1.05 / 0…2.70 / −1.329…1.05, so 2.80 × 2.70 × 2.38 m | +1.9% in x (the lift motor and control box behind the mast), +1.2% in z (the mast's foot plate), inside the envelope |
+| Carriage at the top | the same; the carriage's top at 2.19 m | Under the mast's top (2.70) and the label (3.0) |
+
+Clearances: above the rollers' top nothing but the turntable comes nearer the axis than 1.24 m (the carriage's front plates), 0.45 m outside the turning pallet; and nothing reaches further toward the pallet's path than z −0.611, 0.11 m clear of its side. The turntable's base stands 1.75 cm under its disc, the base frame 2 cm, and the carriage's shoes 1 to 2 cm off the column, its strip and the control box, so nothing touches at any angle or height. `make-heroes.test.mjs` checks all of it at carriage heights 0, 0.525 and 1.05 m and at eight turntable angles.
+
+### What `scene` needs for the swap (phase 12, lane A)
+
+1. `HERO_MODELS.stretchWrapper = 'hero/stretch-wrapper.glb'` and `swapInHero(ctx, root, { path, nodes: ['turntable', 'carriage'] }, …)`, the model loaded into the wrapper's root at (21.6, 0, 14.4) as it is.
+2. The grey box's `carriage` is a mesh centred at (−1.25, 0.6, −0.9) today; to drive the same `position.y` as the hero it becomes a group named `carriage` at (−1.25, 0.45, −0.9) with the grey box hung 0.15 m above it. Its `turntable` group already sits at (0, 0.125, 0).
+3. The film web and the film shell stay the scene's, outside the model (keep them in `swap.keep` if they are children of the root). Take the web's start from `WRAPPER_FILM.exit` above, plus the carriage's position.
+4. 4 draw calls per pass (2 static, 2 moving), against the grey box's 5 parts; both materials opaque, so every mesh casts a shadow.

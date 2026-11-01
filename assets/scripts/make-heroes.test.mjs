@@ -17,8 +17,9 @@ import { NodeIO } from '@gltf-transform/core';
 import { EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { MeshoptDecoder } from 'meshoptimizer';
 import * as THREE from 'three';
+import { boxesOf, contacts, inFrame, planDistance, trianglesOf } from './clearance.mjs';
 import { parseGlb, summarize } from './glb-stats.mjs';
-import { AO, bakeAo, compress, HERO_BUILDERS, HERO_SPECS, heroGlbs, LIQUID_END_Z_M } from './make-heroes.mjs';
+import { AO, bakeAo, compress, HERO_BUILDERS, HERO_SPECS, heroGlbs, LIQUID_END_Z_M, WRAPPER, WRAPPER_FILM, WRAPPER_PALLET, WRAPPER_YAW_RAD } from './make-heroes.mjs';
 import { toGlb } from './make-vehicles.mjs';
 
 const HERO_DIR = fileURLToPath(new URL('../../public/models/hero/', import.meta.url));
@@ -142,6 +143,12 @@ describe('the moving parts show from their stage camera', () => {
     // Filler B (origin z -10.5, mirrored front to back), whose reel and jaws face the camera.
     { key: 'asepticFiller', mirrorZ: true, cameraM: [23 + 2 - 20, 1.4 + 12, -14 + 17 + 10.5], targets: { reel: [[-0.8, 1.5, 1.6]], jaws: [[-0.3, 2.6, 0.2]] } },
     { key: 'palletizer', cameraM: [28 + 2 - 28.3, 1 + 13, 10.5 + 16 - 13.2], targets: { arm: [[1.2, 2.45, 0]], arm_wrist: [[2.45, 1.7, 0.1]] } },
+    // Stage 8 too, from the stretch wrapper's origin (21.6, 0, 14.4): the roller deck, the marker plate, the film roll.
+    {
+      key: 'stretchWrapper',
+      cameraM: [28 + 2 - 21.6, 1 + 13, 10.5 + 16 - 14.4],
+      targets: { turntable: [[0.4, 0.25, 0.2], [0, 0.175, 0.86]], carriage: [[-0.987, 0.7, -0.802]] },
+    },
   ];
   for (const { key, mirrorZ, cameraM, targets } of cases) {
     it(`${key}: ${Object.keys(targets).join(', ')}`, () => {
@@ -290,6 +297,80 @@ describe('moving nodes sit on their joints and stay in their envelope through th
     c2.position.z -= 0.1;
     assert.ok(boxOf(c2).min.z - boxOf(c1).max.z > 0.1, 'closed clamps leave room for a tray');
   });
+
+  it('stretch wrapper: the turntable turns on its axis, flush with the pallet rollers, with a deck that conveys along x and a turn that shows', () => {
+    const model = build('stretchWrapper');
+    const table = model.getObjectByName('turntable');
+    const own = ownBox(table);
+    assert.ok(Math.abs(own.min.x + own.max.x) < MM && Math.abs(own.min.z + own.max.z) < MM, 'on its axis');
+    const still = boxesOf(trianglesOf(...model.children.filter((c) => c.name.startsWith('body'))));
+    for (let i = 0; i < 8; i++) {
+      table.rotation.y = (i / 8) * Math.PI * 2;
+      const box = boxOf(table);
+      assert.ok(Math.abs(box.max.y - WRAPPER.topM) < MM, `top at ${box.max.y.toFixed(4)}, the rollers' ${WRAPPER.topM}`);
+      const radiusM = Math.max(...trianglesOf(table).flatMap((t) => [t.a, t.b, t.c].map((v) => Math.hypot(v.x, v.z))));
+      assert.ok(radiusM <= WRAPPER.turntableRadiusM + MM, `reaches ${radiusM.toFixed(3)} m from the axis`);
+      assert.equal(contacts(trianglesOf(table), still), 0, `turntable at ${table.rotation.y.toFixed(2)} rad touches the base or mast`);
+      assertInside(boxOf(model), HERO_SPECS.stretchWrapper.envelopeM, `turntable at ${table.rotation.y.toFixed(2)} rad`);
+    }
+    // Square (0 or π), the rollers' tops carry a pallet along the line at the rollers' height.
+    for (const turn of [0, Math.PI]) {
+      table.rotation.y = turn;
+      model.updateMatrixWorld(true);
+      const raycaster = new THREE.Raycaster();
+      for (let k = 0; k < 12; k++) {
+        for (const zM of [-0.45, 0, 0.45]) {
+          raycaster.set(new THREE.Vector3(-0.715 + 0.13 * k, 2, zM), new THREE.Vector3(0, -1, 0));
+          const [hit] = raycaster.intersectObject(table);
+          assert.ok(hit && Math.abs(hit.point.y - WRAPPER.topM) < 0.002, `a roller top at x ${(-0.715 + 0.13 * k).toFixed(3)}, z ${zM}`);
+        }
+      }
+    }
+    // The marker plate breaks the deck's half-turn symmetry: turned by π, many vertices land where there are none.
+    const position = table.geometry.getAttribute('position');
+    const vertices = Array.from({ length: position.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(position, i));
+    const half = new THREE.Matrix4().makeRotationY(Math.PI);
+    const unmatched = vertices.filter((v) => !vertices.some((w) => w.distanceTo(v.clone().applyMatrix4(half)) < MM));
+    assert.ok(unmatched.length >= 16, `${unmatched.length} vertices move to an empty place`);
+  });
+
+  it('stretch wrapper: the carriage climbs the mast from its foot, carries the roll on the pallet side, and never meets the mast or a pallet', () => {
+    const model = build('stretchWrapper');
+    const carriage = model.getObjectByName('carriage');
+    const table = model.getObjectByName('turntable');
+    assert.ok(Math.abs(ownBox(carriage).min.y) < MM, 'the origin is the carriage foot');
+    const body = model.children.filter((c) => c.name.startsWith('body'));
+    // The mast and carriage stand turned to face the turntable: compare them in the mast's own frame, where
+    // their faces line up with the axes and the boxes round them are the faces themselves.
+    const toMast = new THREE.Matrix4().makeRotationY(-WRAPPER_YAW_RAD).multiply(new THREE.Matrix4().makeTranslation(-WRAPPER.mastXZ[0], 0, -WRAPPER.mastXZ[1]));
+    const still = boxesOf(inFrame(trianglesOf(...body), toMast));
+    const [carX, , carZ] = WRAPPER.carriageAtM;
+    // The roll faces the turntable: nearer its axis than the carriage's foot and the mast; the film leaves
+    // toward the operator side (+z), where the load's near face moves as the turntable turns +y.
+    const rollXZ = [carX + WRAPPER_FILM.roll.atXZ[0], carZ + WRAPPER_FILM.roll.atXZ[1]];
+    const exitXZ = [carX + WRAPPER_FILM.exit.atXZ[0], carZ + WRAPPER_FILM.exit.atXZ[1]];
+    assert.ok(Math.hypot(...rollXZ) < Math.hypot(carX, carZ) - 0.1 && Math.hypot(...rollXZ) < Math.hypot(...WRAPPER.mastXZ) - 0.3, 'roll on the pallet side');
+    assert.ok(exitXZ[1] > rollXZ[1], 'the film runs off on the operator side of the roll');
+    assert.ok(Math.abs(WRAPPER_FILM.roll.radiusM - 0.12) < MM && Math.abs(WRAPPER_FILM.roll.yM[1] - WRAPPER_FILM.roll.yM[0] - 0.5) < 0.05, 'a 0.24 m roll about 0.5 m tall');
+    const pallet = WRAPPER_PALLET;
+    const riding = new THREE.Box3(new THREE.Vector3(-5, pallet.bottomM + MM, -pallet.halfWidthM), new THREE.Vector3(5, HERO_SPECS.stretchWrapper.maxHeightM, pallet.halfWidthM));
+    for (const travelM of [0, WRAPPER.carriageTravelM / 2, WRAPPER.carriageTravelM]) {
+      carriage.position.y = WRAPPER.carriageAtM[1] + travelM;
+      const moved = trianglesOf(carriage);
+      assert.equal(contacts(inFrame(moved, toMast), still), 0, `carriage ${travelM} m up meets the mast or base`);
+      assert.ok(boxOf(carriage).max.y < HERO_SPECS.stretchWrapper.maxHeightM && boxOf(carriage).max.y < WRAPPER.mastHeightM, 'under the mast top and the label');
+      assertInside(boxOf(model), HERO_SPECS.stretchWrapper.envelopeM, `carriage ${travelM} m up`);
+      // Nothing but the turntable stands where a pallet rides through along x or turns on the turntable,
+      // from the rollers' top to the label, at any carriage height.
+      const around = [...moved, ...trianglesOf(...body)].filter((t) => Math.max(t.a.y, t.b.y, t.c.y) > pallet.bottomM + MM);
+      assert.equal(around.filter((t) => riding.intersectsTriangle(t)).length, 0, `something in the pallet's path along x, carriage ${travelM} m up`);
+      const nearestM = Math.min(...around.map((t) => planDistance(0, 0, t)));
+      assert.ok(nearestM > pallet.spinRadiusM + 0.3, `the nearest part is ${nearestM.toFixed(3)} m from the axis, the turning pallet sweeps ${pallet.spinRadiusM} m`);
+    }
+    // It moves along y only: the slide is the node's position.y.
+    assert.deepEqual([carriage.position.x, carriage.position.z], [carX, carZ]);
+    assert.ok(table.position.y > 0 && table.children.length === 0);
+  });
 });
 
 /** The vertex colours of each vertex-coloured mesh, by mesh name. */
@@ -325,19 +406,29 @@ const AO_NEAR_M = 0.1;
 describe('the baked ambient occlusion', () => {
   for (const key of Object.keys(HERO_SPECS)) {
     it(`${key}: darkens corners and contacts, by AO.strength at most, and leaves open faces nearly as they were`, () => {
-      const plain = colours(build(key));
+      const model = build(key);
+      const plain = colours(model);
       const shaded = colours(baked(key));
       const ratios = [];
+      const raised = []; // the vertices beyond the floor's reach, which can be in the open
+      const v = new THREE.Vector3();
       for (const [name, before] of plain) {
         const after = shaded.get(name);
         assert.equal(after.length, before.length, name);
-        for (let i = 0; i < before.length; i++) ratios.push(after[i] / before[i]);
+        const mesh = model.getObjectByName(name);
+        const position = mesh.geometry.getAttribute('position');
+        for (let i = 0; i < before.length; i++) {
+          ratios.push(after[i] / before[i]);
+          if (v.fromBufferAttribute(position, Math.floor(i / 3)).applyMatrix4(mesh.matrixWorld).y > AO.radiusM) raised.push(after[i] / before[i]);
+        }
       }
       assert.ok(Math.min(...ratios) >= 1 - AO.strength - 1e-6, `darkest ${Math.min(...ratios).toFixed(3)}`);
       assert.ok(Math.max(...ratios) <= 1 + 1e-6, `lightest ${Math.max(...ratios).toFixed(3)}`);
-      const share = (test) => ratios.filter(test).length / ratios.length;
-      assert.ok(share((r) => r < 0.8) > 0.05, `${(100 * share((r) => r < 0.8)).toFixed(1)}% of vertices in shade`);
-      assert.ok(share((r) => r > 0.95) > 0.2, `${(100 * share((r) => r > 0.95)).toFixed(1)}% of vertices in the open`);
+      const share = (list, test) => list.filter(test).length / list.length;
+      assert.ok(share(ratios, (r) => r < 0.8) > 0.05, `${(100 * share(ratios, (r) => r < 0.8)).toFixed(1)}% of vertices in shade`);
+      // The floor shades everything within AO.radiusM of it (the stretch wrapper's turntable and base all are),
+      // so the open share counts the vertices above that.
+      assert.ok(share(raised, (r) => r > 0.95) > 0.2, `${(100 * share(raised, (r) => r > 0.95)).toFixed(1)}% of the raised vertices in the open`);
     });
   }
 
