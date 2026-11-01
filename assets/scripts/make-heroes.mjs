@@ -65,13 +65,15 @@ export const HERO_SPECS = {
     ],
     nozzlesM: [[-1.6, 0.55, 0]],
   },
+  // The grey box (packsLine.ts, palletizer) since phase 12: its boom runs out to MAX_REACH_M + 0.1, about 3.055 m.
   palletizer: {
     file: 'palletizer.glb',
-    boundsM: { min: [-0.55, 0, -0.55], max: [2.725, 2.45, 0.55] },
-    envelopeM: { min: [-0.632, 0, -0.578], max: [2.807, 2.57, 0.578] },
+    boundsM: { min: [-0.55, 0, -0.55], max: [3.055, 2.45, 0.55] },
+    envelopeM: { min: [-0.64, 0, -0.578], max: [3.145, 2.57, 0.578] },
     maxHeightM: 2.95,
     nodes: [
       { name: 'arm', parent: null, atM: [0, 2.35, 0] },
+      { name: 'arm_trolley', parent: 'arm', atM: [2.45, 0, 0] },
       { name: 'arm_lift', parent: 'arm', atM: [2.45, 0, 0] },
       { name: 'arm_wrist', parent: 'arm_lift', atM: [0, -0.63, 0] },
       { name: 'arm_clamp_1', parent: 'arm_wrist', atM: [0, -0.07, -0.225] },
@@ -555,9 +557,62 @@ export function buildAsepticFiller() {
 }
 
 /**
- * The column palletizer, 3.28 × 2.45 × 1.10 m with the arm at rest along +x, origin on the column
- * axis. Moving nodes: `arm` (turns about y on the column), and under it `arm_lift` (the lift rod),
- * `arm_wrist` (the gripper) and `arm_clamp_1`, `arm_clamp_2`. The pallet and the stack are not part of it.
+ * Where the scene stands the palletizer's lift since phase 12 (src/scene/equipment/packs/palletizing.ts): out
+ * along the boom over each tray's place on the pallet (`arm_lift.position.x`, the reach from the column's axis)
+ * and down to the tray on the belt or onto the stack (`arm_lift.position.y = -lift`). Worked out as the scene does
+ * from its layout (packs/layout.ts): the column at (28.3, 13.2), the pick point at (29.85, 11.2), the pallet's
+ * centre at (26.2, 14.4) with 12 places a layer, 3 along x by 4 along z of 0.40 × 0.25 m; a tray 0.135 m tall
+ * hangs under the gripper, whose underside is 0.75 m under the hinge (2.35 m) at rest; the belt's surface is at
+ * 0.86 m, an empty pallet's deck at 0.39 m. Metres: reach about 1.89 to 2.955, lift up to 1.075.
+ */
+export const PALLETIZER_TRAVEL = (() => {
+  const reach = (x, z) => Math.hypot(x - 28.3, z - 13.2);
+  const places = [];
+  for (let row = 0; row < 4; row++) for (let column = 0; column < 3; column++) places.push(reach(26.2 + (column - 1) * 0.4, 14.4 + (row - 1.5) * 0.25));
+  const liftTo = (surfaceM) => 2.35 - 0.75 - 0.135 - surfaceM;
+  return {
+    minReachM: Math.min(...places),
+    maxReachM: Math.max(...places),
+    pickReachM: reach(29.85, 11.2),
+    pickLiftM: liftTo(0.86),
+    maxLiftM: liftTo(0.39),
+  };
+})();
+
+/**
+ * The lift rod the scene draws (packsLine.ts, `lift-rod`, hung on `arm_lift`): a 12-sided cylinder of radius 0.07 m
+ * on the lift's axis, stretched every frame from the top of the gripper (`arm_wrist`) up to `topM` over the
+ * boom's centre line in the arm's frame (BOOM_TOP_M), however far the lift is down. The model's trolley takes
+ * its top end.
+ */
+export const PALLETIZER_LIFT_ROD = { radiusM: 0.07, segments: 12, topM: 0.1 };
+
+/**
+ * The palletizer's boom since phase 12, along +x in the arm's frame: closed at the root, then two beams with a slot
+ * between them for the lift rod, a guide rail on each and a rack on the +z side, an end stop at each end of the
+ * rails, and an end plate at the tip. The trolley's guide blocks run on the rails. Metres.
+ */
+export const PALLETIZER_BOOM = {
+  /** The beams' outer faces, z ±. */
+  halfWidthM: 0.15,
+  /** The slot between the beams, z ±: 1.5 cm clear of the scene's rod. */
+  slotHalfM: 0.085,
+  /** Where the slot begins: the closed root ends. */
+  slotFromM: 1.55,
+  /** The rails, between the end stops. */
+  railM: [1.59, 3.09],
+  /** The end plate's outer face. */
+  tipM: 3.13,
+};
+
+/** The trolley, from its node's origin on the rod's axis: 0.135 m each way along the boom. */
+const TROLLEY_HALF_M = 0.135;
+
+/**
+ * The column palletizer, 3.68 × 2.55 × 1.10 m with the arm at rest along +x, origin on the column axis.
+ * Moving nodes: `arm` (turns about y on the column), and under it `arm_trolley` (rides along the boom),
+ * `arm_lift` (the gripper's mount, slides along the boom and down), `arm_wrist` (the gripper) and
+ * `arm_clamp_1`, `arm_clamp_2`. The pallet, the stack and the lift rod above the gripper's mount are the scene's.
  */
 export function buildPalletizer() {
   const m = makeMaterials('palletizer');
@@ -569,18 +624,48 @@ export function buildPalletizer() {
   p.cylinder(m.paint, C.casing, 'y', [0, 1.39, 0], 0.22, 1.58, 32);
   p.cylinder(m.matte, C.dark, 'y', [0, 2.215, 0], 0.27, 0.07, 32);
 
-  // The arm, from its hinge on the column axis: turntable hub, boom with a side stripe, and the head
-  // that guides the lift rod.
+  // The arm, from its hinge on the column axis: the turntable hub, and the boom (PALLETIZER_BOOM): closed at the
+  // root, then two beams with the rod's slot between them, each with a guide rail and an end stop at each end of
+  // it, the rack on the +z side (the stripe along the root), and the end plate at the tip.
+  const B = PALLETIZER_BOOM;
   const arm = new HeroParts();
   arm.cylinder(m.paint, C.mid, 'y', [0, 0, 0], 0.24, 0.2, 32);
-  arm.box(m.paint, C.casing, [0.1, 2.33], span(-0.1, 0.1), span(-0.13, 0.13));
-  arm.box(m.paint, C.dark, [0.3, 2.2], span(-0.03, 0.03), [0.13, 0.135]);
-  arm.box(m.paint, C.motor, [2.33, 2.57], span(-0.1, 0.1), span(-0.14, 0.14));
+  arm.box(m.paint, C.casing, [0.1, B.slotFromM], span(-0.1, 0.1), span(-B.halfWidthM, B.halfWidthM));
+  const railZ = (s) => side(s, (B.slotHalfM + B.halfWidthM) / 2 - 0.012, (B.slotHalfM + B.halfWidthM) / 2 + 0.012);
+  for (const s of [-1, 1]) {
+    arm.box(m.paint, C.casing, [B.slotFromM, B.tipM - 0.02], span(-0.1, 0.1), side(s, B.slotHalfM, B.halfWidthM));
+    arm.box(m.paint, C.steel, B.railM, [0.1, 0.12], railZ(s));
+    for (const x of [[B.railM[0] - 0.02, B.railM[0]], [B.railM[1], B.railM[1] + 0.02]]) arm.box(m.paint, C.black, x, [0.1, 0.13], side(s, 0.095, 0.14));
+  }
+  arm.box(m.paint, C.dark, [0.3, B.railM[1]], span(-0.03, 0.03), [B.halfWidthM, B.halfWidthM + 0.005]);
+  arm.box(m.paint, C.dark, [B.tipM - 0.02, B.tipM], span(-0.1, 0.1), span(-B.halfWidthM - 0.01, B.halfWidthM + 0.01));
   const armNode = node(arm, 'arm', [0, 2.35, 0]);
 
-  // The lift rod, its origin on its axis at the boom's centre line; its top end stays in the head.
+  // The trolley, its origin on the rod's axis at the boom's centre line. It straddles the boom: a carriage plate
+  // on four guide blocks over the rails (2 mm clear of them), skirts down both sides, a yoke under the beams with
+  // the guide bush the rod runs through, a bearing cap on top, and a drive on each side (gearbox and motor).
+  // The scene's rod ends inside it, at the boom's top, wherever the lift stands along the boom.
+  const trolley = new HeroParts();
+  const along = span(-TROLLEY_HALF_M, TROLLEY_HALF_M);
+  trolley.box(m.paint, C.panel, along, [0.135, 0.16], span(-0.175, 0.175));
+  trolley.box(m.paint, C.panel, along, [-0.16, -0.13], span(-0.175, 0.175));
+  for (const s of [-1, 1]) {
+    trolley.box(m.paint, C.panel, along, [-0.13, 0.135], side(s, B.halfWidthM + 0.01, 0.175));
+    for (const x of [[-0.125, -0.035], [0.035, 0.125]]) trolley.box(m.paint, C.dark, x, [0.122, 0.135], side(s, 0.1, 0.135));
+    trolley.box(m.paint, C.dark, span(-0.05, 0.05), [-0.03, 0.07], side(s, 0.175, 0.205));
+    trolley.cylinder(m.paint, C.motor, 'z', [0, 0.02, s * 0.265], 0.045, 0.12, 16);
+  }
+  trolley.cylinder(m.paint, C.dark, 'y', [0, -0.23, 0], 0.095, 0.14, 24);
+  trolley.cylinder(m.paint, C.black, 'y', [0, -0.305, 0], 0.08, 0.01, 24);
+  trolley.cylinder(m.paint, C.dark, 'y', [0, 0.18, 0], 0.08, 0.04, 24);
+  armNode.add(node(trolley, 'arm_trolley', [2.45, 0, 0]));
+
+  // The gripper's mount, its origin on the rod's axis at the boom's centre line: the foot of the lift rod, clamped
+  // to the top of the gripper, and the rod itself up into the trolley as it stands at rest, 1 cm short of the
+  // boom's top. In the scene the stretched rod (PALLETIZER_LIFT_ROD), 1 cm thicker, covers it at every lift.
   const lift = new HeroParts();
-  lift.cylinder(m.paint, C.steel, 'y', [0, -0.265, 0], 0.06, 0.73, 16);
+  lift.cylinder(m.paint, C.steel, 'y', [0, -0.27, 0], 0.06, 0.72, 16);
+  lift.cylinder(m.paint, C.dark, 'y', [0, -0.605, 0], 0.08, 0.05, 16);
   const liftNode = node(lift, 'arm_lift', [2.45, 0, 0]);
   armNode.add(liftNode);
 

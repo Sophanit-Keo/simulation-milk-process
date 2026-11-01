@@ -45,7 +45,7 @@ Copied unmodified from the Factory Kit 3.0 zip's `Models/GLB format/` folder (SH
 | `public/models/hero/separator.glb` (separator, 1.70 × 2.30 × 2.90 m, 4,592 triangles, 83 KB; block-out 2026-10-18, final with baked AO and meshopt 2026-10-27) | `assets/scripts/make-heroes.mjs` (three.js boxes, cylinders and cones, exported with GLTFExporter, compressed with glTF-Transform) | Own work; no third-party content | 2026-10-18 | The `separator`, stage 1 (`src/scene/equipment/heroes.ts`) |
 | `public/models/hero/homogenizer.glb` (homogenizer, 2.50 × 1.37 × 3.09 m, 5,060 triangles, 97 KB) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-10-18 | The `homogenizer`, stage 3 |
 | `public/models/hero/aseptic-filler.glb` (aseptic filler, 3.53 × 3.56 × 2.73 m, 6,252 triangles, 80 KB) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-10-18 | `filler-a` and, mirrored, `filler-b`, stage 7 |
-| `public/models/hero/palletizer.glb` (palletizer, 3.28 × 2.45 × 1.10 m, 2,048 triangles, 43 KB) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-10-18 | The `palletizer`, stage 8 |
+| `public/models/hero/palletizer.glb` (palletizer, 3.68 × 2.55 × 1.10 m, 3,020 triangles, 69 KB; since 2026-11-01 with the boom out to 3.13 m and the `arm_trolley` node) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-10-18 | The `palletizer`, stage 8 |
 | `public/models/hero/stretch-wrapper.glb` (turntable stretch wrapper, 2.80 × 2.70 × 2.38 m, 3,108 triangles, 82 KB, baked AO and meshopt) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-11-01 | The `stretch-wrapper`, stage 8 (swapped in by phase 12, lane A) |
 
 ## Fonts and libraries in the bundle
