@@ -69,4 +69,4 @@ node tests/perf/measure.mjs --path 60 --headed --channel chrome  # the 60 fps ch
 | `tests/`, `e2e/` | Unit and browser tests, and the perf check | `qa` |
 | `docs/` | Report, demo and video scripts, slides | `lead`, `process` |
 
-The phase 9 and 10 agents' definitions are in `.claude/agents/`.
+The agents' definitions (phases 9 to 12) are in `.claude/agents/`.
