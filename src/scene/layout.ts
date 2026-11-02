@@ -82,9 +82,9 @@ export const STAGE_VIEWS: Readonly<Record<StageId, StageView>> = {
   5: { focusM: [-9, 1.8, -13], cameraOffsetM: [1, 7, 11], badgeM: [-10, 5.3, -14], ringRadiusM: 3.4 },
   6: { focusM: [4, 3, -14], cameraOffsetM: [1, 8, 14], badgeM: [4, 7.2, -14], ringRadiusM: 3.2 },
   7: { focusM: [23, 1.4, -14], cameraOffsetM: [2, 12, 17], badgeM: [20, 4.6, -14], ringRadiusM: 7 },
-  8: { focusM: [28, 1, 10.5], cameraOffsetM: [2, 13, 16], badgeM: [27.5, 3.8, 12], ringRadiusM: 7.5 },
+  8: { focusM: [26, 1, 11.5], cameraOffsetM: [2, 14, 17.5], badgeM: [27.5, 3.8, 12], ringRadiusM: 7.5 },
   9: { focusM: [-1.5, 1, 10.3], cameraOffsetM: [1, 19, 22], badgeM: [-1.8, 3.6, 10.3], ringRadiusM: 11.5 },
-  10: { focusM: [-39, 1.5, 11.5], cameraOffsetM: [2, 27, 33], badgeM: [-40, 5.4, 10.6], ringRadiusM: 25 },
+  10: { focusM: [-45, 1.5, 19], cameraOffsetM: [2, 32, 38], badgeM: [-40, 5.4, 10.6], ringRadiusM: 25 },
 };
 
 /** Smallest rectangle around the given ones. */
