@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Builds the four hero models (assets/hero-specs.md) as our own low-poly work, and writes them as the
-// GLBs the scene loads in place of the grey boxes (src/scene/equipment/heroes.ts):
+// Builds the five hero models (assets/hero-specs.md: separator, homogenizer, aseptic filler, palletizer and,
+// since phase 12, the stretch wrapper) as our own low-poly work, and writes them as the GLBs the scene loads
+// in place of the grey boxes (src/scene/equipment/heroes.ts):
 //
 //   node assets/scripts/make-heroes.mjs [--out public/models/hero]
 //
@@ -64,13 +65,15 @@ export const HERO_SPECS = {
     ],
     nozzlesM: [[-1.6, 0.55, 0]],
   },
+  // The grey box (packsLine.ts, palletizer) since phase 12: its boom runs out to MAX_REACH_M + 0.1, about 3.055 m.
   palletizer: {
     file: 'palletizer.glb',
-    boundsM: { min: [-0.55, 0, -0.55], max: [2.725, 2.45, 0.55] },
-    envelopeM: { min: [-0.632, 0, -0.578], max: [2.807, 2.57, 0.578] },
+    boundsM: { min: [-0.55, 0, -0.55], max: [3.055, 2.45, 0.55] },
+    envelopeM: { min: [-0.64, 0, -0.578], max: [3.145, 2.57, 0.578] },
     maxHeightM: 2.95,
     nodes: [
       { name: 'arm', parent: null, atM: [0, 2.35, 0] },
+      { name: 'arm_trolley', parent: 'arm', atM: [2.45, 0, 0] },
       { name: 'arm_lift', parent: 'arm', atM: [2.45, 0, 0] },
       { name: 'arm_wrist', parent: 'arm_lift', atM: [0, -0.63, 0] },
       { name: 'arm_clamp_1', parent: 'arm_wrist', atM: [0, -0.07, -0.225] },
@@ -78,6 +81,54 @@ export const HERO_SPECS = {
     ],
     nozzlesM: [],
   },
+  // The grey box (packsLine.ts, stretchWrapper): turntable r 1.05, the mast's 0.5 m foot at (-1.45, -1.05).
+  stretchWrapper: {
+    file: 'stretch-wrapper.glb',
+    boundsM: { min: [-1.7, 0, -1.3], max: [1.05, 2.7, 1.05] },
+    envelopeM: { min: [-1.769, 0, -1.359], max: [1.119, 2.835, 1.109] },
+    maxHeightM: 3.0,
+    nodes: [
+      { name: 'turntable', parent: null, atM: [0, 0.125, 0] },
+      { name: 'carriage', parent: null, atM: [-1.25, 0.45, -0.9] },
+    ],
+    nozzlesM: [],
+  },
+};
+
+/**
+ * The stretch wrapper's layout round the turntable's centre (phase-12 card): the turntable flush with the
+ * pallet rollers, the mast in the back corner, the carriage's foot on the mast and how far it climbs.
+ */
+export const WRAPPER = {
+  turntableRadiusM: 1.05,
+  topM: 0.25,
+  mastXZ: [-1.45, -1.05],
+  mastHeightM: 2.7,
+  carriageAtM: [-1.25, 0.45, -0.9],
+  carriageTravelM: 1.05,
+};
+/** The pallet the wrapper must clear: riding along x through the centre, or turning on the turntable (m). */
+export const WRAPPER_PALLET = { halfWidthM: 0.5, bottomM: 0.25, loadTopM: 1.39, spinRadiusM: 0.79 };
+/** The mast and carriage face the turntable's centre: their own +x turned this far about +y. */
+export const WRAPPER_YAW_RAD = -Math.atan2(-WRAPPER.mastXZ[1], -WRAPPER.mastXZ[0]);
+const WRAPPER_YAW = new THREE.Matrix4().makeRotationY(WRAPPER_YAW_RAD);
+/** A point (u, w) of the carriage's own frame (u toward the turntable, w across, to the operator side) as (x, z) of its node. */
+const carriageXZ = ([u, w]) => [u * Math.cos(WRAPPER_YAW_RAD) + w * Math.sin(WRAPPER_YAW_RAD), -u * Math.sin(WRAPPER_YAW_RAD) + w * Math.cos(WRAPPER_YAW_RAD)];
+/** Where the film roll and the carriage's rollers stand in the carriage's own frame: axis (u, w), radius. */
+const FILM_LAYOUT = {
+  roll: { uw: [0.16, -0.11], radiusM: 0.12, yM: [0.045, 0.575] },
+  prestretch: [{ uw: [0.075, 0.07], radiusM: 0.045 }, { uw: [0.075, 0.17], radiusM: 0.045 }],
+  exit: { uw: [0.16, 0.12], radiusM: 0.025 },
+  rollerYM: [0.04, 0.58],
+};
+/**
+ * The film's path on the carriage, in the `carriage` node's frame (its origin the carriage's foot, axes the
+ * model's; add carriage.position for the model frame): the roll's axis and height, and the exit roller the
+ * film leaves from toward the load (the turntable turns +y, so the film runs off on the operator side).
+ */
+export const WRAPPER_FILM = {
+  roll: { atXZ: carriageXZ(FILM_LAYOUT.roll.uw), radiusM: FILM_LAYOUT.roll.radiusM, yM: FILM_LAYOUT.roll.yM },
+  exit: { atXZ: carriageXZ(FILM_LAYOUT.exit.uw), radiusM: FILM_LAYOUT.exit.radiusM, yM: FILM_LAYOUT.rollerYM },
 };
 
 // Plain greys (sRGB), lightest to darkest, plus the paper and the glass tint. No brand colours.
@@ -91,6 +142,7 @@ const C = {
   dark: 0x41484e, // plinths, feet, frames, flanges
   black: 0x24292d, // openings, screens, seals
   glass: 0xc6d5dd,
+  film: 0xd3dde2, // the stretch wrapper's film roll
 };
 
 /**
@@ -152,6 +204,15 @@ export class HeroParts extends Parts {
     geometry.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...tiltRad)));
     geometry.translate(...centre);
     this.add(material, color, geometry);
+  }
+
+  /** Takes every part of `from`, moved by `matrix`: parts built square to a frame of their own, then turned and placed. */
+  merge(from, matrix) {
+    for (const [material, geometries] of from.byMaterial) {
+      let list = this.byMaterial.get(material);
+      if (!list) this.byMaterial.set(material, (list = []));
+      for (const geometry of geometries) list.push(geometry.applyMatrix4(matrix));
+    }
   }
 }
 
@@ -496,9 +557,62 @@ export function buildAsepticFiller() {
 }
 
 /**
- * The column palletizer, 3.28 × 2.45 × 1.10 m with the arm at rest along +x, origin on the column
- * axis. Moving nodes: `arm` (turns about y on the column), and under it `arm_lift` (the lift rod),
- * `arm_wrist` (the gripper) and `arm_clamp_1`, `arm_clamp_2`. The pallet and the stack are not part of it.
+ * Where the scene stands the palletizer's lift since phase 12 (src/scene/equipment/packs/palletizing.ts): out
+ * along the boom over each tray's place on the pallet (`arm_lift.position.x`, the reach from the column's axis)
+ * and down to the tray on the belt or onto the stack (`arm_lift.position.y = -lift`). Worked out as the scene does
+ * from its layout (packs/layout.ts): the column at (28.3, 13.2), the pick point at (29.85, 11.2), the pallet's
+ * centre at (26.2, 14.4) with 12 places a layer, 3 along x by 4 along z of 0.40 × 0.25 m; a tray 0.135 m tall
+ * hangs under the gripper, whose underside is 0.75 m under the hinge (2.35 m) at rest; the belt's surface is at
+ * 0.86 m, an empty pallet's deck at 0.39 m. Metres: reach about 1.89 to 2.955, lift up to 1.075.
+ */
+export const PALLETIZER_TRAVEL = (() => {
+  const reach = (x, z) => Math.hypot(x - 28.3, z - 13.2);
+  const places = [];
+  for (let row = 0; row < 4; row++) for (let column = 0; column < 3; column++) places.push(reach(26.2 + (column - 1) * 0.4, 14.4 + (row - 1.5) * 0.25));
+  const liftTo = (surfaceM) => 2.35 - 0.75 - 0.135 - surfaceM;
+  return {
+    minReachM: Math.min(...places),
+    maxReachM: Math.max(...places),
+    pickReachM: reach(29.85, 11.2),
+    pickLiftM: liftTo(0.86),
+    maxLiftM: liftTo(0.39),
+  };
+})();
+
+/**
+ * The lift rod the scene draws (packsLine.ts, `lift-rod`, hung on `arm_lift`): a 12-sided cylinder of radius 0.07 m
+ * on the lift's axis, stretched every frame from the top of the gripper (`arm_wrist`) up to `topM` over the
+ * boom's centre line in the arm's frame (BOOM_TOP_M), however far the lift is down. The model's trolley takes
+ * its top end.
+ */
+export const PALLETIZER_LIFT_ROD = { radiusM: 0.07, segments: 12, topM: 0.1 };
+
+/**
+ * The palletizer's boom since phase 12, along +x in the arm's frame: closed at the root, then two beams with a slot
+ * between them for the lift rod, a guide rail on each and a rack on the +z side, an end stop at each end of the
+ * rails, and an end plate at the tip. The trolley's guide blocks run on the rails. Metres.
+ */
+export const PALLETIZER_BOOM = {
+  /** The beams' outer faces, z ±. */
+  halfWidthM: 0.15,
+  /** The slot between the beams, z ±: 1.5 cm clear of the scene's rod. */
+  slotHalfM: 0.085,
+  /** Where the slot begins: the closed root ends. */
+  slotFromM: 1.55,
+  /** The rails, between the end stops. */
+  railM: [1.59, 3.09],
+  /** The end plate's outer face. */
+  tipM: 3.13,
+};
+
+/** The trolley, from its node's origin on the rod's axis: 0.135 m each way along the boom. */
+const TROLLEY_HALF_M = 0.135;
+
+/**
+ * The column palletizer, 3.68 × 2.55 × 1.10 m with the arm at rest along +x, origin on the column axis.
+ * Moving nodes: `arm` (turns about y on the column), and under it `arm_trolley` (rides along the boom),
+ * `arm_lift` (the gripper's mount, slides along the boom and down), `arm_wrist` (the gripper) and
+ * `arm_clamp_1`, `arm_clamp_2`. The pallet, the stack and the lift rod above the gripper's mount are the scene's.
  */
 export function buildPalletizer() {
   const m = makeMaterials('palletizer');
@@ -510,18 +624,48 @@ export function buildPalletizer() {
   p.cylinder(m.paint, C.casing, 'y', [0, 1.39, 0], 0.22, 1.58, 32);
   p.cylinder(m.matte, C.dark, 'y', [0, 2.215, 0], 0.27, 0.07, 32);
 
-  // The arm, from its hinge on the column axis: turntable hub, boom with a side stripe, and the head
-  // that guides the lift rod.
+  // The arm, from its hinge on the column axis: the turntable hub, and the boom (PALLETIZER_BOOM): closed at the
+  // root, then two beams with the rod's slot between them, each with a guide rail and an end stop at each end of
+  // it, the rack on the +z side (the stripe along the root), and the end plate at the tip.
+  const B = PALLETIZER_BOOM;
   const arm = new HeroParts();
   arm.cylinder(m.paint, C.mid, 'y', [0, 0, 0], 0.24, 0.2, 32);
-  arm.box(m.paint, C.casing, [0.1, 2.33], span(-0.1, 0.1), span(-0.13, 0.13));
-  arm.box(m.paint, C.dark, [0.3, 2.2], span(-0.03, 0.03), [0.13, 0.135]);
-  arm.box(m.paint, C.motor, [2.33, 2.57], span(-0.1, 0.1), span(-0.14, 0.14));
+  arm.box(m.paint, C.casing, [0.1, B.slotFromM], span(-0.1, 0.1), span(-B.halfWidthM, B.halfWidthM));
+  const railZ = (s) => side(s, (B.slotHalfM + B.halfWidthM) / 2 - 0.012, (B.slotHalfM + B.halfWidthM) / 2 + 0.012);
+  for (const s of [-1, 1]) {
+    arm.box(m.paint, C.casing, [B.slotFromM, B.tipM - 0.02], span(-0.1, 0.1), side(s, B.slotHalfM, B.halfWidthM));
+    arm.box(m.paint, C.steel, B.railM, [0.1, 0.12], railZ(s));
+    for (const x of [[B.railM[0] - 0.02, B.railM[0]], [B.railM[1], B.railM[1] + 0.02]]) arm.box(m.paint, C.black, x, [0.1, 0.13], side(s, 0.095, 0.14));
+  }
+  arm.box(m.paint, C.dark, [0.3, B.railM[1]], span(-0.03, 0.03), [B.halfWidthM, B.halfWidthM + 0.005]);
+  arm.box(m.paint, C.dark, [B.tipM - 0.02, B.tipM], span(-0.1, 0.1), span(-B.halfWidthM - 0.01, B.halfWidthM + 0.01));
   const armNode = node(arm, 'arm', [0, 2.35, 0]);
 
-  // The lift rod, its origin on its axis at the boom's centre line; its top end stays in the head.
+  // The trolley, its origin on the rod's axis at the boom's centre line. It straddles the boom: a carriage plate
+  // on four guide blocks over the rails (2 mm clear of them), skirts down both sides, a yoke under the beams with
+  // the guide bush the rod runs through, a bearing cap on top, and a drive on each side (gearbox and motor).
+  // The scene's rod ends inside it, at the boom's top, wherever the lift stands along the boom.
+  const trolley = new HeroParts();
+  const along = span(-TROLLEY_HALF_M, TROLLEY_HALF_M);
+  trolley.box(m.paint, C.panel, along, [0.135, 0.16], span(-0.175, 0.175));
+  trolley.box(m.paint, C.panel, along, [-0.16, -0.13], span(-0.175, 0.175));
+  for (const s of [-1, 1]) {
+    trolley.box(m.paint, C.panel, along, [-0.13, 0.135], side(s, B.halfWidthM + 0.01, 0.175));
+    for (const x of [[-0.125, -0.035], [0.035, 0.125]]) trolley.box(m.paint, C.dark, x, [0.122, 0.135], side(s, 0.1, 0.135));
+    trolley.box(m.paint, C.dark, span(-0.05, 0.05), [-0.03, 0.07], side(s, 0.175, 0.205));
+    trolley.cylinder(m.paint, C.motor, 'z', [0, 0.02, s * 0.265], 0.045, 0.12, 16);
+  }
+  trolley.cylinder(m.paint, C.dark, 'y', [0, -0.23, 0], 0.095, 0.14, 24);
+  trolley.cylinder(m.paint, C.black, 'y', [0, -0.305, 0], 0.08, 0.01, 24);
+  trolley.cylinder(m.paint, C.dark, 'y', [0, 0.18, 0], 0.08, 0.04, 24);
+  armNode.add(node(trolley, 'arm_trolley', [2.45, 0, 0]));
+
+  // The gripper's mount, its origin on the rod's axis at the boom's centre line: the foot of the lift rod, clamped
+  // to the top of the gripper, and the rod itself up into the trolley as it stands at rest, 1 cm short of the
+  // boom's top. In the scene the stretched rod (PALLETIZER_LIFT_ROD), 1 cm thicker, covers it at every lift.
   const lift = new HeroParts();
-  lift.cylinder(m.paint, C.steel, 'y', [0, -0.265, 0], 0.06, 0.73, 16);
+  lift.cylinder(m.paint, C.steel, 'y', [0, -0.27, 0], 0.06, 0.72, 16);
+  lift.cylinder(m.paint, C.dark, 'y', [0, -0.605, 0], 0.08, 0.05, 16);
   const liftNode = node(lift, 'arm_lift', [2.45, 0, 0]);
   armNode.add(liftNode);
 
@@ -544,15 +688,95 @@ export function buildPalletizer() {
   return group('palletizer', [...p.meshes('body'), armNode]);
 }
 
+/**
+ * The turntable stretch wrapper, in line on the pallet rollers, origin on the turntable's axis at the floor:
+ * a low base, the turntable with a roller deck flush with the pallet rollers, and the mast in the back corner
+ * with its control box, facing the turntable, on which the film carriage climbs. Moving nodes: `turntable`
+ * (turns about +y) and `carriage` (slides up the mast along +y, 0 to WRAPPER.carriageTravelM), which carries
+ * the film roll, the two pre-stretch rollers and the exit roller (WRAPPER_FILM).
+ */
+export function buildStretchWrapper() {
+  const m = makeMaterials('stretch_wrapper');
+  const p = new HeroParts();
+  const [mastX, mastZ] = WRAPPER.mastXZ;
+  const [carX, carY, carZ] = WRAPPER.carriageAtM;
+  const top = WRAPPER.topM;
+
+  // The base the turntable turns on, a shadow gap under its disc (a height float32 holds exactly, so it stands on y 0).
+  p.cylinder(m.matte, C.dark, 'y', [0, 0.03125, 0], 0.98, 0.0625, 64);
+
+  // The mast, built square to its own frame (+x toward the turntable's centre, +z across to the operator
+  // side) and turned to face the centre: foot plate and bolts, base collar, column with the carriage's guide
+  // strip, top cap, the lift motor behind, the control box on the operator side, and the base frame to the turntable.
+  const mast = new HeroParts();
+  mast.box(m.matte, C.dark, span(-0.2, 0.2), [0, 0.04], span(-0.2, 0.2));
+  for (const u of [-0.15, 0.15]) for (const w of [-0.15, 0.15]) mast.cylinder(m.matte, C.black, 'y', [u, 0.05, w], 0.015, 0.02, 8);
+  mast.box(m.matte, C.dark, span(-0.14, 0.14), [0.04, 0.3], span(-0.14, 0.14));
+  mast.box(m.paint, C.casing, span(-0.11, 0.11), [0.3, WRAPPER.mastHeightM - 0.06], span(-0.11, 0.11));
+  mast.box(m.matte, C.black, [0.11, 0.115], [0.35, WRAPPER.mastHeightM - 0.1], span(-0.025, 0.025));
+  mast.box(m.matte, C.dark, span(-0.14, 0.14), [WRAPPER.mastHeightM - 0.06, WRAPPER.mastHeightM], span(-0.14, 0.14));
+  mast.box(m.matte, C.motor, [-0.3, -0.14], [0.08, 0.36], span(-0.1, 0.1));
+  mast.box(m.paint, C.panel, [-0.11, 0.05], [0.95, 1.45], [0.11, 0.33]);
+  mast.box(m.matte, C.black, [-0.07, 0.03], [1.25, 1.38], [0.33, 0.335]); // screen
+  for (const u of [-0.06, -0.02, 0.02]) mast.box(m.matte, C.dark, [u - 0.012, u + 0.012], [1.12, 1.15], [0.33, 0.34]); // buttons
+  mast.cylinder(m.matte, C.black, 'z', [-0.02, 1.03, 0.34], 0.025, 0.02, 12); // stop button
+  mast.box(m.matte, C.dark, [0.14, 0.85], [0, 0.06], span(-0.06, 0.06)); // base frame, under the turntable's rim
+  p.merge(mast, new THREE.Matrix4().makeTranslation(mastX, 0, mastZ).multiply(WRAPPER_YAW));
+
+  // The turntable, its origin on the axis at mid-height: a disc, and on it a roller deck flush with the pallet
+  // rollers (12 rollers across the line between two side frames), so a pallet rides on and off along x when it
+  // stands square (rotation.y a multiple of π); a dark plate on one side shows the turn.
+  const [, tableY] = HERO_SPECS.stretchWrapper.nodes[0].atM;
+  const table = new HeroParts();
+  table.cylinder(m.paint, C.mid, 'y', [0, 0.12 - tableY, 0], WRAPPER.turntableRadiusM, 0.08, 64);
+  for (const s of [-1, 1]) table.box(m.paint, C.dark, span(-0.76, 0.76), [0.16 - tableY, top - tableY], side(s, 0.655, 0.7));
+  for (let i = 0; i < 12; i++) {
+    // Not cut into rings: in a deck of like rollers the shade does not change along a roller.
+    const roller = new THREE.CylinderGeometry(0.04, 0.04, 1.3, 12).rotateX(Math.PI / 2).translate(-0.715 + 0.13 * i, top - 0.04 - tableY, 0);
+    table.add(m.paint, C.steel, roller);
+  }
+  table.box(m.paint, C.black, span(-0.25, 0.25), [0.16 - tableY, 0.175 - tableY], [0.76, 0.96]);
+
+  // The carriage, built in its own frame (u toward the turntable, w across) and turned like the mast. Guide
+  // shoes on the mast's front face and corners; the housing over the pre-stretch gearing with its motor on
+  // top; frame plates over and under the film roll, which stands on its chucks; the two pre-stretch rollers
+  // and the exit roller on the operator side, where the film runs off; a photocell on the top plate.
+  const [mu, , mw] = new THREE.Vector3(mastX - carX, 0, mastZ - carZ).applyMatrix4(new THREE.Matrix4().makeRotationY(-WRAPPER_YAW_RAD)).toArray();
+  const { roll, prestretch, exit, rollerYM } = FILM_LAYOUT;
+  const c = new HeroParts();
+  c.box(m.paint, C.mid, [mu + 0.125, mu + 0.155], [0, 0.62], [mw - 0.15, mw + 0.15]);
+  for (const s of [-1, 1]) c.box(m.paint, C.mid, [mu + 0.07, mu + 0.155], [0.04, 0.58], span(mw + s * 0.125, mw + s * 0.15));
+  c.box(m.paint, C.panel, [mu + 0.155, 0.02], [0.03, 0.59], [-0.24, 0.22]);
+  c.cylinder(m.paint, C.motor, 'y', [-0.04, 0.655, -0.12], 0.055, 0.07, 16);
+  for (const y of [[0, 0.03], [0.59, 0.62]]) {
+    c.box(m.paint, C.dark, [mu + 0.155, 0.13], y, [-0.24, 0.22]);
+    c.box(m.paint, C.dark, [0.13, 0.3], y, [-0.24, 0.14]);
+  }
+  const rollY = (y0, y1) => [(y0 + y1) / 2, y1 - y0];
+  for (const y of [[0.03, roll.yM[0]], [roll.yM[1], 0.59]]) {
+    const [yM, hM] = rollY(...y);
+    c.cylinder(m.paint, C.dark, 'y', [roll.uw[0], yM, roll.uw[1]], 0.05, hM, 16); // chuck
+  }
+  c.cylinder(m.paint, C.film, 'y', [roll.uw[0], rollY(...roll.yM)[0], roll.uw[1]], roll.radiusM, rollY(...roll.yM)[1], 32);
+  for (const { uw, radiusM } of prestretch) c.cylinder(m.paint, C.black, 'y', [uw[0], rollY(...rollerYM)[0], uw[1]], radiusM, rollY(...rollerYM)[1], 16);
+  c.cylinder(m.paint, C.steel, 'y', [exit.uw[0], rollY(...rollerYM)[0], exit.uw[1]], exit.radiusM, rollY(...rollerYM)[1], 12);
+  c.box(m.paint, C.black, [0.26, 0.3], [0.62, 0.66], [-0.03, 0.03]);
+  const carriage = new HeroParts();
+  carriage.merge(c, WRAPPER_YAW);
+
+  return group('stretch_wrapper', [...p.meshes('body'), node(table, 'turntable', [0, tableY, 0]), node(carriage, 'carriage', [carX, carY, carZ])]);
+}
+
 /** Each model's builder, by its key in HERO_SPECS. */
 export const HERO_BUILDERS = {
   separator: buildSeparator,
   homogenizer: buildHomogenizer,
   asepticFiller: buildAsepticFiller,
   palletizer: buildPalletizer,
+  stretchWrapper: buildStretchWrapper,
 };
 
-/** All four as { 'separator.glb': bytes, ... }: built, AO baked, written and compressed. */
+/** All five as { 'separator.glb': bytes, ... }: built, AO baked, written and compressed. */
 export async function heroGlbs() {
   const out = {};
   for (const [key, build] of Object.entries(HERO_BUILDERS)) out[HERO_SPECS[key].file] = await compress(await toGlb(bakeAo(build())));

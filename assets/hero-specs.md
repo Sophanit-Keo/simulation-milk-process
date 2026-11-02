@@ -1,6 +1,6 @@
 # Hero model specs
 
-What the four hero models must be so they can replace their grey boxes in phase 5 with no code change: the separator (stage 1), homogenizer (stage 3), aseptic filler (stage 7, used twice) and palletizer (stage 8). Owned by the `assets` agent ([agent plan](../plan/agent-plan/README.md)); the general rules, budgets and Blender export checklist are in [README.md](README.md).
+What the hero models must be so they can replace their grey boxes with no code change: the separator (stage 1), homogenizer (stage 3), aseptic filler (stage 7, used twice) and palletizer (stage 8), swapped in since phase 5, and the stretch wrapper (stage 8), added in phase 12 ([Stretch wrapper](#stretch-wrapper)). Owned by the `assets` agent ([agent plan](../plan/agent-plan/README.md)); the general rules, budgets and Blender export checklist are in [README.md](README.md).
 
 The numbers come from the merged grey boxes in `src/scene/equipment/liquidLine.ts` and `packsLine.ts` (the code the heroes replace), checked against `uht-plant-preview.html`. The separator, homogenizer and palletizer match the preview exactly; the filler adds an outfeed hood and sealing jaws that the preview lacks.
 
@@ -9,7 +9,8 @@ The numbers come from the merged grey boxes in `src/scene/equipment/liquidLine.t
 | Separator | `public/models/hero/separator.glb` | `separator` | 1 | `bowl` |
 | Homogenizer | `public/models/hero/homogenizer.glb` | `homogenizer` | 3 | `piston_1`, `piston_2`, `piston_3` |
 | Aseptic filler | `public/models/hero/aseptic-filler.glb` | `filler-a`, `filler-b` | 7 | `reel`, `jaws` |
-| Palletizer | `public/models/hero/palletizer.glb` | `palletizer` | 8 | `arm` (sub-joints `arm_lift`, `arm_wrist`, `arm_clamp_1`, `arm_clamp_2` for phase 4) |
+| Palletizer | `public/models/hero/palletizer.glb` | `palletizer` | 8 | `arm` and its sub-joints `arm_lift`, `arm_wrist`, `arm_clamp_1`, `arm_clamp_2` (phase 12); `arm_trolley` (phase 12, from this model on; the scene does not drive it yet, see [Phase 12: the palletizer's boom and trolley](#phase-12-the-palletizers-boom-and-trolley)) |
+| Stretch wrapper | `public/models/hero/stretch-wrapper.glb` (phase 12) | `stretch-wrapper` | 8 | `turntable`, `carriage` (the grey box's carriage becomes a group in phase 12) |
 
 ## How the swap works, and what that requires
 
@@ -113,29 +114,65 @@ Design notes: the aseptic zone is the one glass part (alpha-blended), so the pap
 
 ## Palletizer
 
-A column palletizer: a round base and column, a horizontal arm that swings on top of the column between the pick point (where the tray line ends) and the place point (the pallet being built), and a tray gripper on a lift rod at the arm's end. Machine origin: world (28.3, 0, 13.2), on the column's axis.
+A column palletizer: a round base and column, a horizontal arm that swings on top of the column between the pick point (where the tray line ends) and the pallet being built, and a tray gripper that a trolley carries along the boom, on a lift rod. Machine origin: world (28.3, 0, 13.2), on the column's axis.
 
 | Part (grey box) | Shape and size (m) | Centre, from the origin (m) |
 |---|---|---|
 | Base | cylinder, radius 0.55, height 0.60 | (0, 0.30, 0) |
 | Column | cylinder, radius 0.22, height 1.70 | (0, 1.45, 0) |
-| `arm`: boom | box 2.45 × 0.20 × 0.26 | (1.22, 0, 0) in `arm` |
-| `arm`: lift rod | cylinder along y, radius 0.06, length 0.60 | (2.45, −0.35, 0) in `arm` |
-| `arm`: gripper | box 0.55 × 0.14 × 0.45 | (2.45, −0.70, 0) in `arm` |
+| `arm`: boom | box 3.055 × 0.20 × 0.26 since phase 12 (`MAX_REACH_M + 0.1`; 2.45 m before) | (1.53, 0, 0) in `arm` |
+| `arm_lift`: lift rod (`lift-rod`) | cylinder along y, radius 0.07, from the top of the gripper up to the boom's top (y +0.10 in `arm`), stretched every frame as the lift lowers | on the lift's axis |
+| `arm_wrist`: gripper | box 0.55 × 0.12 × 0.45 | (0, −0.06, 0) in `arm_wrist` |
 
-- **Bounds, arm at rest along +x:** x −0.55 to +2.725, y 0 to 2.45, z −0.55 to +0.55, so **3.28 × 2.45 × 1.10 m**. Swinging, the arm sweeps a disc of radius 2.73 m round the column between y 1.58 and 2.45. Envelope (5%): reach ≤ 2.87 m, height ≤ 2.57 m.
-- **Reach:** the pick point is 2.53 m from the column and the place point 2.42 m, so keep the gripper's centre 2.45 m out along the arm.
+- **Bounds, arm at rest along +x** (grey box since phase 12): x −0.55 to +3.055, y 0 to 2.45, z −0.55 to +0.55, so **3.61 × 2.45 × 1.10 m**. Envelope (5%): x −0.64 to +3.145, height ≤ 2.57 m, z ±0.578. Swinging, the boom sweeps a disc of radius about 3.06 m round the column; keep the model's sweep inside 3.145 m.
+- **Reach** (phase 12, `src/scene/equipment/packs/palletizing.ts`): the pick point is 2.53 m from the column (`PICK_REACH_M`); the 12 places of a layer are 1.89 to 2.955 m out (`MAX_REACH_M`). The lift stands out along the boom over each one, so the boom must run past 2.955 m with the trolley on it: its tip at least 3.055 m out.
+- **Lift** (phase 12): down 0.605 m to a tray on the belt (surface at 0.86 m), 0.235 to 1.075 m onto the stack's top to bottom layer (an empty pallet's deck at 0.39 m).
 - **Label anchor:** (0, 3.00, 0). Keep the model below 2.95 m.
-- **Not part of the hero:** the pallet and the part-built `stack` of trays at the place point belong to the fixture as tokens. The model holds only base, column and arm.
+- **Not part of the hero:** the pallet and the `stack` of trays at the place point belong to the fixture as tokens, and since phase 12 so do the lift rod above the gripper's mount (`lift-rod`) and the tray in the gripper (`carried-tray`), which the scene hangs on the model's `arm_lift` and `arm_wrist`. The model holds base, column, arm, trolley and gripper.
 
 | Node | Parent | Rest position (m) | Motion | Driven by |
 |---|---|---|---|---|
-| `arm` | scene | (0, 2.35, 0), the hinge on top of the column | Turns about +y. At rest it points along +x; it swings between 0.91 rad (52°, the pick point) and 3.66 rad (210°, the place point), the way round via −z | `arm.rotation.y = 0.91 + 2.75·(0.5 − 0.5·cos φ)`, φ advancing 0.5 rad/s while stage 8 runs: one pick and place in about 12.6 s |
-| `arm_lift` | `arm` | (2.45, 0, 0) | Slides down along −y, 0 to 1.20 m, to take a tray off the belt (surface at 0.86 m) or set it on the pallet (empty deck at 0.41 m) | Phase 4 |
-| `arm_wrist` | `arm_lift` | (0, −0.63, 0), the top of the gripper | Turns about +y so the tray stays square to the pallet: `rotation.y = −arm.rotation.y + tray angle` | Phase 4 |
-| `arm_clamp_1`, `arm_clamp_2` | `arm_wrist` | (0, −0.07, −0.225), (0, −0.07, +0.225) | Close towards each other along z, 0 to 0.10 m each, to grip a tray | Phase 4 |
+| `arm` | scene | (0, 2.35, 0), the hinge on top of the column | Turns about +y. At rest it points along +x; it swings between 0.91 rad (52°, the pick point) and about 3.46 to 3.89 rad (the places on the pallet), the way round via −z | Phase 12: `arm.rotation.y = pose.armRad` (`palletizing.ts`) |
+| `arm_trolley` (phase 12) | `arm` | (2.45, 0, 0), on the lift's axis at the boom's centre line | Slides along +x with the lift, about 1.89 to 2.955 m, riding the boom's rails; never down | **Not driven yet**: the scene is to write `arm_trolley.position.x = pose.reachM` (the same value as `arm_lift.position.x`). Until it does, the trolley stays at 2.45 m |
+| `arm_lift` | `arm` | (2.45, 0, 0) | Slides along +x, about 1.89 to 2.955 m (`position.x = reachM`), and down along −y, 0 to about 1.1 m (`position.y = −liftM`), to take a tray off the belt (surface at 0.86 m) or set it on its place on the pallet | Phase 12: `arm_lift.position.set(pose.reachM, −pose.liftM, 0)` |
+| `arm_wrist` | `arm_lift` | (0, −0.63, 0), the top of the gripper | Turns about +y so the tray stays square to the pallet: `rotation.y = −arm.rotation.y + tray angle` | Phase 12: `pose.wristRad` |
+| `arm_clamp_1`, `arm_clamp_2` | `arm_wrist` | (0, −0.07, −0.225), (0, −0.07, +0.225) | Close towards each other along z, 0 to 0.10 m each, to grip a tray | Phase 12: `pose.clampM` |
 
-Design notes: the lift rod, gripper and clamps hang under `arm_lift`, so the boom stays put when it lowers. Until phase 4 drives the sub-joints they stay at rest, which must look like the grey box: gripper raised, clamps open.
+Design notes: the gripper and clamps hang under `arm_lift`, so the boom stays put when it lowers. The trolley is a node of its own under `arm`, not under `arm_lift`: `arm_lift` also goes down, and the trolley must stay on the boom. The lift rod between the trolley and the gripper changes length with the lift (0.73 m with the gripper raised, 1.8 m at the bottom layer), more than a rigid rod could slide through the trolley under the 2.95 m limit, so the scene draws it stretched; the model's trolley takes its top end and the model's gripper mount its foot. At rest everything must look like the grey box: gripper raised, clamps open.
+
+## Stretch wrapper
+
+A turntable stretch wrapper in line on the pallet rollers, added in phase 12 ([phase card](../plan/agent-plan/phase-12-lifelike-motion.md)): a pallet rides on along +x and stops on the turntable, which turns while the film carriage climbs the mast and comes down again; then it rides off along +x. Machine origin: world (21.6, 0, 14.4) (`WRAPPER_M` in `src/scene/equipment/packs/layout.ts`), on the turntable's axis at the floor.
+
+| Part (grey box) | Shape and size (m) | Centre, from the origin (m) |
+|---|---|---|
+| `turntable`: disc | cylinder, radius 1.05, height 0.25 | (0, 0, 0) in `turntable` (y 0 to 0.25) |
+| `turntable`: bar across it | box 1.89 × 0.01 × 0.12 | (0, 0.13, 0) in `turntable` |
+| Mast foot | box 0.50 × 0.10 × 0.50 | (−1.45, 0.05, −1.05) |
+| Mast | box 0.20 × 2.70 × 0.20 | (−1.45, 1.35, −1.05) |
+| Carriage (a mesh in the grey box today) | box 0.32 × 0.22 × 0.50 | (−1.25, 0.60, −0.90) |
+
+- **Bounds (grey box):** x −1.70 to +1.05, y 0 to 2.70, z −1.30 to +1.05, so **2.75 × 2.70 × 2.35 m**. Envelope (5%): x −1.769 to +1.119, y 0 to 2.835, z −1.359 to +1.109.
+- **Turntable:** radius 1.05 m, its top flush with the pallet rollers either side at y 0.25 (`PALLET_ROLLER_TOP_M`).
+- **Label anchor:** (−0.6, 3.1, −0.5). Keep the model below 3.0 m.
+- **Pallet clearance:** a pallet is 1.2 m along x and 1.0 m along z, its load's top at 1.39 m. Riding through along x (z ±0.5 m, from the rollers' top up) and turning on the turntable (a circle of radius 0.79 m round the axis), it meets nothing but the turntable, at any carriage height.
+- **No nozzles.** The film web and the film shell on the load are the scene's (phase 12, lane A), not the model's.
+
+| Node | Parent | Rest position (m) | Motion | Driven by |
+|---|---|---|---|---|
+| `turntable` | scene | (0, 0.125, 0), on the axis at the turntable's mid-height | Turns about +y without limit. Its roller deck runs across the line at rotation.y = kπ, so a pallet rides on and off along x when the turntable stops at a multiple of π ("square"); at an odd multiple of π/2 the rollers lie along the line | Phase 12: `turntable.rotation.y` advancing while a pallet is wrapped (24 rpm) |
+| `carriage` | scene | (−1.25, 0.45, −0.9), the carriage's foot on the mast | Slides along +y, 0 to 1.05 m: `position.y` from 0.45 to 1.50. Carries the film roll, the two pre-stretch rollers and the exit roller | Phase 12: `carriage.position.y = 0.45 + carriageM` |
+
+Where the film runs, in the `carriage` node's frame (its origin the carriage's foot, its axes the model's; add the node's position for the model frame). `make-heroes.mjs` exports these as `WRAPPER_FILM`:
+
+| | Axis (x, z) | Radius | y in the node | Model frame at rest |
+|---|---|---|---|---|
+| Film roll | (0.194, 0.005) | 0.12 | 0.045 to 0.575 | axis at (−1.056, −0.895), y 0.495 to 1.025, 1.38 m from the turntable's axis |
+| Exit roller, where the film leaves for the load | (0.059, 0.191) | 0.025 | 0.04 to 0.58 | axis at (−1.191, −0.709), y 0.49 to 1.03 |
+
+The turntable turns the +y way, so the load's face nearest the carriage moves toward +z: the film runs off the exit roller on the operator side (+z) of the roll and meets the load at its tangent on that side.
+
+Design notes: the mast and the carriage face the turntable's centre, turned −35.9° about +y (`WRAPPER_YAW_RAD`), as on a real in-line wrapper. With the card's 1.05 m of travel the roll spans y 0.495 to 1.025 at the bottom and 1.545 to 2.075 at the top, so it covers the load's top edge (1.39 m) only while `carriageM` is between 0.37 and 0.90 m; above 0.90 m the whole roll is over the load. Wrap the top turns in that range, or clamp the film band to the load.
 
 ## Export checklist (heroes)
 
@@ -170,14 +207,14 @@ The Blender checklist in [README.md](README.md#export-checklist-blender) applies
 | `separator.glb`, 122.5 KB | −0.85…0.85 / 0…2.30 / −2.05…0.85 | Same | 1,944 | 3, 2 | `bowl` |
 | `homogenizer.glb`, 149.0 KB | −1.25…1.25 / 0…1.368 / −1.77…1.32 | z +0.145 m at the front, all at rest: the liquid end (z 1.06 to 1.32) that the design notes allow; 3.09 m deep, inside the envelope | 2,328 | 5, 2 | `piston_1`, `piston_2`, `piston_3` |
 | `aseptic-filler.glb`, 79.7 KB | −1.63…1.90 / 0…3.56 / −1.60…1.135 | x −0.03 m (the product-in flange, proud of the −x face) and z +0.035 m (the control panel on the +z face) | 1,116 | 7, 3 | `reel`, `jaws` > `jaw_1`, `jaw_2` |
-| `palletizer.glb`, 67.4 KB | −0.55…2.725 / 0…2.45 / −0.55…0.55 | Same | 964 | 7, 2 | `arm` > `arm_lift` > `arm_wrist` > `arm_clamp_1`, `arm_clamp_2` |
+| `palletizer.glb`, 67.4 KB (phase 3; [phase 12](#phase-12-the-palletizers-boom-and-trolley) lengthened the boom) | −0.55…2.725 / 0…2.45 / −0.55…0.55 | Same | 964 | 7, 2 | `arm` > `arm_lift` > `arm_wrist` > `arm_clamp_1`, `arm_clamp_2` (and `arm_trolley` under `arm` since phase 12) |
 
 Block-out notes, by model:
 
 - **Separator.** A frame hood (radius 0.72 m, up to y 1.38) hides the lower half of the bowl. Above it the bowl shows its lock ring, eight bolts, the top cone, the fin from the grey box, a dark stripe opposite the fin and an outlet stub, so a turn reads from the stage-1 camera. The two nozzles end in flanges at x ±0.85 m.
 - **Homogenizer.** The liquid end is kept low (y 0.66 to 0.94, valve covers to 0.98) so the stage-3 camera, about 30° above the floor, sees the three pistons across the gap between it and the crankcase (z 0.65 to 1.06). Each piston is 0.70 m long (z −0.40 to +0.30 from its node), with a dark collar that stays in that gap all stroke. At ±0.12 m its back end stays inside the crankcase and its front end inside the liquid end. The two gauges sit on the top cover at the spec's points.
 - **Aseptic filler.** The outfeed hood is open below and at the front: packs on the belt (y 0.86, 0.85 m wide) pass under it into a dark opening in the +x face. The paper tube, its forming ring and the jaws show through the glass. The reel has a hub, the grey box's bar and a splice mark on both faces, so its turn reads on filler B, the mirrored copy.
-- **Palletizer.** The arm is a turntable hub on the column axis, the boom, and a head that guides the lift rod. `arm_lift` is the rod (y −0.63 to +0.10 from the node, its top hidden in the head). `arm_wrist` is the gripper's rotary unit, frame and rails, and the clamps are plates on the gripper's z faces, open at rest. The arm reaches 2.734 m from the column axis, inside the 2.87 m allowed.
+- **Palletizer** (until phase 12, which replaced the head with a trolley on a longer boom: [below](#phase-12-the-palletizers-boom-and-trolley)). The arm is a turntable hub on the column axis, the boom, and a head that guides the lift rod. `arm_lift` is the rod (y −0.63 to +0.10 from the node, its top hidden in the head). `arm_wrist` is the gripper's rotary unit, frame and rails, and the clamps are plates on the gripper's z faces, open at rest. The arm reaches 2.734 m from the column axis, inside the 2.87 m allowed.
 
 `make-heroes.test.mjs` (part of `npm run test:assets`) checks each GLB: size within 5% of the grey box and inside the envelope, on the floor, under the label; every node at its rest position under the right parent with no rotation and scale 1; the budget, with the footprint-centre warning as the only one allowed and glass on the filler only; a flange about 0.24 m across at every nozzle; that the moving parts are visible from their stage camera; and that the parts stay on their joints and inside their envelopes through their travel (bowl turns, piston stroke, reel turns, jaws down and closed, filler B mirrored, the arm from pick to place, the lift lowered 1.2 m, the clamps closed). It also checks that a rerun gives the same bytes as the committed files.
 
@@ -208,11 +245,11 @@ Screenshots (hero with the grey box as a red wireframe, from close by; and the h
 3. **Picking and shadows.** Picking (`src/scene/picking.ts`) walks up from the mesh hit to the machine's object and skips hidden parts, so hero meshes inside the root select their stage with no change. GLTFLoader leaves `castShadow` off: set it on the hero's meshes (the static `body_*` meshes and the moving nodes; the filler's `body_glass` should not cast).
 4. **Glass.** `aseptic_filler_glass` loads as transparent with `depthWrite` off (glTF `BLEND`), like the scene's own `glass` material.
 5. **Materials and theme.** The heroes bring their own materials, so the theme does not re-colour them (the grey `steel` and `steelDark` darken in the dark theme). If they look too bright on the dark floor, phase 5 can swap `<model>_paint` for a themed material.
-6. **Draw calls.** The heroes make 3 (separator), 5 (homogenizer), 7 (each filler) and 7 (palletizer) draw calls per pass, against 5 to 12 for the grey boxes, shadow pass included.
+6. **Draw calls.** The heroes make 3 (separator), 5 (homogenizer), 7 (each filler) and 7 (palletizer; 8 since phase 12) draw calls per pass, against 5 to 12 for the grey boxes, shadow pass included.
 
 Not done in the block-outs, for phase 4 and 5:
 
-- `arm_lift`'s rod is 0.73 m long and its top is hidden in the boom's head, so it stays in the head only for the first 0.20 m of lift. Lowering the full 1.20 m needs a telescopic rod (a second node under `arm_lift`) or a longer rod above the boom, which would break the 2.57 m height limit.
+- `arm_lift`'s rod is 0.73 m long and its top is hidden in the boom's head, so it stays in the head only for the first 0.20 m of lift. Lowering the full 1.20 m needs a telescopic rod (a second node under `arm_lift`) or a longer rod above the boom, which would break the 2.57 m height limit. Phase 12: the scene draws the rod stretched from the gripper to the boom, and the model's trolley takes its top end ([below](#phase-12-the-palletizers-boom-and-trolley)).
 - `jaw_1` and `jaw_2`, and `arm_wrist` and the clamps, are in place but not driven yet.
 - No textures, UVs or `.blend` sources: the models come from the script. Phase 5 bakes their AO into the vertex colours instead (below).
 
@@ -225,7 +262,8 @@ The block-outs above, finished in the same script for the swap: every box face c
 | `separator.glb` | 4,592 (1,944) | 4,709 | 3, 2 | 82.7 KB (195.9 KB) |
 | `homogenizer.glb` | 5,060 (2,328) | 5,439 | 5, 2 | 97.3 KB (226.5 KB) |
 | `aseptic-filler.glb` | 6,252 (1,116) | 5,174 | 7, 3 | 79.7 KB (220.5 KB) |
-| `palletizer.glb` | 2,048 (964) | 2,254 | 7, 2 | 42.7 KB (98.9 KB) |
+| `palletizer.glb` (phase 12: boom to 3.13 m and the trolley, [below](#phase-12-the-palletizers-boom-and-trolley)) | 3,020; 2,048 before phase 12 (964) | 3,708; 2,254 before | 8, 2; 7, 2 before | 69.1 KB (156.8 KB); 42.7 KB (98.9 KB) before |
+| `stretch-wrapper.glb` (phase 12, made final, no block-out) | 3,108 | 4,154 | 4, 2 | 82.2 KB (168.9 KB) |
 
 All four are within the budgets: at most 6,252 of 30,000 triangles, 7 of 20 meshes (under the 10 draw calls aimed for), 3 of 8 materials, and 97 KB of 2 MB. With the filler drawn twice the heroes come to 24,204 triangles a pass, 16,736 more than the block-outs (7,468), and the shadow pass draws them again. The first cut, 0.12 m cells, gave 49,964 a pass and took the overview to 280,986 triangles a frame, close to the 300,000 the README plans for; at 0.2 m the stage cameras show the same shading, since the AO varies over 0.4 m, for half the triangles ([perf baseline](../tests/perf/baseline.md#phase-5-hero-models)).
 
@@ -234,3 +272,53 @@ What the AO shows: contact shading where the cabinets, crankcase and frames stan
 **Deviations from the plan**, for `lead`: the AO is per vertex, not a 1024² ORM texture, because the models have no UVs; and there is no KTX2 step, because they have no textures. A Blender hero would follow the README's texture bake and the Blender checklist instead.
 
 `glb-load-check` loads all four in Chromium with three's meshopt decoder: OK, no console errors. `make-heroes.test.mjs` also checks the bake (darker in corners and at the floor, never by more than 85%, open faces nearly untouched, no shade cast between bodies) and that the compressed files decode to exactly what the script built.
+
+## Phase 12: the stretch wrapper model
+
+`buildStretchWrapper()` in `make-heroes.mjs` makes it the way the phase-5 models are made (faces cut for the AO, AO baked into the vertex colours, meshopt-compressed, two vertex-coloured materials `stretch_wrapper_paint` and `stretch_wrapper_matte`, plain greys), to the [spec above](#stretch-wrapper):
+
+- **Static (`body_paint`, `body_matte`):** a low round base (radius 0.98 m, 0.0625 m high) under the turntable; the mast, turned to face the turntable: a 0.40 m foot plate with four bolts, a base collar, the 0.22 m square column with a dark guide strip on its front face, a top cap at 2.70 m, the lift motor at the back of its foot, a control box (screen, three buttons, a stop button) on its operator side at 0.95 to 1.45 m, and a base frame from the foot to the turntable's base, under the turntable's rim.
+- **`turntable`:** a disc of radius 1.05 m (y 0.08 to 0.16) and on it a roller deck: 12 rollers of 0.08 m across the line, 0.13 m apart, between two side frames, their tops at y 0.25. A dark plate on the disc's +z side (at rest) breaks the deck's half-turn symmetry, so the turn shows. The rollers are not cut into rings: in a deck of like rollers the shade does not change along a roller.
+- **`carriage`:** guide shoes on the mast's front face and corners, a housing over the pre-stretch gearing with its motor on top, frame plates over and under the film roll (y 0 to 0.03 and 0.59 to 0.62 in the node), the film roll on its two chucks, the two rubber pre-stretch rollers and the steel exit roller on the operator side, and a photocell on the top plate. It is 0.69 m tall (y 0.45 to 1.14 at rest, 1.50 to 2.19 at the top).
+
+| | Bounds, x / y / z (m) | Against the grey box |
+|---|---|---|
+| At rest | −1.752…1.05 / 0…2.70 / −1.329…1.05, so 2.80 × 2.70 × 2.38 m | +1.9% in x (the lift motor and control box behind the mast), +1.2% in z (the mast's foot plate), inside the envelope |
+| Carriage at the top | the same; the carriage's top at 2.19 m | Under the mast's top (2.70) and the label (3.0) |
+
+Clearances: above the rollers' top nothing but the turntable comes nearer the axis than 1.24 m (the carriage's front plates), 0.45 m outside the turning pallet; and nothing reaches further toward the pallet's path than z −0.611, 0.11 m clear of its side. The turntable's base stands 1.75 cm under its disc, the base frame 2 cm, and the carriage's shoes 1 to 2 cm off the column, its strip and the control box, so nothing touches at any angle or height. `make-heroes.test.mjs` checks all of it at carriage heights 0, 0.525 and 1.05 m and at eight turntable angles.
+
+### What `scene` needs for the swap (phase 12, lane A)
+
+1. `HERO_MODELS.stretchWrapper = 'hero/stretch-wrapper.glb'` and `swapInHero(ctx, root, { path, nodes: ['turntable', 'carriage'] }, …)`, the model loaded into the wrapper's root at (21.6, 0, 14.4) as it is.
+2. The grey box's `carriage` is a mesh centred at (−1.25, 0.6, −0.9) today; to drive the same `position.y` as the hero it becomes a group named `carriage` at (−1.25, 0.45, −0.9) with the grey box hung 0.15 m above it. Its `turntable` group already sits at (0, 0.125, 0).
+3. The film web and the film shell stay the scene's, outside the model (keep them in `swap.keep` if they are children of the root). Take the web's start from `WRAPPER_FILM.exit` above, plus the carriage's position.
+4. 4 draw calls per pass (2 static, 2 moving), against the grey box's 5 parts; both materials opaque, so every mesh casts a shadow.
+
+## Phase 12: the palletizer's boom and trolley
+
+Phase 12's scene (lane A) stands `arm_lift` out along the boom over each tray's place, 1.89 to 2.955 m from the column, as well as down, up to 1.075 m (the [node table](#palletizer)). The phase-3 boom ended at 2.57 m, so at the far places the gripper stood past its end, and the model's 0.73 m lift rod left the gripper hanging under nothing once it was down more than about 0.2 m. `buildPalletizer()` now makes, round the same origin and with the same nodes at the same rest transforms:
+
+- **Boom (in `arm`, `PALLETIZER_BOOM`):** closed from the hub to 1.55 m, then two beams with a 0.17 m slot between them for the lift rod, out to an end plate at **3.13 m** from the column (0.175 m past the farthest place; the grey boom is 3.055 m). A steel guide rail on each beam (1.59 to 3.09 m) with a rubber end stop at each end, and a rack on the +z side. 0.30 m wide (z ±0.15, the end plate ±0.16), 0.20 m tall as before, the rails and stops 2 to 3 cm above it.
+- **Trolley (new node `arm_trolley` under `arm`, rest (2.45, 0, 0)):** it straddles the boom, 0.27 m long: a carriage plate on four guide blocks over the rails (2 mm clear of them), skirts down both sides 1 cm off the beams, a yoke under the beams with the guide bush the rod runs through (radius 0.095, 0.15 m tall, with a wiper ring), a bearing cap on top, and a drive on each side (gearbox and motor, across the boom; the +z one faces the stage camera). It spans y −0.31 to +0.20 from the boom's centre line, so the model's top is at 2.55 m.
+- **Gripper mount (`arm_lift`):** the rod's foot clamp on the gripper (radius 0.08, 5 cm) and the rod itself (radius 0.06) from the gripper up into the trolley as it stands at rest, 1 cm short of the boom's top. `arm_wrist` and the clamps are unchanged.
+
+**The rod (option a).** The rod that shows is the scene's `lift-rod` (`PALLETIZER_LIFT_ROD`: radius 0.07, 12 sides, from the top of the gripper to 0.10 m over the boom's centre line, stretched every frame), as the pallet and the stack are the scene's. A rod of the model's own cannot do it: with the gripper raised a rigid rod would have to stand 1.1 m above the boom (to 3.5 m, over the 2.95 m limit), and a telescopic one needs a middle stage moving at half the lift, a node the scene would have to drive. The model's own rod is 1 cm thinner than the scene's and always inside its length, so in the scene it never shows; it is there so the model reads whole on its own at rest. The scene's rod runs through the slot 1.5 cm clear of the beams, into the guide bush, and ends under the carriage plate, inside the trolley, at every reach and lift.
+
+**Why `arm_trolley` is a node of its own, and what it needs.** The trolley must follow the lift along the boom but not down it. Under `arm_lift` it would drop up to 1.1 m below the boom with every pick and place, so it hangs under `arm`, and the scene has to move it: `arm_trolley.position.x = pose.reachM`, the value it already writes into `arm_lift.position.x`. Until it does, the trolley stays at its rest place, 2.45 m out: at the pick point (2.53 m) the rod comes up 8 cm off the bush, and at the far places it comes up through the slot up to 0.56 m from the trolley. That is still better than before (the rod now always meets the boom), but it is not right; see the scene change below.
+
+| | Before (phase 3 to 12) | Now |
+|---|---|---|
+| Bounds, arm at rest (m) | −0.55…2.725 / 0…2.45 / −0.55…0.55, 3.28 × 2.45 × 1.10 | −0.55…3.13 / 0…2.55 / −0.55…0.55, **3.68 × 2.55 × 1.10**: against the grey box (3.61 × 2.45 × 1.10) +2.1% in x, +4.1% in y; inside the envelope (x ≤ 3.145, y ≤ 2.57) |
+| Reach, swinging | 2.734 m | 3.134 m (the end plate's corners) |
+| Triangles, vertices | 2,048, 2,254 | 3,020, 3,708 (+972: the arm, hub and boom, 688 (was 396); the trolley 616 (new); the gripper mount 224 (was 160)) |
+| Meshes (draw calls), materials | 7, 2 | 8, 2 |
+| File, compressed (uncompressed) | 42.7 KB (98.9 KB) | 69.1 KB (156.8 KB) |
+
+`make-heroes.test.mjs` checks: the boom's tip at least 0.1 m past the farthest place (`PALLETIZER_TRAVEL`, worked out from the scene's layout as `palletizing.ts` does); the trolley under `arm`, not `arm_lift`, on the rod's axis, and staying put when the lift lowers; and at reaches 1.89, 2.45, 2.53 and 2.955 m and lifts 0, 0.605, 1.075 and 1.2 m, with the trolley moved as the scene is to move it: the trolley, the gripper and the scene's rod never touch the boom, the guide blocks stay between the end stops, the rod's top end is inside the trolley seen from above, from both sides and from the stage-8 camera, the rod runs into the guide bush, the scene's rod (not the model's) shows between the bush and the gripper, and nothing rises above 2.57 m (under the 2.95 m limit). `glb-load-check` loads it with no errors. Screenshot, with a stand-in for the scene's rod and a tray in the gripper: [at rest, and at the farthest place's bottom layer](screenshots/palletizer-trolley.png).
+
+### What `scene` needs (phase 12, lane A follow-up)
+
+1. **Drive the trolley.** In `palletizer()` (`src/scene/equipment/packsLine.ts`): a grey group `arm_trolley` under `arm` at `ARM_LIFT_AT_M` (a small box on it if the grey box should show one), `trolley` in `ArmJoints`, `'arm_trolley'` in the swap's `nodes`, `trolley: nodes.arm_trolley` in the swap callback, and in `applyPose()` `joints.trolley.position.x = pose.reachM`. In `tests/scene/heroes.test.ts` and `palletizing.test.ts`, the stand-in models' palletizer node lists gain `arm_trolley`.
+2. **Keep the rod.** `lift-rod` stays as it is (radius 0.07, from the top of the gripper to `BOOM_TOP_M`, hung on the model's `arm_lift`); the trolley is built round it. Do not thicken it past 0.08 m: the slot is 0.085 m each side of the axis.
+3. **Nothing else:** the rest transforms, the node names the scene already drives and the 2.45 m rest reach are unchanged. The grey boom can stay 3.055 m long. 8 draw calls per pass, both materials opaque.

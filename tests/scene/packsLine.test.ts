@@ -7,6 +7,7 @@ import { CARTON_SIZE_M, TRAY_SIZE_M, cartonPlaces, trayPlaces } from '../../src/
 import type { VehicleSizeM } from '../../src/scene/equipment/packs/vehicles';
 import { createTokenStream } from '../../src/scene/equipment/packs/belts';
 import { CARTON_PITCH_M, LINE_A_START_M, LINE_B_START_M, TRAY_PITCH_M } from '../../src/scene/equipment/packs/tokens';
+import { motionRate } from '../../src/scene/motion';
 import { PALLETS_PER_RACK_PLACE, packsLine, rackLoadsShown } from '../../src/scene/equipment/packsLine';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
 import { createSim } from '../../src/sim';
@@ -16,11 +17,16 @@ import { plantConfig } from '../helpers/plantConfig';
 
 /**
  * The module adds light panels and amber floor markings to the shared set, the QA lab its lamp, and the
- * quarantine its block lamps and the plate under a picked block (phase 4).
+ * quarantine its block lamps and the plate under a picked block (phase 4). Phase 12 allows five more: the
+ * stretch wrapper's film and film shell, the forklifts' lit beacon, the dock lamps and one spare.
  */
-const MAX_OWN_MATERIALS = 5;
-/** The lane's budget is about 150 draw calls for stages 7–10, shadow pass included. */
-const DRAW_CALL_BUDGET = 150;
+const MAX_OWN_MATERIALS = 10;
+/**
+ * The lane's budget for stages 7–10, shadow pass included: about 150 until phase 12 (145 with grey boxes),
+ * then 185 for the palletizer's tray stack, the wrapper's film, the carried pallets, the trucks' doors and
+ * tractors, and the docks' roller doors and lamps (phase-12-lifelike-motion.md, Budgets).
+ */
+const DRAW_CALL_BUDGET = 185;
 
 /** src/styles/tokens.css's light theme: the declarations of its first :root block. */
 const LIGHT_TOKENS = (() => {
@@ -234,7 +240,14 @@ describe('packsLine', () => {
       expect(node(byId(machines, id), 'reel')).toBeInstanceOf(THREE.Group);
       expect(node(byId(machines, id), 'jaws')).toBeInstanceOf(THREE.Group);
     }
-    expect(node(byId(machines, 'palletizer'), 'arm')).toBeInstanceOf(THREE.Group);
+    // The palletizer's sub-joints hang under their joints, as in the model: arm > arm_lift > arm_wrist > clamps.
+    const palletizer = byId(machines, 'palletizer');
+    const parents: [string, string][] = [['arm', 'palletizer'], ['arm_trolley', 'arm'], ['arm_lift', 'arm'], ['arm_wrist', 'arm_lift'], ['arm_clamp_1', 'arm_wrist'], ['arm_clamp_2', 'arm_wrist']];
+    for (const [name, parent] of parents) {
+      expect(node(palletizer, name), name).toBeInstanceOf(THREE.Group);
+      expect(node(palletizer, name).parent?.name, name).toBe(parent);
+    }
+    for (const name of ['turntable', 'carriage']) expect(node(byId(machines, 'stretch-wrapper'), name), name).toBeInstanceOf(THREE.Group);
   });
 
   it('uses the shared materials, adding at most five of its own', () => {
@@ -579,20 +592,37 @@ describe('packsLine', () => {
     expect(empty.ctx.requested).toEqual(expect.arrayContaining(['vehicles/truck.glb', 'vehicles/forklift.glb']));
     for (const id of ['truck', 'forklift-1', 'forklift-2']) expect(node(byId(empty.machines, id), 'grey-box')).toBeDefined();
     // A grey truck at each of the three doors, hidden until the sim docks one there.
-    const doors = node(byId(empty.machines, 'truck'), 'trucks').children.filter((child) => child.name !== 'yard');
+    const doors = node(byId(empty.machines, 'truck'), 'trucks').children.filter((child) => child.name.startsWith('truck-'));
     expect(doors.map((truck) => truck.name)).toEqual(['truck-1', 'truck-2', 'truck-3']);
-    // And four spots in the yard, for trucks that find every door taken (phase 5).
-    expect(node(byId(empty.machines, 'truck'), 'yard').children.map((truck) => truck.name)).toEqual(['yard-1', 'yard-2', 'yard-3', 'yard-4']);
+    // And four spots in the yard, for trucks that find every door taken (phase 5): instanced copies of the truck.
+    const yard = node(byId(empty.machines, 'truck'), 'yard').children;
+    expect(yard.length).toBeGreaterThan(0);
+    for (const copies of yard) {
+      expect(copies, copies.name).toBeInstanceOf(THREE.InstancedMesh);
+      expect((copies as THREE.InstancedMesh).instanceMatrix.count, copies.name).toBe(at.YARD_X_M.length);
+    }
     for (const truck of doors) expect(truck.getObjectByName('grey-box'), truck.name).toBeDefined();
 
-    // Stand-ins that lie along x, at a different scale and off-centre, as a downloaded model might.
-    const box = (x: number, y: number, z: number) => () =>
-      new THREE.Mesh(new THREE.BoxGeometry(x, y, z).translate(5, 3, -2), new THREE.MeshStandardMaterial());
-    const { machines } = build(makeContext({ 'vehicles/truck.glb': box(33, 8, 5), 'vehicles/forklift.glb': box(70, 50, 30) }));
+    // Stand-ins that lie along x, at a different scale and off-centre, as a downloaded model might, with the
+    // moving nodes the grey boxes have (phase 12).
+    const box = (x: number, y: number, z: number, nodes: readonly string[]) => () => {
+      const model = new THREE.Group();
+      model.add(new THREE.Mesh(new THREE.BoxGeometry(x, y, z).translate(5, 3, -2), new THREE.MeshStandardMaterial()));
+      for (const name of nodes) model.add(Object.assign(new THREE.Group(), { name }));
+      return model;
+    };
+    const { machines } = build(
+      makeContext({
+        'vehicles/truck.glb': box(33, 8, 5, ['tractor', 'door_left', 'door_right']),
+        'vehicles/forklift.glb': box(70, 50, 30, ['forks', 'mast_inner', 'beacon']),
+      }),
+    );
     await settle();
+    // Forklift-1 parks facing the quarantine's west edge, along x.
+    const parkedM: at.FloorPointM = [-15.3 + 0.535, 8.7];
     const fits: [string, THREE.Object3D, at.FloorPointM, VehicleSizeM][] = [
       ['truck', node(byId(machines, 'truck'), 'truck-2'), [at.DOOR_X_M[1], at.DOCKED_TAIL_Z_M + at.TRUCK_SIZE_M.lengthM / 2], at.TRUCK_SIZE_M],
-      ['forklift-1', byId(machines, 'forklift-1').object, [-24, 10.6], at.FORKLIFT_SIZE_M],
+      ['forklift-1', node(byId(machines, 'forklift-1'), 'forklift-1-vehicle'), parkedM, at.FORKLIFT_SIZE_M],
     ];
     for (const [id, object, centreM, size] of fits) {
       expect(object.getObjectByName('grey-box'), id).toBeUndefined();
@@ -652,17 +682,20 @@ describe('packsLine', () => {
     const truck = (id: number, door: number) => ({ id, door, state: door < 0 ? ('waiting' as const) : ('loading' as const), arrivedS: 0, remainingS: 0, pallets: 22 });
     snapshot.packs.warehouse.trucks = [truck(1, 0), truck(2, 1), truck(3, 2), truck(4, -1), truck(5, -1)];
     trucks.update(snapshot, 0.1);
-    const parked = node(trucks, 'yard').children;
-    expect(parked.filter((each) => each.visible).map((each) => each.name)).toEqual(['yard-1', 'yard-2']);
+    // The yard's trucks are instanced copies, one draw a mesh of the truck: as many copies shown as trucks wait.
+    const parked = node(trucks, 'yard').children as THREE.InstancedMesh[];
+    const shown = (): number[] => [...new Set(parked.map((copies) => (copies.visible ? copies.count : 0)))];
+    expect(shown()).toEqual([2]);
     expect(trucks.labelText(snapshot)).toBe('1 loading · 2 in the yard');
     expect(trucks.debugState?.().yard).toBe(2);
     snapshot.packs.warehouse.trucks = [...snapshot.packs.warehouse.trucks, ...[6, 7, 8].map((id) => truck(id, -1))];
     trucks.update(snapshot, 0.1);
-    expect(parked.every((each) => each.visible)).toBe(true);
+    expect(shown()).toEqual([at.YARD_X_M.length]);
     expect(trucks.labelText(snapshot)).toBe('1 loading · 5 in the yard');
     snapshot.packs.warehouse.trucks = [];
     trucks.update(snapshot, 0.1);
-    expect(parked.some((each) => each.visible)).toBe(false);
+    expect(shown()).toEqual([0]);
+    expect(parked.some((copies) => copies.visible)).toBe(false);
   });
 
   it('shows no label value, rather than NaN, when the snapshot lacks it', () => {
@@ -751,10 +784,11 @@ describe('packsLine', () => {
     expect(a.labelText(oneDown)).toBe('stopped');
   });
 
-  it('swings the palletizer arm between the pick and place points, and not while paused', () => {
+  it('swings the palletizer arm from the pick point to the tray’s place on the pallet, the long way via -z, and not while paused', () => {
     const { machines } = build();
     const palletizer = byId(machines, 'palletizer');
     const arm = node(palletizer, 'arm');
+    const lift = node(palletizer, 'arm_lift');
     const pointing = (): [number, number] => [Math.cos(arm.rotation.y), -Math.sin(arm.rotation.y)];
     const towards = ([xM, zM]: at.FloorPointM): [number, number] => {
       const dx = xM - at.PALLETIZER_M[0];
@@ -762,15 +796,30 @@ describe('packsLine', () => {
       const lengthM = Math.hypot(dx, dz);
       return [dx / lengthM, dz / lengthM];
     };
+    // Parked over the pick point.
     const [pickX, pickZ] = towards(at.PICK_M);
     expect(pointing()[0]).toBeCloseTo(pickX, 6);
     expect(pointing()[1]).toBeCloseTo(pickZ, 6);
+    const pickRad = arm.rotation.y;
     const snapshot = staticSnapshot();
-    // Half a swing (π at 0.5 rad/s) reaches the place point.
-    for (let i = 0; i < 100; i++) palletizer.update(snapshot, Math.PI / 0.5 / 100);
-    const [placeX, placeZ] = towards(at.PLACE_M);
-    expect(pointing()[0]).toBeCloseTo(placeX, 6);
-    expect(pointing()[1]).toBeCloseTo(placeZ, 6);
+    // The pick (1.4 motion s), the swing over (1.8) and the first moment of setting the tray down, at the snapshot's motion rate.
+    const realS = (1.4 + 1.8 + 0.05) / motionRate(snapshot.speed);
+    let leastRad = Infinity;
+    let mostRad = -Infinity;
+    for (let i = 0; i < 100; i++) {
+      palletizer.update(snapshot, realS / 100);
+      leastRad = Math.min(leastRad, arm.rotation.y);
+      mostRad = Math.max(mostRad, arm.rotation.y);
+    }
+    expect(palletizer.debugState?.().phase).toBe('place');
+    // The gripper stands over the pallet, on the first place of the empty pallet.
+    lift.updateWorldMatrix(true, false);
+    const gripperM = new THREE.Vector3().setFromMatrixPosition(lift.matrixWorld);
+    expect(Math.abs(gripperM.x - at.PLACE_M[0])).toBeLessThan(0.6);
+    expect(Math.abs(gripperM.z - at.PLACE_M[1])).toBeLessThan(0.5);
+    // Via -z: the angle only grows from the pick's, through a quarter turn (pointing at -z), to the place's.
+    expect(leastRad).toBeCloseTo(pickRad, 6);
+    expect(mostRad).toBeGreaterThan(Math.PI);
     const held = arm.rotation.y;
     palletizer.update({ ...snapshot, paused: true }, 1);
     expect(arm.rotation.y).toBe(held);
@@ -830,12 +879,15 @@ describe('packsLine', () => {
 
     machines.slice(0, -1).forEach((machine) => machine.dispose());
     // The unit shapes and the module's materials stay while one fixture still uses them (the QA lab's
-    // lamp material and the quarantine's block lamps and plate are their fixtures' own, and go with them).
+    // lamp material, the quarantine's block lamps and plate, the stretch wrapper's film web and the riding
+    // pallets' film are their fixtures' own, and go with them).
     const quarantine = byId(machines, 'quarantine');
     const fixtureOwn = new Set([
       (node(byId(machines, 'qa-lab'), 'lamps') as THREE.Mesh).material,
       (node(quarantine, 'quarantine-lamps') as THREE.Mesh).material,
       (node(quarantine, 'quarantine-mark') as THREE.Mesh).material,
+      (node(byId(machines, 'stretch-wrapper'), 'film-web') as THREE.Mesh).material,
+      (node(byId(machines, 'pallet-conveyor'), 'riding-films') as THREE.Mesh).material,
     ]);
     expect([...own].some((material) => !fixtureOwn.has(material) && disposed.has(material))).toBe(false);
     machines.at(-1)?.dispose();

@@ -17,8 +17,24 @@ import { NodeIO } from '@gltf-transform/core';
 import { EXTMeshoptCompression } from '@gltf-transform/extensions';
 import { MeshoptDecoder } from 'meshoptimizer';
 import * as THREE from 'three';
+import { boxesOf, contacts, inFrame, planDistance, trianglesOf } from './clearance.mjs';
 import { parseGlb, summarize } from './glb-stats.mjs';
-import { AO, bakeAo, compress, HERO_BUILDERS, HERO_SPECS, heroGlbs, LIQUID_END_Z_M } from './make-heroes.mjs';
+import {
+  AO,
+  bakeAo,
+  compress,
+  HERO_BUILDERS,
+  HERO_SPECS,
+  heroGlbs,
+  LIQUID_END_Z_M,
+  PALLETIZER_BOOM,
+  PALLETIZER_LIFT_ROD,
+  PALLETIZER_TRAVEL,
+  WRAPPER,
+  WRAPPER_FILM,
+  WRAPPER_PALLET,
+  WRAPPER_YAW_RAD,
+} from './make-heroes.mjs';
 import { toGlb } from './make-vehicles.mjs';
 
 const HERO_DIR = fileURLToPath(new URL('../../public/models/hero/', import.meta.url));
@@ -141,7 +157,17 @@ describe('the moving parts show from their stage camera', () => {
     },
     // Filler B (origin z -10.5, mirrored front to back), whose reel and jaws face the camera.
     { key: 'asepticFiller', mirrorZ: true, cameraM: [23 + 2 - 20, 1.4 + 12, -14 + 17 + 10.5], targets: { reel: [[-0.8, 1.5, 1.6]], jaws: [[-0.3, 2.6, 0.2]] } },
-    { key: 'palletizer', cameraM: [28 + 2 - 28.3, 1 + 13, 10.5 + 16 - 13.2], targets: { arm: [[1.2, 2.45, 0]], arm_wrist: [[2.45, 1.7, 0.1]] } },
+    {
+      key: 'palletizer',
+      cameraM: [28 + 2 - 28.3, 1 + 13, 10.5 + 16 - 13.2],
+      targets: { arm: [[1.2, 2.45, 0], [2.9, 2.45, 0.12]], arm_trolley: [[2.45, 2.505, 0.12], [2.45, 2.4, 0.3]], arm_wrist: [[2.45, 1.7, 0.1]] },
+    },
+    // Stage 8 too, from the stretch wrapper's origin (21.6, 0, 14.4): the roller deck, the marker plate, the film roll.
+    {
+      key: 'stretchWrapper',
+      cameraM: [28 + 2 - 21.6, 1 + 13, 10.5 + 16 - 14.4],
+      targets: { turntable: [[0.4, 0.25, 0.2], [0, 0.175, 0.86]], carriage: [[-0.987, 0.7, -0.802]] },
+    },
   ];
   for (const { key, mirrorZ, cameraM, targets } of cases) {
     it(`${key}: ${Object.keys(targets).join(', ')}`, () => {
@@ -242,8 +268,9 @@ describe('moving nodes sit on their joints and stay in their envelope through th
     assert.ok(Math.abs(box.max.z - 1.6) < 0.01 && box.min.z >= -1.17, `z ${box.min.z.toFixed(3)} to ${box.max.z.toFixed(3)}`);
   });
 
-  it('palletizer: the arm swings about the column, keeps within its reach, and the sub-joints sit where phase 4 drives them', () => {
+  it('palletizer: the arm swings about the column, keeps within its reach, and the sub-joints sit where the scene drives them', () => {
     const model = build('palletizer');
+    const { envelopeM } = HERO_SPECS.palletizer;
     const arm = model.getObjectByName('arm');
     const reach = (object) => {
       object.updateWorldMatrix(true, true);
@@ -259,36 +286,191 @@ describe('moving nodes sit on their joints and stay in their envelope through th
       });
       return maxM;
     };
-    // From the pick point (0.91 rad) to the place point (3.66 rad), the way round via -z.
-    for (let i = 0; i <= 10; i++) {
-      arm.rotation.y = 0.91 + (2.75 * i) / 10;
-      assert.ok(reach(arm) <= 2.87, `reach ${reach(arm).toFixed(3)} at ${arm.rotation.y.toFixed(2)} rad`);
+    // From the pick point (0.91 rad) to the farthest place (3.9 rad), the way round via -z.
+    for (let i = 0; i <= 12; i++) {
+      arm.rotation.y = 0.91 + (3.0 * i) / 12;
+      assert.ok(reach(arm) <= envelopeM.max[0], `reach ${reach(arm).toFixed(3)} at ${arm.rotation.y.toFixed(2)} rad`);
       const box = boxOf(arm);
-      assert.ok(box.min.y >= 1.5 && box.max.y <= 2.57, `arm between y ${box.min.y.toFixed(2)} and ${box.max.y.toFixed(2)}`);
+      assert.ok(box.min.y >= 1.5 && box.max.y <= envelopeM.max[1], `arm between y ${box.min.y.toFixed(2)} and ${box.max.y.toFixed(2)}`);
     }
     arm.rotation.y = 0;
     model.updateMatrixWorld(true);
-    const armOwn = ownBox(arm);
-    assert.ok(Math.abs(armOwn.min.z + armOwn.max.z) < MM && Math.abs(armOwn.min.y + armOwn.max.y) < MM, 'arm hinge on its centre line');
-    const lift = model.getObjectByName('arm_lift');
-    const liftOwn = ownBox(lift);
-    assert.ok(Math.abs(liftOwn.min.x + liftOwn.max.x) < MM && Math.abs(liftOwn.min.z + liftOwn.max.z) < MM, 'arm_lift on the rod axis');
-    assert.ok(Math.abs(new THREE.Vector3().setFromMatrixPosition(lift.matrixWorld).x - 2.45) < MM, 'gripper 2.45 m out');
+    // The hub on the hinge: the arm's vertices round the column's axis are centred on it, the boom's 0.2 m tall.
+    const armPosition = arm.geometry.getAttribute('position');
+    const hub = new THREE.Box3();
+    for (let i = 0; i < armPosition.count; i++) {
+      const v = new THREE.Vector3().fromBufferAttribute(armPosition, i);
+      if (Math.hypot(v.x, v.z) <= 0.24 + MM) hub.expandByPoint(v);
+    }
+    assert.ok(Math.abs(hub.min.x + hub.max.x) < MM && Math.abs(hub.min.z + hub.max.z) < MM, 'arm hub on the hinge');
+    assert.ok(Math.abs(hub.min.y + 0.1) < MM && Math.abs(hub.max.y - 0.1) < MM, 'arm hub on the boom centre line');
+    // The trolley and the gripper's mount on the rod's axis, 2.45 m out at rest.
+    const [trolley, lift] = ['arm_trolley', 'arm_lift'].map((n) => model.getObjectByName(n));
+    for (const part of [trolley, lift]) {
+      const own = ownBox(part);
+      assert.ok(Math.abs(own.min.x + own.max.x) < MM && Math.abs(own.min.z + own.max.z) < MM, `${part.name} on the rod axis`);
+      assert.ok(Math.abs(new THREE.Vector3().setFromMatrixPosition(part.matrixWorld).x - 2.45) < MM, `${part.name} 2.45 m out`);
+    }
     const wrist = model.getObjectByName('arm_wrist');
     const wristBox = boxOf(wrist);
     assert.ok(Math.abs(wristBox.max.y - (2.35 - 0.63)) < MM, 'arm_wrist origin at the top of the gripper');
     assert.ok(Math.abs(wristBox.min.y - (2.35 - 0.77)) < MM, 'gripper bottom as the grey box');
-    // Lowering arm_lift takes the gripper down and leaves the boom where it is.
+    // Lowering arm_lift takes the gripper down and leaves the boom and the trolley where they are.
+    const trolleyAtRest = boxOf(trolley);
     lift.position.y = -1.2;
     assert.ok(Math.abs(boxOf(wrist).min.y - (2.35 - 0.77 - 1.2)) < MM, 'gripper lowered 1.2 m');
     const boomBox = ownBox(arm).applyMatrix4(arm.matrixWorld);
-    assert.ok(Math.abs(boomBox.min.y - 2.25) < MM, 'the rod and gripper hang under arm_lift, so the boom stays put');
+    assert.ok(Math.abs(boomBox.min.y - 2.25) < MM, 'the gripper hangs under arm_lift, so the boom stays put');
+    assert.ok(boxOf(trolley).equals(trolleyAtRest), 'the trolley is not under arm_lift, so it stays on the boom');
     lift.position.y = 0;
     const [c1, c2] = ['arm_clamp_1', 'arm_clamp_2'].map((n) => model.getObjectByName(n));
     assert.ok(boxOf(c1).max.z < boxOf(c2).min.z && boxOf(c1).min.z >= -0.225 - MM && boxOf(c2).max.z <= 0.225 + MM, 'clamps open, inside the gripper');
     c1.position.z += 0.1;
     c2.position.z -= 0.1;
     assert.ok(boxOf(c2).min.z - boxOf(c1).max.z > 0.1, 'closed clamps leave room for a tray');
+  });
+
+  it("palletizer: the boom runs past the farthest place; the trolley rides its rails and takes the scene's lift rod at every reach and lift", () => {
+    const { minReachM, maxReachM, pickReachM, pickLiftM, maxLiftM } = PALLETIZER_TRAVEL;
+    assert.ok(minReachM > 1.85 && minReachM < 1.95 && maxReachM > 2.9 && maxReachM < 3.0, `reach ${minReachM.toFixed(3)} to ${maxReachM.toFixed(3)} m`);
+    assert.ok(Math.abs(pickLiftM - 0.605) < MM && Math.abs(maxLiftM - 1.075) < MM, `lift to ${pickLiftM.toFixed(3)} and ${maxLiftM.toFixed(3)} m`);
+    const { railM, slotFromM, tipM } = PALLETIZER_BOOM;
+    const spec = HERO_SPECS.palletizer;
+    const model = build('palletizer');
+    const [arm, trolley, lift] = ['arm', 'arm_trolley', 'arm_lift'].map((n) => model.getObjectByName(n));
+    assert.equal(trolley.parent, arm, 'the trolley rides on the boom, not on arm_lift, which also goes down');
+    const tipAtM = ownBox(arm).max.x;
+    assert.ok(tipAtM >= maxReachM + 0.1 && Math.abs(tipAtM - tipM) < MM, `boom tip at ${tipAtM.toFixed(3)}, the farthest place ${maxReachM.toFixed(3)} m out`);
+    // The boom alone (the arm's own mesh, not the nodes under it), in the model's frame.
+    const boomOnly = new THREE.Mesh(arm.geometry);
+    boomOnly.matrixAutoUpdate = false;
+    boomOnly.matrix.copy(arm.matrixWorld);
+    const boom = boxesOf(trianglesOf(boomOnly));
+    const wristY = spec.nodes.find((n) => n.name === 'arm_wrist').atM[1];
+    const raycaster = new THREE.Raycaster();
+    const firstHit = (origin, target, objects) => {
+      raycaster.set(origin, target.clone().sub(origin).normalize());
+      return raycaster.intersectObjects(objects, true)[0]?.object;
+    };
+    for (const reachM of [minReachM, 2.45, pickReachM, maxReachM]) {
+      for (const liftM of [0, pickLiftM, maxLiftM, 1.2]) {
+        const what = `reach ${reachM.toFixed(3)}, lift ${liftM.toFixed(3)}`;
+        trolley.position.x = reachM; // what the scene is to write (hero-specs.md, the node table)
+        lift.position.set(reachM, -liftM, 0); // what the scene writes
+        model.updateMatrixWorld(true);
+        // The scene's rod, from the top of the gripper up to the boom's top, on the lift's axis.
+        const { radiusM, segments, topM } = PALLETIZER_LIFT_ROD;
+        const bottomM = wristY - liftM;
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(radiusM, radiusM, topM - bottomM, segments).translate(reachM, (topM + bottomM) / 2, 0));
+        rod.matrixAutoUpdate = false;
+        rod.matrix.copy(arm.matrixWorld);
+        rod.updateMatrixWorld(true);
+
+        const box = boxOf(trolley);
+        assert.ok(box.min.x > slotFromM && box.max.x < tipM - 0.02, `${what}: the trolley over the slot, short of the end plate`);
+        assert.equal(contacts(trianglesOf(trolley), boom), 0, `${what}: the trolley touches the boom`);
+        assert.equal(contacts(trianglesOf(lift), boom), 0, `${what}: the gripper or its mount touches the boom`);
+        assert.equal(contacts(trianglesOf(rod), boom), 0, `${what}: the scene's rod touches the boom`);
+        // The guide blocks: the trolley's faces between the rails' top and the carriage plate, over the rails.
+        const blocks = trianglesOf(trolley).filter((t) => {
+          const [a, b, c] = [t.a, t.b, t.c];
+          return Math.min(a.y, b.y, c.y) > 2.35 + 0.121 && Math.max(a.y, b.y, c.y) < 2.35 + 0.136 && Math.max(Math.abs(a.z), Math.abs(b.z), Math.abs(c.z)) < 0.136;
+        });
+        assert.ok(blocks.length > 0, `${what}: guide blocks found`);
+        const blockX = blocks.flatMap((t) => [t.a.x, t.b.x, t.c.x]);
+        assert.ok(Math.min(...blockX) > railM[0] && Math.max(...blockX) < railM[1], `${what}: the guide blocks between the end stops`);
+
+        // The rod's top end is inside the trolley, seen from above, from either side and from the stage camera;
+        // below it the rod runs into the trolley's guide bush; and between the bush and the gripper the scene's rod
+        // shows, covering the model's own.
+        const at = (yM, zM = 0) => new THREE.Vector3(reachM, yM, zM).applyMatrix4(arm.matrixWorld);
+        const top = at(topM - 0.005);
+        const camera = new THREE.Vector3(28 + 2 - 28.3, 1 + 13, 10.5 + 16 - 13.2);
+        for (const origin of [at(3), at(topM - 0.005, 3), at(topM - 0.005, -3), camera]) {
+          assert.equal(firstHit(origin, top, [model, rod]), trolley, `${what}: the rod's top end is in the trolley`);
+        }
+        assert.equal(firstHit(at(-0.23, 3), at(-0.23), [model, rod]), trolley, `${what}: the rod runs into the guide bush`);
+        const gapM = (-0.31 + (wristY + 0.05 - liftM)) / 2;
+        for (const origin of [at(gapM, 3), at(gapM, -3)]) {
+          assert.equal(firstHit(origin, at(gapM), [model, rod]), rod, `${what}: the scene's rod shows between the bush and the gripper`);
+        }
+        assert.ok(boxOf(model).max.y <= spec.envelopeM.max[1] + MM && boxOf(model).max.y < spec.maxHeightM, `${what}: top at y ${boxOf(model).max.y.toFixed(3)}`);
+      }
+    }
+  });
+
+  it('stretch wrapper: the turntable turns on its axis, flush with the pallet rollers, with a deck that conveys along x and a turn that shows', () => {
+    const model = build('stretchWrapper');
+    const table = model.getObjectByName('turntable');
+    const own = ownBox(table);
+    assert.ok(Math.abs(own.min.x + own.max.x) < MM && Math.abs(own.min.z + own.max.z) < MM, 'on its axis');
+    const still = boxesOf(trianglesOf(...model.children.filter((c) => c.name.startsWith('body'))));
+    for (let i = 0; i < 8; i++) {
+      table.rotation.y = (i / 8) * Math.PI * 2;
+      const box = boxOf(table);
+      assert.ok(Math.abs(box.max.y - WRAPPER.topM) < MM, `top at ${box.max.y.toFixed(4)}, the rollers' ${WRAPPER.topM}`);
+      const radiusM = Math.max(...trianglesOf(table).flatMap((t) => [t.a, t.b, t.c].map((v) => Math.hypot(v.x, v.z))));
+      assert.ok(radiusM <= WRAPPER.turntableRadiusM + MM, `reaches ${radiusM.toFixed(3)} m from the axis`);
+      assert.equal(contacts(trianglesOf(table), still), 0, `turntable at ${table.rotation.y.toFixed(2)} rad touches the base or mast`);
+      assertInside(boxOf(model), HERO_SPECS.stretchWrapper.envelopeM, `turntable at ${table.rotation.y.toFixed(2)} rad`);
+    }
+    // Square (0 or π), the rollers' tops carry a pallet along the line at the rollers' height.
+    for (const turn of [0, Math.PI]) {
+      table.rotation.y = turn;
+      model.updateMatrixWorld(true);
+      const raycaster = new THREE.Raycaster();
+      for (let k = 0; k < 12; k++) {
+        for (const zM of [-0.45, 0, 0.45]) {
+          raycaster.set(new THREE.Vector3(-0.715 + 0.13 * k, 2, zM), new THREE.Vector3(0, -1, 0));
+          const [hit] = raycaster.intersectObject(table);
+          assert.ok(hit && Math.abs(hit.point.y - WRAPPER.topM) < 0.002, `a roller top at x ${(-0.715 + 0.13 * k).toFixed(3)}, z ${zM}`);
+        }
+      }
+    }
+    // The marker plate breaks the deck's half-turn symmetry: turned by π, many vertices land where there are none.
+    const position = table.geometry.getAttribute('position');
+    const vertices = Array.from({ length: position.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(position, i));
+    const half = new THREE.Matrix4().makeRotationY(Math.PI);
+    const unmatched = vertices.filter((v) => !vertices.some((w) => w.distanceTo(v.clone().applyMatrix4(half)) < MM));
+    assert.ok(unmatched.length >= 16, `${unmatched.length} vertices move to an empty place`);
+  });
+
+  it('stretch wrapper: the carriage climbs the mast from its foot, carries the roll on the pallet side, and never meets the mast or a pallet', () => {
+    const model = build('stretchWrapper');
+    const carriage = model.getObjectByName('carriage');
+    const table = model.getObjectByName('turntable');
+    assert.ok(Math.abs(ownBox(carriage).min.y) < MM, 'the origin is the carriage foot');
+    const body = model.children.filter((c) => c.name.startsWith('body'));
+    // The mast and carriage stand turned to face the turntable: compare them in the mast's own frame, where
+    // their faces line up with the axes and the boxes round them are the faces themselves.
+    const toMast = new THREE.Matrix4().makeRotationY(-WRAPPER_YAW_RAD).multiply(new THREE.Matrix4().makeTranslation(-WRAPPER.mastXZ[0], 0, -WRAPPER.mastXZ[1]));
+    const still = boxesOf(inFrame(trianglesOf(...body), toMast));
+    const [carX, , carZ] = WRAPPER.carriageAtM;
+    // The roll faces the turntable: nearer its axis than the carriage's foot and the mast; the film leaves
+    // toward the operator side (+z), where the load's near face moves as the turntable turns +y.
+    const rollXZ = [carX + WRAPPER_FILM.roll.atXZ[0], carZ + WRAPPER_FILM.roll.atXZ[1]];
+    const exitXZ = [carX + WRAPPER_FILM.exit.atXZ[0], carZ + WRAPPER_FILM.exit.atXZ[1]];
+    assert.ok(Math.hypot(...rollXZ) < Math.hypot(carX, carZ) - 0.1 && Math.hypot(...rollXZ) < Math.hypot(...WRAPPER.mastXZ) - 0.3, 'roll on the pallet side');
+    assert.ok(exitXZ[1] > rollXZ[1], 'the film runs off on the operator side of the roll');
+    assert.ok(Math.abs(WRAPPER_FILM.roll.radiusM - 0.12) < MM && Math.abs(WRAPPER_FILM.roll.yM[1] - WRAPPER_FILM.roll.yM[0] - 0.5) < 0.05, 'a 0.24 m roll about 0.5 m tall');
+    const pallet = WRAPPER_PALLET;
+    const riding = new THREE.Box3(new THREE.Vector3(-5, pallet.bottomM + MM, -pallet.halfWidthM), new THREE.Vector3(5, HERO_SPECS.stretchWrapper.maxHeightM, pallet.halfWidthM));
+    for (const travelM of [0, WRAPPER.carriageTravelM / 2, WRAPPER.carriageTravelM]) {
+      carriage.position.y = WRAPPER.carriageAtM[1] + travelM;
+      const moved = trianglesOf(carriage);
+      assert.equal(contacts(inFrame(moved, toMast), still), 0, `carriage ${travelM} m up meets the mast or base`);
+      assert.ok(boxOf(carriage).max.y < HERO_SPECS.stretchWrapper.maxHeightM && boxOf(carriage).max.y < WRAPPER.mastHeightM, 'under the mast top and the label');
+      assertInside(boxOf(model), HERO_SPECS.stretchWrapper.envelopeM, `carriage ${travelM} m up`);
+      // Nothing but the turntable stands where a pallet rides through along x or turns on the turntable,
+      // from the rollers' top to the label, at any carriage height.
+      const around = [...moved, ...trianglesOf(...body)].filter((t) => Math.max(t.a.y, t.b.y, t.c.y) > pallet.bottomM + MM);
+      assert.equal(around.filter((t) => riding.intersectsTriangle(t)).length, 0, `something in the pallet's path along x, carriage ${travelM} m up`);
+      const nearestM = Math.min(...around.map((t) => planDistance(0, 0, t)));
+      assert.ok(nearestM > pallet.spinRadiusM + 0.3, `the nearest part is ${nearestM.toFixed(3)} m from the axis, the turning pallet sweeps ${pallet.spinRadiusM} m`);
+    }
+    // It moves along y only: the slide is the node's position.y.
+    assert.deepEqual([carriage.position.x, carriage.position.z], [carX, carZ]);
+    assert.ok(table.position.y > 0 && table.children.length === 0);
   });
 });
 
@@ -325,19 +507,29 @@ const AO_NEAR_M = 0.1;
 describe('the baked ambient occlusion', () => {
   for (const key of Object.keys(HERO_SPECS)) {
     it(`${key}: darkens corners and contacts, by AO.strength at most, and leaves open faces nearly as they were`, () => {
-      const plain = colours(build(key));
+      const model = build(key);
+      const plain = colours(model);
       const shaded = colours(baked(key));
       const ratios = [];
+      const raised = []; // the vertices beyond the floor's reach, which can be in the open
+      const v = new THREE.Vector3();
       for (const [name, before] of plain) {
         const after = shaded.get(name);
         assert.equal(after.length, before.length, name);
-        for (let i = 0; i < before.length; i++) ratios.push(after[i] / before[i]);
+        const mesh = model.getObjectByName(name);
+        const position = mesh.geometry.getAttribute('position');
+        for (let i = 0; i < before.length; i++) {
+          ratios.push(after[i] / before[i]);
+          if (v.fromBufferAttribute(position, Math.floor(i / 3)).applyMatrix4(mesh.matrixWorld).y > AO.radiusM) raised.push(after[i] / before[i]);
+        }
       }
       assert.ok(Math.min(...ratios) >= 1 - AO.strength - 1e-6, `darkest ${Math.min(...ratios).toFixed(3)}`);
       assert.ok(Math.max(...ratios) <= 1 + 1e-6, `lightest ${Math.max(...ratios).toFixed(3)}`);
-      const share = (test) => ratios.filter(test).length / ratios.length;
-      assert.ok(share((r) => r < 0.8) > 0.05, `${(100 * share((r) => r < 0.8)).toFixed(1)}% of vertices in shade`);
-      assert.ok(share((r) => r > 0.95) > 0.2, `${(100 * share((r) => r > 0.95)).toFixed(1)}% of vertices in the open`);
+      const share = (list, test) => list.filter(test).length / list.length;
+      assert.ok(share(ratios, (r) => r < 0.8) > 0.05, `${(100 * share(ratios, (r) => r < 0.8)).toFixed(1)}% of vertices in shade`);
+      // The floor shades everything within AO.radiusM of it (the stretch wrapper's turntable and base all are),
+      // so the open share counts the vertices above that.
+      assert.ok(share(raised, (r) => r > 0.95) > 0.2, `${(100 * share(raised, (r) => r > 0.95)).toFixed(1)}% of the raised vertices in the open`);
     });
   }
 

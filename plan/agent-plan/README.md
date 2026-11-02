@@ -17,6 +17,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 9. Factory board | after the term | lead, factory-* agents | The real factory's lines live from Let Report | [Phase 9](phase-9-factory-board.md) |
 | 10. Factory floor in 3D | after the term | lead, factory-* agents | The three UHT trains in 3D, moving with the board | [Phase 10](phase-10-factory-floor.md) |
 | 11. Control-room look | after the term | lead, ui, scene, factory-ui, factory-scene, lr-ui | One dark, modern look for the simulation and Let Report | [Phase 11](phase-11-control-room.md) |
+| 12. Lifelike motion | after the term | lead, assets, scene (two lanes), qa | The palletizer robot, stretch wrapper, forklifts and trucks moving like the real ones | [Phase 12](phase-12-lifelike-motion.md) |
 
 ## The agents
 

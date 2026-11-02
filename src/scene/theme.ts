@@ -74,11 +74,19 @@ export function sceneIsDark(): boolean {
 
 /**
  * A colour token that may carry an alpha, such as --grid's rgba(56, 189, 248, 0.05): the colour into `target` and the
- * alpha returned (1 for an opaque colour). Only #rgb, #rrggbb and rgb()/rgba() with plain numbers are read as such;
- * anything else goes to THREE.Color as it is.
+ * alpha returned (1 for an opaque colour). #rgb, #rrggbb, #rgba, #rrggbbaa and rgb()/rgba() with plain numbers are read
+ * as such; anything else goes to THREE.Color as it is. The production build's CSS minifier writes an rgba() token as
+ * #rrggbbaa (#38bdf80d), which THREE.Color cannot read, so the hex forms with an alpha are read here.
  */
 export function readSceneRgba(name: SceneColorVar, target: Color): number {
   const value = readSceneColor(name);
+  const hex = /^#([\da-f]{4}|[\da-f]{8})$/i.exec(value)?.[1];
+  if (hex) {
+    const digits = hex.length === 4 ? [...hex].map((digit) => digit + digit).join('') : hex;
+    const channel = (i: number): number => parseInt(digits.slice(2 * i, 2 * i + 2), 16) / 255;
+    target.setRGB(channel(0), channel(1), channel(2), 'srgb');
+    return channel(3);
+  }
   const rgba = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+)(%?))?\s*\)$/i.exec(value);
   if (!rgba) {
     target.set(value);

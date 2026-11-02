@@ -419,6 +419,26 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Why:** an operations screen is read at a glance, often in a dim control room; dark surfaces make the coloured lamps and live numbers stand out. Keeping light serves bright rooms, printing and those who prefer it.
 - **What it changes:** the tokens and styles of the three screens, a theme switch on each, and the 3D views' lamps and floors in the dark theme.
 
+## D22. Lifelike motion at the end of the line
+
+- **Status:** Proposed
+- **Date:** 2026-11-01
+- **Review note:** none (the developer asked for detailed, real-looking motion of the palletizer robot, stretch wrapper, forklifts and trucks in the 3D plant; [phase 12](agent-plan/phase-12-lifelike-motion.md))
+- **Decision:** stages 8 and 10 of the teaching plant move as the real machines do: the palletizer picks each tray off the belt with its lift, wrist and clamps and stacks it in layers of 12; the stretch wrapper winds visible film round each pallet, bottom to top and down; one forklift puts released pallets away into the racks at their level and the other loads pallets onto the docked truck; trucks drive in, open their rear doors, reverse articulated to the dock, fill from the front and leave, with the dock's roller door and lamp following. The motion is drawn from the snapshot the scene already reads: no sim or contract change.
+- **The motion's numbers, visual assumptions unless sourced:**
+
+| Thing | Value | Basis |
+|---|---|---|
+| Palletizer pick and place | about 6.2 motion s | Robot palletizers with a single-tray gripper make about 10–20 picks a minute; 1,250 trays/h is 21 a minute, so the arm is a sample, like the belts |
+| Pallet pattern | 7 layers of 12 trays | 84 trays per pallet (`traysPerPallet`) |
+| Stretch wrapper | 24 rpm, about 21 motion s a pallet (2 base turns, 3 up, 1 top, 2 down, cut) | Real turntable wrappers turn at 10–15 rpm and take about a minute; twice as fast so it fits at ×10 |
+| Forklift | 2.2 m/s empty, 1.8 m/s loaded, 0.6 m/s in turns and into a rack or trailer; forks 0.5 m/s | Typical counterbalance trucks lift at 0.4–0.6 m/s and are held to walking pace or a few m/s indoors |
+| Truck | arrive 8 s, doors 3 s, reverse 10 s at walking pace, roller door 3 s, leave 11 s | |
+
+- **Rules with no key:** the motion never runs behind the sim: when the sim moves on faster than a move can play (a truck leaves at ×1,000 within a second), the move plays faster or is skipped. At ×1 and ×10 every move plays in full. Paused, everything stands. The motion shows what runs, so it stays on under `prefers-reduced-motion`; only the forklift beacon's flash may stop.
+- **Why:** the end of the line is where students see packs become pallets and pallets become shipments; a robot that picks, a film that wraps and a forklift that carries make each step readable without a caption, as the liquid line's moving parts do for stages 1 to 6.
+- **What it changes:** `src/scene/equipment/packsLine.ts` and new modules under `src/scene/equipment/packs/`; the truck, forklift and a new stretch-wrapper hero model (`assets/scripts/`, `public/models/`); the packs line's draw-call budget (150 → 185) and own-material budget (5 → 10). The sim, the contracts, the UI and the factory floor are unchanged.
+
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →

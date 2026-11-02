@@ -4,7 +4,7 @@ import { clockTimeS, waitForClock, waitForClockToMove } from './helpers';
 /** How long the frame loop runs before a page is judged error-free, so errors thrown per frame show up. */
 const SETTLE_MS = 1_500;
 /** The machines that load a hero model (src/scene/equipment/heroes.ts). */
-const HERO_MACHINES = ['separator', 'homogenizer', 'filler-a', 'filler-b', 'palletizer'];
+const HERO_MACHINES = ['separator', 'homogenizer', 'filler-a', 'filler-b', 'palletizer', 'stretch-wrapper'];
 
 // The fixtures fail every test on a console error or warning, a page error, a failed request or a
 // third-party request; these tests also look for them explicitly, once the page has run a while.
@@ -36,7 +36,7 @@ test('the mock snapshot (/?mock) loads with no errors and no third-party request
   expect(pageProblems).toEqual([]);
 });
 
-test('the four hero models load in place of their grey boxes with no errors; with ?greybox none loads', async ({ page, pageProblems }) => {
+test('the five hero models load in place of their grey boxes with no errors; with ?greybox none loads', async ({ page, pageProblems }) => {
   const heroFiles = (urls: string[]) => [...new Set(urls.filter((url) => url.includes('/models/hero/')).map((url) => url.split('/').pop()))].sort();
   const loaded: string[] = [];
   page.on('response', (response) => {
@@ -50,7 +50,7 @@ test('the four hero models load in place of their grey boxes with no errors; wit
   loaded.length = 0;
   await page.goto('/');
   await waitForClock(page);
-  await expect.poll(() => heroFiles(loaded)).toEqual(['aseptic-filler.glb', 'homogenizer.glb', 'palletizer.glb', 'separator.glb']);
+  await expect.poll(() => heroFiles(loaded)).toEqual(['aseptic-filler.glb', 'homogenizer.glb', 'palletizer.glb', 'separator.glb', 'stretch-wrapper.glb']);
   // Each machine swaps its model in, meshopt-decoded.
   await page.goto('/?debug');
   await waitForClock(page);
