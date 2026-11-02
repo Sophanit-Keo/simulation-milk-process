@@ -222,11 +222,11 @@ Measured on 2 November 2026 on the phase 12 branch, a production build served by
 | 5 Flash cooling | 118 | 145,460 |
 | 6 Aseptic tank | 99 | 133,456 |
 | 7 Filling | 111 | 147,896 |
-| 8 Packaging | 124 | 153,650 |
+| 8 Packaging | 130 | 163,350 |
 | 9 Quarantine & QA | 146 | 218,836 |
-| 10 Warehouse | 143 | 159,124 |
+| 10 Warehouse | 142 | 158,600 |
 
-Six draw calls more than phase 8 at the overview. The pieces: the palletizer's clamps, carried tray, trolley and safety fence; the stretch wrapper's hero model (3,108 triangles), its film roll and film web; the film shells on riding pallets; the forklifts' beacons and carried pallets; the docks' roller doors and lamps. The stage 10 stop draws 5 fewer than before because the yard's trucks are now instanced. The counts grow with what moves. A docked truck adds about 12 draw calls with its tractor, doors and load (`qa` read 248 at the overview with the first truck docked, dark theme). A pallet riding to quarantine carries a full tray stack, 1,008 triangles a pass, and at most 10 ride at once. In the packs line's unit test (`tests/scene/packsLine.test.ts`), stages 7–10 draw 162 calls with grey boxes against a budget of 185 (145 before phase 12). Software GL gave 2.7 fps at the overview, not the 60 fps check, which runs on the target laptop.
+Six draw calls more than phase 8 at the overview. The pieces: the palletizer's clamps, carried tray, trolley and safety fence; the stretch wrapper's hero model (3,108 triangles), its film roll and film web; the film shells on riding pallets; the forklifts' beacons and carried pallets; the docks' roller doors and lamps. The stage 8 and 10 stops moved in this phase (stage 8 takes in the stretch wrapper, stage 10 the docks and a docked truck), so their rows are not comparable with phase 8's; at stage 10 the yard's parked trucks are now instanced. The counts grow with what moves. A docked truck adds about 12 draw calls with its tractor, doors and load (`qa` read 248 at the overview with the first truck docked, dark theme). A pallet riding to quarantine carries a full tray stack, 1,008 triangles a pass, and at most 10 ride at once. In the packs line's unit test (`tests/scene/packsLine.test.ts`), stages 7–10 draw 162 calls with grey boxes against a budget of 185 (145 before phase 12). Software GL gave 2.7 fps at the overview, not the 60 fps check, which runs on the target laptop.
 
 ### Frame rate: software GL only, not representative
 
