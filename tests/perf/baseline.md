@@ -27,7 +27,7 @@ The script is not part of `npm test` or `npm run check`, because it needs a buil
 What it does:
 
 1. It opens the app with `?debug` in Chromium, launched with `--enable-unsafe-swiftshader` so that a machine without a GPU still gets WebGL.
-2. It waits until the page has fetched everything and `window.__scene.drawCalls()` and `triangles()` hold still for `--hold` seconds. The Kenney conveyor pieces and the two vehicles load about a second after the first frame and change both counts.
+2. It waits until the page has fetched everything, pauses the sim (since phase 12 the palletizer's stack and the moving pallets change the triangles every second or so while the plant runs; the camera path resumes it), and waits until `window.__scene.drawCalls()` and `triangles()` hold still for `--hold` seconds. The Kenney conveyor pieces and the two vehicles load about a second after the first frame and change both counts.
 3. It reads the overview: draw calls, triangles and `fps()` (an average over the last second, read once a second).
 4. It clicks each stage on the rail, waits for `#viewport[data-focus-stage]`, waits for the counts to hold still for a second, and reads the same numbers.
 
@@ -207,6 +207,26 @@ Measured on 29 October 2026 on the phase 8 branch (contracts v6, the live boiler
 | 10 Warehouse | 148 | 156,832 | 163 | 163,980 |
 
 One draw call and 2,112 triangles more than phase 7 at every camera: the chimney's plume, six puffs in one `InstancedMesh` (main pass only, as the flash vessel's vapour). Its copies move, so it is not frustum-culled, and it shows from any camera whenever the boiler burns gas, nearly all the time. Software GL gave 3.8 fps at the overview at 1440 × 900 (3.9 at 1280 × 720), at a load average of about 4: as phase 7's, and not the 60 fps check, which runs on the target laptop.
+
+### Phase 12: lifelike motion at the end of the line
+
+Measured on 2 November 2026 on the phase 12 branch, a production build served by `vite preview`, in headless Chromium 153.0.8010.12 on SwiftShader, read paused after the plant opens (day 8, 06:00), with no truck at the dock. Within the overview budget; no console errors (the phase 11 `THREE.Color` warning on the built `--grid` token is fixed).
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 |
+|---|---:|---:|
+| **Overview** | **228** | **252,946** |
+| 1 Standardization | 112 | 140,500 |
+| 2 Preheating | 109 | 142,420 |
+| 3 Homogenization | 110 | 139,656 |
+| 4 UHT | 123 | 151,780 |
+| 5 Flash cooling | 118 | 145,460 |
+| 6 Aseptic tank | 99 | 133,456 |
+| 7 Filling | 111 | 147,896 |
+| 8 Packaging | 124 | 153,650 |
+| 9 Quarantine & QA | 146 | 218,836 |
+| 10 Warehouse | 143 | 159,124 |
+
+Six draw calls more than phase 8 at the overview. The pieces: the palletizer's clamps, carried tray, trolley and safety fence; the stretch wrapper's hero model (3,108 triangles), its film roll and film web; the film shells on riding pallets; the forklifts' beacons and carried pallets; the docks' roller doors and lamps. The stage 10 stop draws 5 fewer than before because the yard's trucks are now instanced. The counts grow with what moves. A docked truck adds about 12 draw calls with its tractor, doors and load (`qa` read 248 at the overview with the first truck docked, dark theme). A pallet riding to quarantine carries a full tray stack, 1,008 triangles a pass, and at most 10 ride at once. In the packs line's unit test (`tests/scene/packsLine.test.ts`), stages 7–10 draw 162 calls with grey boxes against a budget of 185 (145 before phase 12). Software GL gave 2.7 fps at the overview, not the 60 fps check, which runs on the target laptop.
 
 ### Frame rate: software GL only, not representative
 
