@@ -79,6 +79,17 @@ describe('the theme the scene shows', () => {
     stubTheme({ '--grid': '#38bdf8' });
     expect(readSceneRgba('--grid', color)).toBe(1);
     expect(color.getHex()).toBe(0x38bdf8);
+    // The production build's minifier writes rgba() tokens as #rrggbbaa (phase 12 qa): read, not handed to THREE.Color.
+    color.set(0x000000);
+    stubTheme({ '--grid': '#38bdf80d' });
+    expect(readSceneRgba('--grid', color)).toBeCloseTo(13 / 255, 9);
+    expect(color.getHex()).toBe(0x38bdf8);
+    stubTheme({ '--grid': '#13212b09' });
+    expect(readSceneRgba('--grid', color)).toBeCloseTo(9 / 255, 9);
+    expect(color.getHex()).toBe(0x13212b);
+    stubTheme({ '--grid': '#38f8' });
+    expect(readSceneRgba('--grid', color)).toBeCloseTo(0x88 / 255, 9);
+    expect(color.getHex()).toBe(0x3388ff);
   });
 });
 

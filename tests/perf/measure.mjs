@@ -7,7 +7,8 @@
 //
 // With a port (5505 if none is given) it serves dist/ with `vite preview --strictPort` on that port and
 // stops it afterwards; with a URL it measures an app that is already running there. It opens the app
-// with ?debug in Chromium and waits at the overview until the draw calls and triangles hold still for
+// with ?debug in Chromium, pauses the sim (since phase 12 the moving pallets change the triangles every
+// second or so while it runs) and waits at the overview until the draw calls and triangles hold still for
 // `--hold` seconds: the Kenney conveyor pieces and the vehicles load about a second after the first
 // frame and change both counts. Then it selects each stage on the rail, waits for the camera to land
 // (#viewport[data-focus-stage]) and for the counts to hold still again. At each stop it reads
@@ -191,6 +192,17 @@ async function settledCounts(page, holdS) {
   }
 }
 
+/**
+ * Pauses or resumes the sim clock with the top bar's Pause button (Space). Since phase 12 the palletizer's tray
+ * stack and the pallets change the triangles every second or so while the plant runs, so the draw calls and
+ * triangles are read paused, where nothing changes; the camera path runs the plant again.
+ */
+async function setPaused(page, paused) {
+  const button = page.locator('[data-testid="pause"]');
+  if ((await button.getAttribute('aria-pressed')) !== String(paused)) await button.click();
+  await page.waitForSelector(`[data-testid="pause"][aria-pressed="${paused}"]`);
+}
+
 /** fps averaged over `samples` seconds, one reading of the last second's average per second. */
 async function readFps(page, samples) {
   const fps = [];
@@ -227,6 +239,7 @@ function frameStats(timesMs) {
  */
 async function runPath(page, stages, pathS, speedKey) {
   await page.click('#rail [data-testid="overview"]');
+  await setPaused(page, false);
   await page.keyboard.press(speedKey);
   await sleep(2_000); // the flight home, and the speed's first frames
   await page.evaluate(() => {
@@ -288,8 +301,9 @@ async function measure(appUrl, options) {
       name: shortName,
     }));
 
-    // Every model and texture fetched, then the counts hold still: the settled overview.
+    // Every model and texture fetched, the plant paused, then the counts hold still: the settled overview.
     await page.waitForLoadState('networkidle');
+    await setPaused(page, true);
     const overview = { ...(await settledCounts(page, options.holdS)), ...(await readFps(page, options.samples)) };
 
     const stops = [];
