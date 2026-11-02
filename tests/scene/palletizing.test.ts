@@ -153,6 +153,33 @@ describe('palletizer: pick and place', () => {
     expect((steps[5] as [ArmPhase, number])[1] - (steps[1] as [ArmPhase, number])[1]).toBeCloseTo(6.2, 1);
   });
 
+  it('sets the tray in hand on the fresh pallet when the pallet closes while the tray is being set down (qa, phase 12)', () => {
+    const arm = createPalletizing();
+    const dtS = 1 / 60;
+    let trays = 70;
+    // Into the place step with a tray, aimed at place 70 or above on the old pallet.
+    for (let i = 0; i < 2000 && !(arm.phase() === 'place' && arm.carrying()); i++) arm.update(dtS, true, trays);
+    expect(arm.phase()).toBe('place');
+    expect(arm.targetSlot()).toBeGreaterThanOrEqual(70);
+    for (let i = 0; i < 20; i++) arm.update(dtS, true, trays); // part of the way down
+    // The sim closes the pallet: one tray already on the fresh one.
+    trays = 1;
+    let lastLiftM = arm.pose.liftM;
+    let lastRad = arm.pose.armRad;
+    while (arm.phase() === 'place') {
+      arm.update(dtS, true, trays);
+      // Never the old pallet's count on the new one, and the gripper moves there without a jump.
+      expect(arm.traysShown()).toBeLessThanOrEqual(trays + 1);
+      expect(Math.abs(arm.pose.liftM - lastLiftM)).toBeLessThan(0.1);
+      expect(Math.abs(arm.pose.armRad - lastRad)).toBeLessThan(0.1);
+      lastLiftM = arm.pose.liftM;
+      lastRad = arm.pose.armRad;
+    }
+    // The tray went to place 1, the next free place on the fresh pallet.
+    expect(arm.traysShown()).toBe(2);
+    expect(arm.layers()).toBe(1);
+  });
+
   it('stays parked over the pick point while no packer lane packs, and finishes its move and parks when they stop', () => {
     const idle = createPalletizing();
     const rest = { ...idle.pose };

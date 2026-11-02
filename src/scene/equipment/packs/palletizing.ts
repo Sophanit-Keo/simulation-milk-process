@@ -199,6 +199,8 @@ export function createPalletizing(): Palletizing {
   /** Where the current swing started. */
   let fromRad = PICK_RAD;
   let fromReachM = PICK_REACH_M;
+  /** How far down the lift was when the step started: 0, unless the place step starts over (the pallet closed). */
+  let fromLiftM = 0;
   /** The place the tray goes to, and how the arm stands over it. */
   let target = -1;
   let targetRad = PICK_RAD;
@@ -256,7 +258,7 @@ export function createPalletizing(): Palletizing {
         pose.armRad = lerp(fromRad, targetRad, k);
         pose.reachM = lerp(fromReachM, targetReachM, k);
         const upS = stepS - PLACE_DOWN_S - PLACE_RELEASE_S;
-        pose.liftM = targetLiftM * (upS > 0 ? 1 - ease(upS / (ARM_STEP_S.place - PLACE_DOWN_S - PLACE_RELEASE_S)) : k);
+        pose.liftM = upS > 0 ? targetLiftM * (1 - ease(upS / (ARM_STEP_S.place - PLACE_DOWN_S - PLACE_RELEASE_S))) : lerp(fromLiftM, targetLiftM, k);
         pose.clampM = CLAMP_GRIP_M * (1 - ease((stepS - PLACE_DOWN_S) / PLACE_RELEASE_S));
         break;
       }
@@ -269,6 +271,7 @@ export function createPalletizing(): Palletizing {
     stepS = 0;
     fromRad = pose.armRad;
     fromReachM = pose.reachM;
+    fromLiftM = pose.liftM;
     if (next === 'toPlace') {
       // The next free place on the pallet.
       aimAt(Math.min(shown(), STACK_CAPACITY - 1));
@@ -291,7 +294,13 @@ export function createPalletizing(): Palletizing {
     update(dtS, packing, trays) {
       const count = Math.min(Math.max(Math.round(trays), 0), STACK_CAPACITY);
       // Fewer trays than last frame: the pallet closed and rode off, and a fresh one stands under the place point.
-      if (count < simTrays) laid = 0;
+      if (count < simTrays) {
+        laid = 0;
+        simTrays = count;
+        // A tray being set down was aimed at its place on the old pallet: it goes to the next free place on the fresh
+        // one, the gripper moving there from where it is (no jump), so the old pallet's count never shows on the new.
+        if (carrying && phase === 'place') begin('place');
+      }
       simTrays = count;
       if (!(dtS > 0)) return;
       let leftS = dtS;
