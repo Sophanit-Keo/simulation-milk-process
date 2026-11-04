@@ -439,6 +439,38 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Why:** the end of the line is where students see packs become pallets and pallets become shipments; a robot that picks, a film that wraps and a forklift that carries make each step readable without a caption, as the liquid line's moving parts do for stages 1 to 6.
 - **What it changes:** `src/scene/equipment/packsLine.ts` and new modules under `src/scene/equipment/packs/`; the truck, forklift and a new stretch-wrapper hero model (`assets/scripts/`, `public/models/`); the packs line's draw-call budget (150 → 185) and own-material budget (5 → 10). The sim, the contracts, the UI and the factory floor are unchanged.
 
+## D23. The CIP station's chemicals and returns
+
+- **Status:** Proposed
+- **Date:** 2026-11-04
+- **Review note:** none (the developer asked for the CIP station's details: the chemicals it uses and the rest; [phase 13](agent-plan/phase-13-cip-station.md))
+- **Decision:** the CIP station names its chemicals and their strength, reads the return's conductivity, sends the return back to its tank or to drain by that reading, and counts the caustic, acid and rinse water it uses. D16's steps, times and temperatures stay as they are. New keys in `plant.json` (schema 9), all under `cleaning`:
+
+| Setting | Default | `plant.json` key | Basis |
+|---|---|---|---|
+| Lye | Sodium hydroxide (NaOH), 1.5% by weight | `chemicals.lye.concentrationPct` | The handbook doses NaOH at 0.5–2.0 wt% for heated surfaces ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment)); sim assumption: the upper half, because UHT deposits are harder to remove (caramelised and denatured, the same chapter) |
+| Acid | Nitric acid (HNO₃), 0.8% by weight | `chemicals.acid.concentrationPct` | The handbook doses HNO₃ at 0.5–1.5 wt%; sim assumption: within it |
+| Rinse water | Softened to 3 °dH | `chemicals.water.hardnessDh` | The handbook: rinse water softened to 2–4 °dH |
+| Conductivity of the lye, acid and water | 70.9, 45.0 and 0.3 mS/cm (at 20 °C) | `chemicals.*.conductivityMsPerCm` | CRC Handbook, "Electrical conductivity of aqueous solutions" (20 °C): NaOH 48.6 mS/cm at 1% and 93.1 at 2%, HNO₃ 28.4 at 0.5% and 56.1 at 1%, taken linearly at 1.5% and 0.8% (H120). Water: sim assumption, softened tap water |
+| Conductivity of milk | 4.8 mS/cm | `milkConductivityMsPerCm` | Milk varies naturally from 4.0 to 5.5 mS/cm ([Int. J. Food Properties](https://informahealthcare.com/doi/full/10.1081/JFP-200048143)); the middle of that range |
+| The circuit's volume | 600 L, from the balance tank to the cooler outlet and back | `circuitL` | Sim assumption: the heat exchangers' channels, the vessels' working volume and the pipes. At 24,000 L/h the circulation turns it over every 90 s |
+| Pipe bore | 65 mm | `pipeBoreMm` | D16's bore: 24,000 L/h is 2.0 m/s, inside the handbook's 1.5–3.0 m/s (H114) |
+| Change-over | Half the solution's conductivity | `changeOverFrac` | The handbook: a conductivity transmitter on the return switches the change-over valve to drain "at a preset conductivity", which it does not give; sim assumption |
+| Recovered rinses | The post-rinse and the gradual cooling | `recoverSteps` | The handbook: the final rinse water is collected and used for the next pre-rinse |
+
+- **Rules with no key:**
+  - The return's conductivity moves from what the circuit held to the new fluid's as one well-mixed volume is displaced. That is first-order with τ = `circuitL` ÷ `circulateLph`, 90 s. It starts from milk, which the first step of either programme pushes out (H120).
+  - **While a chemical circulates,** its return goes to drain until it reaches the change-over, then back to its tank.
+  - **In the water step after a chemical,** the return goes back to that chemical's tank while it is above the change-over. After that it goes to the water tank in a recovered step and to drain in any other.
+  - **The chemicals used** are the solution lost at a chemical step's two interfaces: what reaches the drain before the change-over, and what is left in the circuit when the rinse after it changes over. Litres count as kilograms, as for the energy. One CIP uses 6.20 kg of NaOH and 3.16 kg of HNO₃, one AIC 6.19 kg of NaOH (H121).
+  - **The rinse water to drain** is the circulation in every water step that is not recovered: 6,000 L a CIP and 4,000 L an AIC.
+  - Nothing models soil, the strength falling as it cleans, or the dosing that tops it up. The tanks' own levels are not drawn.
+- **Why:** the chemicals, strengths and conductivity control are what a dairy's CIP operator works with; showing them makes the station something to read, not only a lamp. The handbook and the CRC table give every number but the circuit's volume and the change-over point.
+- **What it changes:**
+  - the keys above in `plant.json` (schema 9) and their rows in [default settings](06-simulation-model.md#default-settings);
+  - contracts v7: `CleaningSnapshot.concentrationPct`, `returnConductivityMsPerCm` and `returnTo`, and `LiquidSnapshot.cleaningUse`;
+  - the stage 4 panel's rows, the CIP station's label, and "About this model".
+
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →
