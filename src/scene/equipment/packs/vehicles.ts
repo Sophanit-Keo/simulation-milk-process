@@ -3,7 +3,8 @@
 // Each vehicle is built facing +z around its own footprint centre, then turned and placed as a whole. Since
 // phase 12 the parts that move are named nodes, in the grey box as in the models (phase-12 card, Contracts):
 // the truck's `tractor` turns at the kingpin and its rear doors `door_left` and `door_right` swing open; the
-// forklift's `forks` and `mast_inner` lift and its `beacon` flashes.
+// forklift's `forks` and `mast_inner` lift and its `beacon` flashes. Since phase 14 (D24) the forklift's `mast` tilts
+// with the inner mast and the forks in it, and its rear wheels `steer_left` and `steer_right` steer.
 import * as THREE from 'three';
 import type { FixtureBuilder } from './builder';
 
@@ -36,12 +37,24 @@ export const CARGO_FRONT_Z_M = 5.29;
  */
 export const DOOR_OPEN_RAD = { door_left: (3 * Math.PI) / 2, door_right: (-3 * Math.PI) / 2 } as const;
 
-/** The forklift's moving nodes and their origins (assets/README.md, Vehicles). */
-export const FORKLIFT_NODES = ['forks', 'mast_inner', 'beacon'] as const;
+/**
+ * The forklift's moving nodes and their origins in its frame (assets/README.md, Vehicles). `mast_inner` and `forks`
+ * ride in `mast` (phase 14), so their origins here are where they stand at rest; in the mast's frame they are taken
+ * from the pivot.
+ */
+export const FORKLIFT_NODES = ['mast', 'forks', 'mast_inner', 'beacon', 'steer_left', 'steer_right'] as const;
 export type ForkliftNode = (typeof FORKLIFT_NODES)[number];
 export const FORKS_ORIGIN_M = [0, 0.03, 0.75] as const;
 export const MAST_INNER_ORIGIN_M = [0, 0.1, 0.64] as const;
 export const BEACON_ORIGIN_M = [0, 2.15, -0.95] as const;
+/** The mast's pivot on the drive axle (phase 14, D24): it tilts about +x here, 8° back (negative) to 5° forward. */
+export const MAST_PIVOT_M = [0, 0.32, 0.61] as const;
+export const MAST_TILT_RAD = { forward: (5 * Math.PI) / 180, back: (-8 * Math.PI) / 180 } as const;
+/** The rear wheels' centres: each steers about +y, up to STEER_MAX_RAD either way (phase 14). */
+export const STEER_M = { steer_left: [-0.45, 0.24, -1.3], steer_right: [0.45, 0.24, -1.3] } as const;
+export const STEER_MAX_RAD = (85 * Math.PI) / 180;
+/** The rear axle's place along the forklift, where the steer wheels turn. */
+export const REAR_AXLE_Z_M = -1.3;
 
 /** Nodes whose meshes cast no shadow: the doors lie inside the trailer's own shadow, the beacon is a lamp. */
 const NO_SHADOW_NODES = new Set<string>(['door_left', 'door_right', 'beacon']);
@@ -98,47 +111,52 @@ export function greyTruck(b: FixtureBuilder, layer: THREE.Object3D, size: Vehicl
 }
 
 /**
- * A counterbalance forklift, forks at +z: body and counterweight, overhead guard with the beacon on top,
- * the outer mast, the inner mast and the forks on their carriage (both lift), and the wheels.
+ * A counterbalance forklift, forks at +z: body and counterweight, overhead guard with the beacon on top, the mast on
+ * its pivot (it tilts) with the inner mast and the forks on their carriage in it (both lift), the drive wheels, and
+ * the rear wheels that steer. The body's front stops short of the mast, so the mast can tilt back (phase 14).
  */
 export function greyForklift(b: FixtureBuilder, layer: THREE.Object3D, size: VehicleSizeM, beaconMaterial: THREE.Material): void {
   const halfM = size.lengthM / 2;
-  const bodyM = 2.3;
+  const bodyM = 2.11;
   const bodyMidM = -halfM + bodyM / 2;
   const bodyWidthM = size.widthM - 0.05;
   b.part('box', 'paint', [0, 0.7, bodyMidM], [bodyWidthM, 0.9, bodyM], { parent: layer, castShadow: true });
   b.part('box', 'rubber', [0, 1.3, bodyMidM + 0.1], [0.5, 0.3, 0.5], { parent: layer }); // seat
   // Overhead guard: four posts and a roof.
   const guardBackM = bodyMidM - 0.45;
-  const guardFrontM = bodyMidM + 0.75;
+  const guardFrontM = 0.22;
   for (const zM of [guardBackM, guardFrontM]) {
     for (const side of [-1, 1]) b.part('box', 'steelDark', [side * (bodyWidthM / 2 - 0.05), 1.65, zM], [0.06, 1.0, 0.06], { parent: layer });
   }
   b.part('box', 'steelDark', [0, 2.12, (guardBackM + guardFrontM) / 2], [bodyWidthM, 0.06, guardFrontM - guardBackM + 0.1], { parent: layer, castShadow: true });
-  // The outer mast at the front of the body, as tall as the vehicle.
-  const mastM = -halfM + bodyM + 0.08;
-  for (const side of [-1, 1]) b.part('box', 'steelDark', [side * 0.35, size.heightM / 2, mastM], [0.08, size.heightM, 0.1], { parent: layer, castShadow: true });
+  // The mast on its pivot: the outer channels, in its frame (positions from the pivot).
+  const [, pivotYM, pivotZM] = MAST_PIVOT_M;
+  const mast = b.group('mast', [...MAST_PIVOT_M], layer);
+  for (const side of [-1, 1]) b.part('box', 'steelDark', [side * 0.35, size.heightM / 2 - pivotYM, 0], [0.08, size.heightM, 0.1], { parent: mast, castShadow: true });
   // The inner mast rides inside it at half the forks' lift (the 2:1 chain).
-  const inner = b.group('mast_inner', [...MAST_INNER_ORIGIN_M], layer);
+  const inner = b.group('mast_inner', [MAST_INNER_ORIGIN_M[0], MAST_INNER_ORIGIN_M[1] - pivotYM, MAST_INNER_ORIGIN_M[2] - pivotZM], mast);
   const innerM = size.heightM - MAST_INNER_ORIGIN_M[1];
   for (const side of [-1, 1]) b.part('box', 'steelDark', [side * 0.27, innerM / 2, 0], [0.06, innerM, 0.07], { parent: inner });
   b.part('box', 'steelDark', [0, innerM - 0.04, 0], [0.6, 0.06, 0.06], { parent: inner });
   // The carriage and the two forks; the node's origin is at the forks' underside.
-  const forks = b.group('forks', [...FORKS_ORIGIN_M], layer);
+  const forks = b.group('forks', [FORKS_ORIGIN_M[0], FORKS_ORIGIN_M[1] - pivotYM, FORKS_ORIGIN_M[2] - pivotZM], mast);
   const forkM = halfM - FORKS_ORIGIN_M[2];
-  b.part('box', 'steelDark', [0, 0.42, mastM + 0.09 - FORKS_ORIGIN_M[2]], [0.9, 0.5, 0.06], { parent: forks });
+  b.part('box', 'steelDark', [0, 0.42, -0.03], [0.9, 0.5, 0.06], { parent: forks });
   for (const side of [-1, 1]) b.part('box', 'steelDark', [side * 0.25, 0.025, forkM / 2], [0.12, 0.05, forkM], { parent: forks });
   // The amber beacon on the guard's roof, a low dome; the scene swaps its material to flash it.
   const beacon = b.group('beacon', [...BEACON_ORIGIN_M], layer);
   b.mesh('beacon-lamp', 'cylLo', beaconMaterial, [0, (size.heightM - BEACON_ORIGIN_M[1]) / 2, 0], [0.09, size.heightM - BEACON_ORIGIN_M[1], 0.09], { parent: beacon });
-  const wheelRadiusM = 0.3;
-  for (const zM of [mastM - 0.35, -halfM + 0.4]) {
-    for (const side of [-1, 1]) {
-      b.part('cylLo', 'rubber', [side * (size.widthM / 2 - 0.13), wheelRadiusM, zM], [wheelRadiusM, 0.24, wheelRadiusM], {
-        parent: layer,
-        rotationRad: [0, 0, Math.PI / 2],
-      });
-    }
+  // The drive wheels under the mast, and the rear wheels, each a group that steers about its centre.
+  const driveRadiusM = 0.3;
+  for (const side of [-1, 1]) {
+    b.part('cylLo', 'rubber', [side * (size.widthM / 2 - 0.13), driveRadiusM, 0.2], [driveRadiusM, 0.24, driveRadiusM], {
+      parent: layer,
+      rotationRad: [0, 0, Math.PI / 2],
+    });
+  }
+  for (const name of ['steer_left', 'steer_right'] as const) {
+    const wheel = b.group(name, [...STEER_M[name]], layer);
+    b.part('cylLo', 'rubber', [0, 0, 0], [0.24, 0.2, 0.24], { parent: wheel, rotationRad: [0, 0, Math.PI / 2] });
   }
 }
 

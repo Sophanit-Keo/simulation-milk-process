@@ -17,7 +17,7 @@ import { LAMP_COLOR_VAR, type SceneColorVar } from '../theme';
 import { HERO_MODELS, swapInHero } from './heroes';
 import { createTokenStream, PACK_BELT_SPEED_MPS, TRAY_BELT_SPEED_MPS, type TokenStream } from './packs/belts';
 import { FixtureBuilder, type BuiltFixture, type InstanceM } from './packs/builder';
-import { createAisleLocks, createForkliftDriver, type AisleLocks, type ForkliftInputs, type ForkliftRole, type PalletPose } from './packs/forkliftJobs';
+import { createAisleLocks, createForkliftDriver, rearSteerRad, type AisleLocks, type ForkliftDriver, type ForkliftInputs, type ForkliftRole, type PalletPose } from './packs/forkliftJobs';
 import { beltPlacements, createKitLoader, greyBelt, greyRollers, repeatPlacements, swapInKit, type KitLoader, type Placement } from './packs/conveyors';
 import { createKit, type Kit, type PrintName } from './packs/kit';
 import * as at from './packs/layout';
@@ -62,6 +62,9 @@ import {
   CARGO_TAIL_Z_M,
   DOOR_OPEN_RAD,
   FORKLIFT_NODES,
+  MAST_PIVOT_M,
+  REAR_AXLE_Z_M,
+  STEER_MAX_RAD,
   TRAILER_DECK_M,
   TRUCK_NODES,
   fitVehicle,
@@ -915,6 +918,8 @@ interface Warehouse {
   readonly lampMaterial: THREE.MeshBasicMaterial;
   readonly lampPalette: LampPalette<'red' | 'green'>;
   readonly pallets: { readonly bases: THREE.InstancedMesh; readonly loads: THREE.InstancedMesh; readonly shown: Uint8Array };
+  /** The forklifts' blue safety spots on the floor (phase 14), one copy each, one draw for both while one shows. */
+  readonly blueSpots: { readonly mesh: THREE.InstancedMesh; readonly shown: Uint8Array };
   /** prefers-reduced-motion, where there is a page to ask: the beacon then shines steadily. */
   readonly reducedMotion: MediaQueryList | null;
   applyBeaconTheme(): void;
@@ -932,6 +937,11 @@ const BEACON_DARK_VAR: Record<'lit', SceneColorVar> = { lit: LAMP_COLOR_VAR.warn
 /** Dock lamps: red while a truck stands at the dock, green otherwise. */
 const DOCK_LAMP_HEX = { red: LAMP_COLORS.bad, green: LAMP_COLORS.ok };
 const DOCK_LAMP_VAR: Record<'red' | 'green', SceneColorVar> = { red: LAMP_COLOR_VAR.bad, green: LAMP_COLOR_VAR.ok };
+/**
+ * The blue safety spot a forklift casts on the floor while it drives (phase 14, D24): this far beyond its end in the
+ * direction of travel, this wide, and the blue of the lamp on its guard.
+ */
+export const BLUE_SPOT = { beyondM: 3, radiusM: 0.32, hex: 0x2f6fe0, moving: 0.1 } as const;
 /** A full truck load and the sim seconds it takes (D3). */
 const PALLETS_PER_TRUCK = plantJson.warehouse.palletsPerTruck;
 const TRUCK_LOAD_S = plantJson.warehouse.truckLoadS;
@@ -968,6 +978,15 @@ function createWarehouse(kit: Kit): Warehouse {
   // With no pallet shown they draw nothing.
   bases.visible = false;
   loads.visible = false;
+  // The blue spots: a flat disc each, see-through and lit, on the floor; none drawn while both forklifts stand.
+  const spotMaterial = new THREE.MeshBasicMaterial({ color: BLUE_SPOT.hex, transparent: true, opacity: 0.75, depthWrite: false });
+  spotMaterial.name = 'forklift-blue-spot';
+  const spots = new THREE.InstancedMesh(kit.shape('cylLo'), spotMaterial, 2);
+  spots.name = 'forklift-blue-spots';
+  spots.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  for (let i = 0; i < 2; i++) spots.setMatrixAt(i, hiddenAt);
+  spots.boundingSphere = new THREE.Sphere(new THREE.Vector3(-37, 0, 11), 34);
+  spots.visible = false;
   const paintBeacon = (): void => {
     const color = beaconPalette.color('lit');
     if (beaconPalette.dark) {
@@ -987,6 +1006,7 @@ function createWarehouse(kit: Kit): Warehouse {
     lampMaterial,
     lampPalette,
     pallets: { bases, loads, shown: new Uint8Array(FORKLIFT_PALLET_SLOTS) },
+    blueSpots: { mesh: spots, shown: new Uint8Array(2) },
     reducedMotion: typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null,
     applyBeaconTheme() {
       beaconPalette.applyTheme();
@@ -1002,6 +1022,8 @@ function createWarehouse(kit: Kit): Warehouse {
         if (holders > 0) return;
         beaconLit.dispose();
         lampMaterial.dispose();
+        spotMaterial.dispose();
+        spots.dispose();
         bases.dispose();
         loads.dispose();
       };
@@ -1009,8 +1031,41 @@ function createWarehouse(kit: Kit): Warehouse {
   };
 }
 
-/** Writes pallet `slot` of the forklifts' pallets at `pose`, or hides it; the meshes draw while one shows. */
-function writePallet(pallets: Warehouse['pallets'], slot: number, pose: PalletPose): void {
+/** A forklift's mast tilt, for the pallet on its forks: the tilt, and the footprint and heading it turns with (phase 14). */
+interface ForksTilt {
+  rad: number;
+  xM: number;
+  zM: number;
+  headingRad: number;
+}
+
+const _pivot = new THREE.Vector3();
+const _offset = new THREE.Vector3();
+const _tilt = new THREE.Quaternion();
+const _right = new THREE.Vector3(1, 0, 0);
+
+/**
+ * Turns a point of the pallet on the forks (world metres, in `out`) about the mast's pivot by the tilt, and gives the
+ * pallet's turn in `_quaternion`: the heading, then the tilt about the forklift's own x (phase 14).
+ */
+function tiltOnForks(out: THREE.Vector3, tilt: ForksTilt): void {
+  const sin = Math.sin(tilt.headingRad);
+  const cos = Math.cos(tilt.headingRad);
+  // The pivot in the floor's frame: the forklift's footprint, then its pivot along its heading.
+  _pivot.set(tilt.xM + sin * MAST_PIVOT_M[2], MAST_PIVOT_M[1], tilt.zM + cos * MAST_PIVOT_M[2]);
+  _quaternion.setFromAxisAngle(_up, tilt.headingRad);
+  _tilt.setFromAxisAngle(_right, tilt.rad);
+  _quaternion.multiply(_tilt);
+  // Into the forklift's frame, tilted about its x, and back.
+  _offset.copy(out).sub(_pivot).applyAxisAngle(_up, -tilt.headingRad).applyAxisAngle(_right, tilt.rad).applyAxisAngle(_up, tilt.headingRad);
+  out.copy(_pivot).add(_offset);
+}
+
+/**
+ * Writes pallet `slot` of the forklifts' pallets at `pose`, or hides it; the meshes draw while one shows. A pallet on
+ * the forks tilts with the mast (`tilt`, phase 14).
+ */
+function writePallet(pallets: Warehouse['pallets'], slot: number, pose: PalletPose, tilt?: ForksTilt): void {
   const { bases, loads, shown } = pallets;
   shown[slot] = pose.shown ? 1 : 0;
   const any = shown.includes(1);
@@ -1026,9 +1081,26 @@ function writePallet(pallets: Warehouse['pallets'], slot: number, pose: PalletPo
   const p = at.RACK_PALLET;
   _quaternion.setFromAxisAngle(_up, pose.headingRad);
   _position.set(pose.xM, pose.yM + p.heightM / 2, pose.zM);
+  if (tilt && tilt.rad !== 0) tiltOnForks(_position, tilt);
   bases.setMatrixAt(slot, _matrix.compose(_position, _quaternion, _scale.set(p.widthM, p.heightM, p.depthM)));
-  _position.y = pose.yM + p.heightM + p.loadHeightM / 2;
+  _position.set(pose.xM, pose.yM + p.heightM + p.loadHeightM / 2, pose.zM);
+  if (tilt && tilt.rad !== 0) tiltOnForks(_position, tilt);
   loads.setMatrixAt(slot, _matrix.compose(_position, _quaternion, _scale.set(...PALLET_LOAD_SIZE_M)));
+}
+
+/** Writes forklift `slot`'s blue spot on the floor `aheadM` from its footprint along its heading, or hides it (phase 14). */
+function writeBlueSpot(spots: Warehouse['blueSpots'], slot: number, xM: number, zM: number, headingRad: number, aheadM: number | null): void {
+  spots.shown[slot] = aheadM === null ? 0 : 1;
+  spots.mesh.visible = spots.shown.includes(1);
+  if (aheadM === null) {
+    spots.mesh.getMatrixAt(slot, _matrix);
+    spots.mesh.setMatrixAt(slot, _matrix.multiply(HIDDEN)); // keeps its spot, at no size, so the bounds stay the forklifts'
+  } else {
+    _position.set(xM + Math.sin(headingRad) * aheadM, 0.06, zM + Math.cos(headingRad) * aheadM);
+    _quaternion.identity();
+    spots.mesh.setMatrixAt(slot, _matrix.compose(_position, _quaternion, _scale.set(BLUE_SPOT.radiusM, 0.01, BLUE_SPOT.radiusM)));
+  }
+  spots.mesh.instanceMatrix.needsUpdate = true;
 }
 
 /**
@@ -1232,7 +1304,7 @@ function forklift(kit: Kit, ctx: EquipmentContext, id: string, role: ForkliftRol
     // Both forklifts' pallets, in world metres: the root stands at the origin.
     const holder = new THREE.Group();
     holder.name = 'pallets';
-    holder.add(bases, loads);
+    holder.add(bases, loads, warehouse.blueSpots.mesh);
     root.add(holder);
     printOn(kit, 'pallet', [bases], life);
   }
@@ -1248,20 +1320,47 @@ function forklift(kit: Kit, ctx: EquipmentContext, id: string, role: ForkliftRol
   const heightM = at.FORKLIFT_SIZE_M.heightM + 0.4;
   const anchor: [number, number, number] = [driver.xM, heightM, driver.zM];
   let palletsShown = false;
+  // Phase 14: the rear wheels' steer angle from the rear axle's motion, and the direction it drives in.
+  const spotSlot = role === 'putAway' ? 0 : 1;
+  let steerRad = 0;
+  let travel = 0; // +1 forks first, -1 reversing, 0 standing
+  const rearAxle = (): [number, number] => [driver.xM + Math.sin(driver.headingRad) * REAR_AXLE_Z_M, driver.zM + Math.cos(driver.headingRad) * REAR_AXLE_Z_M];
+  let lastRear = rearAxle();
+  let lastFoot: [number, number] = [driver.xM, driver.zM];
+  const tilt: ForksTilt = { rad: 0, xM: 0, zM: 0, headingRad: 0 };
+  const follow = (dtS: number): void => {
+    const rear = rearAxle();
+    steerRad = rearSteerRad(rear[0] - lastRear[0], rear[1] - lastRear[1], driver.headingRad, steerRad, dtS, STEER_MAX_RAD);
+    lastRear = rear;
+    // Which way it drives: along its heading (forks first) or against it, while it moves faster than a crawl.
+    const along = (driver.xM - lastFoot[0]) * Math.sin(driver.headingRad) + (driver.zM - lastFoot[1]) * Math.cos(driver.headingRad);
+    travel = dtS > 0 && Math.abs(along) > BLUE_SPOT.moving * dtS ? Math.sign(along) : dtS > 0 ? 0 : travel;
+    lastFoot = [driver.xM, driver.zM];
+  };
   const pose = (): void => {
     const object = vehicle.fixture.object;
     object.position.set(driver.xM, 0, driver.zM);
     object.rotation.y = driver.headingRad;
-    const { nodes, restY, unitM } = vehicle;
+    const { nodes, restY, restTurn, unitM } = vehicle;
     nodes.forks.position.y = restY.forks + driver.liftM / unitM.forks;
     nodes.mast_inner.position.y = restY.mast_inner + driver.liftM / 2 / unitM.mast_inner;
+    nodes.mast.rotation.x = driver.tiltRad;
+    nodes.steer_left.rotation.y = restTurn.steer_left + steerRad;
+    nodes.steer_right.rotation.y = restTurn.steer_right + steerRad;
+    // The blue spot, beyond its end in the direction of travel, while it drives.
+    const endM = at.FORKLIFT_SIZE_M.lengthM / 2 + BLUE_SPOT.beyondM;
+    writeBlueSpot(warehouse.blueSpots, spotSlot, driver.xM, driver.zM, driver.headingRad, travel === 0 ? null : travel * endM);
+    tilt.rad = driver.tiltRad;
+    tilt.xM = driver.xM;
+    tilt.zM = driver.zM;
+    tilt.headingRad = driver.headingRad;
     if (driver.beacon !== litShown) {
       litShown = driver.beacon;
       for (const mesh of beaconMeshes) mesh.material = litShown ? warehouse.beaconLit : dark;
     }
     const anyShown = driver.carried.shown || driver.setDown.shown || driver.waiting.shown;
     if (anyShown || palletsShown) {
-      writePallet(warehouse.pallets, slots.carried, driver.carried);
+      writePallet(warehouse.pallets, slots.carried, driver.carried, tilt);
       writePallet(warehouse.pallets, slots.setDown, driver.setDown);
       if (role === 'putAway') writePallet(warehouse.pallets, WAITING_SLOT, driver.waiting);
       bases.instanceMatrix.needsUpdate = true;
@@ -1293,9 +1392,13 @@ function forklift(kit: Kit, ctx: EquipmentContext, id: string, role: ForkliftRol
           }
         }
         inputs.steadyBeacon = warehouse.reducedMotion?.matches ?? false;
-        driver.update(busyMotionDtS(s, realDtS), inputs);
+        const dtS = busyMotionDtS(s, realDtS);
+        driver.update(dtS, inputs);
+        follow(dtS);
         pose();
       },
+      // What it does now (phase 14), and the forks' height while they are up.
+      labelText: () => forkliftWords(driver),
       labelAnchorNowM: () => {
         anchor[0] = driver.xM;
         anchor[2] = driver.zM;
@@ -1312,10 +1415,25 @@ function forklift(kit: Kit, ctx: EquipmentContext, id: string, role: ForkliftRol
         beacon: driver.beacon,
         place: driver.place,
         model: !vehicle.fixture.object.getObjectByName('grey-box'),
+        tiltRad: driver.tiltRad,
+        steerRad,
+        blueSpot: travel !== 0,
       }),
     },
     life,
   );
+}
+
+/** A forklift's job in words, for its label (phase 14): by its role, as a dispatcher would say it. */
+const FORKLIFT_JOB_WORDS: Readonly<Record<ForkliftRole, Readonly<Record<ForkliftDriver['job'], string>>>> = {
+  putAway: { parked: 'parked', toPick: 'to the pallet', pick: 'picking up', toDrop: 'to the racks', drop: 'putting away', home: 'back to its spot' },
+  loading: { parked: 'parked', toPick: 'to the racks', pick: 'picking up', toDrop: 'to the truck', drop: 'loading the truck', home: 'back to its spot' },
+};
+
+/** "to the racks · forks 1.6 m": the job, and the forks' height once they are up (above 0.3 m). */
+export function forkliftWords(driver: Pick<ForkliftDriver, 'role' | 'job' | 'liftM'>): string {
+  const words = FORKLIFT_JOB_WORDS[driver.role][driver.job];
+  return driver.liftM > 0.3 ? `${words} · forks ${driver.liftM.toFixed(1)} m` : words;
 }
 
 /**
