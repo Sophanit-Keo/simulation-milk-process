@@ -19,7 +19,10 @@ import {
   buildForklift,
   buildTruck,
   FORKLIFT_BEACON_M,
+  FORKLIFT_MAST_PIVOT_M,
   FORKLIFT_SIZE_M,
+  FORKLIFT_STEER_M,
+  FORKLIFT_TILT_RAD,
   TRUCK_CARGO_M,
   TRUCK_DOOR_OPEN_RAD,
   TRUCK_HINGE_M,
@@ -34,8 +37,8 @@ const MM = 0.001;
 
 const generated = await vehicleGlbs();
 
-/** Meshes (draw calls) each model may have: the phase-12 card's limits. */
-const MAX_MESHES = { 'truck.glb': 7, 'forklift.glb': 5 };
+/** Meshes (draw calls) each model may have: the phase-12 card's limits, the forklift's raised to 8 in phase 14. */
+const MAX_MESHES = { 'truck.glb': 7, 'forklift.glb': 8 };
 
 for (const [file, size] of [['truck.glb', TRUCK_SIZE_M], ['forklift.glb', FORKLIFT_SIZE_M]]) {
   describe(file, () => {
@@ -92,18 +95,85 @@ describe('facing and moving nodes', () => {
     assert.equal(truck.getObjectByName('body_glass'), undefined, 'no glass on the trailer');
   });
 
-  it('the forklift has its forks at +z, on nodes that lift along y from the floor', () => {
+  it('the forklift has its forks at +z, on nodes in the mast that lift along its y from the floor', () => {
     const forklift = buildForklift();
     forklift.updateMatrixWorld(true);
+    const mast = forklift.getObjectByName('mast');
     const forks = forklift.getObjectByName('forks');
     const inner = forklift.getObjectByName('mast_inner');
-    assert.ok(forks && inner, 'forks and mast_inner exist');
-    // Both are children of the root, so lifting is position.y += liftM with nothing else to undo.
-    assert.equal(forks.parent, forklift);
-    assert.equal(inner.parent, forklift);
+    assert.ok(mast && forks && inner, 'mast, forks and mast_inner exist');
+    // Both ride in the mast (phase 14), so they tilt with it, and lifting is position.y += liftM in its frame.
+    assert.equal(mast.parent, forklift);
+    assert.equal(forks.parent, mast);
+    assert.equal(inner.parent, mast);
     assert.ok(Math.abs(boxOf(forks).max.z - FORKLIFT_SIZE_M.lengthM / 2) < MM, 'fork tips at the +z end');
-    assert.ok(Math.abs(boxOf(forks).min.y - forks.position.y) < MM, 'the forks origin is their underside');
-    assert.ok(Math.abs(boxOf(inner).min.y - inner.position.y) < MM, 'the inner mast origin is its foot');
+    assert.ok(Math.abs(boxOf(forks).min.y - (FORKLIFT_MAST_PIVOT_M[1] + forks.position.y)) < MM, 'the forks origin is their underside');
+    assert.ok(Math.abs(boxOf(inner).min.y - (FORKLIFT_MAST_PIVOT_M[1] + inner.position.y)) < MM, 'the inner mast origin is its foot');
+  });
+
+  it('tilts its mast about the pivot on the drive axle, the forks with it, clear of the guard and the floor (phase 14)', () => {
+    const forklift = buildForklift();
+    const mast = forklift.getObjectByName('mast');
+    assert.deepEqual(mast.position.toArray(), FORKLIFT_MAST_PIVOT_M);
+    assert.deepEqual(mast.quaternion.toArray(), [0, 0, 0, 1]);
+    // The Linde E20's 5° forward and 8° back (VDI 2198 sheet, line 4.1).
+    assert.ok(Math.abs(FORKLIFT_TILT_RAD.forward - (5 * Math.PI) / 180) < 1e-12 && Math.abs(FORKLIFT_TILT_RAD.back + (8 * Math.PI) / 180) < 1e-12);
+    const forks = forklift.getObjectByName('forks');
+    const inner = forklift.getObjectByName('mast_inner');
+    const tipOf = () => boxOf(forks);
+    const restTip = tipOf().max.z;
+    const rest = { forks: forks.position.y, inner: inner.position.y };
+    // The body, the guard and the operator; the mast, its inner mast and the forks never meet them, from 8° back to
+    // 5° forward, with the forks at their travel height or at the full lift (the inner mast at half, the 2:1 chain).
+    forklift.updateMatrixWorld(true);
+    const still = boxesOf(trianglesOf(forklift.getObjectByName('body_paint'), forklift.getObjectByName('body_matte')));
+    for (const tilt of [FORKLIFT_TILT_RAD.back, FORKLIFT_TILT_RAD.back / 2, 0, FORKLIFT_TILT_RAD.forward]) {
+      for (const liftM of [0.15, 3.3]) {
+        mast.rotation.x = tilt;
+        forks.position.y = rest.forks + liftM;
+        inner.position.y = rest.inner + liftM / 2;
+        assert.equal(contacts(trianglesOf(mast), still), 0, `the mast at ${((tilt * 180) / Math.PI).toFixed(1)}° and ${liftM} m meets the body`);
+      }
+    }
+    forks.position.y = rest.forks;
+    inner.position.y = rest.inner;
+    mast.rotation.x = FORKLIFT_TILT_RAD.back;
+    assert.ok(tipOf().max.y > 0.15, 'tilted back, the fork tips rise');
+    // 5° forward with the forks at their travel height, 0.15 m: the tips dip, and stay above the floor.
+    mast.rotation.x = 0;
+    forks.position.y = rest.forks + 0.15;
+    const levelTipY = tipOf().min.y;
+    mast.rotation.x = FORKLIFT_TILT_RAD.forward;
+    assert.ok(tipOf().min.y > 0, `the fork tips at y ${tipOf().min.y.toFixed(3)}`);
+    assert.ok(tipOf().min.y < levelTipY, 'tilted forward, the tips sit lower than level');
+    // The tips stand below the pivot, so a forward tilt draws them back a little, never past their rest by much.
+    assert.ok(Math.abs(tipOf().max.z - restTip) < 0.05, 'the tips stay at the +z end');
+  });
+
+  it('has its rear wheels as steer nodes on their centres, turning about y (phase 14)', () => {
+    const forklift = buildForklift();
+    for (const [name, centre] of Object.entries(FORKLIFT_STEER_M)) {
+      const wheel = forklift.getObjectByName(name);
+      assert.ok(wheel?.isMesh, `${name} is a mesh`);
+      assert.equal(wheel.parent, forklift);
+      assert.deepEqual(wheel.position.toArray(), centre);
+      const own = ownBox(wheel);
+      assert.ok(Math.abs(own.min.y + 0.24) < MM && Math.abs(own.min.z + own.max.z) < MM, `${name}: its origin at the wheel's centre`);
+      assert.ok(boxOf(wheel).min.y > -MM && boxOf(wheel).min.y < MM, `${name} stands on the floor`);
+    }
+  });
+
+  it('carries its operator on the seat, under the guard’s roof, in hi-vis and a hard hat (phase 14)', () => {
+    const forklift = buildForklift();
+    forklift.updateMatrixWorld(true);
+    // A ray down through the operator's head meets the hard hat under the roof's slats (their underside at 2.09 m).
+    const raycaster = new THREE.Raycaster(new THREE.Vector3(0, 2.085, -0.81), new THREE.Vector3(0, -1, 0), 0, 0.2);
+    const hits = raycaster.intersectObjects([forklift.getObjectByName('body_paint'), forklift.getObjectByName('body_matte')]);
+    assert.ok(hits.length > 0, 'something stands under the roof at the seat');
+    assert.ok(hits[0].point.y > 2.0 && hits[0].point.y < 2.09, `the hard hat's top at ${hits[0].point.y.toFixed(3)} m`);
+    // No exhaust on an electric truck: nothing rises above the guard but the beacon.
+    const body = boxOf(forklift.getObjectByName('body_matte')).max.y;
+    assert.ok(body <= 2.15 + MM, `the body reaches ${body.toFixed(3)} m`);
   });
 
   it('the forklift has its amber beacon on the guard, at its foot, in a material of its own that glows', () => {

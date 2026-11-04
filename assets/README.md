@@ -21,7 +21,7 @@ How 3D models and textures get into the plant: where files go, the rules every m
 | What | Files | Size | Status |
 |---|---|---|---|
 | Kenney Factory Kit pieces | 12 GLBs in `public/models/kenney/` + `Textures/colormap.png` | 253 KB | CC0. Six are placed as conveyors and rollers (stages 7–8); six are spares. [LICENSES.md](LICENSES.md) lists each. |
-| Truck and forklift | `public/models/vehicles/truck.glb`, `forklift.glb` | 195 KB + 79 KB | Own work (no CC0 kit has them, see [Vehicles](#vehicles)). They replace the grey boxes at the docks. Since phase 12 the truck's tractor and rear doors and the forklift's beacon are nodes of their own. |
+| Truck and forklift | `public/models/vehicles/truck.glb`, `forklift.glb` | 195 KB + 151 KB | Own work (no CC0 kit has them, see [Vehicles](#vehicles)). They replace the grey boxes at the docks. Since phase 12 the truck's tractor and rear doors and the forklift's beacon are nodes of their own. |
 | Token textures | `public/textures/carton.png`, `tray.png`, `pallet.png` | 8, 19, 35 KB | Own work, brand-free. Printed on the static tokens since G1: the cartons on both pack lines, the trays on the tray line, and the pallets at the palletizer and in the racks. Phase 4 moves the same tokens. See [Token textures](#token-textures). |
 | Hero specs | [`hero-specs.md`](hero-specs.md) | | Separator, homogenizer, aseptic filler, palletizer. The models came in phases 3–5. |
 | Hero models (phase 5) | `public/models/hero/separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` | 83, 97, 80, 69 KB | Own work, plain grey, at the grey boxes' size with every moving node the scene drives; AO baked into the vertex colours and the geometry meshopt-compressed. The scene loads them by default since phase 5 (`src/scene/equipment/heroes.ts`); `?greybox` keeps the grey boxes. See [hero-specs.md](hero-specs.md#phase-5-final-models). Since phase 12 the palletizer's boom reaches 3.13 m, with a trolley (`arm_trolley`) that the scene is still to drive: see [hero-specs.md](hero-specs.md#phase-12-the-palletizers-boom-and-trolley). |
@@ -53,7 +53,7 @@ The target is 60 fps on a mid-range laptop, with one shadow-casting light ([plan
 | Kind | Triangles | Textures | Materials, meshes | GLB after phase-5 compression |
 |---|---|---|---|---|
 | Hero: separator, homogenizer, aseptic filler, palletizer, stretch wrapper | ≤ 30,000 each | Base colour ≤ 2048²; ORM and normal ≤ 1024² | ≤ 8 materials, ≤ 20 meshes (the stretch wrapper ≤ 6, phase 12) | ≤ 2 MB |
-| Other models: kit pieces, truck, forklift, racks | ≤ 5,000 each | ≤ 1024² | ≤ 4 materials; the truck ≤ 7 meshes, the forklift ≤ 5 (phase 12) | ≤ 500 KB |
+| Other models: kit pieces, truck, forklift, racks | ≤ 5,000 each | ≤ 1024² | ≤ 4 materials; the truck ≤ 7 meshes (phase 12), the forklift ≤ 8 (phase 14) | ≤ 500 KB |
 | Tokens: carton, tray, pallet | Plain boxes, 12 each, built in code as `InstancedMesh` | One print each in `public/textures/`, ≤ 1024² (512² is enough) | 1 | none |
 
 Why these numbers fit:
@@ -168,9 +168,9 @@ For every model we make, including any the developer models by hand:
 | Native size (x × y × z) | 2.55 × 4.00 × 16.50 m | 1.20 × 2.20 × 3.50 m |
 | Facing | Cab at +z, trailer tail at −z | Forks at +z, counterweight at −z |
 | Origin | Footprint centre, on the floor | Footprint centre, on the floor |
-| Triangles, draw calls | 2,784 (2,040 before phase 12); 7 meshes: the trailer's `body_paint` and `body_matte`, under `tractor` its `tractor_paint`, `tractor_matte` and `tractor_glass`, and `door_left`, `door_right` | 1,096 (1,076 before phase 12); 5 meshes (`body_paint`, `body_matte`, `mast_inner`, `forks`, `beacon`) |
+| Triangles, draw calls | 2,784 (2,040 before phase 12); 7 meshes: the trailer's `body_paint` and `body_matte`, under `tractor` its `tractor_paint`, `tractor_matte` and `tractor_glass`, and `door_left`, `door_right` | 2,116 (1,096 before phase 14); 8 meshes: `body_paint`, `body_matte`, `mast` with `mast_inner` and `forks` in it, `beacon`, `steer_left`, `steer_right` |
 | Materials | 3, no textures: painted and matte parts take vertex colours (`COLOR_0`), plus glass (the cab's only) | 3, no textures: `forklift_paint` and `forklift_matte` take vertex colours; `forklift_beacon` is the beacon's own |
-| Moving nodes | `tractor`, `door_left`, `door_right` (phase 12, below); the scene places and turns the whole truck by its root, which is the trailer | `forks` (carriage and forks; origin at the forks' underside, (0, 0.03, 0.75)) and `mast_inner` (origin at its foot, (0, 0.10, 0.64)), both children of the root. To lift a pallet by `liftM` (0 to 3.3 m; the top rack beam is at 3.21 m) add `liftM` to `forks.position.y` and `liftM / 2` to `mast_inner.position.y` (a 2:1 chain), which keeps the inner mast 0.45 m inside the outer one at full lift. And `beacon` (phase 12, below) |
+| Moving nodes | `tractor`, `door_left`, `door_right` (phase 12, below); the scene places and turns the whole truck by its root, which is the trailer | `mast` (phase 14: tilts about +x on its pivot (0, 0.32, 0.61), 8° back to 5° forward) holding `forks` (carriage and forks; origin at the forks' underside, at rest (0, 0.03, 0.75)) and `mast_inner` (origin at its foot, at rest (0, 0.10, 0.64)), both in the mast's frame: to lift by `liftM` add `liftM` to `forks.position.y` and `liftM / 2` to `mast_inner.position.y` (the 2:1 chain); `steer_left` and `steer_right`, the rear wheels, turn about +y on their centres (∓0.45, 0.24, −1.3); `beacon` (below) |
 
 **The truck's moving nodes (phase 12).** All three are children of the root, at rest with no rotation and scale 1, and each turns about +y. `make-vehicles.mjs` exports their numbers (`TRUCK_KINGPIN_M`, `TRUCK_HINGE_M`, `TRUCK_DOOR_OPEN_RAD`, `TRUCK_CARGO_M`).
 
@@ -189,6 +189,14 @@ The scene's `fitVehicle()` (`src/scene/equipment/packs/vehicles.ts`) scales a mo
 In the app (vite build and vite preview, 1440 × 900, SwiftShader), the models add 4 draw calls and about 7,000 triangles (both passes) over the grey boxes they replace: 179 draw calls and 104,810 triangles at the overview against 175 and 97,842 without them, with no console errors. Those figures predate the scene's G1 fixes (the first perf baseline, at `1700d82`, read the same 179 and 104,810). The tokens and the now empty racks have changed the overview since: [the perf baseline](../tests/perf/baseline.md#draw-calls-and-triangles) has the current 178 draw calls and 98,558 triangles.
 
 Phase 12's nodes add 4 meshes to each truck (7 against 3) and 1 to each forklift (5 against 4), so 4 more draw calls per truck and 1 more per forklift in each pass; `qa` measures the overview's new count.
+
+**The forklift in detail (phase 14, D24).** A 2 t electric counterbalance truck after the Linde E20's VDI 2198 sheet:
+- **Operator:** seated, in a hi-vis vest with reflective bands and a white hard hat, hands on the wheel; the hat's top at 2.03 m, under the guard's slats.
+- **Electric details:** the battery hood's seam, a red charging socket on the right, and the capacity plate on the cowl; no exhaust.
+- **Mast:** two lift cylinders whose rods stay in their barrels at the full lift, chains on the inner mast's sheaves, and a hose.
+- **Fittings:** mirrors and a grab handle on the front posts, a step, work lights front and back, red tail lights, the blue-spot lamp, and a tow pin.
+- **Tilt clearance:** the body's front stops at z 0.36 and the guard's front posts stand at z 0.19–0.25, so the mast tilts 8° back without meeting them. A test checks there is no contact between the mast and the body at 8° back, level and 5° forward, at the travel height and at full lift. `make-vehicles.mjs` exports `FORKLIFT_MAST_PIVOT_M`, `FORKLIFT_TILT_RAD` and `FORKLIFT_STEER_M`.
+- **Cost:** 3 meshes more than phase 12's (8 against 5), so 3 more draw calls per forklift in each pass, and 1,020 triangles more.
 
 To change them, edit `make-vehicles.mjs`, run it, then `npm run test:assets` and `node assets/scripts/glb-load-check.mjs public/models/vehicles/*.glb --port 5507 --shots <dir>`.
 
