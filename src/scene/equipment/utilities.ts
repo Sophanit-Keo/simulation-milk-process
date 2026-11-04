@@ -156,11 +156,12 @@ function cipStation(steel: THREE.Material, dark: THREE.Material): Equipment {
     label: 'CIP station',
     object,
     labelAnchorM: [cx, S.tankTopM + 0.9, cz],
-    // While it cleans: the fluid, and the temperature a CIP step runs at.
+    // While it cleans: the chemical and its strength (contracts v7, D23), or the water, and the temperature a CIP step runs at.
     labelText(snapshot) {
       const cleaning = snapshot.liquid?.cleaning;
       if (!cleaning) return '';
-      return cleaning.tempC === null ? cleaning.fluid : `${cleaning.fluid} · ${cleaning.tempC} °C`;
+      const what = cipLabelFluid(cleaning.fluid, cleaning.concentrationPct);
+      return cleaning.tempC === null ? what : `${what} · ${cleaning.tempC} °C`;
     },
     update(snapshot) {
       light(fluidOf(snapshot));
@@ -179,6 +180,16 @@ function cipStation(steel: THREE.Material, dark: THREE.Material): Equipment {
       // steel and dark are shared (equipmentHost) and disposed there.
     },
   };
+}
+
+/** The chemicals by formula on the CIP station's label (D23): the lye's sodium hydroxide, the acid's nitric acid. */
+const CIP_LABEL_FORMULA: Readonly<Record<Exclude<CleaningFluid, 'water'>, string>> = { lye: 'NaOH', acid: 'HNO₃' };
+
+/** "NaOH 1.5%", "HNO₃ 0.8%" or "water"; a chemical without its strength from a snapshot older than contracts v7. */
+export function cipLabelFluid(fluid: CleaningFluid, concentrationPct: number | null | undefined): string {
+  if (fluid === 'water') return 'water';
+  const formula = CIP_LABEL_FORMULA[fluid];
+  return typeof concentrationPct === 'number' ? `${formula} ${concentrationPct}%` : formula;
 }
 
 function boilerHouse(kit: Kit, chimneyMaterial: THREE.Material): Equipment {
