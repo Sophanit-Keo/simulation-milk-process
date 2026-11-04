@@ -198,6 +198,15 @@ describe('checkPlantConfig catches a broken copy', () => {
     ['a fractional number of extra trucks', (copy: PlantConfig) => (copy.scenarios.spikeTrucks = 2.5), /spikeTrucks must be a whole number/],
     ['a zero steam lag', (copy: PlantConfig) => (copy.scenarios.steamFaultLagS = 0), /steamFaultLagS must be greater than 0/],
     ['a zero filler repair', (copy: PlantConfig) => (copy.scenarios.fillerRepairS = 0), /fillerRepairS must be greater than 0/],
+    // Phase 13 (D23): the CIP station's chemicals, its circuit and its change-over.
+    ['no lye strength', (copy: PlantConfig) => (copy.cleaning.chemicals.lye.concentrationPct = 0), /chemicals\.lye\.concentrationPct must be greater than 0/],
+    ['an acid stronger than 100%', (copy: PlantConfig) => (copy.cleaning.chemicals.acid.concentrationPct = 120), /chemicals\.acid\.concentrationPct must lie in 0–100/],
+    ['an acid that conducts no better than the water', (copy: PlantConfig) => (copy.cleaning.chemicals.acid.conductivityMsPerCm = 0.3), /acid\.conductivityMsPerCm must be above the water's/],
+    ['no circuit to clean', (copy: PlantConfig) => (copy.cleaning.circuitL = 0), /circuitL must be greater than 0/],
+    ['no pipe bore', (copy: PlantConfig) => (copy.cleaning.pipeBoreMm = 0), /pipeBoreMm must be greater than 0/],
+    ['a change-over at the whole solution', (copy: PlantConfig) => (copy.cleaning.changeOverFrac = 1), /changeOverFrac must lie in 0–1/],
+    ['a change-over below the water', (copy: PlantConfig) => (copy.cleaning.changeOverFrac = 0.001), /changeOverFrac must put the acid's change-over above the water's conductivity/],
+    ['a recovered step that is not a water step', (copy: PlantConfig) => (copy.cleaning.recoverSteps = ['postRinse', 'lye']), /recoverSteps: lye must be a water step/],
   ])('%s', (_label, change, problem) => {
     expect(problemsWith(change).join('\n')).toMatch(problem);
   });

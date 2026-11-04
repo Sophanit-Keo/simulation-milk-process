@@ -5,8 +5,9 @@ import { expectLanded, sceneCall, waitForClock, waitForScene } from './helpers';
 // Phase 7 in the browser, on the live sim: after the UHT temperature drop the full CIP walks its six steps
 // (H112). The UHT circuit's pipes take each fluid's colour, the CIP station lights the lamp of the fluid
 // it pumps, the stage 4 panel names the step and the legend shows the fluids, the one circulating marked;
-// then the plant re-sterilizes and all of it goes back to milk. The step times are the unit tests'
-// (tests/sim/cleaning.test.ts); here only the order of what shows on screen.
+// then the plant re-sterilizes and all of it goes back to milk. Since phase 13 (D23) the panel also names each
+// step's chemical and strength, where the return goes, and what the clean used. The step times, the change-overs
+// and the amounts are the unit tests' (tests/sim/cleaning.test.ts); here only what shows on screen.
 //
 // As in divert.spec.ts, nothing waits on wall-clock time: a recorder in the page notes, on every frame,
 // each change of what the pipes carry, the lit lamp, the panel's step and the legend.
@@ -16,6 +17,9 @@ interface Seen {
   lamp: string;
   step: string;
   legend: string | null;
+  /** The Chemical row's words before "·" (phase 13), and where the Return row says the return goes. */
+  chemical: string;
+  returnTo: string;
 }
 
 /** Starts noting each change of the pipes' fluid, the station's lamp, the panel's cleaning step (its name alone) and the legend's marked fluid. */
@@ -27,12 +31,16 @@ async function recordCleaning(page: Page): Promise<() => Promise<Seen[]>> {
     const tick = (): void => {
       const scene = (window as unknown as { __scene?: Scene }).__scene;
       const words = document.querySelector('#panel [data-state-key="cleaning"] dd')?.textContent ?? '';
+      const chemical = document.querySelector('#panel [data-state-key="chemical"] dd')?.textContent ?? '';
+      const back = document.querySelector('#panel [data-state-key="cipReturn"] dd')?.textContent ?? '';
       const group = document.querySelector<HTMLElement>('[data-testid="legend-cleaning"]');
       const now: Seen = {
         pipes: scene?.pipeState().cleaning ?? null,
         lamp: String(scene?.equipmentState('cip-station')?.lit ?? ''),
         step: words.split(/[,·]/)[0].trim(),
         legend: group && !group.hidden ? (group.querySelector<HTMLElement>('.legend-fluid.active')?.dataset.fluid ?? '') : null,
+        chemical: chemical.split('·')[0].trim(),
+        returnTo: back.includes('·') ? back.split('·')[1].trim() : back.trim(),
       };
       const last = seen.at(-1);
       if (!last || (Object.keys(now) as (keyof Seen)[]).some((key) => last[key] !== now[key])) seen.push(now);
@@ -89,6 +97,19 @@ test('the CIP after a UHT temperature drop: the pipes, the CIP station, the pane
   // The station's lamp and the pipes draw from the same snapshot, so they agree on every frame (the HUD's
   // panel and legend redraw 4 times a second, so they may trail by a frame).
   for (const each of changes) expect(each.lamp, detail).toBe(each.pipes ?? 'none');
+  // Phase 13: each step's chemical and strength in order, and the return both recovered and drained.
+  expect(runs(changes.filter((each) => each.chemical !== ''), 'chemical'), detail).toEqual([
+    'None',
+    'Softened water, 3 °dH',
+    'Sodium hydroxide (NaOH) 1.5%',
+    'Softened water, 3 °dH',
+    'Nitric acid (HNO₃) 0.8%',
+    'Softened water, 3 °dH',
+    'None',
+  ]);
+  const returns = new Set(changes.map((each) => each.returnTo));
+  for (const where of ['to drain', 'back to the lye tank', 'back to the acid tank', 'to the water tank']) expect(returns.has(where), `${where}: ${detail}`).toBe(true);
+  await expect(page.locator('#panel [data-state-key="cleaningUse"] dd')).toHaveText('6.2 kg NaOH · 3.2 kg HNO₃ · 6,000 L water');
   await expect(page.getByTestId('legend-cleaning')).toBeHidden();
   await expect(page.locator('.overlay-legend')).not.toHaveAttribute('aria-label', /Cleaning/);
 });

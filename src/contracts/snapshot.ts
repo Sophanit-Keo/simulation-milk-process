@@ -6,9 +6,10 @@ import type { LinePointId, Speed, StageId, Status } from './stages';
 /**
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
  * v0 week 1, v1 at G1, v2 at week 6, v3 at G2, v4 in phase 5 (scenarios), v5 in phase 7 (cleaning steps), v6 in
- * phase 8 (steam and energy). From v3 on, fields may only be added.
+ * phase 8 (steam and energy), v7 in phase 13 (the CIP station's chemicals and returns). From v3 on, fields may
+ * only be added.
  */
-export const CONTRACT_VERSION = 6;
+export const CONTRACT_VERSION = 7;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -73,6 +74,13 @@ export const CLEANING_FLUIDS: readonly CleaningFluid[] = ['water', 'lye', 'acid'
 export type CleaningStepId = 'preRinse' | 'lye' | 'rinse' | 'acid' | 'postRinse' | 'cooling' | 'displace';
 export const CLEANING_STEP_IDS: readonly CleaningStepId[] = ['preRinse', 'lye', 'rinse', 'acid', 'postRinse', 'cooling', 'displace'];
 
+/**
+ * Where the CIP station's change-over valve sends the return (contracts v7, phase 13, D23): back to the lye's or the
+ * acid's tank while the return is that solution, to the water tank in a recovered rinse, or to drain.
+ */
+export type CleaningReturn = 'drain' | 'waterTank' | 'lyeTank' | 'acidTank';
+export const CLEANING_RETURNS: readonly CleaningReturn[] = ['drain', 'waterTank', 'lyeTank', 'acidTank'];
+
 /** The cleaning step under way (contracts v5, phase 7). */
 export interface CleaningSnapshot {
   program: CleaningProgram;
@@ -87,6 +95,25 @@ export interface CleaningSnapshot {
   tempC: number | null;
   /** What the CIP station circulates through the UHT plant, stages 2–5, and back. */
   flowLph: number;
+  /**
+   * The step's chemical strength by weight (contracts v7): the lye's sodium hydroxide or the acid's nitric acid; null
+   * for water. Absent from an older snapshot.
+   */
+  concentrationPct?: number | null;
+  /** What the conductivity transmitter on the return reads, referred to 20 °C (contracts v7). Absent from an older snapshot. */
+  returnConductivityMsPerCm?: number;
+  /** Where the change-over valve sends the return now (contracts v7). Absent from an older snapshot. */
+  returnTo?: CleaningReturn;
+}
+
+/**
+ * What the cleans have used since the plant opened (contracts v7, phase 13, D23): pure sodium hydroxide and nitric
+ * acid lost at the chemical steps' interfaces (litres of solution count as kilograms), and the rinse water sent to drain.
+ */
+export interface CleaningUseSnapshot {
+  lyeKg: number;
+  acidKg: number;
+  drainWaterL: number;
 }
 
 /**
@@ -151,6 +178,8 @@ export interface LiquidSnapshot {
   cleaning?: CleaningSnapshot | null;
   /** The steam, the gas and the electricity (contracts v6, phase 8). Absent from an older snapshot. */
   energy?: EnergySnapshot;
+  /** The chemicals and the rinse water the cleans have used (contracts v7, phase 13). Absent from an older snapshot. */
+  cleaningUse?: CleaningUseSnapshot;
   tanks: {
     silo: TankLevel;
     /** The mixing (feed) tank after standardization, which feeds the UHT plant. */

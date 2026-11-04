@@ -65,11 +65,16 @@ describe('the CIP station', () => {
     item.dispose();
   });
 
-  it('labels the fluid, with a CIP step’s temperature; nothing while it stands', () => {
+  it('labels the chemical and its strength, or the water, with a CIP step’s temperature; nothing while it stands', () => {
     const item = station();
     expect(item.labelText(withCleaning(null))).toBe('');
-    expect(item.labelText(withCleaning(step('lye', 75)))).toBe('lye · 75 °C');
+    expect(item.labelText(withCleaning({ ...step('lye', 75), concentrationPct: 1.5 }))).toBe('NaOH 1.5% · 75 °C');
+    expect(item.labelText(withCleaning({ ...step('acid', 70), concentrationPct: 0.8 }))).toBe('HNO₃ 0.8% · 70 °C');
+    // An AIC step holds the UHT set point: no temperature of its own.
+    expect(item.labelText(withCleaning({ ...step('lye', null), concentrationPct: 1.5 }))).toBe('NaOH 1.5%');
     expect(item.labelText(withCleaning(step('water', null)))).toBe('water');
+    // From a snapshot older than contracts v7: the chemical without its strength.
+    expect(item.labelText(withCleaning(step('lye', 75)))).toBe('NaOH · 75 °C');
     item.dispose();
   });
 

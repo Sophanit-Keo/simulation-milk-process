@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "timeS": 648400.7527456576,
   "speed": 10,
   "paused": false,
@@ -213,6 +213,11 @@
       "gasKwh": 7500.010604331789,
       "electricKwh": 730.1559671351577,
       "kwhPerT": 86.61918745218682
+    },
+    "cleaningUse": {
+      "lyeKg": 0,
+      "acidKg": 0,
+      "drainWaterL": 0
     },
     "tanks": {
       "silo": {

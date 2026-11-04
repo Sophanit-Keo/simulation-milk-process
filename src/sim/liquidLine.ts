@@ -72,6 +72,7 @@ import {
   steamHeatKw,
   steamLph,
 } from './liquid/stageModels';
+import { displacementS, programChemistry, returnMsPerCm, returnTo, type StepChemistry } from './liquid/cleaningChemistry';
 import type { Rng } from './rng';
 
 /** Levels this close to a threshold count as on it (floating-point slack, far below any level shown). */
@@ -138,6 +139,10 @@ export interface LiquidTotals {
   steamKg: number;
   /** Electricity the homogenizer drew (phase 8). */
   electricKwh: number;
+  /** Pure sodium hydroxide and nitric acid the cleans lost at their interfaces, and the rinse water they sent to drain (phase 13, D23). */
+  lyeKg: number;
+  acidKg: number;
+  drainWaterL: number;
 }
 
 /** Flows at one instant, for the line points and the stage values. */
@@ -226,6 +231,12 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
   const resumeBelowL = tank.resumeBelowFrac * tank.capacityL;
   const tankerBelowL = std.tankerBelowFrac * std.siloCapacityL;
   const programSteps: Readonly<Record<CleaningProgram, readonly CleaningStep[]>> = { cip: cleaningSteps(config, 'cip'), aic: cleaningSteps(config, 'aic') };
+  // Phase 13 (D23): each step's chemical and strength, the return's conductivity from step to step, and what it uses.
+  const programChem: Readonly<Record<CleaningProgram, readonly StepChemistry[]>> = {
+    cip: programChemistry(config, programSteps.cip),
+    aic: programChemistry(config, programSteps.aic),
+  };
+  const circuitTauS = displacementS(config);
 
   const asepticStartL = tank.capacityL * tank.startFrac;
   const state: LiquidState = {
@@ -261,6 +272,9 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     throttledProductionS: 0,
     steamKg: 0,
     electricKwh: 0,
+    lyeKg: 0,
+    acidKg: 0,
+    drainWaterL: 0,
   };
 
   /**
@@ -278,6 +292,44 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       if (spentS < endS - TIME_EPS_S || index === steps.length - 1) return { program, index, step, remainingS: Math.max(0, endS - spentS) };
     }
     return null;
+  }
+
+  /**
+   * The step under way as the snapshot gives it (contracts v5), with its chemical's strength, what the conductivity
+   * transmitter on the return reads now and where the change-over valve sends the return (contracts v7, D23).
+   */
+  function cleaningSnapshot(now: { program: CleaningProgram; index: number; step: CleaningStep; remainingS: number }): CleaningSnapshot {
+    const chemistry = programChem[now.program][now.index] as StepChemistry;
+    const msPerCm = returnMsPerCm(chemistry, now.step.durationS - now.remainingS, circuitTauS);
+    return {
+      program: now.program,
+      step: now.step.step,
+      fluid: now.step.fluid,
+      stepIndex: now.index,
+      stepCount: programSteps[now.program].length,
+      stepRemainingS: now.remainingS,
+      tempC: now.step.tempC,
+      flowLph: cleaning.circulateLph,
+      concentrationPct: chemistry.concentrationPct,
+      returnConductivityMsPerCm: msPerCm,
+      returnTo: returnTo(config, chemistry, now.step.fluid, msPerCm),
+    };
+  }
+
+  /**
+   * Adds what each step of the cleaning programme under way has used once it ends within this cut, from the time
+   * spent in the mode before and after it (phase 13, D23). A step cut short, by a reset, counts nothing.
+   */
+  function countCleaningUse(program: CleaningProgram, spentBeforeS: number, spentAfterS: number): void {
+    let endS = 0;
+    for (const [index, step] of programSteps[program].entries()) {
+      endS += step.durationS;
+      if (endS <= spentBeforeS + TIME_EPS_S || endS > spentAfterS + TIME_EPS_S) continue;
+      const use = (programChem[program][index] as StepChemistry).use;
+      totals.lyeKg += use.lyeKg;
+      totals.acidKg += use.acidKg;
+      totals.drainWaterL += use.drainWaterL;
+    }
   }
 
   /** UHT flow the plant runs at in production or divert: full capacity, or the throttled share. */
@@ -450,6 +502,11 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     const airTargetPct = flows.uhtLph > 0 ? preheating.deaeratedAirPct : preheating.rawAirPct;
     state.airPct = lagToward(state.airPct, airTargetPct, dtS, preheating.lagS);
 
+    if (state.mode === 'cip' || state.mode === 'aic') {
+      const totalS = state.mode === 'cip' ? cleaning.cipS : cleaning.aicS;
+      const spentS = totalS - state.modeRemainingS;
+      countCleaningUse(state.mode, spentS, spentS + dtS);
+    }
     if (TIMED_MODES.has(state.mode)) state.modeRemainingS -= dtS;
     if (state.mode === 'production') {
       state.productionSinceCleanS += dtS;
@@ -706,18 +763,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
     };
 
     const tankLevel = (levelL: number, capacityL: number) => ({ levelL, capacityL });
-    const cleaningView: CleaningSnapshot | null = cleaningStep
-      ? {
-          program: cleaningStep.program,
-          step: cleaningStep.step.step,
-          fluid: cleaningStep.step.fluid,
-          stepIndex: cleaningStep.index,
-          stepCount: programSteps[cleaningStep.program].length,
-          stepRemainingS: cleaningStep.remainingS,
-          tempC: cleaningStep.step.tempC,
-          flowLph: cleaning.circulateLph,
-        }
-      : null;
+    const cleaningView: CleaningSnapshot | null = cleaningStep ? cleaningSnapshot(cleaningStep) : null;
     const liquid: LiquidSnapshot = {
       uhtMode: state.mode,
       modeRemainingS: Math.max(0, state.modeRemainingS),
@@ -729,6 +775,7 @@ export function createLiquidLine(config: PlantConfig, rng: Rng, options: LiquidL
       divertCount: state.divertCount,
       cleaning: cleaningView,
       energy,
+      cleaningUse: { lyeKg: totals.lyeKg, acidKg: totals.acidKg, drainWaterL: totals.drainWaterL },
       tanks: {
         silo: tankLevel(state.siloL, std.siloCapacityL),
         mixTank: tankLevel(state.mixTankL, std.mixTankCapacityL),
