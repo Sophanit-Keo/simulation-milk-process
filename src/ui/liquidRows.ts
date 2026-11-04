@@ -1,4 +1,5 @@
-import type { CleaningStepId, LiquidSnapshot, StageId, Status, UhtMode } from '../contracts';
+import { lphToLps, type CleaningFluid, type CleaningReturn, type CleaningStepId, type LiquidSnapshot, type StageId, type Status, type UhtMode } from '../contracts';
+import plantJson from '../data/plant.json';
 import { formatDuration, formatNumber, formatSigned, NO_VALUE, withUnit } from './format';
 
 /** A state the panel shows in words with a lamp, such as "Diverting · 2 min 30 s left". */
@@ -50,6 +51,77 @@ export function cleaningText(liquid: Pick<LiquidSnapshot, 'cleaning'>): StateTex
   return { text: `${name}${temp} · ${cleaning.stepIndex + 1} of ${cleaning.stepCount} · ${formatDuration(cleaning.stepRemainingS)} left`, status: 'warn' };
 }
 
+/** What each cleaning fluid is (phase 13, D23): the lye is caustic soda, the acid nitric acid, the rinses softened water. */
+export const CLEANING_FLUID_TEXT: Readonly<Record<CleaningFluid, string>> = {
+  lye: 'Sodium hydroxide (NaOH)',
+  acid: 'Nitric acid (HNO₃)',
+  water: 'Softened water',
+};
+
+/** What each chemical takes off the heated surfaces (Dairy Processing Handbook, D23). */
+export const CLEANING_FLUID_REMOVES: Readonly<Record<Exclude<CleaningFluid, 'water'>, string>> = {
+  lye: 'fat and protein',
+  acid: 'milkstone',
+};
+
+const RINSE_HARDNESS_DH = plantJson.cleaning.chemicals.water.hardnessDh;
+const PIPE_BORE_M = plantJson.cleaning.pipeBoreMm / 1_000;
+
+/**
+ * The chemical circulating now and its strength (contracts v7): "Sodium hydroxide (NaOH) 1.5% · fat and protein", in
+ * amber while a chemical circulates; the rinses' softened water unlit. "None" while no programme runs.
+ */
+export function chemicalText(liquid: Pick<LiquidSnapshot, 'cleaning'>): StateText {
+  const cleaning = liquid.cleaning;
+  if (!cleaning) return { text: 'None', status: 'idle' };
+  if (cleaning.fluid === 'water') return { text: `${CLEANING_FLUID_TEXT.water}, ${formatNumber(RINSE_HARDNESS_DH)} °dH`, status: 'idle' };
+  const strength = typeof cleaning.concentrationPct === 'number' ? ` ${formatNumber(cleaning.concentrationPct, 1)}%` : '';
+  return { text: `${CLEANING_FLUID_TEXT[cleaning.fluid]}${strength} · ${CLEANING_FLUID_REMOVES[cleaning.fluid]}`, status: 'warn' };
+}
+
+/** Where the change-over valve sends the return, in words (contracts v7). */
+export const CLEANING_RETURN_TEXT: Readonly<Record<CleaningReturn, string>> = {
+  drain: 'to drain',
+  waterTank: 'to the water tank',
+  lyeTank: 'back to the lye tank',
+  acidTank: 'back to the acid tank',
+};
+
+/**
+ * What the conductivity transmitter on the return reads and where the return goes (contracts v7): "70.9 mS/cm · back to
+ * the lye tank", green while it is recovered to a tank, amber while it goes to drain. "None" with no programme running,
+ * or from a snapshot older than contracts v7.
+ */
+export function returnText(liquid: Pick<LiquidSnapshot, 'cleaning'>): StateText {
+  const cleaning = liquid.cleaning;
+  if (!cleaning || typeof cleaning.returnConductivityMsPerCm !== 'number' || !cleaning.returnTo) return { text: 'None', status: 'idle' };
+  const reading = withUnit(formatNumber(cleaning.returnConductivityMsPerCm, 1), 'mS/cm');
+  const where = CLEANING_RETURN_TEXT[cleaning.returnTo] ?? cleaning.returnTo;
+  return { text: `${reading} · ${where}`, status: cleaning.returnTo === 'drain' ? 'warn' : 'ok' };
+}
+
+/** The CIP station's circulation and its velocity in the pipes: "24,000 L/h · 2.0 m/s" (D16, D23); "None" with no programme. */
+export function cipFlowText(liquid: Pick<LiquidSnapshot, 'cleaning'>): StateText {
+  const cleaning = liquid.cleaning;
+  if (!cleaning) return { text: 'None', status: 'idle' };
+  const mps = lphToLps(cleaning.flowLph) / 1_000 / (Math.PI * (PIPE_BORE_M / 2) ** 2);
+  return { text: `${withUnit(formatNumber(cleaning.flowLph), 'L/h')} · ${withUnit(formatNumber(mps, 1), 'm/s')}`, status: 'ok' };
+}
+
+/**
+ * What the cleans have used since the plant opened (contracts v7): "6.2 kg NaOH · 3.2 kg HNO₃ · 6,000 L water", the pure
+ * chemicals and the rinse water to drain; "None yet" before the first step ends, a dash from an older snapshot.
+ */
+export function cleaningUseText(liquid: Pick<LiquidSnapshot, 'cleaningUse'>): StateText {
+  const use = liquid.cleaningUse;
+  if (!use) return { text: NO_VALUE, status: 'idle' };
+  if (!(use.lyeKg > 0 || use.acidKg > 0 || use.drainWaterL > 0)) return { text: 'None yet', status: 'idle' };
+  return {
+    text: `${withUnit(formatNumber(use.lyeKg, 1), 'kg')} NaOH · ${withUnit(formatNumber(use.acidKg, 1), 'kg')} HNO₃ · ${withUnit(formatNumber(use.drainWaterL), 'L')} water`,
+    status: 'idle',
+  };
+}
+
 /** The UHT plant's feed: full flow, or held back while the aseptic tank is high (90% on, 60% off). */
 export function throttleText(liquid: Pick<LiquidSnapshot, 'throttled'>): StateText {
   return liquid.throttled ? { text: 'Throttled · tank high', status: 'warn' } : { text: 'Full flow', status: 'ok' };
@@ -89,7 +161,11 @@ export const STATE_ROWS: Readonly<Partial<Record<StageId, readonly StateRow[]>>>
   4: [
     { key: 'uhtMode', label: 'UHT plant', read: uhtModeText },
     { key: 'cleaning', label: 'Cleaning step', read: cleaningText },
+    { key: 'chemical', label: 'Chemical', read: chemicalText },
+    { key: 'cipReturn', label: 'Return', read: returnText },
+    { key: 'cipFlow', label: 'CIP flow', read: cipFlowText },
     { key: 'throttle', label: 'Feed', read: feedText },
+    { key: 'cleaningUse', label: 'Used since opening', read: cleaningUseText },
   ],
   6: [
     { key: 'throttle', label: 'UHT plant', read: supplyText },

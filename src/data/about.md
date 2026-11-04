@@ -21,7 +21,17 @@ At 140 °C and a 4 s hold, B* is 1.19 and the divert limit is 139.22 °C. The te
 
 A full CIP walks the Dairy Processing Handbook's programme for circuits with heated surfaces: a 10 min pre-rinse with warm water at 45 °C, 30 min of lye at 75 °C, a 5 min rinse, 20 min of acid at 70 °C, a 7 min post-rinse with cold water and 8 min of gradual cooling, 80 min in all ([Cleaning of dairy equipment](https://dairyprocessinghandbook.tetrapak.com/chapter/cleaning-dairy-equipment)). After every 10 h of production the plant also runs a 30 min intermediate clean (AIC) at the set point, so it stays sterile: water pushes the milk out for 5 min, lye circulates for 20 min and water rinses for 5 min, while the fillers draw on the aseptic tank.
 
-The CIP station behind the flash vessel pumps each fluid at 24,000 L/h, about 2 m/s in the pipes, and lights the lamp of the one it pumps. The pipes from the balance tank to the cooler outlet take that fluid's colour: pale blue water, violet lye, magenta acid. The aseptic tank and the divert line are not in the circuit. The stage 4 panel names the step and the time left in it.
+The chemicals:
+
+- Lye: sodium hydroxide (NaOH, caustic soda) at 1.5% by weight. It dissolves fat and protein, the organic deposit that builds up on the heated surfaces. The handbook doses it at 0.5–2%; the model takes the upper half, as UHT deposits are hard to shift.
+- Acid: nitric acid (HNO₃) at 0.8% by weight. It dissolves milkstone, the calcium and magnesium phosphates the lye leaves behind. The handbook doses it at 0.5–1.5%.
+- Rinse water: softened to 3 °dH, inside the handbook's 2–4 °dH, so the rinses leave no scale.
+
+The CIP station behind the flash vessel has a tank each for water, lye and acid. Its pump circulates each fluid at 24,000 L/h, about 2 m/s in the 65 mm pipes, fast enough for turbulent flow (the handbook asks 1.5–3 m/s), and it lights the lamp of the one it pumps. The pipes from the balance tank to the cooler outlet take that fluid's colour: pale blue water, violet lye, magenta acid. The aseptic tank and the divert line are not in the circuit.
+
+A conductivity transmitter on the return reads how strong it is, referred to 20 °C. The lye reads 70.9 mS/cm and the acid 45.0, from the CRC Handbook's table, the softened water 0.3 and milk about 4.8. As each step pushes out what the 600 L circuit held, the reading moves to the new fluid's over a minute or two. The change-over valve sends the return back to its tank while it reads above half the solution's conductivity, and to drain below. That way the lye and acid are recovered and used again, and only their mixed fronts and tails are lost. The post-rinse and cooling water goes to the water tank for the next pre-rinse; the other rinses go to drain.
+
+Each CIP so uses about 6.2 kg of sodium hydroxide and 3.2 kg of nitric acid, and sends 6,000 L of rinse water to drain. Each AIC uses about 6.2 kg of sodium hydroxide and sends 4,000 L. The stage 4 panel names the step and the time left in it, the chemical and its strength, the return's reading and where it goes, and the circulation. It also shows what the cleans have used since the plant opened.
 
 ## Steam and energy
 
@@ -71,7 +81,7 @@ Tour, at the top of the stage list, flies the camera through the ten stages in o
 - Milk moves as plug flow, with no pressure drop, viscosity effects or fouling.
 - Temperatures change in steps with a short lag, not through heat-transfer equations.
 - One product and one pack size.
-- Cleaning runs its steps on a timer: the fluids colour the pipes and set the temperatures, but they are not part of the liquid balance, and nothing models soil or detergent strength.
+- Cleaning runs its steps on a timer: the fluids colour the pipes and set the temperatures, but they are not part of the liquid balance. The chemicals keep their strength as they clean: nothing models soil, the strength falling or the dosing that tops it up, and the circuit is one well-mixed volume.
 - The energy counts the boiler's gas for the injector's steam and the homogenizer's electricity; the other drives, cooling, compressed air and buildings are left out, and the cleaning fluids heat as milk does.
 - Failures follow simple random rates, not real plant data.
 - The fault scenarios are scripted, each with one fixed size and duration.
@@ -98,6 +108,8 @@ Process and regulation:
 - [FDA: Aseptic Processing and Packaging for the Food Industry](https://www.fda.gov/inspections-compliance-enforcement-and-criminal-investigations/inspection-guides/aseptic-processing-and-packaging-food-industry)
 - [Reinheimer and Demkow (1990), Comparison of rapid tests for assessing UHT milk sterility](https://www.cambridge.org/core/journals/journal-of-dairy-research/article/abs/comparison-of-rapid-tests-for-assessing-uht-milk-sterility/4614AE5B275AC91DE2AA432FE6E1E919), Journal of Dairy Research
 - [GEA: Shelf-stable milk](https://www.gea.com/en/stories/shelf-stable-milk-conscientious-convenience/): shelf life
+- CRC Handbook of Chemistry and Physics, "Electrical conductivity of aqueous solutions" (20 °C): the conductivity of the lye and the acid
+- [International Journal of Food Properties](https://informahealthcare.com/doi/full/10.1081/JFP-200048143): milk's natural conductivity, 4.0–5.5 mS/cm
 
 Steam and energy:
 

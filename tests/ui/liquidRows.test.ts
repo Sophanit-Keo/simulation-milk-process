@@ -5,8 +5,13 @@ import { CLEANING_STEP_IDS, UHT_MODES, type CleaningSnapshot, type LiquidSnapsho
 import { createSim } from '../../src/sim';
 import { divertLimitC } from '../../src/sim/formulas';
 import {
+  chemicalText,
+  cipFlowText,
+  CLEANING_RETURN_TEXT,
   CLEANING_STEP_TEXT,
   cleaningText,
+  cleaningUseText,
+  returnText,
   energyPerTonneText,
   DERIVED_ROWS,
   feedText,
@@ -121,16 +126,69 @@ describe('throttleText and fillersText', () => {
   });
 });
 
+describe('the CIP station’s chemicals and returns (phase 13, D23)', () => {
+  const lye: CleaningSnapshot = {
+    program: 'cip',
+    step: 'lye',
+    fluid: 'lye',
+    stepIndex: 1,
+    stepCount: 6,
+    stepRemainingS: 1_740,
+    tempC: 75,
+    flowLph: plantConfig.cleaning.circulateLph,
+    concentrationPct: 1.5,
+    returnConductivityMsPerCm: 70.9,
+    returnTo: 'lyeTank',
+  };
+
+  it('names the chemical, its strength and what it removes, in amber; the rinses’ softened water unlit', () => {
+    expect(chemicalText({ cleaning: lye })).toEqual({ text: 'Sodium hydroxide (NaOH) 1.5% · fat and protein', status: 'warn' });
+    expect(chemicalText({ cleaning: { ...lye, step: 'acid', fluid: 'acid', concentrationPct: 0.8 } }).text).toBe('Nitric acid (HNO₃) 0.8% · milkstone');
+    expect(chemicalText({ cleaning: { ...lye, step: 'rinse', fluid: 'water', concentrationPct: null } })).toEqual({ text: 'Softened water, 3 °dH', status: 'idle' });
+    // A contracts v5 snapshot has no strength: the chemical alone.
+    expect(chemicalText({ cleaning: { ...lye, concentrationPct: undefined } }).text).toBe('Sodium hydroxide (NaOH) · fat and protein');
+    expect(chemicalText({ cleaning: null })).toEqual({ text: 'None', status: 'idle' });
+  });
+
+  it('reads the return’s conductivity and where it goes: green back to a tank, amber to drain', () => {
+    expect(returnText({ cleaning: lye })).toEqual({ text: '70.9 mS/cm · back to the lye tank', status: 'ok' });
+    expect(returnText({ cleaning: { ...lye, returnConductivityMsPerCm: 34.66, returnTo: 'drain' } })).toEqual({ text: '34.7 mS/cm · to drain', status: 'warn' });
+    expect(returnText({ cleaning: { ...lye, fluid: 'water', returnConductivityMsPerCm: 0.302, returnTo: 'waterTank' } }).text).toBe('0.3 mS/cm · to the water tank');
+    expect(returnText({ cleaning: { ...lye, returnTo: undefined } })).toEqual({ text: 'None', status: 'idle' });
+    expect(returnText({ cleaning: null })).toEqual({ text: 'None', status: 'idle' });
+    expect(new Set(Object.values(CLEANING_RETURN_TEXT)).size).toBe(4);
+  });
+
+  it('reads the circulation with its velocity in the 65 mm pipes', () => {
+    expect(cipFlowText({ cleaning: lye })).toEqual({ text: '24,000 L/h · 2.0 m/s', status: 'ok' });
+    expect(cipFlowText({ cleaning: null })).toEqual({ text: 'None', status: 'idle' });
+  });
+
+  it('counts the chemicals and the rinse water used since opening: "None yet" before any, a dash from an older snapshot', () => {
+    expect(cleaningUseText({ cleaningUse: { lyeKg: 6.1998, acidKg: 3.1609, drainWaterL: 6_000 } }).text).toBe('6.2 kg NaOH · 3.2 kg HNO₃ · 6,000 L water');
+    expect(cleaningUseText({ cleaningUse: { lyeKg: 0, acidKg: 0, drainWaterL: 0 } })).toEqual({ text: 'None yet', status: 'idle' });
+    expect(cleaningUseText({})).toEqual({ text: '—', status: 'idle' });
+  });
+});
+
 describe('STATE_ROWS', () => {
   it('shows the UHT mode and the cleaning step in stage 4, and the throttle where it starts and where it acts (stages 6 and 4)', () => {
-    expect(STATE_ROWS[4]?.map((row) => row.key)).toEqual(['uhtMode', 'cleaning', 'throttle']);
+    expect(STATE_ROWS[4]?.map((row) => row.key)).toEqual(['uhtMode', 'cleaning', 'chemical', 'cipReturn', 'cipFlow', 'throttle', 'cleaningUse']);
     expect(STATE_ROWS[6]?.map((row) => row.key)).toEqual(['throttle', 'fillers']);
     for (const stage of [1, 2, 3, 5, 7, 8, 9, 10] as const) expect(STATE_ROWS[stage], `stage ${stage}`).toBeUndefined();
   });
 
   it('reads every row from the liquid snapshot', () => {
     const throttled = { ...liquid(), throttled: true, uhtMode: 'divert' as const, modeRemainingS: 30 };
-    expect(STATE_ROWS[4]?.map((row) => row.read(throttled).text)).toEqual(['Diverting to reject · 30 s left', 'None', 'Throttled · tank high']);
+    expect(STATE_ROWS[4]?.map((row) => row.read(throttled).text)).toEqual([
+      'Diverting to reject · 30 s left',
+      'None',
+      'None',
+      'None',
+      'None',
+      'Throttled · tank high',
+      'None yet',
+    ]);
   });
 });
 
