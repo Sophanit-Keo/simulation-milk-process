@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 8,
+  "schemaVersion": 9,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -100,7 +100,17 @@
       { "step": "displace", "fluid": "water", "durationS": 300 },
       { "step": "lye", "fluid": "lye", "durationS": 1200 },
       { "step": "rinse", "fluid": "water", "durationS": 300 }
-    ]
+    ],
+    "chemicals": {
+      "lye": { "concentrationPct": 1.5, "conductivityMsPerCm": 70.9 },
+      "acid": { "concentrationPct": 0.8, "conductivityMsPerCm": 45.0 },
+      "water": { "hardnessDh": 3, "conductivityMsPerCm": 0.3 }
+    },
+    "milkConductivityMsPerCm": 4.8,
+    "circuitL": 600,
+    "pipeBoreMm": 65,
+    "changeOverFrac": 0.5,
+    "recoverSteps": ["postRinse", "cooling"]
   },
   "fillers": {
     "count": 2,

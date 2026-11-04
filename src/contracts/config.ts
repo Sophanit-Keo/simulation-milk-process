@@ -18,6 +18,12 @@ export interface CipStepConfig extends CleaningStepConfig {
   tempC: number;
 }
 
+/** A cleaning chemical (phase 13, D23): its strength by weight, and what a conductivity transmitter reads in it at 20 °C. */
+export interface CleaningChemicalConfig {
+  concentrationPct: number;
+  conductivityMsPerCm: number;
+}
+
 /**
  * Shape of src/data/plant.json, the default settings (plan 06 and plan/DECISIONS.md).
  * Names follow the units rule in units.ts. Only `process` changes the values.
@@ -165,6 +171,26 @@ export interface PlantConfig {
     cipSteps: CipStepConfig[];
     /** The intermediate clean's steps in order, adding up to aicS (sim assumption, phase 7, D16). */
     aicSteps: CleaningStepConfig[];
+    /**
+     * What circulates (phase 13, D23): the lye is sodium hydroxide and the acid nitric acid, each at its strength by
+     * weight (Dairy Processing Handbook), and the rinse water softened to hardnessDh; each with its conductivity at 20 °C
+     * (CRC Handbook).
+     */
+    chemicals: {
+      lye: CleaningChemicalConfig;
+      acid: CleaningChemicalConfig;
+      water: { hardnessDh: number; conductivityMsPerCm: number };
+    };
+    /** What the return reads while the circuit still holds milk, before the first step pushes it out (phase 13, D23). */
+    milkConductivityMsPerCm: number;
+    /** The circuit's volume, from the balance tank to the cooler outlet and back (sim assumption, D23); the return is displaced through it. */
+    circuitL: number;
+    /** The circuit's pipe bore, for the circulation's velocity (D16, D23). */
+    pipeBoreMm: number;
+    /** The change-over valve sends the return back to its solution's tank above this share of the solution's conductivity, to drain below (sim assumption, D23). */
+    changeOverFrac: number;
+    /** Water steps whose return is recovered to the water tank for the next pre-rinse; the other water steps go to drain (D23). */
+    recoverSteps: string[];
   };
   /** Stage 7. */
   fillers: {
@@ -278,6 +304,15 @@ const POSITIVE_KEYS = [
   'cleaning.cipS',
   'cleaning.aicS',
   'cleaning.circulateLph',
+  'cleaning.chemicals.lye.concentrationPct',
+  'cleaning.chemicals.lye.conductivityMsPerCm',
+  'cleaning.chemicals.acid.concentrationPct',
+  'cleaning.chemicals.acid.conductivityMsPerCm',
+  'cleaning.chemicals.water.conductivityMsPerCm',
+  'cleaning.milkConductivityMsPerCm',
+  'cleaning.circuitL',
+  'cleaning.pipeBoreMm',
+  'cleaning.changeOverFrac',
   'asepticTank.capacityL',
   'fillers.count',
   'fillers.ratePacksPerH',
@@ -445,6 +480,35 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   };
   checkSteps('cipSteps', 'cipS');
   checkSteps('aicSteps', 'aicS');
+  // Phase 13: a strength by weight, a change-over between the water's and the solution's conductivity, and recovered
+  // rinses that are water steps of a programme.
+  const given = cleaning.chemicals as Partial<PlantConfig['cleaning']['chemicals']> | undefined;
+  if (!given?.lye || !given.acid || !given.water) fail('cleaning.chemicals must give the lye, the acid and the water');
+  else {
+    const chemicals = given as PlantConfig['cleaning']['chemicals'];
+    for (const name of ['lye', 'acid'] as const) {
+      if (!(chemicals[name].concentrationPct < 100)) fail(`cleaning.chemicals.${name}.concentrationPct must lie in 0–100`);
+      if (!(chemicals[name].conductivityMsPerCm > chemicals.water.conductivityMsPerCm)) {
+        fail(`cleaning.chemicals.${name}.conductivityMsPerCm must be above the water's, so the change-over can tell them apart`);
+      }
+    }
+    if (!(cleaning.changeOverFrac < 1)) fail('cleaning.changeOverFrac must lie in 0–1');
+    else {
+      for (const name of ['lye', 'acid'] as const) {
+        if (!(cleaning.changeOverFrac * chemicals[name].conductivityMsPerCm > chemicals.water.conductivityMsPerCm)) {
+          fail(`cleaning.changeOverFrac must put the ${name}'s change-over above the water's conductivity`);
+        }
+      }
+    }
+  }
+  const recover: unknown = cleaning.recoverSteps;
+  if (!Array.isArray(recover)) fail('cleaning.recoverSteps must list steps');
+  else {
+    const waterSteps = new Set([...cleaning.cipSteps, ...cleaning.aicSteps].filter((step) => step.fluid === 'water').map((step) => step.step));
+    for (const step of recover as unknown[]) {
+      if (typeof step !== 'string' || !waterSteps.has(step)) fail(`cleaning.recoverSteps: ${String(step)} must be a water step of a programme`);
+    }
+  }
   // Phase 8: a boiler can't be more than all efficient, nor a kilogram of steam give the milk more than it took to raise.
   const { energy } = config;
   if (energy.boilerEfficiencyFrac > 1) fail('energy.boilerEfficiencyFrac must lie in 0–1');
