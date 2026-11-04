@@ -3,6 +3,15 @@
 // each step at its time and temperature, while the modes keep the times the scenario scripts expect.
 import { describe, expect, it } from 'vitest';
 import { checkPlantConfig, cleaningSteps, hToS, lphToLps, minToS, type CleaningSnapshot, type Snapshot } from '../../src/contracts';
+import {
+  circulationMps,
+  displacementS,
+  programChemistry,
+  programUse,
+  returnMsPerCm,
+  returnTo,
+  type StepChemistry,
+} from '../../src/sim/liquid/cleaningChemistry';
 import { expectWithin } from '../helpers/expectWithin';
 import { startPacks, type PacksRun } from '../helpers/packsRun';
 import { copyConfig, plantConfig } from '../helpers/plantConfig';
@@ -119,5 +128,104 @@ describe('H114: the circulation', () => {
     const areaM2 = Math.PI * 0.0325 ** 2;
     const speedMps = lphToLps(cleaning.circulateLph) / 1_000 / areaM2;
     expectWithin(speedMps, 2.01, 0.01);
+  });
+});
+
+// Phase 13 (D23, plan/hand-calculations.md H120–H121): the CIP station's chemicals, the return's conductivity as each
+// step displaces the circuit, the change-overs at half the solution's conductivity, and what the cleans use.
+describe('H120: the chemicals and the return’s conductivity', () => {
+  const cip = programChemistry(plantConfig, cleaningSteps(plantConfig, 'cip'));
+  const aic = programChemistry(plantConfig, cleaningSteps(plantConfig, 'aic'));
+  const tauS = displacementS(plantConfig);
+
+  it('circulates 1.5% NaOH and 0.8% HNO₃, conducting 70.9 and 45.0 mS/cm at 20 °C (the CRC table, taken linearly)', () => {
+    // CRC, 20 °C: NaOH 48.6 mS/cm at 1% and 93.1 at 2%; HNO₃ 28.4 at 0.5% and 56.1 at 1%.
+    // plant.json keeps them to 0.1 mS/cm: 70.85 → 70.9, 45.02 → 45.0.
+    expectWithin(48.6 + ((93.1 - 48.6) * (1.5 - 1)) / (2 - 1), cleaning.chemicals.lye.conductivityMsPerCm, 0.06);
+    expectWithin(28.4 + ((56.1 - 28.4) * (0.8 - 0.5)) / (1 - 0.5), cleaning.chemicals.acid.conductivityMsPerCm, 0.06);
+    expect(cip.map((step) => step.concentrationPct)).toEqual([null, 1.5, null, 0.8, null, null]);
+    expect(aic.map((step) => step.concentrationPct)).toEqual([null, 1.5, null]);
+  });
+
+  it('turns the 600 L circuit over every 90 s at 24,000 L/h, 2.0 m/s in the 65 mm bore', () => {
+    expect(tauS).toBe(90);
+    expectWithin(circulationMps(plantConfig, cleaning.circulateLph), 2.009, 0.001);
+  });
+
+  it('starts each step from what the step before left on the return, the first from milk', () => {
+    const starts = [4.8, 0.3057, 70.9, 2.8186, 45.0, 0.7203];
+    cip.forEach((step, i) => expectWithin(step.startMsPerCm, starts[i] as number, 1e-4));
+    // The AIC's lye runs 20 min, not 30: its rinse starts at 70.9 − 70.44 e^(−1,200/90) = 70.8999.
+    [4.8, 0.4605, 70.8999].forEach((startMsPerCm, i) => expectWithin((aic[i] as StepChemistry).startMsPerCm, startMsPerCm, 1e-4));
+    // 60 s into the lye: 70.9 + (0.3057 − 70.9) e^(−60/90) = 34.66 mS/cm.
+    expectWithin(returnMsPerCm(cip[1] as StepChemistry, 60, tauS), 34.66, 0.01);
+  });
+
+  it('sends the return to drain or back to its tank at half the solution’s conductivity', () => {
+    const steps = cleaningSteps(plantConfig, 'cip');
+    const where = (i: number, intoS: number) => {
+      const step = cip[i] as StepChemistry;
+      return returnTo(plantConfig, step, (steps[i] as (typeof steps)[number]).fluid, returnMsPerCm(step, intoS, tauS));
+    };
+    // The change-overs: lye at 61.99 s, the rinse after it at 62.77 s, acid at 56.56 s, the post-rinse at 62.99 s.
+    expect([where(0, 0), where(0, 599)]).toEqual(['drain', 'drain']);
+    expect([where(1, 61.9), where(1, 62.1), where(1, 1_799)]).toEqual(['drain', 'lyeTank', 'lyeTank']);
+    expect([where(2, 62.7), where(2, 62.9), where(2, 299)]).toEqual(['lyeTank', 'drain', 'drain']);
+    expect([where(3, 56.5), where(3, 56.7)]).toEqual(['drain', 'acidTank']);
+    expect([where(4, 62.9), where(4, 63.1), where(4, 419)]).toEqual(['acidTank', 'waterTank', 'waterTank']);
+    expect([where(5, 0), where(5, 479)]).toEqual(['waterTank', 'waterTank']);
+  });
+});
+
+describe('H121: what the cleans use', () => {
+  it('a CIP loses 6.20 kg of NaOH and 3.16 kg of HNO₃ at its interfaces, and sends 6,000 L of rinse water to drain', () => {
+    const use = programUse(programChemistry(plantConfig, cleaningSteps(plantConfig, 'cip')));
+    expectWithin(use.lyeKg, 6.1998, 1e-4);
+    expectWithin(use.acidKg, 3.1609, 1e-4);
+    expectWithin(use.drainWaterL, 6_000, 1e-6);
+  });
+
+  it('an AIC loses 6.19 kg of NaOH and sends 4,000 L to drain', () => {
+    const use = programUse(programChemistry(plantConfig, cleaningSteps(plantConfig, 'aic')));
+    expectWithin(use.lyeKg, 6.19, 1e-4);
+    expect(use.acidKg).toBe(0);
+    expectWithin(use.drainWaterL, 4_000, 1e-6);
+  });
+
+  it('in the live sim, the CIP after a UHT temperature drop shows each step’s strength and change-overs, and its totals', () => {
+    const run = startPacks(copyConfig());
+    run.sim.dispatch({ type: 'triggerScenario', id: 'uhtTempDrop' });
+    const routes: string[] = [];
+    run.runTo(hToS(2), (snap: Snapshot) => {
+      const now = snap.liquid.cleaning;
+      if (!now) return;
+      const key = `${now.step}:${now.concentrationPct ?? '-'}:${now.returnTo}`;
+      if (routes.at(-1) !== key) routes.push(key);
+    });
+    expect(routes).toEqual([
+      'preRinse:-:drain',
+      'lye:1.5:drain',
+      'lye:1.5:lyeTank',
+      'rinse:-:lyeTank',
+      'rinse:-:drain',
+      'acid:0.8:drain',
+      'acid:0.8:acidTank',
+      'postRinse:-:acidTank',
+      'postRinse:-:waterTank',
+      'cooling:-:waterTank',
+    ]);
+    const use = run.sim.snapshot().liquid.cleaningUse;
+    expectWithin(use?.lyeKg ?? Number.NaN, 6.1998, 1e-4);
+    expectWithin(use?.acidKg ?? Number.NaN, 3.1609, 1e-4);
+    expectWithin(use?.drainWaterL ?? Number.NaN, 6_000, 1e-6);
+  });
+
+  it('in the live sim, nothing is used before the first clean, and the first AIC uses its 6.19 kg and 4,000 L', () => {
+    const run = startPacks(copyConfig());
+    expect(run.runTo(hToS(9.9)).liquid.cleaningUse).toEqual({ lyeKg: 0, acidKg: 0, drainWaterL: 0 });
+    const use = run.runTo(hToS(10.6)).liquid.cleaningUse;
+    expectWithin(use?.lyeKg ?? Number.NaN, 6.19, 1e-4);
+    expect(use?.acidKg).toBe(0);
+    expectWithin(use?.drainWaterL ?? Number.NaN, 4_000, 1e-6);
   });
 });

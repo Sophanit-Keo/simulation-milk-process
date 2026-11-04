@@ -66,8 +66,8 @@ function expectLineMatchesStages(snap: Snapshot, where: string): void {
 }
 
 describe('contracts v1', () => {
-  it('CONTRACT_VERSION is 6 (contracts v6, phase 8; v1 is a subset of it)', () => {
-    expect(CONTRACT_VERSION).toBe(6);
+  it('CONTRACT_VERSION is 7 (contracts v7, phase 13; v1 is a subset of it)', () => {
+    expect(CONTRACT_VERSION).toBe(7);
   });
 
   it('LINE_POINT_IDS lists the 12 measuring points once each, in flow order', () => {

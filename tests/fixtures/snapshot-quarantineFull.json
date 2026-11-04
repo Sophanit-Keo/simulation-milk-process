@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "timeS": 655140,
   "speed": 10,
   "paused": false,
@@ -210,9 +210,14 @@
       "electricKw": 124.66124661246614,
       "regenerationPct": 56.61080074487895,
       "steamKg": 12276.142361115459,
-      "gasKwh": 9514.408234128747,
+      "gasKwh": 9514.408234128745,
       "electricKwh": 926.2656164646334,
-      "kwhPerT": 86.61918745216632
+      "kwhPerT": 86.6191874521663
+    },
+    "cleaningUse": {
+      "lyeKg": 0,
+      "acidKg": 0,
+      "drainWaterL": 0
     },
     "tanks": {
       "silo": {
