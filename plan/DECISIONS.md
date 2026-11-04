@@ -471,6 +471,33 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - contracts v7: `CleaningSnapshot.concentrationPct`, `returnConductivityMsPerCm` and `returnTo`, and `LiquidSnapshot.cleaningUse`;
   - the stage 4 panel's rows, the CIP station's label, and "About this model".
 
+## D24. The forklifts in detail
+
+- **Status:** Proposed
+- **Date:** 2026-11-04
+- **Review note:** none (the developer asked for more real detail on the forklifts; [phase 14](agent-plan/phase-14-forklift-detail.md))
+- **Decision:** the two warehouse forklifts are drawn and moved as a 2 t electric counterbalance truck of the kind dairies use indoors (no exhaust), taking the Linde E20's datasheet as the reference ([Linde E20–E35 technical data, VDI 2198](https://www.linde-mh.co.uk/media/Datasheets/EN_ds_e20_e35_1252_en_a_0621_view.pdf)). Phase 12's jobs, routes, travel speeds and clearances stay. Nothing in the sim, the contracts or `plant.json` changes.
+
+| Thing | Value | Basis |
+|---|---|---|
+| The truck | Electric, 2.0 t at a 500 mm load centre, front-wheel drive, rear steer axle; 3.32 m long with forks, 1.18 m wide, 2.17 m to the guard | The E20 sheet (lines 1.5, 1.6, 3.5, 4.7, 4.19, 4.21); the model keeps its 3.5 × 2.2 × 1.2 m (phase 2) |
+| Mast tilt | 5° forward, 8° back. Back 8° while it carries a pallet, level to pick one up or set it down, at 4° a second | The E20 sheet, line 4.1 (5.0/8.0°); when to tilt is how forklifts are driven (load tilted back, forks level to enter); the 4° a second is a sim assumption |
+| Lift speed | 0.56 m/s laden, 0.64 m/s empty; lowering 0.57 m/s | The E20 sheet, lines 5.2 and 5.3 (was 0.5 m/s both ways) |
+| Steering | The rear wheels turn with the motion, along the rear axle's direction of travel, up to 85° | A combi steer axle turns the truck about the middle of its drive axle (the sheet's minimum pivoting distance, 0 mm, line 4.36); 85° is a sim assumption |
+| Blue spot | A blue spot on the floor 3 m ahead in the direction of travel while it drives | A common warehouse safety light that warns walkers of a truck coming; the distance is a sim assumption |
+| Forks | 1.0 m long, 0.1 m wide | The sheet's 45 × 100 × 1,000 mm (line 4.22), as the model has them |
+
+- **Rules with no key:**
+  - The tilt, the steering and the blue spot are drawn from the forklift's own motion; the routes and their timings are phase 12's. The forklift still turns on the spot about the middle of its body, phase 12's compromise with the 2.7 m aisles, where a combi axle would pivot about the drive axle.
+  - The pallet on the forks tilts with the mast.
+  - The label says what each forklift is doing and, while the forks are up, their height.
+  - The tilt and the steering show what the truck does, so they stay on under `prefers-reduced-motion`.
+- **Why:** an operator, a tilting mast and steering wheels are what make a forklift read as a forklift. The datasheet gives the numbers, so they are a real truck's, not guesses.
+- **What it changes:**
+  - the forklift model (`assets/scripts/make-vehicles.mjs`, `public/models/vehicles/forklift.glb`), with its new nodes `mast`, `steer_left` and `steer_right`;
+  - the grey forklift and the forklifts' motion and label (`src/scene/equipment/packs/`, `packsLine.ts`);
+  - phase 12's lift speed.
+
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →
