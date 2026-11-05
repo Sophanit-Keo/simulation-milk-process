@@ -16,8 +16,11 @@
 // the pallet lifted to the trailer's deck. Speeds are the card's: 2.2 m/s empty, 1.8 m/s loaded, 0.6 m/s into a
 // rack or trailer and in turns; the forks only while the forklift stands, since phase 14 at the Linde E20's 0.56 m/s
 // laden and 0.64 m/s empty up and 0.57 m/s down (D24). Phase 14 also tilts the mast: back 8° for the trip with a
-// pallet, the forks low, and level to pick up, lift or set down, at 4° a second; and gives the rear wheels' steer
-// angle from the rear axle's motion (rearSteerRad).
+// pallet, the forks low, and level to pick up, lift or set down, at 4° a second; and steers the rear wheels. Each
+// step that moves the forklift says the angle each rear wheel stands at for it: straight on a line, square to the
+// line from the curve's centre on a curve, and from the middle of the body in a turn on the spot (wheelSteerRad).
+// Standing, the driver turns the wheels to a step's angles before it moves off, and while the forks move, toward
+// the next move's; while it drives on from one step into the next, the wheels follow at their rate.
 import { RACK_Z_M, rackSlots, type FloorPointM, type RackSlotM } from './layout';
 
 export type ForkliftJob = 'parked' | 'toPick' | 'pick' | 'toDrop' | 'drop' | 'home';
@@ -45,6 +48,13 @@ const PIVOT_RAD_PER_S2 = 0.6;
 const FORKS_MPS2 = 1.0;
 /** Turning while driving: no faster than this, so a tight curve is slow. */
 const TURN_RAD_PER_S = 0.5;
+/**
+ * The rear wheels (phase 14, D24): their centres in the forklift's frame, x across and z toward the forks from its
+ * footprint centre (vehicles.ts STEER_M), the most each turns either way, and how fast the power steering turns them.
+ */
+export const STEER_WHEELS_M = { left: [-0.45, -1.3], right: [0.45, -1.3] } as const;
+export const STEER_MAX_RAD = (85 * Math.PI) / 180;
+export const STEER_RAD_PER_S = 2;
 const MIN_SPEED = 0.03;
 /** The beacon flashes at this rate while the forklift works. */
 export const BEACON_HZ = 1.5;
@@ -168,6 +178,9 @@ interface Step {
   vmax: number;
   /** Speed to leave a drive step at: the next drive step's, or 0 before a stop. */
   exitV: number;
+  /** A drive or pivot step's rear wheel angles (wheelSteerRad), left and right. */
+  steerL: number;
+  steerR: number;
   mark: Mark;
   /** A mark's payload: the surface a pallet stands on. */
   value: number;
@@ -192,6 +205,8 @@ const newStep = (): Step => ({
   done: 0,
   vmax: 0,
   exitV: 0,
+  steerL: 0,
+  steerR: 0,
   mark: 'grab',
   value: 0,
 });
@@ -214,6 +229,9 @@ class Route {
   speed = 0;
   /** Whether the forks carry a pallet: they lift it slower (the driver sets it before each play). */
   laden = false;
+  /** The rear wheels' angles now, left and right; they carry over from one plan to the next. */
+  steerL = 0;
+  steerR = 0;
   /** Where the plan has got to while it is written. */
   private readonly cursor: Pose = { x: 0, z: 0, heading: 0, lift: 0 };
 
@@ -254,6 +272,8 @@ class Route {
     step.from = this.cursor.heading;
     step.sign = Math.sign(turn);
     step.length = Math.abs(turn);
+    // About the middle of the body: the turning point, PIVOT_BACK_M behind the footprint centre.
+    setSteer(step, 0, -PIVOT_BACK_M);
     this.cursor.heading = wrap(heading);
   }
 
@@ -340,6 +360,8 @@ class Route {
     step.reverse = reverse;
     step.length = radius * Math.abs(turn);
     step.vmax = vmax;
+    // The curve's centre, beside the turning point: on the side it turns to, the other side when reversing.
+    setSteer(step, (reverse ? -sign : sign) * radius, -PIVOT_BACK_M);
     this.cursor.x = step.cx + radius * Math.sin(angle0 + turn);
     this.cursor.z = step.cz + radius * Math.cos(angle0 + turn);
     this.cursor.heading = wrap(this.cursor.heading + turn);
@@ -377,7 +399,8 @@ class Route {
 
   /**
    * Plays the plan on by `dtS` motion seconds, writing the pose and handing marks to `onMark` as they are
-   * passed; `speed` is left at the speed it ends the frame with.
+   * passed; `speed` is left at the speed it ends the frame with. A step that moves the forklift from a stand waits
+   * for the wheels to stand at its angles; meanwhile, and while the forks move, the wheels turn at STEER_RAD_PER_S.
    */
   play(dtS: number, pose: Pose, onMark: (mark: Mark, value: number) => void): void {
     let t = dtS;
@@ -388,6 +411,18 @@ class Route {
         this.index += 1;
         continue;
       }
+      const moves = step.kind !== 'lift';
+      if (moves && this.speed === 0 && step.done === 0) {
+        // Standing, the driver turns the wheels first (power steering), then sets off.
+        const off = Math.max(Math.abs(step.steerL - this.steerL), Math.abs(step.steerR - this.steerR));
+        if (off > 1e-9) {
+          const used = Math.min(t, off / STEER_RAD_PER_S);
+          this.steer(step, used);
+          t -= used;
+          continue;
+        }
+      }
+      const startT = t;
       const remaining = step.length - step.done;
       let vmax: number;
       let accel: number;
@@ -408,6 +443,7 @@ class Route {
       const cap = Math.min(vmax, Math.sqrt(exit * exit + 2 * accel * Math.max(remaining, 0)));
       this.speed = Math.max(Math.min(cap, this.speed + accel * t), Math.min(MIN_SPEED, vmax));
       const move = this.speed * t;
+      const towards = moves ? step : this.nextMove();
       if (move >= remaining) {
         t -= remaining / this.speed;
         step.done = step.length;
@@ -419,8 +455,25 @@ class Route {
         t = 0;
         apply(step, pose);
       }
+      if (towards) this.steer(towards, startT - t);
     }
     if (this.index >= this.count) this.speed = 0;
+  }
+
+  /** Turns the wheels toward `step`'s angles for `seconds`. */
+  private steer(step: Step, seconds: number): void {
+    const most = STEER_RAD_PER_S * seconds;
+    this.steerL += Math.max(-most, Math.min(most, step.steerL - this.steerL));
+    this.steerR += Math.max(-most, Math.min(most, step.steerR - this.steerR));
+  }
+
+  /** The next step after this one that moves the forklift, past marks and lifts, or null. */
+  private nextMove(): Step | null {
+    for (let i = this.index + 1; i < this.count; i++) {
+      const step = this.steps[i] as Step;
+      if (step.kind !== 'mark' && step.kind !== 'lift') return step;
+    }
+    return null;
   }
 
   /** True while the step being played moves the forklift along the floor. */
@@ -431,6 +484,12 @@ class Route {
 }
 
 const newStepValues = newStep();
+
+/** Sets a step's wheel angles for a turning centre at (x, z) in the forklift's frame (wheelSteerRad). */
+function setSteer(step: Step, centreXM: number, centreZM: number): void {
+  step.steerL = wheelSteerRad(STEER_WHEELS_M.left[0], STEER_WHEELS_M.left[1], centreXM, centreZM);
+  step.steerR = wheelSteerRad(STEER_WHEELS_M.right[0], STEER_WHEELS_M.right[1], centreXM, centreZM);
+}
 
 /** Writes what a step sets of the pose at its progress `done`. */
 function apply(step: Step, pose: Pose): void {
@@ -480,6 +539,9 @@ export interface ForkliftDriver {
   readonly beacon: boolean;
   /** The mast's tilt about +x (phase 14): 0 level, down to FORKLIFT_MOTION.tiltBackRad while it carries along the floor. */
   readonly tiltRad: number;
+  /** The rear wheels' steer angles about +y (phase 14): left (-x) and right (+x), 0 straight. */
+  readonly steerLeftRad: number;
+  readonly steerRightRad: number;
   /** Pallet waiting for it, on its forks, and the one it set down last. */
   readonly carried: PalletPose;
   readonly setDown: PalletPose;
@@ -851,6 +913,12 @@ export function createForkliftDriver(role: ForkliftRole, locks: AisleLocks): For
     get tiltRad() {
       return tiltRad;
     },
+    get steerLeftRad() {
+      return route.steerL;
+    },
+    get steerRightRad() {
+      return route.steerR;
+    },
     carried,
     setDown,
     waiting,
@@ -899,21 +967,16 @@ export function createForkliftDriver(role: ForkliftRole, locks: AisleLocks): For
 }
 
 /**
- * The rear wheels' steer angle (phase 14, D24): the direction the rear axle's middle moves in, seen from the
- * forklift, `dxM`, `dzM` in the floor's frame over the frame, held to ±maxRad. A wheel rolls either way, so of that
- * direction and its reverse the one nearer where the wheels point now (`currentRad`) is taken: no flip between +85°
- * and −85° as the axle moves crosswise in a turn on the spot. With no motion the wheels stay where they were. Toward
- * the target at `radPerS` × `dtS`.
+ * The angle a rear wheel at (`wheelXM`, `wheelZM`) stands at to roll round a turning centre at (`centreXM`,
+ * `centreZM`), all in the forklift's frame (x across, z toward its forks, from its footprint centre; phase 14, D24):
+ * square to the line from the centre to the wheel. A wheel rolls either way, so of that direction and its reverse
+ * the one within a quarter turn of straight is taken, held to ±STEER_MAX_RAD. In a turn on the spot about the middle
+ * of the body the two wheels stand splayed, each on its own circle, and the same whichever way it turns.
  */
-export function rearSteerRad(dxM: number, dzM: number, headingRad: number, currentRad: number, dtS: number, maxRad: number, radPerS = 2): number {
-  if (!(dtS > 0) || Math.hypot(dxM, dzM) < 1e-4 * dtS) return currentRad;
-  // The forklift's x (right of its forks) and z (toward its forks) in the floor's frame: rotation.y = headingRad.
-  const across = dxM * Math.cos(headingRad) - dzM * Math.sin(headingRad);
-  const along = dxM * Math.sin(headingRad) + dzM * Math.cos(headingRad);
-  const raw = Math.atan2(across, along);
-  let target = raw;
-  for (const candidate of [raw - Math.PI, raw + Math.PI]) if (Math.abs(candidate - currentRad) < Math.abs(target - currentRad)) target = candidate;
-  target = Math.max(-maxRad, Math.min(maxRad, target));
-  const step = radPerS * dtS;
-  return currentRad + Math.max(-step, Math.min(step, target - currentRad));
+export function wheelSteerRad(wheelXM: number, wheelZM: number, centreXM: number, centreZM: number): number {
+  // Turning about +y, a point moves along (z, -x) from the centre (rotation.y = heading).
+  let rad = Math.atan2(wheelZM - centreZM, centreXM - wheelXM);
+  if (rad > Math.PI / 2) rad -= Math.PI;
+  else if (rad <= -Math.PI / 2) rad += Math.PI;
+  return Math.max(-STEER_MAX_RAD, Math.min(STEER_MAX_RAD, rad));
 }
