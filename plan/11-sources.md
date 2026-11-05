@@ -35,4 +35,4 @@
 
 ---
 
-← [10. Risks & simplifications](10-risks-and-simplifications.md) · [Review](REVIEW.md) →
+← [10. Risks & simplifications](10-risks-and-simplifications.md) · [12. The yogurt line](12-yogurt-line.md) →

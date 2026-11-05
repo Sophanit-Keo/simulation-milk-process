@@ -19,6 +19,7 @@ Build a browser-based 3D simulation in Three.js of a UHT milk plant that runs al
 | 9 | [Development roadmap](09-development-roadmap.md) | Six phases over 12 weeks, three review gates, deliverables |
 | 10 | [Risks & simplifications](10-risks-and-simplifications.md) | Main risks and how to handle them; accepted simplifications |
 | 11 | [Sources](11-sources.md) | Process, regulation, equipment and tool references |
+| 12 | [The yogurt line (Line P8)](12-yogurt-line.md) | Stirred and set yogurt in cups as stages 11–16 in a new wing, from the [P8 SOP](yogurt-sop-p8.md); built in phases 15–21 ([roadmap](09-development-roadmap.md#the-yogurt-line-phases-1521)) |
 
 ## Review
 

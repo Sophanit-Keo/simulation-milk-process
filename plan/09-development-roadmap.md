@@ -40,6 +40,64 @@ The [agent plan](agent-plan/README.md) breaks each phase down into tasks for sev
 
 > **Decided in week 1:** the batch definition, the missing defaults and the truck load are in the [decision log](DECISIONS.md), waiting for the developer's approval.
 
+## The yogurt line (phases 15–21)
+
+The plant gains a second product: stirred and set yogurt in 125 g cups on Line P8, in a new wing north of the milk row ([plan 12](12-yogurt-line.md), [SOP](yogurt-sop-p8.md), [D25](DECISIONS.md#d25-the-yogurt-line-line-p8), [D26](DECISIONS.md#d26-the-yogurt-lines-defaults)). It is built the way the first ten stages were:
+- research and numbers first;
+- then a grey-box wing;
+- then the liquid side, the cups and the cold chain;
+- details and faults only after the scope freeze.
+
+It takes seven phases over 12 weeks, with three gates.
+
+```mermaid
+gantt
+  title Yogurt line P8 · 12 weeks · 7 phases, 3 gates
+  dateFormat YYYY-MM-DD
+  axisFormat W%V
+  section Plan
+  15 Research, decisions & contracts   :p15, 2026-11-09, 1w
+  section Build
+  16 Grey-box yogurt wing              :p16, after p15, 2w
+  Y1 grey-box wing                     :milestone, y1, after p16, 0d
+  17 Mix to buffer (11–14)             :p17, after p16, 2w
+  18 P8 cup filling & checks (15)      :p18, after p17, 2w
+  19 Cold chain & dispatch (16)        :p19, after p18, 2w
+  Y2 scope freeze                      :milestone, y2, after p19, 0d
+  section Finish
+  20 Hero models, faults & tour        :p20, after p19, 2w
+  21 Polish, performance & docs        :p21, after p20, 1w
+  Y3 yogurt demo                       :milestone, y3, after p21, 0d
+```
+
+| Phase | Weeks | Critical path | Ends with | Detail |
+|---|---|---|---|---|
+| 15. Research, decisions & contracts | 1 | process, lead | D25–D26 approved, H122–H125, schema 10, contracts v8, mock yogurt snapshot | [Phase 15](agent-plan/phase-15-yogurt-research-and-contracts.md) |
+| 16. Grey-box yogurt wing | 2–3 | scene, ui | **Y1** · the wing in grey boxes, the rail grouped by line, panels 11–16 from the mock | [Phase 16](agent-plan/phase-16-yogurt-grey-box.md) |
+| 17. Mix to buffer (stages 11–14) | 4–5 | sim | Heat treatment and divert, denaturation, pH curves, set/stirred routing live | [Phase 17](agent-plan/phase-17-yogurt-liquid-line.md) |
+| 18. Line P8 cup filling & checks (stage 15) | 6–7 | sim, scene | Cups filled, sealed, coded, weighed and inspected; HEPA, SIP and seal-test interlocks | [Phase 18](agent-plan/phase-18-p8-cup-filler.md) |
+| 19. Cold chain & dispatch (stage 16) | 8–9 | sim, scene | **Y2** · scope freeze: milk to cup to reefer truck, both routes | [Phase 19](agent-plan/phase-19-yogurt-cold-chain.md) |
+| 20. Hero models, faults & tour | 10–11 | assets, sim, ui | P8 and fermentation-tank heroes, five yogurt faults, the yogurt tour | [Phase 20](agent-plan/phase-20-yogurt-detail-and-scenarios.md) |
+| 21. Polish, performance & docs | 12 | qa, lead | **Y3** · 60 fps with both lines; report, demo and slides updated | [Phase 21](agent-plan/phase-21-yogurt-polish.md) |
+
+Gate Y2 is the safety net here too. If the run from silo to reefer truck does not work for both routes by week 9, cut Could items rather than stretch the schedule.
+
+The Could list, in order:
+1. fruit dosing (keep plain only);
+2. the set route's warm room (keep stirred only);
+3. the vision station;
+4. the factory board's yogurt lines.
+
+### Yogurt deliverables to tick off
+
+- [ ] Week 1: D25 and D26 approved; `plant.json` schema 10; contracts v8; stages 11–16 in `stages.json`; the mock yogurt snapshot drives the UI.
+- [ ] Week 3 (gate Y1): the wing's four zones in grey boxes, with pipes, camera stops, the grouped stage rail and panels 11–16.
+- [ ] Week 5: stages 11–14 live (fat and SNF, divert at 85 °C, denaturation, three tanks' pH, cooling, buffer); tests against H122–H125.
+- [ ] Week 7: stage 15 live (cups, seal window, checkweigher, metal and vision rejects, seal tests, HEPA, SIP); tests against H126–H129.
+- [ ] Week 9 (gate Y2): stage 16 live (trays, pallets, warm room, blast chiller, cold-room hold, reefer trucks); a 7-day run conserves cups; scope frozen.
+- [ ] Week 11: P8 and fermentation-tank hero models, five yogurt faults, the yogurt tour, "About this model".
+- [ ] Week 12 (gate Y3): the 60 fps check with both lines; the report, demo script and slides updated.
+
 ---
 
 ← [8. User interface](08-user-interface.md) · [10. Risks & simplifications](10-risks-and-simplifications.md) →

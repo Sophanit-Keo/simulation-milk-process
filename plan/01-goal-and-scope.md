@@ -26,6 +26,8 @@ Build a browser-based 3D simulation in Three.js of a UHT milk plant that runs al
 
 Assumptions: one developer, desktop browser (Chrome or Edge).
 
+> **After the term:** a second product, stirred and set yogurt in 125 g cups on Line P8, is planned as stages 11–16 in a new wing of the same plant. The UHT milk scope above does not change. See [plan 12](12-yogurt-line.md) and [D25](DECISIONS.md#d25-the-yogurt-line-line-p8).
+
 ---
 
 ← [Index](README.md) · [2. The UHT line at a glance](02-uht-line-at-a-glance.md) →

@@ -54,6 +54,7 @@ node tests/perf/measure.mjs --path 60 --headed --channel chrome  # the 60 fps ch
 | [docs/demo-script.md](docs/demo-script.md) | The live demo, step by step, with the numbers to expect |
 | [docs/video-script.md](docs/video-script.md) | The demo video's shots and narration |
 | [docs/slides.md](docs/slides.md) | The presentation, slide by slide |
+| [plan/12-yogurt-line.md](plan/12-yogurt-line.md) | The yogurt line (Line P8), planned as stages 11–16 in phases 15–21, from the [P8 SOP](plan/yogurt-sop-p8.md); schedule in the [roadmap](plan/09-development-roadmap.md#the-yogurt-line-phases-1521) |
 | [plan/DECISIONS.md](plan/DECISIONS.md), [plan/hand-calculations.md](plan/hand-calculations.md) | Every default with its source, and every expected value the tests check |
 
 ## Layout

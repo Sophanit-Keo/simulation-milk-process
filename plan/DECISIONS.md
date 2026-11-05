@@ -27,6 +27,11 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D19](#d19-the-factory-board) | The factory board: the real factory's UHT plants and lines, mirrored live from Let Report | — | Proposed |
 | [D20](#d20-the-factory-floor-in-3d) | The factory floor in 3D: a bay per UHT with its tank and fillers, drawn from the board's view | — | Proposed |
 | [D21](#d21-the-control-room-look) | The control-room look: dark by default, light kept, one palette for the simulation and Let Report | — | Proposed |
+| [D22](#d22-lifelike-motion-at-the-end-of-the-line) | Lifelike motion at the end of the line: palletizer robot, stretch wrapper, forklifts, trucks | — | Proposed |
+| [D23](#d23-the-cip-stations-chemicals-and-returns) | The CIP station's chemicals, strengths, returns and use: the keys of schema 9 | — | Proposed |
+| [D24](#d24-the-forklifts-in-detail) | The forklifts as a 2 t electric counterbalance truck from its datasheet | — | Proposed |
+| [D25](#d25-the-yogurt-line-line-p8) | The yogurt line, Line P8: stages 11–16 in a new wing, set and stirred, the UHT line unchanged | — | Proposed |
+| [D26](#d26-the-yogurt-lines-defaults) | The yogurt line's defaults: mix, heat treatment, fermentation, P8, cold chain (schema 10) | — | Proposed |
 
 ## D1. Batch size
 
@@ -497,6 +502,89 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - the forklift model (`assets/scripts/make-vehicles.mjs`, `public/models/vehicles/forklift.glb`), with its new nodes `mast`, `steer_left` and `steer_right`;
   - the grey forklift and the forklifts' motion and label (`src/scene/equipment/packs/`, `packsLine.ts`);
   - phase 12's lift speed.
+
+## D25. The yogurt line (Line P8)
+
+- **Status:** Proposed
+- **Date:** 2026-11-05
+- **Review note:** none (the developer asked for yogurt processing in the 3D simulation, with their [SOP for Line P8](yogurt-sop-p8.md); [plan 12](12-yogurt-line.md), phases 15–21)
+- **Decision:**
+  - **What it makes:** the teaching plant makes a second product, yogurt in 125 g cups on Line P8, in both of the SOP's kinds: stirred, fermented in bulk tanks, and set, fermented in the cup in a warm room.
+  - **Where:** it is a new wing of the same plant, a row north of the milk row (z < −26 m), with its cold store and reefer dock at the east end.
+  - **Six new stages:**
+    - 11, mix preparation;
+    - 12, deaeration, homogenization and heat treatment;
+    - 13, inoculation and fermentation;
+    - 14, smoothing, cooling and the P8 buffer;
+    - 15, P8 cup filling and in-line checks;
+    - 16, trays, pallets and the cold chain.
+  - **Four new zones:** `yogurtMix`, `yogurtProcess`, `p8` and `coldChain`.
+- **Rules:**
+  - **Contracts:** `StageId` widens to 1–16. A new `LineId = 'uht' | 'yogurt'` says which line a stage belongs to, and `STAGE_IDS_BY_LINE` lists each line's stages.
+  - **Contracts v8 only add:** `Snapshot.yogurt: YogurtSnapshot`, the yogurt `LinePointId`s, new `Command`s (`setYogurtProduct` for the next shift) and setpoint keys (`yogurtHeatC`, `fermentTempC`, `p8RateCupsPerH`). Nothing in the UHT snapshot changes shape or value.
+  - **`plant.json` schema 10** adds a `yogurt` block, which `checkPlantConfig` checks. Every UHT key keeps its value.
+  - **The UHT line stays as it is:** the wing has its own raw-milk silo (only the tanker bay is shared), so H1–H121, the fixtures and the acceptance and 60-day runs keep their numbers. New expected values start at H122.
+  - **Reuse, not copy:**
+    - the wing's CIP reuses phase 13's `cleaningChemistry.ts` at the SOP's strengths;
+    - the palletizer robot, wrapper, forklifts and truck moves of phases 12 and 14 are reused as new instances;
+    - the reefer truck is the articulated truck with a refrigeration unit.
+  - **UI:** the stage rail groups the stages under "UHT milk" and "Yogurt P8". The KPI strip gains a yogurt group. The existing 3-minute tour stays, and a second tour covers stages 11–16.
+  - **The factory board (phases 9–10)** does not change. Showing Let Report's yogurt lines there is a Could item after phase 21 (it changes [D19](#d19-the-factory-board)'s rule that leaves them out).
+- **Why:**
+  - One plant with two products shows what is shared (milk reception, utilities, CIP, logistics) and what differs: a mild heat treatment rather than sterilization, fermentation, a chilled chain rather than ambient storage, and a clean-room cup filler.
+  - A separate silo and only-added contracts keep fourteen phases of tested numbers intact.
+- **What it changes:**
+  - `src/contracts/` (v8);
+  - `src/data/plant.json` (schema 10) and `stages.json` (stages 11–16);
+  - new `src/sim/yogurt/`, `src/scene/equipment/yogurt/` and `src/ui` panels;
+  - the floor size and the overview camera;
+  - the stage rail and the tour.
+
+## D26. The yogurt line's defaults
+
+- **Status:** Proposed
+- **Date:** 2026-11-05
+- **Review note:** none ([plan 12](12-yogurt-line.md))
+- **Decision:** the defaults below go into `plant.json`'s `yogurt` block (schema 10). Phase 15 checks each one against its source and works the expected values into H122–H125. Later phases add their own rows: phase 18 H126–H129, phase 19 H130–H133, phase 20 H134–H138.
+
+| Setting | Default | `plant.json` key (under `yogurt`) | Basis |
+|---|---|---|---|
+| Yogurt silo | 30,000 L | `silo.capacityL` | Sim assumption: the smallest silo size in plan 03 (30,000–250,000 L) |
+| Mix line capacity | 6,000 L/h | `mix.capacityLph` | Sim assumption: about a quarter of the UHT line's 24,000 L/h |
+| Mix fat, SNF | 3.0%, 11.0% (from milk's 8.7%) | `mix.fatPct`, `mix.snfPct` | Handbook: dry matter raised to 14–16% for yogurt; 3.0 + 11.0 = 14% |
+| Skim-milk powder | 95% SNF, dosed to the SNF target: about 26.7 kg per tonne of mix | `mix.powderSnfPct` | Mass balance (H122); SOP 2 |
+| Stabilizer | 0.3% | `mix.stabilizerPct` | Sim assumption, a typical pectin/starch dose |
+| Homogenization | 180 bar at 68 °C | `homogenizer.bar`, `homogenizer.tempC` | SOP 3: 150–200 bar, 65–70 °C |
+| Heat treatment | 92 °C held 300 s | `heat.setpointC`, `heat.holdS` | SOP 4: 85–95 °C for 3–5 min; handbook 90–95 °C, about 5 min |
+| Divert limit (CCP) | Below 85 °C, or a hold under 180 s | `heat.divertBelowC`, `heat.minHoldS` | SOP 4's lower limits |
+| Whey-protein denaturation target | ≥ 85% β-lactoglobulin | `heat.denatTargetPct` | Kinetics of Dannenberg & Kessler (1988), parameters in H124; the target is a sim assumption |
+| Inoculation temperature | 43 °C | `ferment.tempC` | SOP 5: 41–43 °C |
+| Fermentation tanks | 3 × 10,000 L | `ferment.tanks`, `ferment.tankL` | Sim assumption: one tank feeds P8 for about 3.7 h (H126) |
+| pH | from 6.6 to an end of 4.55, in about 4 h at 43 °C | `ferment.startPh`, `ferment.endPh`, `ferment.hoursAt43` | SOP 6: 4.50–4.65; time: sim assumption within the 2.5–6 h of starter cultures and direct-vat cultures |
+| Cooling after fermentation | to 18 °C | `cooling.outletC` | SOP 6B: 15–20 °C |
+| P8 buffer | 4,000 L; set mix may wait at most 45 min | `buffer.capacityL`, `buffer.setMaxWaitS` | Sim assumption |
+| Fruit dose | 15% of the flow | `fruit.dosePct` | Sim assumption, a typical fruit-yogurt share |
+| Cup | 125 g | `p8.cupG` | Developer's line |
+| P8 rate | 21,600 cups/h (12 lanes × 30 cycles/min) | `p8.ratePerH` | Sim assumption for a linear cup filler |
+| Fill weight | target 127 g, σ 1.0 g; under-fill reject below 120.5 g, over-fill above 135 g | `p8.fill.*` | Under-fill: the EU average-quantity T1 limit at 125 g (125 − 4.5 g); target and over-fill: sim assumption |
+| Seal | 200 °C, 1.0 s, 5.0 bar; window 180–220 °C, 0.8–1.2 s, 4–6 bar | `p8.seal.*` | SOP P8 step 5 |
+| Seal tests | 5 cups every 2 operating hours | `p8.sealTest.cups`, `p8.sealTest.everyS` | SOP Part 3 |
+| HEPA cabin | ≥ +15 Pa, normally +25 Pa | `p8.hepa.minPa`, `p8.hepa.normalPa` | SOP Part 3; the normal value is a sim assumption |
+| SIP | ≥ 121 °C for 20 min | `p8.sip.tempC`, `p8.sip.holdS` | SOP Part 3 |
+| ATP swab | < 10 RLU | `p8.atpMaxRlu` | SOP Part 3 |
+| Wing CIP | NaOH 1.8% at 78 °C, HNO₃ 0.8% at 68 °C | `cip.lyePct`, `cip.acidPct` | SOP Part 3: 1.5–2.0% at 75–80 °C, 0.5–1.0% at 65–70 °C; D23's model |
+| Tray, pallet | 24 cups a tray; 120 trays a pallet | `coldChain.cupsPerTray`, `coldChain.traysPerPallet` | Sim assumption, settled in phase 19 (H130) |
+| Warm room | 43 °C, until pH ≤ 4.60 | `coldChain.warmRoomC`, `coldChain.releasePh` | SOP P8 step 7 |
+| Blast chiller | to ≤ 4 °C | `coldChain.chillToC` | SOP P8 step 7; the time per pallet is set in phase 19 |
+| Cold room | 2–4 °C (3 °C set point), 24 h minimum hold, 48 h maximum | `coldChain.roomC`, `coldChain.minHoldS`, `coldChain.maxHoldS` | SOP P8 step 7 |
+| Shelf life | 28 days | `coldChain.shelfLifeDays` | Sim assumption for chilled yogurt (21–35 days is common) |
+| Reefer truck | 26 pallets at 2–4 °C | `coldChain.palletsPerTruck` | Sim assumption, settled with H133 |
+| Product day | plain stirred 06–14, strawberry stirred 14–22, plain set 22–06 | `products` | Sim assumption ([plan 12](12-yogurt-line.md#product-plan)) |
+
+- **What it changes:**
+  - the `yogurt` block of `plant.json` (schema 10);
+  - a "Yogurt line" part in [default settings](06-simulation-model.md#default-settings);
+  - H122 onwards in [Hand calculations](hand-calculations.md).
 
 ---
 

@@ -20,6 +20,13 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 12. Lifelike motion | after the term | lead, assets, scene (two lanes), qa | The palletizer robot, stretch wrapper, forklifts and trucks moving like the real ones | [Phase 12](phase-12-lifelike-motion.md) |
 | 13. The CIP station in detail | after the term | process, lead, sim, ui, scene, qa | The CIP station's chemicals and strengths, its returns and change-overs, and what the cleans use | [Phase 13](phase-13-cip-station.md) |
 | 14. The forklifts in detail | after the term | lead, assets, scene, qa | The forklifts as a real electric counterbalance truck: operator, tilting mast, steering wheels, datasheet lift speeds, blue spot | [Phase 14](phase-14-forklift-detail.md) |
+| 15. Yogurt research, decisions & contracts | yogurt week 1 | process, lead | D25–D26, schema 10, contracts v8, stages 11–16 from a mock | [Phase 15](phase-15-yogurt-research-and-contracts.md) |
+| 16. Grey-box yogurt wing | yogurt weeks 2–3 | scene, ui | **Y1** · the Line P8 wing in grey boxes, the rail grouped by line | [Phase 16](phase-16-yogurt-grey-box.md) |
+| 17. Mix to buffer (11–14) | yogurt weeks 4–5 | sim | Heat treatment and divert, fermentation pH, set/stirred routing live | [Phase 17](phase-17-yogurt-liquid-line.md) |
+| 18. Line P8 cup filling & checks (15) | yogurt weeks 6–7 | sim, scene | Cups filled, sealed, coded, weighed, inspected; hygiene interlocks | [Phase 18](phase-18-p8-cup-filler.md) |
+| 19. Cold chain & dispatch (16) | yogurt weeks 8–9 | sim, scene | **Y2** · scope freeze: silo to reefer truck, both routes | [Phase 19](phase-19-yogurt-cold-chain.md) |
+| 20. Yogurt heroes, faults & tour | yogurt weeks 10–11 | assets, sim, ui | P8 and tank heroes, five yogurt faults, the yogurt tour | [Phase 20](phase-20-yogurt-detail-and-scenarios.md) |
+| 21. Yogurt polish & docs | yogurt week 12 | qa, lead | **Y3** · 60 fps with both lines, docs updated | [Phase 21](phase-21-yogurt-polish.md) |
 
 ## The agents
 
