@@ -92,4 +92,8 @@ Built on 5 November 2026 in one session, lane by lane in the order above. D25 an
   - the fixtures' UHT part fingerprinted at v7 and checked at v8 (`tests/fixtures/uhtPart.ts`), and the milk mock's likewise;
   - the architecture test names `src/sim/yogurt/`;
   - `e2e/yogurtMock.spec.ts`: the default rail keeps ten stages, `?mock&yogurt` fills panels 11–16, and `?yogurt` shows them standing with `plant.json`'s values.
-- **Checks:** `npm run check` (1,603 unit tests) and `npm run build` pass. The three new browser tests pass; the full browser run is in progress, and its result is added here when it ends.
+- **Checks:**
+  - `npm run check` passes (1,604 unit tests, 88 asset tests), and so does `npm run build`.
+  - The browser run passed 83 of 85 tests, the three new ones among them.
+  - "The clock runs far faster at ×1,000" failed only while other jobs loaded the machine; run alone, it passes for both `/` and `/?mock`.
+  - "The canvas follows the screen pixel ratio" fails in this sandbox on the commit before phase 15 as well, with the same error (the buffer stays at 1× when the page emulates 2×). It is the sandbox's browser, not this phase: the project pins Playwright 1.56, and the sandbox has only a newer Chromium. It should pass where the pinned browser is installed.
