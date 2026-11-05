@@ -108,6 +108,28 @@ Temperatures are in the chart under [The UHT line at a glance](02-uht-line-at-a-
 
 > **Decided:** a batch is one filler for one 8-hour shift ([D1](DECISIONS.md#d1-batch-size)), the eleven missing defaults are set ([D2](DECISIONS.md#d2-missing-defaults)), and a truck carries 22 pallets every 100 min ([D3](DECISIONS.md#d3-truck-payload)). Each stays Proposed until the developer approves it in the [decision log](DECISIONS.md). [Hand calculations](hand-calculations.md) lists the expected values QA tests against.
 
+### Yogurt line
+
+Stages 11–16, Line P8 ([plan 12](12-yogurt-line.md)), from the `yogurt` block of `plant.json` (schema 10). The decisions are [D25](DECISIONS.md#d25-the-yogurt-line-line-p8) and [D26](DECISIONS.md#d26-the-yogurt-lines-defaults), and the expected values H122–H125 are in [Hand calculations](hand-calculations.md#phase-15-the-yogurt-line). The UHT line's settings above keep their values.
+
+| Setting | Default | Basis |
+|---|---|---|
+| Yogurt silo | 30,000 L, starts 60% full, raw milk at 4 °C, filled from the shared tanker bay | Silos hold 30,000–250,000 L ([Tanks](https://dairyprocessinghandbook.tetrapak.com/chapter/tanks)); SOP 1: ≤ 4 °C; the start level as for the milk's silo ([D13](DECISIONS.md#d13-phase-3-liquid-line-defaults)); size a sim assumption |
+| Mix line | 6,000 L/h, into a 6,000 L mix tank | Sim assumption: about a third of the UHT plant's 16,000 L/h; the tank an hour of mix |
+| Mix recipe | 3.0% fat, 11.0% solids-not-fat from the milk's 8.7%, 0.3% stabilizer: 26.95 kg of 95% skim-milk powder a tonne, milk standardized to 3.09% fat (H122) | Handbook: dry matter 14–16% for yogurt ([Fermented milk products](https://dairyprocessinghandbook.tetrapak.com/chapter/fermented-milk-products)); SOP 2; the milk's SNF and the stabilizer are sim assumptions |
+| Homogenization | 180 bar at 68 °C | SOP 3: 150–200 bar, 65–70 °C |
+| Heat treatment | 92 °C held 300 s in a 500 L holding cell (H123); 99.2% of the β-lactoglobulin denatured, against an 85% target (H124) | SOP 4: 85–95 °C for 3–5 min; handbook 90–95 °C for about 5 min; Dannenberg & Kessler (1988); the target and the 4.0 g/L of β-lactoglobulin are sim assumptions |
+| Divert (CCP) | Below 85 °C at the holding-cell outlet, or a hold under 180 s, into a 2,000 L reprocess tank | SOP 4's lower limits; the tank a sim assumption |
+| Fermentation | 3 × 10,000 L tanks at 43 °C; pH from 6.6 to 4.55 in 4 h, toward a floor of 4.2; 4 h 16 min at 40 °C (H125); acidity 0.19% to 0.90% lactic acid | SOP 5–6: 41–43 °C, pH 4.50–4.65; the curve, its floor, the culture's 15/43/50 °C cardinal temperatures (Rosso et al., 1993) and the acidities are sim assumptions |
+| Cooling and buffer | Stirred yogurt cooled to 18 °C into a 4,000 L P8 buffer; set mix may wait there 45 min; fruit dosed at 15% of the flow | SOP 6B: 15–20 °C; the buffer, the wait and the fruit share are sim assumptions |
+| Line P8 | 125 g cups, 12 lanes at 30 cycles a minute (21,600 cups/h); fill 127 g, σ 1.0 g, rejected below 120.5 g or above 135 g | Developer's line; under-fill at the EU average-quantity T1 limit for 125 g (125 − 4.5 g); the rest sim assumptions |
+| Sealing and checks | 200 °C, 1.0 s, 5.0 bar inside 180–220 °C, 0.8–1.2 s, 4–6 bar; 5 cups tested every 2 operating hours | SOP P8 step 5 and Part 3 |
+| P8 hygiene | HEPA cabin at +25 Pa, stopping below +15 Pa; SIP at ≥ 121 °C for 20 min; ATP swab < 10 RLU; the wing's CIP lye 1.8% NaOH at 78 °C, acid 0.8% HNO₃ at 68 °C | SOP Part 3; the +25 Pa and the strengths within the SOP's ranges are sim assumptions |
+| Cold chain | 24 cups a tray, 120 trays a pallet; set yogurt in the 43 °C warm room until pH ≤ 4.60; blast-chilled to ≤ 4 °C; cold room at 3 °C (2–4 °C), held 24–48 h; 28 days' shelf life; reefers of 26 pallets | SOP P8 step 7; the counts, the shelf life and the reefer load are sim assumptions, settled in phase 19 (H130–H133) |
+| Product day | Plain stirred 06:00–14:00, strawberry stirred 14:00–22:00, plain set 22:00–06:00, on the shifts of [D1](DECISIONS.md#d1-batch-size); the next shift's product can be changed | Sim assumption ([plan 12](12-yogurt-line.md#product-plan)) |
+
+> Until phase 17 makes it live, the live sim reports the yogurt line standing: its silo full to its opening level, every other vessel empty, nothing flowing, and stages 11–16 grey. `?mock` fills it; `?yogurt` puts stages 11–16 on the rail.
+
 ## KPIs on screen
 
 - Liquid line: UHT throughput (L/h), F0 and B\*, litres diverted, aseptic tank level (%).

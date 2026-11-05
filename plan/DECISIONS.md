@@ -549,37 +549,48 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 
 | Setting | Default | `plant.json` key (under `yogurt`) | Basis |
 |---|---|---|---|
-| Yogurt silo | 30,000 L | `silo.capacityL` | Sim assumption: the smallest silo size in plan 03 (30,000–250,000 L) |
-| Mix line capacity | 6,000 L/h | `mix.capacityLph` | Sim assumption: about a quarter of the UHT line's 24,000 L/h |
-| Mix fat, SNF | 3.0%, 11.0% (from milk's 8.7%) | `mix.fatPct`, `mix.snfPct` | Handbook: dry matter raised to 14–16% for yogurt; 3.0 + 11.0 = 14% |
-| Skim-milk powder | 95% SNF, dosed to the SNF target: about 26.7 kg per tonne of mix | `mix.powderSnfPct` | Mass balance (H122); SOP 2 |
+| Yogurt silo | 30,000 L, opening 60% full, at 4 °C | `silo.capacityL`, `silo.startFrac`, `silo.tempC` | Sim assumption: the smallest silo size in plan 03 (30,000–250,000 L); the start level as the milk silo's (D13); SOP 1: ≤ 4 °C |
+| Mix line capacity | 6,000 L/h, into a 6,000 L mix tank | `mix.capacityLph`, `mix.tankL` | Sim assumption: about a third of the UHT plant's 16,000 L/h; the tank an hour of mix |
+| Mix fat, SNF | 3.0%, 11.0% (from milk's 8.7%) | `mix.fatPct`, `mix.snfPct`, `mix.milkSnfPct` | Handbook: dry matter raised to 14–16% for yogurt; 3.0 + 11.0 + 0.3 (stabilizer) = 14.3%; the milk's SNF a sim assumption |
+| Skim-milk powder | 95% SNF, dosed to the SNF target: 26.95 kg per tonne of mix | `mix.powderSnfPct` | Mass balance (H122); SOP 2 |
 | Stabilizer | 0.3% | `mix.stabilizerPct` | Sim assumption, a typical pectin/starch dose |
 | Homogenization | 180 bar at 68 °C | `homogenizer.bar`, `homogenizer.tempC` | SOP 3: 150–200 bar, 65–70 °C |
 | Heat treatment | 92 °C held 300 s | `heat.setpointC`, `heat.holdS` | SOP 4: 85–95 °C for 3–5 min; handbook 90–95 °C, about 5 min |
 | Divert limit (CCP) | Below 85 °C, or a hold under 180 s | `heat.divertBelowC`, `heat.minHoldS` | SOP 4's lower limits |
-| Whey-protein denaturation target | ≥ 85% β-lactoglobulin | `heat.denatTargetPct` | Kinetics of Dannenberg & Kessler (1988), parameters in H124; the target is a sim assumption |
+| Whey-protein denaturation target | ≥ 85% β-lactoglobulin; the defaults give 99.2% (H124) | `heat.denatTargetPct` | Kinetics of Dannenberg & Kessler (1988), parameters in H124; the target is a sim assumption |
+| β-lactoglobulin in the mix | 4.0 g/L, native, before heating | `heat.betaLgGPerL` | Sim assumption: milk's 3.2 g/L raised with the SNF (11.0 ÷ 8.7), for the kinetics' order 1.5 (H124) |
+| Reprocess tank | 2,000 L | `heat.reprocessTankL` | Sim assumption: 20 min of the line's flow, as the UHT reject tank holds about 22 min of its own |
 | Inoculation temperature | 43 °C | `ferment.tempC` | SOP 5: 41–43 °C |
 | Fermentation tanks | 3 × 10,000 L | `ferment.tanks`, `ferment.tankL` | Sim assumption: one tank feeds P8 for about 3.7 h (H126) |
-| pH | from 6.6 to an end of 4.55, in about 4 h at 43 °C | `ferment.startPh`, `ferment.endPh`, `ferment.hoursAt43` | SOP 6: 4.50–4.65; time: sim assumption within the 2.5–6 h of starter cultures and direct-vat cultures |
+| pH | from 6.6 to an end of 4.55, in 4 h at 43 °C, toward a floor of 4.2 | `ferment.startPh`, `ferment.endPh`, `ferment.endAtOptS`, `ferment.floorPh` | SOP 6: 4.50–4.65; time: sim assumption within the 2.5–6 h of starter cultures and direct-vat cultures; the curve and its floor (H125) a sim assumption |
+| The culture's temperatures | none below 15 °C, fastest at 43 °C, none above 50 °C: 4 h 16 min to pH 4.55 at 40 °C (H125) | `ferment.minC`, `ferment.optC`, `ferment.maxC` | Rosso et al.'s cardinal temperature model (1993); the three temperatures are sim assumptions around the SOP's 41–43 °C |
+| Titratable acidity | 0.19% lactic acid at pH 6.6, 0.90% at 4.55, linear in the pH | `ferment.startTaPct`, `ferment.endTaPct` | Sim assumption: milk's 0.15% raised with the SNF; the end within what yogurt usually shows |
 | Cooling after fermentation | to 18 °C | `cooling.outletC` | SOP 6B: 15–20 °C |
 | P8 buffer | 4,000 L; set mix may wait at most 45 min | `buffer.capacityL`, `buffer.setMaxWaitS` | Sim assumption |
 | Fruit dose | 15% of the flow | `fruit.dosePct` | Sim assumption, a typical fruit-yogurt share |
 | Cup | 125 g | `p8.cupG` | Developer's line |
-| P8 rate | 21,600 cups/h (12 lanes × 30 cycles/min) | `p8.ratePerH` | Sim assumption for a linear cup filler |
+| P8 rate | 21,600 cups/h (12 lanes × 30 cycles/min) | `p8.lanes`, `p8.rateCupsPerH` | Sim assumption for a linear cup filler |
 | Fill weight | target 127 g, σ 1.0 g; under-fill reject below 120.5 g, over-fill above 135 g | `p8.fill.*` | Under-fill: the EU average-quantity T1 limit at 125 g (125 − 4.5 g); target and over-fill: sim assumption |
 | Seal | 200 °C, 1.0 s, 5.0 bar; window 180–220 °C, 0.8–1.2 s, 4–6 bar | `p8.seal.*` | SOP P8 step 5 |
 | Seal tests | 5 cups every 2 operating hours | `p8.sealTest.cups`, `p8.sealTest.everyS` | SOP Part 3 |
 | HEPA cabin | ≥ +15 Pa, normally +25 Pa | `p8.hepa.minPa`, `p8.hepa.normalPa` | SOP Part 3; the normal value is a sim assumption |
 | SIP | ≥ 121 °C for 20 min | `p8.sip.tempC`, `p8.sip.holdS` | SOP Part 3 |
 | ATP swab | < 10 RLU | `p8.atpMaxRlu` | SOP Part 3 |
-| Wing CIP | NaOH 1.8% at 78 °C, HNO₃ 0.8% at 68 °C | `cip.lyePct`, `cip.acidPct` | SOP Part 3: 1.5–2.0% at 75–80 °C, 0.5–1.0% at 65–70 °C; D23's model |
+| Wing CIP | NaOH 1.8% at 78 °C, HNO₃ 0.8% at 68 °C | `cip.lyePct`, `cip.lyeTempC`, `cip.acidPct`, `cip.acidTempC` | SOP Part 3: 1.5–2.0% at 75–80 °C, 0.5–1.0% at 65–70 °C; D23's model |
 | Tray, pallet | 24 cups a tray; 120 trays a pallet | `coldChain.cupsPerTray`, `coldChain.traysPerPallet` | Sim assumption, settled in phase 19 (H130) |
 | Warm room | 43 °C, until pH ≤ 4.60 | `coldChain.warmRoomC`, `coldChain.releasePh` | SOP P8 step 7 |
 | Blast chiller | to ≤ 4 °C | `coldChain.chillToC` | SOP P8 step 7; the time per pallet is set in phase 19 |
-| Cold room | 2–4 °C (3 °C set point), 24 h minimum hold, 48 h maximum | `coldChain.roomC`, `coldChain.minHoldS`, `coldChain.maxHoldS` | SOP P8 step 7 |
+| Cold room | 2–4 °C (3 °C set point), 24 h minimum hold, 48 h maximum | `coldChain.roomC`, `coldChain.roomMinC`, `coldChain.roomMaxC`, `coldChain.minHoldS`, `coldChain.maxHoldS` | SOP P8 step 7 |
 | Shelf life | 28 days | `coldChain.shelfLifeDays` | Sim assumption for chilled yogurt (21–35 days is common) |
 | Reefer truck | 26 pallets at 2–4 °C | `coldChain.palletsPerTruck` | Sim assumption, settled with H133 |
-| Product day | plain stirred 06–14, strawberry stirred 14–22, plain set 22–06 | `products` | Sim assumption ([plan 12](12-yogurt-line.md#product-plan)) |
+| Product day | plain stirred 06–14, strawberry stirred 14–22, plain set 22–06 | `products`, `shiftProducts` | Sim assumption ([plan 12](12-yogurt-line.md#product-plan)) |
+
+- **Checked in phase 15** (`process`, 5 November 2026), against the SOP, the handbook and the arithmetic of H122–H125:
+  - **Corrected:** the powder dose is 26.95 kg a tonne, not 26.7: the 0.3% stabilizer takes its share of the tonne (H122). The mix line's basis is a third of the UHT plant's 16,000 L/h: the 24,000 L/h it cited is the CIP circulation.
+  - **Renamed, for the units rule ([D6](#d6-units)):** `ferment.hoursAt43` is `ferment.endAtOptS` (14,400 s), and `p8.ratePerH` is `p8.rateCupsPerH`.
+  - **Added, each a number the model needs that the table had in words or not at all:** the silo's start level and temperature, the milk's SNF, the mix tank, the β-lactoglobulin concentration, the reprocess tank, the pH curve's floor, the culture's three cardinal temperatures, the two acidities, P8's lanes, the cold room's band, the wing CIP's two temperatures and the product of each shift.
+  - **Worked out:** the holding cell is 500 L (H123); the CCP's hold limit needs 10,000 L/h, so at the line's own flows only the temperature diverts. The defaults denature 99.2% of the β-lactoglobulin; the CCP's limits, 85 °C for 180 s, only 81.6% (H124). The 1988 paper's own table was not to hand in phase 15, so its parameters are as Kessler's book (2002) reproduces them: the developer checks them. At the 127 g target a tank feeds P8 for 10,000 L ÷ 2,743.2 L/h = 3.65 h, which H126 settles in phase 18.
+  - **Set point ranges** (contracts v8, `SETPOINT_RANGES`): the heat treatment 80–95 °C, reaching under the 85 °C limit so the divert can be shown, as the UHT slider does; the fermentation 37–45 °C; P8 10,800–25,200 cups/h (15–35 cycles a minute). `checkPlantConfig` refuses a default outside its range.
 
 - **What it changes:**
   - the `yogurt` block of `plant.json` (schema 10);
