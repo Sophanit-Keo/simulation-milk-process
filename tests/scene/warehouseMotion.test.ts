@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import type { Snapshot, Speed, TruckSnapshot } from '../../src/contracts';
-import { AISLE_Z_M, FORKLIFT_MOTION, PALLET_AHEAD_M, rearSteerRad } from '../../src/scene/equipment/packs/forkliftJobs';
+import { AISLE_Z_M, FORKLIFT_MOTION, PALLET_AHEAD_M, PIVOT_BACK_M, STEER_MAX_RAD, STEER_RAD_PER_S, STEER_WHEELS_M, wheelSteerRad } from '../../src/scene/equipment/packs/forkliftJobs';
 import * as at from '../../src/scene/equipment/packs/layout';
 import { MAX_ARTICULATION_RAD, STOP_M, TURN_END_M, articulationRad, arrivalPose, arriveS, pullOutPose, type TruckPose } from '../../src/scene/equipment/packs/truckMoves';
-import { DOOR_OPEN_RAD, TRAILER_DECK_M } from '../../src/scene/equipment/packs/vehicles';
+import { DOOR_OPEN_RAD, STEER_M, TRAILER_DECK_M } from '../../src/scene/equipment/packs/vehicles';
 import { forkliftWords, packsLine, rackLoadsShown } from '../../src/scene/equipment/packsLine';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
 import { createSim } from '../../src/sim';
@@ -724,11 +724,61 @@ describe('forklift details (phase 14)', () => {
     expect(down).toBeGreaterThan(0.5);
   });
 
-  it('steers the rear wheels with the motion, up to 85°, and holds them where they are while it stands', () => {
-    const steers = run.frames.map((f) => Number(f.steerRad));
-    for (const s of steers) expect(Math.abs(s)).toBeLessThanOrEqual(85 * DEG + 1e-9);
-    expect(Math.max(...steers.map(Math.abs)), 'nearly crosswise as it turns on the spot').toBeGreaterThan(60 * DEG);
-    expect(steers.some((s) => Math.abs(s) < 0.02), 'straight on a straight run').toBe(true);
+  /** The turning point (the middle of the body) of a frame, and how far it turned and moved since another. */
+  const turningPoint = (f: Record<string, number | string | boolean>): [number, number] => [
+    Number(f.xM) - Math.sin(Number(f.headingRad)) * PIVOT_BACK_M,
+    Number(f.zM) - Math.cos(Number(f.headingRad)) * PIVOT_BACK_M,
+  ];
+  const turned = (a: Record<string, number | string | boolean>, b: Record<string, number | string | boolean>): number =>
+    Math.abs(Math.atan2(Math.sin(Number(b.headingRad) - Number(a.headingRad)), Math.cos(Number(b.headingRad) - Number(a.headingRad))));
+  const moved = (a: Record<string, number | string | boolean>, b: Record<string, number | string | boolean>): number => {
+    const [ax, az] = turningPoint(a);
+    const [bx, bz] = turningPoint(b);
+    return Math.hypot(bx - ax, bz - az);
+  };
+
+  it('turns on the spot only with each rear wheel square to the middle of the body, splayed at 59.5°', () => {
+    const pivotL = wheelSteerRad(...STEER_WHEELS_M.left, 0, -PIVOT_BACK_M);
+    const pivotR = wheelSteerRad(...STEER_WHEELS_M.right, 0, -PIVOT_BACK_M);
+    expect(pivotL).toBeCloseTo(-Math.atan2(1.3 - PIVOT_BACK_M, 0.45), 9);
+    expect(pivotR).toBeCloseTo(-pivotL, 9);
+    let pivoting = 0;
+    for (let i = 1; i + 1 < run.frames.length; i++) {
+      const [before, now, after] = [run.frames[i - 1], run.frames[i], run.frames[i + 1]] as Record<string, number | string | boolean>[];
+      // Mid-turn on the spot: the heading turns into and out of this frame, the turning point stays.
+      if (!(turned(before, now) > 1e-6 && turned(now, after) > 1e-6 && moved(before, now) < 1e-9 && moved(now, after) < 1e-9)) continue;
+      pivoting += 1;
+      expect(now.steerLeftRad, `frame ${i}`).toBeCloseTo(pivotL, 9);
+      expect(now.steerRightRad, `frame ${i}`).toBeCloseTo(pivotR, 9);
+    }
+    expect(pivoting, 'frames turning on the spot').toBeGreaterThan(20);
+  });
+
+  it('sets off from a stand only with its wheels already where the move needs them: straight to drive straight', () => {
+    let setOff = 0;
+    for (let i = 2; i < run.frames.length; i++) {
+      const [stood, before, now] = [run.frames[i - 2], run.frames[i - 1], run.frames[i]] as Record<string, number | string | boolean>[];
+      if (!(moved(stood, before) < 1e-9 && turned(stood, before) < 1e-9 && moved(before, now) > 1e-6 && turned(before, now) < 1e-9)) continue;
+      setOff += 1;
+      expect(now.steerLeftRad, `frame ${i}`).toBe(0);
+      expect(now.steerRightRad, `frame ${i}`).toBe(0);
+    }
+    expect(setOff, 'drives off straight from a stand').toBeGreaterThan(2);
+  });
+
+  it('steers each wheel up to 85° at the power steering’s rate, the inner wheel further on a curve', () => {
+    for (const [i, f] of run.frames.entries()) {
+      for (const key of ['steerLeftRad', 'steerRightRad']) {
+        expect(Math.abs(Number(f[key]))).toBeLessThanOrEqual(STEER_MAX_RAD + 1e-9);
+        // 2 rad a second at ×1 (the frames are 1/20 s of motion).
+        if (i > 0) expect(Math.abs(Number(f[key]) - Number(run.frames[i - 1]?.[key]))).toBeLessThanOrEqual(STEER_RAD_PER_S / 20 + 1e-9);
+      }
+    }
+    const left = run.frames.map((f) => Number(f.steerLeftRad));
+    const right = run.frames.map((f) => Number(f.steerRightRad));
+    expect(left.some((l, i) => Math.abs(l) < 1e-9 && Math.abs(right[i] as number) < 1e-9), 'straight on a straight run').toBe(true);
+    // On a curve both turn the same way, the one nearer the curve's centre further (a steer axle's geometry).
+    expect(left.some((l, i) => Math.sign(l) === Math.sign(right[i] as number) && Math.abs(l) > 0.1 && Math.abs(Math.abs(l) - Math.abs(right[i] as number)) > 0.05)).toBe(true);
   });
 
   it('leads with a blue spot 4.75 m from its middle, ahead or behind as it drives, and none while it stands', () => {
@@ -770,47 +820,55 @@ describe('forklift details (phase 14)', () => {
       const machines = packsLine(makeContext(models));
       await settle();
       play(machines, snapshotAt(634), 0.5);
-      play(machines, snapshotAt(700), 120, () => Number(state(machines, 'forklift-1').tiltRad) < -4 * DEG);
+      play(machines, snapshotAt(700), 120, () => {
+        const now = state(machines, 'forklift-1');
+        return Number(now.tiltRad) < -4 * DEG && Math.abs(Number(now.steerLeftRad)) > 0.1 && Number(now.steerLeftRad) !== Number(now.steerRightRad);
+      });
       const f1 = byId(machines, 'forklift-1');
       const now = state(machines, 'forklift-1');
+      expect(Number(now.tiltRad)).toBeLessThan(-4 * DEG);
+      expect(Math.abs(Number(now.steerLeftRad))).toBeGreaterThan(0.1);
       const mast = f1.object.getObjectByName('mast') as THREE.Object3D;
       expect(mast.rotation.x).toBeCloseTo(Number(now.tiltRad), 9);
       expect(f1.object.getObjectByName('forks')?.parent).toBe(mast);
       expect(f1.object.getObjectByName('mast_inner')?.parent).toBe(mast);
-      for (const name of ['steer_left', 'steer_right']) expect(f1.object.getObjectByName(name)?.rotation.y).toBeCloseTo(Number(now.steerRad), 9);
+      expect(f1.object.getObjectByName('steer_left')?.rotation.y).toBeCloseTo(Number(now.steerLeftRad), 9);
+      expect(f1.object.getObjectByName('steer_right')?.rotation.y).toBeCloseTo(Number(now.steerRightRad), 9);
     }
   });
 });
 
-describe('rearSteerRad (phase 14)', () => {
-  const MAX = (85 * Math.PI) / 180;
-  const heading = 0.7; // forks toward (sin 0.7, cos 0.7)
-  const along = (m: number): [number, number] => [Math.sin(heading) * m, Math.cos(heading) * m];
-  const across = (m: number): [number, number] => [Math.cos(heading) * m, -Math.sin(heading) * m];
+describe('wheelSteerRad (phase 14)', () => {
+  const [lx, lz] = STEER_WHEELS_M.left;
+  const [rx, rz] = STEER_WHEELS_M.right;
 
-  it('points the wheels along the rear axle’s motion: straight ahead or back, crosswise, or at the angle between', () => {
-    const steer = (d: [number, number], current = 0) => rearSteerRad(d[0], d[1], heading, current, 1, MAX, 100);
-    expect(steer(along(0.1))).toBeCloseTo(0, 9);
-    expect(steer(along(-0.1))).toBeCloseTo(0, 9);
-    // Crosswise either way is the same wheel: it takes the side nearer where it points.
-    expect(steer(across(0.1), 0.01)).toBeCloseTo(MAX, 9);
-    expect(steer(across(-0.1), 0.01)).toBeCloseTo(MAX, 9);
-    expect(steer(across(0.1), -0.01)).toBeCloseTo(-MAX, 9);
-    const [ax, az] = along(0.1);
-    const [cx, cz] = across(0.1);
-    expect(steer([ax + cx, az + cz])).toBeCloseTo(Math.PI / 4, 9);
+  it('has the wheels where the grey box and the model steer them', () => {
+    expect([lx, lz]).toEqual([STEER_M.steer_left[0], STEER_M.steer_left[2]]);
+    expect([rx, rz]).toEqual([STEER_M.steer_right[0], STEER_M.steer_right[2]]);
+    expect(STEER_MAX_RAD).toBeCloseTo((85 * Math.PI) / 180, 12);
   });
 
-  it('turns them at its rate, never flipping across, and holds them while the axle stands', () => {
-    const [cx, cz] = across(0.1);
-    expect(rearSteerRad(cx, cz, heading, 0.001, 0.1, MAX, 2)).toBeCloseTo(0.201, 9);
-    // Nearly crosswise and moving crosswise: it stays on its side, whatever the noise in the motion.
-    for (const noise of [1e-12, -1e-12, 1e-6, -1e-6]) {
-      const [ax, az] = along(noise);
-      expect(rearSteerRad(cx + ax, cz + az, heading, MAX, 0.05, MAX)).toBeCloseTo(MAX, 9);
-    }
-    expect(rearSteerRad(0, 0, heading, 0.4, 0.1, MAX)).toBe(0.4);
-    expect(rearSteerRad(cx, cz, heading, 0.4, 0, MAX)).toBe(0.4);
+  it('stands each wheel square to the line from the turning centre: straight for a far one, splayed about the body', () => {
+    // A centre far to the side: a straight run.
+    expect(wheelSteerRad(lx, lz, 1e6, -PIVOT_BACK_M)).toBeCloseTo(0, 5);
+    expect(wheelSteerRad(rx, rz, -1e6, -PIVOT_BACK_M)).toBeCloseTo(0, 5);
+    // On the spot about the middle of the body, and about the drive axle's middle (0.2 m ahead of the footprint centre).
+    expect(wheelSteerRad(lx, lz, 0, -PIVOT_BACK_M)).toBeCloseTo(-Math.atan2(1.3 - PIVOT_BACK_M, 0.45), 9);
+    expect(wheelSteerRad(rx, rz, 0, -PIVOT_BACK_M)).toBeCloseTo(Math.atan2(1.3 - PIVOT_BACK_M, 0.45), 9);
+    expect(wheelSteerRad(lx, lz, 0, 0.2)).toBeCloseTo(-Math.atan2(1.5, 0.45), 9);
+    // A 1.5 m curve to the right side (+x): both turn the same way, the nearer wheel further.
+    const near = wheelSteerRad(rx, rz, 1.5, -PIVOT_BACK_M);
+    const far = wheelSteerRad(lx, lz, 1.5, -PIVOT_BACK_M);
+    expect(Math.sign(near)).toBe(Math.sign(far));
+    expect(Math.abs(near)).toBeGreaterThan(Math.abs(far));
+    // Mirrored: a curve to the other side turns them the other way.
+    expect(wheelSteerRad(lx, lz, -1.5, -PIVOT_BACK_M)).toBeCloseTo(-near, 9);
+  });
+
+  it('holds a wheel that would stand crosswise to 85°', () => {
+    // The centre straight ahead of the wheel: it would roll sideways.
+    expect(Math.abs(wheelSteerRad(lx, lz, lx, 0.2))).toBeCloseTo(STEER_MAX_RAD, 9);
+    expect(Math.abs(wheelSteerRad(rx, rz, rx, -3))).toBeCloseTo(STEER_MAX_RAD, 9);
   });
 });
 

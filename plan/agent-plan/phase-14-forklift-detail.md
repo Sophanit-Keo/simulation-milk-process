@@ -13,7 +13,7 @@ Make the two warehouse forklifts read as a real electric counterbalance truck, m
 |---|---|---|
 | Model | Body, guard, mast, forks, beacon; no driver | A seated operator in a hi-vis vest and hard hat; the battery hood and its charging socket (electric: no exhaust); lift cylinders, chains and hoses on the mast; mirrors, a grab handle, a step, work and tail lights and a blue-spot lamp |
 | Mast | Fixed upright | A `mast` node that tilts: back 8° while carrying, level to pick up or set down, at 4° a second. The inner mast and forks ride in it, so the forks and the pallet tilt with it |
-| Steering | Rear wheels fixed | `steer_left` and `steer_right` turn with the motion, up to 85°: straight on a straight run, turned in a curve, nearly crosswise when it turns on the spot |
+| Steering | Rear wheels fixed | `steer_left` and `steer_right` each turn square to the line from the point the forklift turns about, up to 85°: straight on a straight run, the inner wheel further in a curve, splayed 59.5° each way when it turns on the spot. Standing, it turns them before it moves off |
 | Lift | 0.5 m/s up and down | 0.56 m/s laden and 0.64 m/s empty up, 0.57 m/s down (the datasheet) |
 | Blue spot | — | A blue spot on the floor 3 m ahead in the direction of travel while it drives, and none while it stands |
 | Label | "Forklift" | What it does: "parked", "to the pallet", "picking up", "to rack place 14 · forks 1.6 m", "loading door 2", "back to its spot" |
@@ -29,7 +29,7 @@ Make the two warehouse forklifts read as a real electric counterbalance truck, m
 | `steer_left`, `steer_right` | scene | the rear wheels' centres, (∓0.45, 0.24, −1.3) | Turn about +y, ±85° |
 | `beacon` | scene | as before | as before |
 
-- **Debug state** (`forklift-1`, `forklift-2`): new keys `tiltRad` (negative is back), `steerRad` and `blueSpot` (boolean); the others stay.
+- **Debug state** (`forklift-1`, `forklift-2`): new keys `tiltRad` (negative is back), `steerLeftRad` and `steerRightRad` (`steerRad` until the fix below) and `blueSpot` (boolean); the others stay.
 - **Budgets:** the forklift model at most 8 meshes. The packs line stays within its 185 draw calls and 10 own materials (the blue spot takes one).
 
 ## Who does what
@@ -50,7 +50,7 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 - [x] `tests/scene/warehouseMotion.test.ts`:
   - the tilt back while carrying, and level at a pick or set-down;
   - the lift speeds;
-  - the steer angle along the rear axle's motion;
+  - each wheel's steer angle round the turning centre, set before it moves off;
   - the blue spot while driving;
   - the carried pallet riding on the tilted forks;
   - the label words.
@@ -83,5 +83,22 @@ Built on 4 November 2026 in one session, lane by lane in the order above:
   - Browser: `motion` 4 of 4, `smoke` 4 of 4, and `stages`, `packs` and `camera` 18 of 18 (9.1 min), the forklifts' new label text among them.
   - The packs line draws 171 calls with grey boxes (budget 185) and adds 9 materials of its own (budget 10). The app's overview is 240 draw calls (228 in phase 12; `tests/perf/baseline.md`).
   - Looked at in the app: forklift-2 reverses toward the truck with its pallet tilted back, the blue spot behind it, and the label "to the truck", then "loading the truck · forks 1.4 m".
-- **Left as it is:** the forklifts still turn on the spot about the middle of the body (phase 12's compromise with the 2.7 m aisles), where the E20's combi axle would pivot about the drive axle. In a turn on the spot the rear wheels stand nearly crosswise and stick out a few centimetres past the body.
+- **Left as it is:** the forklifts still turn on the spot about the middle of the body (phase 12's compromise with the 2.7 m aisles), where the E20's combi axle would pivot about the drive axle. In a turn on the spot the rear wheels stand splayed and stick out about 11 cm past the forklift's 1.2 m width.
 - **Open:** the developer's own look at the forklifts.
+
+### Fix: the steering (5 November 2026)
+
+The developer asked for the forklift detail animation to be fixed. Watched frame by frame, the rear wheels' steer had been read from the motion after it happened, so the wheels lagged what the forklift did:
+
+- every turn on the spot began with the wheels straight while the body swung round, and they reached their angle only part way through the turn;
+- every drive off after a turn began with the wheels still crosswise: forklift-1 drove into its rack place with its wheels sweeping from 85° to 30°;
+- both wheels took the rear axle's direction, so in a turn on the spot about the middle of the body they stood parallel and crosswise, where each wheel's own circle needs 59.5°, splayed.
+
+Now (`scene`, `forkliftJobs.ts` and `packsLine.ts`):
+
+- each step of a route says the angles its rear wheels stand at (`wheelSteerRad`): straight on a line, square to the line from the curve's centre on a curve, and from the middle of the body in a turn on the spot;
+- standing, the driver turns the wheels to them before the forklift sets off, at 2 rad a second, and while the forks move, toward the next move's;
+- on the move from one step into the next, the wheels follow at the same rate;
+- each wheel has its own angle; the debug state's `steerRad` became `steerLeftRad` and `steerRightRad`.
+
+Routes and speeds are unchanged; a turn on the spot takes up to about a second more for the steering (0.5 s each side, less where it steers while the forks move). `tests/scene/warehouseMotion.test.ts` checks that every frame of a turn on the spot has the wheels splayed at their angles, every drive off from a stand starts with them straight, the wheels turn no faster than their rate, and the inner wheel turns further in a curve. `e2e/motion.spec.ts` checks the splayed wheels in the app.

@@ -50,11 +50,11 @@ export const BEACON_ORIGIN_M = [0, 2.15, -0.95] as const;
 /** The mast's pivot on the drive axle (phase 14, D24): it tilts about +x here, 8° back (negative) to 5° forward. */
 export const MAST_PIVOT_M = [0, 0.32, 0.61] as const;
 export const MAST_TILT_RAD = { forward: (5 * Math.PI) / 180, back: (-8 * Math.PI) / 180 } as const;
-/** The rear wheels' centres: each steers about +y, up to STEER_MAX_RAD either way (phase 14). */
+/**
+ * The rear wheels' centres: each steers about +y on its own, up to 85° either way (phase 14); the forklift's jobs
+ * give the angles (forkliftJobs.ts STEER_WHEELS_M and wheelSteerRad).
+ */
 export const STEER_M = { steer_left: [-0.45, 0.24, -1.3], steer_right: [0.45, 0.24, -1.3] } as const;
-export const STEER_MAX_RAD = (85 * Math.PI) / 180;
-/** The rear axle's place along the forklift, where the steer wheels turn. */
-export const REAR_AXLE_Z_M = -1.3;
 
 /** Nodes whose meshes cast no shadow: the doors lie inside the trailer's own shadow, the beacon is a lamp. */
 const NO_SHADOW_NODES = new Set<string>(['door_left', 'door_right', 'beacon']);

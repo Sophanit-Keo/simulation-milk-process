@@ -17,7 +17,7 @@ import { LAMP_COLOR_VAR, type SceneColorVar } from '../theme';
 import { HERO_MODELS, swapInHero } from './heroes';
 import { createTokenStream, PACK_BELT_SPEED_MPS, TRAY_BELT_SPEED_MPS, type TokenStream } from './packs/belts';
 import { FixtureBuilder, type BuiltFixture, type InstanceM } from './packs/builder';
-import { createAisleLocks, createForkliftDriver, rearSteerRad, type AisleLocks, type ForkliftDriver, type ForkliftInputs, type ForkliftRole, type PalletPose } from './packs/forkliftJobs';
+import { createAisleLocks, createForkliftDriver, type AisleLocks, type ForkliftDriver, type ForkliftInputs, type ForkliftRole, type PalletPose } from './packs/forkliftJobs';
 import { beltPlacements, createKitLoader, greyBelt, greyRollers, repeatPlacements, swapInKit, type KitLoader, type Placement } from './packs/conveyors';
 import { createKit, type Kit, type PrintName } from './packs/kit';
 import * as at from './packs/layout';
@@ -63,8 +63,6 @@ import {
   DOOR_OPEN_RAD,
   FORKLIFT_NODES,
   MAST_PIVOT_M,
-  REAR_AXLE_Z_M,
-  STEER_MAX_RAD,
   TRAILER_DECK_M,
   TRUCK_NODES,
   fitVehicle,
@@ -1320,18 +1318,12 @@ function forklift(kit: Kit, ctx: EquipmentContext, id: string, role: ForkliftRol
   const heightM = at.FORKLIFT_SIZE_M.heightM + 0.4;
   const anchor: [number, number, number] = [driver.xM, heightM, driver.zM];
   let palletsShown = false;
-  // Phase 14: the rear wheels' steer angle from the rear axle's motion, and the direction it drives in.
+  // Phase 14: the direction it drives in, for the blue spot (the driver steers the wheels itself).
   const spotSlot = role === 'putAway' ? 0 : 1;
-  let steerRad = 0;
   let travel = 0; // +1 forks first, -1 reversing, 0 standing
-  const rearAxle = (): [number, number] => [driver.xM + Math.sin(driver.headingRad) * REAR_AXLE_Z_M, driver.zM + Math.cos(driver.headingRad) * REAR_AXLE_Z_M];
-  let lastRear = rearAxle();
   let lastFoot: [number, number] = [driver.xM, driver.zM];
   const tilt: ForksTilt = { rad: 0, xM: 0, zM: 0, headingRad: 0 };
   const follow = (dtS: number): void => {
-    const rear = rearAxle();
-    steerRad = rearSteerRad(rear[0] - lastRear[0], rear[1] - lastRear[1], driver.headingRad, steerRad, dtS, STEER_MAX_RAD);
-    lastRear = rear;
     // Which way it drives: along its heading (forks first) or against it, while it moves faster than a crawl.
     const along = (driver.xM - lastFoot[0]) * Math.sin(driver.headingRad) + (driver.zM - lastFoot[1]) * Math.cos(driver.headingRad);
     travel = dtS > 0 && Math.abs(along) > BLUE_SPOT.moving * dtS ? Math.sign(along) : dtS > 0 ? 0 : travel;
@@ -1345,8 +1337,8 @@ function forklift(kit: Kit, ctx: EquipmentContext, id: string, role: ForkliftRol
     nodes.forks.position.y = restY.forks + driver.liftM / unitM.forks;
     nodes.mast_inner.position.y = restY.mast_inner + driver.liftM / 2 / unitM.mast_inner;
     nodes.mast.rotation.x = driver.tiltRad;
-    nodes.steer_left.rotation.y = restTurn.steer_left + steerRad;
-    nodes.steer_right.rotation.y = restTurn.steer_right + steerRad;
+    nodes.steer_left.rotation.y = restTurn.steer_left + driver.steerLeftRad;
+    nodes.steer_right.rotation.y = restTurn.steer_right + driver.steerRightRad;
     // The blue spot, beyond its end in the direction of travel, while it drives.
     const endM = at.FORKLIFT_SIZE_M.lengthM / 2 + BLUE_SPOT.beyondM;
     writeBlueSpot(warehouse.blueSpots, spotSlot, driver.xM, driver.zM, driver.headingRad, travel === 0 ? null : travel * endM);
@@ -1416,7 +1408,8 @@ function forklift(kit: Kit, ctx: EquipmentContext, id: string, role: ForkliftRol
         place: driver.place,
         model: !vehicle.fixture.object.getObjectByName('grey-box'),
         tiltRad: driver.tiltRad,
-        steerRad,
+        steerLeftRad: driver.steerLeftRad,
+        steerRightRad: driver.steerRightRad,
         blueSpot: travel !== 0,
       }),
     },
