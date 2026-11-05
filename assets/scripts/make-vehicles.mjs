@@ -324,6 +324,17 @@ function rearDoor(m, name) {
 
 /** The forklift's amber beacon: its node's origin, the beacon's foot on the overhead guard (model frame, m). */
 export const FORKLIFT_BEACON_M = [0, 2.15, -0.95];
+/**
+ * The mast's pivot (phase 14, D24): its foot on the drive axle's housing. The mast tilts about +x here, from 8° back
+ * (negative) to 5° forward, as the Linde E20's sheet gives; the inner mast and the forks ride in it.
+ */
+export const FORKLIFT_MAST_PIVOT_M = [0, 0.32, 0.61];
+export const FORKLIFT_TILT_RAD = { forward: (5 * Math.PI) / 180, back: (-8 * Math.PI) / 180 };
+/** The rear (steer) wheels' centres, each a node that turns about +y (phase 14). */
+export const FORKLIFT_STEER_M = { steer_left: [-0.45, 0.24, -1.3], steer_right: [0.45, 0.24, -1.3] };
+/** Where the inner mast's foot and the forks' heel underside stand at rest, in the model frame. */
+const MAST_INNER_AT_M = [0, 0.1, 0.64];
+const FORKS_AT_M = [0, 0.03, 0.75];
 
 /**
  * The beacon's own material, so the scene can flash it without touching the rest: amber, and emissive in the
@@ -333,10 +344,57 @@ function beaconMaterial() {
   return new THREE.MeshStandardMaterial({ name: 'forklift_beacon', color: C.lightAmber, emissive: C.lightAmber, roughness: 0.3, metalness: 0 });
 }
 
+/** A round bar from `a` to `b` (each [x, y, z], m): an arm, a grab handle, a lift-cylinder rod. */
+function rod(parts, material, color, a, b, radiusM, segments = 8) {
+  const from = new THREE.Vector3(...a);
+  const to = new THREE.Vector3(...b);
+  const along = to.clone().sub(from);
+  const geometry = new THREE.CylinderGeometry(radiusM, radiusM, along.length(), segments);
+  geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), along.normalize()));
+  geometry.translate(...from.add(to).multiplyScalar(0.5).toArray());
+  parts.add(material, color, geometry);
+}
+
+/** Moves a node's parts so its origin is `at` (model frame), and puts it there. */
+const atJoint = (mesh, at, base = [0, 0, 0]) => {
+  mesh.position.set(at[0] - base[0], at[1] - base[1], at[2] - base[2]);
+  return mesh;
+};
+
+/** The forklift's colours beyond the vehicles' shared ones: the operator, the safety lights. */
+const F = {
+  vest: 0xd5e13b, // hi-vis yellow
+  reflective: 0xc9cdd1,
+  trousers: 0x2b3445,
+  skin: 0xc48a63,
+  helmet: 0xf1f2f2,
+  boot: 0x1d2124,
+  blueSpot: 0x2f6fe0,
+  socket: 0xb3382c,
+  plate: 0xd4d8db,
+  hose: 0x16191c,
+  chain: 0x5b6268,
+};
+
 /**
- * A counterbalance forklift, 3.5 × 2.2 × 1.2 m, forks at +z. Moving nodes (both slide along +y):
- * `mast_inner`, the inner mast channel, and `forks`, the carriage with backrest and forks; and `beacon`, the
- * amber lamp on the overhead guard, in its own material (beaconMaterial) for the scene to flash.
+ * One rear wheel, its node's origin at the wheel's centre (phase 14): the tyre, a hub on its outer face and the
+ * fork that carries it from the steer axle, all in one mesh that turns about +y.
+ */
+function steerWheel(m, s) {
+  const p = new Parts();
+  p.cylinder(m.matte, C.tyre, 'x', [0, 0, 0], 0.24, 0.2, 16);
+  p.cylinder(m.matte, C.hub, 'x', [s * 0.105, 0, 0], 0.12, 0.02, 10);
+  p.box(m.matte, C.guard, span(-0.13, 0.13), [0.2, 0.3], span(-0.06, 0.06)); // the axle's fork over the tyre
+  return p.meshes(s < 0 ? 'steer_left' : 'steer_right')[0];
+}
+
+/**
+ * A 2 t electric counterbalance forklift (phase 14, D24, after the Linde E20's VDI 2198 sheet), 3.5 × 2.2 × 1.2 m,
+ * forks at +z, an operator on the seat. Moving nodes:
+ * - `mast` turns about +x on its pivot (FORKLIFT_MAST_PIVOT_M); in it `mast_inner` and `forks` slide along its +y
+ *   (the 2:1 chain), so they tilt with it, the lift cylinders' rods coming out of their barrels as the inner mast rises;
+ * - `steer_left` and `steer_right`, the rear wheels, turn about +y on their centres;
+ * - `beacon`, the amber lamp on the overhead guard, in its own material (beaconMaterial) for the scene to flash.
  */
 export function buildForklift() {
   const m = makeMaterials('forklift');
@@ -346,60 +404,109 @@ export function buildForklift() {
   const tipZ = FORKLIFT_SIZE_M.lengthM / 2; // 1.75
   const topY = FORKLIFT_SIZE_M.heightM; // 2.2
 
-  // Body: a narrow lower frame between the wheels, a full-width upper body over them, the
-  // counterweight at the back and the hood the seat stands on.
-  body.box(m.paint, C.forkliftBody, span(-0.34, 0.34), [0.12, 0.55], [rearZ + 0.15, 0.52]);
+  // Body: a narrow lower frame between the wheels, a full-width upper body over them, the counterweight at the
+  // back and the battery hood the seat stands on (an electric truck: no exhaust). Its front stops at z 0.36, short of
+  // the mast, so the mast tilts back 8° into the gap (phase 14).
+  const bodyFrontZ = 0.36;
+  body.box(m.paint, C.forkliftBody, span(-0.34, 0.34), [0.12, 0.55], [rearZ + 0.15, bodyFrontZ]);
   body.box(m.paint, C.counterweight, span(-0.34, 0.34), [0.12, 0.55], [rearZ, rearZ + 0.15]);
-  body.box(m.paint, C.forkliftBody, span(-0.58, 0.58), [0.55, 0.95], [-1.1, 0.52]);
+  body.box(m.paint, C.forkliftBody, span(-0.58, 0.58), [0.55, 0.95], [-1.1, bodyFrontZ]);
   body.prism(m.paint, C.counterweight, [0.55, 1.2], { x: span(-0.58, 0.58), z: [rearZ, -1.1] }, { x: span(-0.55, 0.55), z: [rearZ + 0.13, -1.1] });
   body.prism(m.paint, C.forkliftBody, [0.95, 1.12], { x: span(-0.52, 0.52), z: [-1.1, -0.35] }, { x: span(-0.5, 0.5), z: [-1.05, -0.4] });
-  body.box(m.paint, C.forkliftBody, span(-0.5, 0.5), [0.95, 1.25], [0.25, 0.52]); // cowl
-  body.box(m.matte, C.guard, span(-0.5, 0.5), [0.95, 0.98], [-0.35, 0.25]); // floor plate
+  body.box(m.paint, C.forkliftBody, span(-0.5, 0.5), [0.95, 1.25], [0.2, 0.32]); // cowl, under the steering column
+  body.box(m.matte, C.guard, span(-0.5, 0.5), [0.95, 0.98], [-0.35, 0.2]); // floor plate
+  // The battery hood's seam, its charging socket on the right, the capacity plate on the cowl, the tow pin.
+  body.box(m.matte, C.guard, span(-0.525, 0.525), [1.105, 1.115], [-1.08, -0.37]);
+  body.box(m.matte, F.socket, [0.58, 0.6], [0.68, 0.84], [-0.95, -0.77]);
+  body.box(m.paint, F.plate, [-0.505, -0.5], [1.03, 1.17], [0.21, 0.31]);
+  body.cylinder(m.matte, C.guard, 'y', [0, 0.6, rearZ + 0.04], 0.03, 0.14, 8); // in its slot in the counterweight
   // Seat, steering column and wheel.
   body.box(m.matte, C.seat, span(-0.24, 0.24), [1.12, 1.24], [-0.98, -0.58]);
   body.box(m.matte, C.seat, span(-0.24, 0.24), [1.24, 1.62], [-1.02, -0.92]);
   body.box(m.matte, C.guard, span(-0.04, 0.04), [1.25, 1.42], [0.2, 0.28]);
   body.cylinder(m.matte, C.seat, 'y', [0, 1.45, 0.17], 0.17, 0.03, 16, [-0.5, 0, 0]);
-  // Overhead guard: four posts, two side rails, six slats, work lights and an amber beacon.
+
+  // The operator, seated: boots on the floor plate, hands on the wheel, a hi-vis vest and a hard hat.
   for (const s of [-1, 1]) {
-    for (const zM of [[-1.12, -1.06], [0.38, 0.44]]) body.box(m.matte, C.guard, side(s, 0.5, 0.56), [0.95, 2.08], zM);
-    body.box(m.matte, C.guard, side(s, 0.48, 0.58), [2.08, 2.15], [-1.15, 0.47]);
-    body.box(m.paint, C.lightWhite, side(s, 0.44, 0.5), [1.85, 1.95], [0.44, 0.5]);
+    body.box(m.matte, F.trousers, side(s, 0.03, 0.16), [1.24, 1.37], [-0.66, -0.3]); // thigh
+    body.box(m.matte, F.trousers, side(s, 0.04, 0.15), [1.0, 1.32], [-0.36, -0.24]); // shin
+    body.box(m.matte, F.boot, side(s, 0.04, 0.15), [0.98, 1.05], [-0.36, -0.1]);
+    rod(body, m.matte, F.vest, [s * 0.2, 1.74, -0.8], [s * 0.22, 1.5, -0.56], 0.045); // upper arm
+    rod(body, m.matte, F.vest, [s * 0.22, 1.5, -0.56], [s * 0.13, 1.47, 0.1], 0.04); // forearm
+    body.box(m.matte, F.skin, side(s, 0.1, 0.16), [1.44, 1.5], [0.08, 0.16]); // hand
+  }
+  body.box(m.matte, F.trousers, span(-0.17, 0.17), [1.24, 1.39], [-0.9, -0.62]); // hips
+  body.box(m.paint, F.vest, span(-0.19, 0.19), [1.39, 1.8], [-0.92, -0.7]); // torso in the vest
+  for (const yM of [[1.5, 1.53], [1.63, 1.66]]) body.box(m.paint, F.reflective, span(-0.195, 0.195), yM, [-0.925, -0.695]);
+  body.cylinder(m.matte, F.skin, 'y', [0, 1.84, -0.81], 0.05, 0.08, 8); // neck
+  body.cylinder(m.matte, F.skin, 'y', [0, 1.94, -0.81], 0.095, 0.16, 12); // head
+  body.cylinder(m.paint, F.helmet, 'y', [0, 2.03, -0.81], 0.11, 0.05, 14); // hard hat
+  body.cylinder(m.paint, F.helmet, 'y', [0, 2.0, -0.79], 0.13, 0.012, 14); // its brim
+
+  // Overhead guard: four posts, two side rails and six slats, its front just behind the steering wheel so the
+  // mast clears it tilted back; work lights, mirrors and a grab handle on the front posts, a work light, the
+  // blue-spot lamp and the beacon at the back.
+  const guardFrontZ = [0.19, 0.25];
+  for (const s of [-1, 1]) {
+    for (const zM of [[-1.12, -1.06], guardFrontZ]) body.box(m.matte, C.guard, side(s, 0.5, 0.56), [0.95, 2.08], zM);
+    body.box(m.matte, C.guard, side(s, 0.48, 0.58), [2.08, 2.15], [-1.15, guardFrontZ[1] + 0.02]);
+    body.box(m.paint, C.lightWhite, side(s, 0.44, 0.5), [1.85, 1.95], [guardFrontZ[1], guardFrontZ[1] + 0.06]);
+    body.box(m.matte, C.guard, side(s, 0.56, 0.585), [1.86, 1.89], [0.2, 0.23]); // mirror arm
+    body.box(m.paint, C.glass, side(s, 0.585, 0.6), [1.8, 1.95], [0.15, 0.27]); // mirror
+    // A tail light on the counterweight's sloping back, about 10 cm in from its foot at this height.
+    body.box(m.paint, C.lightRed, side(s, 0.4, 0.5), [1.06, 1.13], [rearZ + 0.085, rearZ + 0.115]);
   }
   for (let i = 0; i < 6; i++) {
-    const zM = -1.1 + (i * 1.52) / 5;
+    const zM = -1.1 + (i * (guardFrontZ[0] + 1.1)) / 5;
     body.box(m.matte, C.guard, span(-0.48, 0.48), [2.09, 2.14], [zM - 0.03, zM + 0.03]);
   }
+  rod(body, m.matte, C.guard, [-0.47, 1.25, 0.16], [-0.47, 1.75, 0.16], 0.016); // grab handle
+  body.box(m.matte, C.guard, [-0.6, -0.5], [0.55, 0.58], [-0.36, -0.1]); // step
+  body.box(m.paint, C.lightWhite, [0.44, 0.5], [1.85, 1.95], [-1.16, -1.12]); // rear work light
+  body.cylinder(m.paint, F.blueSpot, 'z', [0.53, 1.75, -1.15], 0.035, 0.05, 10); // blue-spot lamp
   // The beacon's mounting plate, across the two rearmost slats; the beacon stands on it.
   const [, beaconY, beaconZ] = FORKLIFT_BEACON_M;
   body.box(m.matte, C.guard, span(-0.09, 0.09), [beaconY - 0.03, beaconY], [-1.13, -0.766]);
-  // Wheels: big drive wheels under the mast, small steer wheels under the counterweight.
+  // The drive wheels under the mast (the steer wheels are nodes of their own) and the mast's tilt cylinders.
   for (const s of [-1, 1]) {
     wheel(body, m, s, 0.2, 0.32, [0.35, halfW - 0.005], 0.17);
-    wheel(body, m, s, -1.3, 0.24, [0.35, 0.55], 0.12);
-  }
-  // Outer mast and its tilt cylinders, fixed to the body.
-  for (const s of [-1, 1]) {
-    body.box(m.matte, C.mast, side(s, 0.3, 0.38), [0.06, topY], [0.56, 0.66]);
     body.cylinder(m.matte, C.mast, 'z', [s * 0.42, 0.85, 0.42], 0.035, 0.3, 8);
   }
-  body.box(m.matte, C.mast, span(-0.38, 0.38), [topY - 0.08, topY], [0.56, 0.66]);
 
-  // The inner mast channel; its origin is its foot on the lift axis, so lifting only adds to y.
-  const innerOrigin = new THREE.Vector3(0, 0.1, 0.64);
+  // The mast, in its own frame round its pivot: the outer channels and their cross beams, the two lift
+  // cylinders' barrels behind them, and a hose up the right channel.
+  const pivot = FORKLIFT_MAST_PIVOT_M;
+  const inMast = ([x, y, z]) => [x - pivot[0], y - pivot[1], z - pivot[2]];
+  const mast = new Parts();
+  const mastBox = (color, x, y, z) => mast.box(m.matte, color, x, [y[0] - pivot[1], y[1] - pivot[1]], [z[0] - pivot[2], z[1] - pivot[2]]);
+  for (const s of [-1, 1]) {
+    mastBox(C.mast, side(s, 0.3, 0.38), [0.06, topY], [0.56, 0.66]);
+    mast.cylinder(m.matte, C.mast, 'y', inMast([s * 0.2, 1.0, 0.52]), 0.045, 1.8, 10); // lift cylinder barrel, 0.1–1.9 m
+  }
+  mastBox(C.mast, span(-0.38, 0.38), [topY - 0.08, topY], [0.56, 0.66]);
+  mastBox(C.mast, span(-0.38, 0.38), [0.42, 0.5], [0.56, 0.6]);
+  mastBox(F.hose, [0.33, 0.35], [0.3, 1.7], [0.66, 0.68]); // on the channel's front, behind the carriage
+
+  // The inner mast, in its frame (its foot on the lift axis, so lifting adds to y): channels, the top beam with
+  // the chain sheaves and chains, and the lift cylinders' rods, which stay in their barrels at the full lift.
   const inner = new Parts();
-  for (const s of [-1, 1]) inner.box(m.matte, C.mastInner, side(s, 0.22, 0.29), [0, 2.05], [-0.04, 0.04]);
+  for (const s of [-1, 1]) {
+    inner.box(m.matte, C.mastInner, side(s, 0.22, 0.29), [0, 2.05], [-0.04, 0.04]);
+    inner.cylinder(m.matte, C.mastInner, 'x', [s * 0.12, 1.96, 0.01], 0.05, 0.04, 10); // chain sheave
+    inner.box(m.matte, F.chain, side(s, 0.1, 0.14), [1.25, 1.96], [0, 0.02]); // chain, between the channels, behind the carriage
+    rod(inner, m.matte, C.steel, [s * 0.2, 0.12, -0.12], [s * 0.2, 1.98, -0.12], 0.025); // lift cylinder rod
+  }
   inner.box(m.matte, C.mastInner, span(-0.29, 0.29), [1.98, 2.05], [-0.04, 0.04]);
 
-  // Carriage, backrest and two forks; the origin is the forks' heel underside, where a pallet sits on.
-  const forksOrigin = new THREE.Vector3(0, 0.03, 0.75);
+  // Carriage, backrest and two forks (45 × 100 × 1,000 mm); the origin is the forks' heel underside.
   const forks = new Parts();
   forks.box(m.matte, C.fork, span(-0.45, 0.45), [0.09, 0.52], [-0.06, 0]); // carriage plate
   for (const yM of [[0.92, 0.97], [1.12, 1.17]]) forks.box(m.matte, C.fork, span(-0.45, 0.45), yM, [-0.05, -0.02]);
   for (const xM of [-0.42, -0.15, 0.15, 0.42]) forks.box(m.matte, C.fork, span(xM - 0.02, xM + 0.02), [0.52, 1.17], [-0.05, -0.02]);
   for (const s of [-1, 1]) {
     forks.box(m.matte, C.fork, side(s, 0.2, 0.3), [0.05, 0.47], [0, 0.05]); // shank
-    forks.box(m.matte, C.fork, side(s, 0.2, 0.3), [0, 0.05], [0, tipZ - forksOrigin.z]); // blade
+    forks.box(m.matte, C.fork, side(s, 0.2, 0.3), [0, 0.045], [0, tipZ - FORKS_AT_M[2] - 0.08]); // blade
+    forks.prism(m.matte, C.fork, [0, 0.045], { x: side(s, 0.2, 0.3), z: [tipZ - FORKS_AT_M[2] - 0.08, tipZ - FORKS_AT_M[2]] }, { x: side(s, 0.21, 0.29), z: [tipZ - FORKS_AT_M[2] - 0.08, tipZ - FORKS_AT_M[2] - 0.06] }); // tapered tip
   }
 
   // The beacon, its origin at its foot: an amber lens up to the forklift's full height (2.2 m).
@@ -408,13 +515,11 @@ export function buildForklift() {
   lens.translate(0, (topY - beaconY) / 2, 0);
   beacon.add(beaconMaterial(), C.lightAmber, lens);
 
-  const innerMesh = inner.meshes('mast_inner')[0];
-  innerMesh.position.copy(innerOrigin);
-  const forksMesh = forks.meshes('forks')[0];
-  forksMesh.position.copy(forksOrigin);
-  const beaconMesh = beacon.meshes('beacon')[0];
-  beaconMesh.position.set(0, beaconY, beaconZ);
-  return group('forklift', [...body.meshes('body'), innerMesh, forksMesh, beaconMesh]);
+  const mastMesh = atJoint(mast.meshes('mast')[0], pivot);
+  mastMesh.add(atJoint(inner.meshes('mast_inner')[0], MAST_INNER_AT_M, pivot), atJoint(forks.meshes('forks')[0], FORKS_AT_M, pivot));
+  const beaconMesh = atJoint(beacon.meshes('beacon')[0], [0, beaconY, beaconZ]);
+  const steer = [-1, 1].map((s) => atJoint(steerWheel(m, s), FORKLIFT_STEER_M[s < 0 ? 'steer_left' : 'steer_right']));
+  return group('forklift', [...body.meshes('body'), mastMesh, beaconMesh, ...steer]);
 }
 
 /** The exported scene: glTF's scene takes `name`; its nodes must not repeat it (three would rename them). */

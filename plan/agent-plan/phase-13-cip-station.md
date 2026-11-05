@@ -78,6 +78,7 @@ Built on 4 November 2026 in one session, lane by lane in the order above:
 - **Checks:**
   - `npm run check`: typecheck, lint, 1,400 unit tests in 63 files (26 new), 85 asset tests. `npm run build` passes.
   - `e2e/cleaning.spec.ts` passes through a whole CIP: the chemicals in order, the return to drain and back to the lye, acid and water tanks, and "6.2 kg NaOH · 3.2 kg HNO₃ · 6,000 L water" at its end.
+  - Browser, on the merged lanes: `cleaning`, `divert`, `energy`, `kpis` and `liquid`, 15 of 15 in 9.4 min. The stage 4 panel's new rows keep the one-screen layout at 1280 × 720 and 1440 × 900 in both themes.
   - Looked at in the app during the lye and the acid at 1440 × 900.
 - **Seen and left as they are:**
   - In the stage 4 view the CIP station's label stands at the right edge, so its longer text is cut there; the whole label shows from the overview, or once the view is turned a little.

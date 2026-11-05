@@ -614,7 +614,7 @@ describe('packsLine', () => {
     const { machines } = build(
       makeContext({
         'vehicles/truck.glb': box(33, 8, 5, ['tractor', 'door_left', 'door_right']),
-        'vehicles/forklift.glb': box(70, 50, 30, ['forks', 'mast_inner', 'beacon']),
+        'vehicles/forklift.glb': box(70, 50, 30, ['mast', 'forks', 'mast_inner', 'beacon', 'steer_left', 'steer_right']),
       }),
     );
     await settle();

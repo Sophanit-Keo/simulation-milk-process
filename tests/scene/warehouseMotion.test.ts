@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import type { Snapshot, Speed, TruckSnapshot } from '../../src/contracts';
-import { AISLE_Z_M, FORKLIFT_MOTION, PALLET_AHEAD_M } from '../../src/scene/equipment/packs/forkliftJobs';
+import { AISLE_Z_M, FORKLIFT_MOTION, PALLET_AHEAD_M, rearSteerRad } from '../../src/scene/equipment/packs/forkliftJobs';
 import * as at from '../../src/scene/equipment/packs/layout';
 import { MAX_ARTICULATION_RAD, STOP_M, TURN_END_M, articulationRad, arrivalPose, arriveS, pullOutPose, type TruckPose } from '../../src/scene/equipment/packs/truckMoves';
 import { DOOR_OPEN_RAD, TRAILER_DECK_M } from '../../src/scene/equipment/packs/vehicles';
-import { packsLine, rackLoadsShown } from '../../src/scene/equipment/packsLine';
+import { forkliftWords, packsLine, rackLoadsShown } from '../../src/scene/equipment/packsLine';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment/types';
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
@@ -66,7 +66,7 @@ function stubTruck(nodes: readonly string[] = ['tractor', 'door_left', 'door_rig
   return scene;
 }
 
-function stubForklift(nodes: readonly string[] = ['forks', 'mast_inner', 'beacon']): THREE.Object3D {
+function stubForklift(nodes: readonly string[] = ['mast', 'forks', 'mast_inner', 'beacon', 'steer_left', 'steer_right']): THREE.Object3D {
   const scene = new THREE.Group();
   const mesh = (name: string, size: [number, number, number], atM: [number, number, number]): THREE.Mesh => {
     const part = new THREE.Mesh(new THREE.BoxGeometry(...size), new THREE.MeshStandardMaterial());
@@ -75,16 +75,28 @@ function stubForklift(nodes: readonly string[] = ['forks', 'mast_inner', 'beacon
     return part;
   };
   scene.add(mesh('body_paint', [1.2, 0.9, 2.3], [0, 0.7, -0.6]), mesh('body_matte', [0.8, 2.2, 0.1], [0, 1.1, 0.63]));
-  // Each node's geometry hangs from its origin, as in assets' model: the inner mast stands on its foot.
+  // Each node's geometry hangs from its origin, as in assets' model: the mast on its pivot (phase 14) with the inner
+  // mast standing on its foot and the forks in it, each at its rest place taken from the pivot.
+  const pivot: [number, number, number] = [0, 0.32, 0.61];
+  const outer = nodes.includes('mast') ? mesh('mast', [0.76, 2.14, 0.1], pivot) : null;
+  if (outer) {
+    outer.geometry.translate(0, 0.81, 0);
+    scene.add(outer);
+  }
+  const holder: THREE.Object3D = outer ?? scene;
+  const from = outer ? pivot : [0, 0, 0];
   if (nodes.includes('mast_inner')) {
-    const mast = mesh('mast_inner', [0.6, 2.1, 0.07], [0, 0.1, 0.64]);
+    const mast = mesh('mast_inner', [0.6, 2.1, 0.07], [0, 0.1 - from[1], 0.64 - from[2]]);
     mast.geometry.translate(0, 1.05, 0);
-    scene.add(mast);
+    holder.add(mast);
   }
   if (nodes.includes('forks')) {
-    const forks = mesh('forks', [0.6, 0.05, 1.0], [0, 0.03, 0.75]);
+    const forks = mesh('forks', [0.6, 0.05, 1.0], [0, 0.03 - from[1], 0.75 - from[2]]);
     forks.geometry.translate(0, 0.025, 0.5);
-    scene.add(forks);
+    holder.add(forks);
+  }
+  for (const [name, x] of [['steer_left', -0.45], ['steer_right', 0.45]] as const) {
+    if (nodes.includes(name)) scene.add(mesh(name, [0.2, 0.48, 0.48], [x, 0.24, -1.3]));
   }
   if (nodes.includes('beacon')) {
     const beacon = mesh('beacon', [0.16, 0.05, 0.16], [0, 2.15, -0.95]);
@@ -280,7 +292,9 @@ describe('forklifts (stage 10)', () => {
       const modelIn = state(machines, 'forklift-1').model;
       expect(modelIn).toBe(Object.keys(models).length > 0);
       const { forks, mast } = forkliftNodes(f1);
-      const worldY = (node: THREE.Object3D): number => node.getWorldPosition(new THREE.Vector3()).y;
+      // Along the mast, which tilts since phase 14: each node's height in the mast's frame, in metres.
+      const tilting = f1.object.getObjectByName('mast') as THREE.Object3D;
+      const worldY = (node: THREE.Object3D): number => tilting.worldToLocal(node.getWorldPosition(new THREE.Vector3())).y * tilting.getWorldScale(new THREE.Vector3()).y;
       const rest = { forks: worldY(forks), mast: worldY(mast) };
       play(machines, snapshotAt(634), 0.5);
       let checked = 0;
@@ -639,5 +653,176 @@ describe('forklift aisles', () => {
       const reach = Math.min(...AISLE_Z_M.map((aisleZ) => Math.abs(Math.abs(zM - aisleZ) - PALLET_AHEAD_M)));
       expect(reach).toBeLessThan(0.1);
     }
+  });
+});
+
+// Phase 14 (D24): the forklifts as a 2 t electric counterbalance truck after the Linde E20's VDI 2198 sheet. The mast
+// tilts back 8° for the trip with a pallet and stands level to pick up, lift and set down; the forks lift at the
+// sheet's speeds; the rear wheels steer along the rear axle's motion; a blue spot leads it on the floor; the pallet
+// on the forks tilts with the mast; the label says what it does.
+describe('forklift details (phase 14)', () => {
+  const DEG = Math.PI / 180;
+
+  /** Every frame of a put-away of the opening's first release: forklift-1's state and its pallet's and spot's matrices. */
+  function putAway(): { frames: Record<string, number | string | boolean>[]; palletUp: number[]; spotAt: (THREE.Vector3 | null)[] } {
+    const machines = packsLine(makeContext());
+    const f1 = byId(machines, 'forklift-1');
+    const bases = f1.object.getObjectByName('forklift-pallets') as THREE.InstancedMesh;
+    const spots = f1.object.getObjectByName('forklift-blue-spots') as THREE.InstancedMesh;
+    const frames: Record<string, number | string | boolean>[] = [];
+    const palletUp: number[] = [];
+    const spotAt: (THREE.Vector3 | null)[] = [];
+    const matrix = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    const where = new THREE.Vector3();
+    play(machines, snapshotAt(634), 0.5);
+    play(machines, snapshotAt(700), 220, () => {
+      frames.push({ ...state(machines, 'forklift-1') });
+      bases.getMatrixAt(0, matrix);
+      matrix.decompose(where, q, scale);
+      palletUp.push(new THREE.Vector3(0, 1, 0).applyQuaternion(q).angleTo(new THREE.Vector3(0, 1, 0)));
+      spots.getMatrixAt(0, matrix);
+      // decompose() reads a zero-scale matrix as scale 1, so the scale comes from its columns.
+      spotAt.push(new THREE.Vector3().setFromMatrixScale(matrix).x > 0 ? new THREE.Vector3().setFromMatrixPosition(matrix) : null);
+      return frames.length > 10 && frames.at(-1)?.job === 'parked' && frames.some((f) => f.job === 'drop');
+    });
+    return { frames, palletUp, spotAt };
+  }
+  const run = putAway();
+
+  it('tilts the mast back 8° for the trip with a pallet, never past the sheet’s 8°, at 4° a second', () => {
+    const tilts = run.frames.map((f) => Number(f.tiltRad));
+    for (const t of tilts) expect(t).toBeGreaterThanOrEqual(-8 * DEG - 1e-9);
+    for (const t of tilts) expect(t).toBeLessThanOrEqual(1e-9);
+    const back = run.frames.filter((f) => f.carrying === true && f.job === 'toDrop' && Number(f.tiltRad) <= -8 * DEG + 1e-6);
+    expect(back.length, 'tilted fully back on the trip').toBeGreaterThan(10);
+    // 4° a second at ×1 (the frames are 1/20 s of motion).
+    for (let i = 1; i < tilts.length; i++) expect(Math.abs((tilts[i] as number) - (tilts[i - 1] as number))).toBeLessThanOrEqual(4 * DEG * (1 / 20) + 1e-9);
+  });
+
+  it('stands the mast level to pick up, to lift high at the rack, and to set down', () => {
+    for (const f of run.frames) {
+      if (f.job === 'pick' && f.carrying === false) expect(f.tiltRad, 'picking up').toBe(0);
+      if (Number(f.liftM) > 1.4) expect(f.tiltRad, `lifted to ${Number(f.liftM).toFixed(2)} m`).toBe(0);
+    }
+    expect(run.frames.some((f) => Number(f.liftM) > 1.4) || run.frames.some((f) => f.job === 'drop')).toBe(true);
+  });
+
+  it('lifts the pallet at 0.56 m/s and lowers the forks at 0.57 m/s, the Linde E20’s figures', () => {
+    let upLaden = 0;
+    let down = 0;
+    for (let i = 1; i < run.frames.length; i++) {
+      const rate = (Number(run.frames[i]?.liftM) - Number(run.frames[i - 1]?.liftM)) * 20;
+      if (rate > 0 && run.frames[i]?.carrying === true) upLaden = Math.max(upLaden, rate);
+      if (rate < 0) down = Math.max(down, -rate);
+    }
+    expect(FORKLIFT_MOTION).toMatchObject({ liftLadenMps: 0.56, liftEmptyMps: 0.64, lowerMps: 0.57 });
+    expect(upLaden).toBeLessThanOrEqual(0.56 + 1e-9);
+    expect(upLaden).toBeGreaterThan(0.5);
+    expect(down).toBeLessThanOrEqual(0.57 + 1e-9);
+    expect(down).toBeGreaterThan(0.5);
+  });
+
+  it('steers the rear wheels with the motion, up to 85°, and holds them where they are while it stands', () => {
+    const steers = run.frames.map((f) => Number(f.steerRad));
+    for (const s of steers) expect(Math.abs(s)).toBeLessThanOrEqual(85 * DEG + 1e-9);
+    expect(Math.max(...steers.map(Math.abs)), 'nearly crosswise as it turns on the spot').toBeGreaterThan(60 * DEG);
+    expect(steers.some((s) => Math.abs(s) < 0.02), 'straight on a straight run').toBe(true);
+  });
+
+  it('leads with a blue spot 4.75 m from its middle, ahead or behind as it drives, and none while it stands', () => {
+    // Standing to lift: no spot.
+    const standing = run.frames.flatMap((f, i) => (i > 0 && Number(f.liftM) !== Number(run.frames[i - 1]?.liftM) && f.xM === run.frames[i - 1]?.xM && f.zM === run.frames[i - 1]?.zM ? [i] : []));
+    expect(standing.length).toBeGreaterThan(5);
+    for (const i of standing) {
+      expect(run.frames[i]?.blueSpot, `frame ${i}`).toBe(false);
+      expect(run.spotAt[i], `frame ${i}`).toBeNull();
+    }
+    const shown = run.frames.flatMap((f, i) => (f.blueSpot === true ? [i] : []));
+    expect(shown.length).toBeGreaterThan(20);
+    for (const i of shown) {
+      const f = run.frames[i] as Record<string, number>;
+      const at_ = run.spotAt[i] as THREE.Vector3;
+      // Instance matrices are 32-bit floats: to a tenth of a millimetre.
+      expect(at_.y).toBeCloseTo(0.06, 4);
+      const off = Math.hypot(at_.x - f.xM, at_.z - f.zM);
+      expect(off).toBeCloseTo(at.FORKLIFT_SIZE_M.lengthM / 2 + 3, 4);
+      // On the forklift's own line, ahead (forks first) or behind.
+      const across = (at_.x - f.xM) * Math.cos(f.headingRad) - (at_.z - f.zM) * Math.sin(f.headingRad);
+      expect(Math.abs(across)).toBeLessThan(1e-4);
+    }
+  });
+
+  it('tilts the pallet on the forks with the mast', () => {
+    let checked = 0;
+    run.frames.forEach((f, i) => {
+      if (f.carrying !== true) return;
+      expect(run.palletUp[i]).toBeCloseTo(Math.abs(Number(f.tiltRad)), 4);
+      if (Math.abs(Number(f.tiltRad)) > 7 * DEG) checked += 1;
+    });
+    expect(checked).toBeGreaterThan(10);
+  });
+
+  it('turns the model’s or the grey box’s mast and steer wheels as its debug state says', async () => {
+    const cases: Record<string, () => THREE.Object3D>[] = [{}, { 'vehicles/forklift.glb': () => stubForklift() }];
+    for (const models of cases) {
+      const machines = packsLine(makeContext(models));
+      await settle();
+      play(machines, snapshotAt(634), 0.5);
+      play(machines, snapshotAt(700), 120, () => Number(state(machines, 'forklift-1').tiltRad) < -4 * DEG);
+      const f1 = byId(machines, 'forklift-1');
+      const now = state(machines, 'forklift-1');
+      const mast = f1.object.getObjectByName('mast') as THREE.Object3D;
+      expect(mast.rotation.x).toBeCloseTo(Number(now.tiltRad), 9);
+      expect(f1.object.getObjectByName('forks')?.parent).toBe(mast);
+      expect(f1.object.getObjectByName('mast_inner')?.parent).toBe(mast);
+      for (const name of ['steer_left', 'steer_right']) expect(f1.object.getObjectByName(name)?.rotation.y).toBeCloseTo(Number(now.steerRad), 9);
+    }
+  });
+});
+
+describe('rearSteerRad (phase 14)', () => {
+  const MAX = (85 * Math.PI) / 180;
+  const heading = 0.7; // forks toward (sin 0.7, cos 0.7)
+  const along = (m: number): [number, number] => [Math.sin(heading) * m, Math.cos(heading) * m];
+  const across = (m: number): [number, number] => [Math.cos(heading) * m, -Math.sin(heading) * m];
+
+  it('points the wheels along the rear axle’s motion: straight ahead or back, crosswise, or at the angle between', () => {
+    const steer = (d: [number, number], current = 0) => rearSteerRad(d[0], d[1], heading, current, 1, MAX, 100);
+    expect(steer(along(0.1))).toBeCloseTo(0, 9);
+    expect(steer(along(-0.1))).toBeCloseTo(0, 9);
+    // Crosswise either way is the same wheel: it takes the side nearer where it points.
+    expect(steer(across(0.1), 0.01)).toBeCloseTo(MAX, 9);
+    expect(steer(across(-0.1), 0.01)).toBeCloseTo(MAX, 9);
+    expect(steer(across(0.1), -0.01)).toBeCloseTo(-MAX, 9);
+    const [ax, az] = along(0.1);
+    const [cx, cz] = across(0.1);
+    expect(steer([ax + cx, az + cz])).toBeCloseTo(Math.PI / 4, 9);
+  });
+
+  it('turns them at its rate, never flipping across, and holds them while the axle stands', () => {
+    const [cx, cz] = across(0.1);
+    expect(rearSteerRad(cx, cz, heading, 0.001, 0.1, MAX, 2)).toBeCloseTo(0.201, 9);
+    // Nearly crosswise and moving crosswise: it stays on its side, whatever the noise in the motion.
+    for (const noise of [1e-12, -1e-12, 1e-6, -1e-6]) {
+      const [ax, az] = along(noise);
+      expect(rearSteerRad(cx + ax, cz + az, heading, MAX, 0.05, MAX)).toBeCloseTo(MAX, 9);
+    }
+    expect(rearSteerRad(0, 0, heading, 0.4, 0.1, MAX)).toBe(0.4);
+    expect(rearSteerRad(cx, cz, heading, 0.4, 0, MAX)).toBe(0.4);
+  });
+});
+
+describe('forkliftWords (phase 14)', () => {
+  it('says what each forklift does, as a dispatcher would, and the forks’ height once they are up', () => {
+    expect(forkliftWords({ role: 'putAway', job: 'parked', liftM: 0 })).toBe('parked');
+    expect(forkliftWords({ role: 'putAway', job: 'toPick', liftM: 0 })).toBe('to the pallet');
+    expect(forkliftWords({ role: 'putAway', job: 'toDrop', liftM: 0.15 })).toBe('to the racks');
+    expect(forkliftWords({ role: 'putAway', job: 'drop', liftM: 1.62 })).toBe('putting away · forks 1.6 m');
+    expect(forkliftWords({ role: 'loading', job: 'toPick', liftM: 0 })).toBe('to the racks');
+    expect(forkliftWords({ role: 'loading', job: 'toDrop', liftM: 0.15 })).toBe('to the truck');
+    expect(forkliftWords({ role: 'loading', job: 'drop', liftM: 1.36 })).toBe('loading the truck · forks 1.4 m');
+    expect(forkliftWords({ role: 'loading', job: 'home', liftM: 0 })).toBe('back to its spot');
   });
 });

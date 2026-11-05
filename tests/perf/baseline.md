@@ -228,6 +228,10 @@ Measured on 2 November 2026 on the phase 12 branch, a production build served by
 
 Six draw calls more than phase 8 at the overview. The pieces: the palletizer's clamps, carried tray, trolley and safety fence; the stretch wrapper's hero model (3,108 triangles), its film roll and film web; the film shells on riding pallets; the forklifts' beacons and carried pallets; the docks' roller doors and lamps. The stage 8 and 10 stops moved in this phase (stage 8 takes in the stretch wrapper, stage 10 the docks and a docked truck), so their rows are not comparable with phase 8's; at stage 10 the yard's parked trucks are now instanced. The counts grow with what moves. A docked truck adds about 12 draw calls with its tractor, doors and load (`qa` read 248 at the overview with the first truck docked, dark theme). A pallet riding to quarantine carries a full tray stack, 1,008 triangles a pass, and at most 10 ride at once. In the packs line's unit test (`tests/scene/packsLine.test.ts`), stages 7–10 draw 162 calls with grey boxes against a budget of 185 (145 before phase 12). Software GL gave 2.7 fps at the overview, not the 60 fps check, which runs on the target laptop.
 
+### Phase 14: the forklifts in detail
+
+Measured on 4 November 2026 the same way as phase 12 (paused after the opening, 1440 × 900, headless Chromium 153 on SwiftShader). The overview reads **240** draw calls and **257,026** triangles, 12 and 4,080 more than phase 12. Each forklift model has 3 more meshes (its tilting `mast` and two steer wheels; 8 against 5), drawn in both the main and the shadow pass. Every stage stop draws 6 more (stage 8 at 136, stage 10 at 148), as the shadow pass draws the forklifts from any camera. The blue spots draw only while a forklift drives. No console errors.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.

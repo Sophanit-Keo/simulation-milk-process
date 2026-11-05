@@ -14,7 +14,10 @@
 // empty, and both forklifts come at their place with the forks pointing east). It drives in the last few
 // centimetres, sets the pallet down, and turns back out. At the doors it turns the same way in the front aisle,
 // the pallet lifted to the trailer's deck. Speeds are the card's: 2.2 m/s empty, 1.8 m/s loaded, 0.6 m/s into a
-// rack or trailer and in turns; forks at 0.5 m/s, and only while the forklift stands.
+// rack or trailer and in turns; the forks only while the forklift stands, since phase 14 at the Linde E20's 0.56 m/s
+// laden and 0.64 m/s empty up and 0.57 m/s down (D24). Phase 14 also tilts the mast: back 8° for the trip with a
+// pallet, the forks low, and level to pick up, lift or set down, at 4° a second; and gives the rear wheels' steer
+// angle from the rear axle's motion (rearSteerRad).
 import { RACK_Z_M, rackSlots, type FloorPointM, type RackSlotM } from './layout';
 
 export type ForkliftJob = 'parked' | 'toPick' | 'pick' | 'toDrop' | 'drop' | 'home';
@@ -24,9 +27,17 @@ export const FORKLIFT_MOTION = {
   emptyMps: 2.2,
   loadedMps: 1.8,
   slowMps: 0.6,
-  forksMps: 0.5,
+  /** The forks up laden and empty, and down (the Linde E20's VDI 2198 sheet, lines 5.2 and 5.3; D24). */
+  liftLadenMps: 0.56,
+  liftEmptyMps: 0.64,
+  lowerMps: 0.57,
   maxLiftM: 3.3,
+  /** The mast tilts back this far while carrying along the floor (the sheet's 8°), at this rate (a sim assumption). */
+  tiltBackRad: (-8 * Math.PI) / 180,
+  tiltRadPerS: (4 * Math.PI) / 180,
 } as const;
+/** The slowest the forks move, for estimates. */
+const SLOWEST_FORKS_MPS = Math.min(FORKLIFT_MOTION.liftLadenMps, FORKLIFT_MOTION.liftEmptyMps, FORKLIFT_MOTION.lowerMps);
 const ACCEL_MPS2 = 0.8;
 /** Turning on the spot: the body's corners, 1.34 m out, move at about 0.6 m/s. */
 const PIVOT_RAD_PER_S = 0.45;
@@ -201,6 +212,8 @@ class Route {
   index = 0;
   /** Speed now: m/s while driving, rad/s while turning on the spot, m/s of the forks while lifting. */
   speed = 0;
+  /** Whether the forks carry a pallet: they lift it slower (the driver sets it before each play). */
+  laden = false;
   /** Where the plan has got to while it is written. */
   private readonly cursor: Pose = { x: 0, z: 0, heading: 0, lift: 0 };
 
@@ -357,7 +370,7 @@ class Route {
       const step = this.steps[i] as Step;
       if (isDrive(step)) s += step.length / step.vmax + 1;
       else if (step.kind === 'pivot') s += step.length / PIVOT_RAD_PER_S + 1;
-      else if (step.kind === 'lift') s += step.length / FORKLIFT_MOTION.forksMps + 0.5;
+      else if (step.kind === 'lift') s += step.length / SLOWEST_FORKS_MPS + 0.5;
     }
     return s;
   }
@@ -388,7 +401,7 @@ class Route {
         accel = PIVOT_RAD_PER_S2;
         exit = 0;
       } else {
-        vmax = FORKLIFT_MOTION.forksMps;
+        vmax = step.sign < 0 ? FORKLIFT_MOTION.lowerMps : this.laden ? FORKLIFT_MOTION.liftLadenMps : FORKLIFT_MOTION.liftEmptyMps;
         accel = FORKS_MPS2;
         exit = 0;
       }
@@ -465,6 +478,8 @@ export interface ForkliftDriver {
   readonly carrying: boolean;
   /** True while the beacon shines (it flashes while the forklift works). */
   readonly beacon: boolean;
+  /** The mast's tilt about +x (phase 14): 0 level, down to FORKLIFT_MOTION.tiltBackRad while it carries along the floor. */
+  readonly tiltRad: number;
   /** Pallet waiting for it, on its forks, and the one it set down last. */
   readonly carried: PalletPose;
   readonly setDown: PalletPose;
@@ -489,6 +504,8 @@ export function createForkliftDriver(role: ForkliftRole, locks: AisleLocks): For
   let landingOn = 0;
   let flashS = 0;
   let beacon = false;
+  /** The mast's tilt about +x: 0 level, negative back (phase 14). */
+  let tiltRad = 0;
   let place = -1;
   let aisle = -1;
   /** Put-away: trips still to make, and the places the racks showed last frame. */
@@ -831,6 +848,9 @@ export function createForkliftDriver(role: ForkliftRole, locks: AisleLocks): For
     get beacon() {
       return beacon;
     },
+    get tiltRad() {
+      return tiltRad;
+    },
     carried,
     setDown,
     waiting,
@@ -845,8 +865,14 @@ export function createForkliftDriver(role: ForkliftRole, locks: AisleLocks): For
       } else if (setDown.shown && (setDownDoor < 0 || (inputs.dockedMask & (1 << setDownDoor)) === 0)) setDown.shown = false;
 
       if (dtS > 0) {
+        route.laden = carrying;
         route.play(dtS, pose, onMark);
         flashS = (flashS + dtS) % (1 / BEACON_HZ);
+        // Back for the whole trip with a pallet, the forks low, turns on the spot included; level to pick it up, to lift
+        // it at its place and to set it down (a driver tilts back once loaded and levels the forks to place).
+        const tiltTo = carrying && job === 'toDrop' && pose.lift <= TRAVEL_LIFT_M + 0.02 ? FORKLIFT_MOTION.tiltBackRad : 0;
+        const tiltStep = FORKLIFT_MOTION.tiltRadPerS * dtS;
+        tiltRad = tiltRad + Math.max(-tiltStep, Math.min(tiltStep, tiltTo - tiltRad));
       }
       if (route.done) {
         if (role === 'putAway') putAwayNext(inputs);
@@ -870,4 +896,24 @@ export function createForkliftDriver(role: ForkliftRole, locks: AisleLocks): For
     },
   };
   return driver;
+}
+
+/**
+ * The rear wheels' steer angle (phase 14, D24): the direction the rear axle's middle moves in, seen from the
+ * forklift, `dxM`, `dzM` in the floor's frame over the frame, held to ±maxRad. A wheel rolls either way, so of that
+ * direction and its reverse the one nearer where the wheels point now (`currentRad`) is taken: no flip between +85°
+ * and −85° as the axle moves crosswise in a turn on the spot. With no motion the wheels stay where they were. Toward
+ * the target at `radPerS` × `dtS`.
+ */
+export function rearSteerRad(dxM: number, dzM: number, headingRad: number, currentRad: number, dtS: number, maxRad: number, radPerS = 2): number {
+  if (!(dtS > 0) || Math.hypot(dxM, dzM) < 1e-4 * dtS) return currentRad;
+  // The forklift's x (right of its forks) and z (toward its forks) in the floor's frame: rotation.y = headingRad.
+  const across = dxM * Math.cos(headingRad) - dzM * Math.sin(headingRad);
+  const along = dxM * Math.sin(headingRad) + dzM * Math.cos(headingRad);
+  const raw = Math.atan2(across, along);
+  let target = raw;
+  for (const candidate of [raw - Math.PI, raw + Math.PI]) if (Math.abs(candidate - currentRad) < Math.abs(target - currentRad)) target = candidate;
+  target = Math.max(-maxRad, Math.min(maxRad, target));
+  const step = radPerS * dtS;
+  return currentRad + Math.max(-step, Math.min(step, target - currentRad));
 }

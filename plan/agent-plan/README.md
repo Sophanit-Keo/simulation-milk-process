@@ -19,6 +19,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 11. Control-room look | after the term | lead, ui, scene, factory-ui, factory-scene, lr-ui | One dark, modern look for the simulation and Let Report | [Phase 11](phase-11-control-room.md) |
 | 12. Lifelike motion | after the term | lead, assets, scene (two lanes), qa | The palletizer robot, stretch wrapper, forklifts and trucks moving like the real ones | [Phase 12](phase-12-lifelike-motion.md) |
 | 13. The CIP station in detail | after the term | process, lead, sim, ui, scene, qa | The CIP station's chemicals and strengths, its returns and change-overs, and what the cleans use | [Phase 13](phase-13-cip-station.md) |
+| 14. The forklifts in detail | after the term | lead, assets, scene, qa | The forklifts as a real electric counterbalance truck: operator, tilting mast, steering wheels, datasheet lift speeds, blue spot | [Phase 14](phase-14-forklift-detail.md) |
 
 ## The agents
 

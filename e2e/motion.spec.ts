@@ -474,6 +474,22 @@ test.describe('stage 10', () => {
     if (!place) throw new Error(`forklift-1 dropped at no rack place (${text(setDown, 'forklift-1', 'place')})`);
     expect(num(setDown, 'forklift-1', 'liftM'), `the forks as the pallet is set down on its place, ${place.yM.toFixed(2)} m up`).toBeGreaterThanOrEqual(place.yM - 0.02);
     expect(num(setDown, 'forklift-1', 'liftM')).toBeLessThanOrEqual(place.yM + 0.07);
+
+    // Phase 14 (D24): the mast tilts back 8° for the trip with the pallet and stands level to set it down; the rear
+    // wheels steer; the blue spot leads while it drives, and is off while it stands to set down; the label says so.
+    const deg = Math.PI / 180;
+    for (const sample of released) {
+      expect(num(sample, 'forklift-1', 'tiltRad')).toBeGreaterThanOrEqual(-8 * deg - 1e-9);
+      expect(num(sample, 'forklift-1', 'tiltRad')).toBeLessThanOrEqual(1e-9);
+      expect(Math.abs(num(sample, 'forklift-1', 'steerRad'))).toBeLessThanOrEqual(85 * deg + 1e-9);
+    }
+    const tiltedBack = released.filter((sample) => text(sample, 'forklift-1', 'job') === 'toDrop' && state(sample, 'forklift-1').carrying === true && num(sample, 'forklift-1', 'tiltRad') <= -7 * deg);
+    expect(tiltedBack.length, 'tilted back on the trip with the pallet').toBeGreaterThan(0);
+    expect(num(setDown, 'forklift-1', 'tiltRad'), 'level as it sets the pallet down').toBe(0);
+    expect(Math.max(...released.map((sample) => Math.abs(num(sample, 'forklift-1', 'steerRad')))), 'the rear wheels turn nearly crosswise in its turns').toBeGreaterThan(1);
+    expect(released.some((sample) => state(sample, 'forklift-1').blueSpot === true), 'a blue spot while it drives').toBe(true);
+    expect(state(setDown, 'forklift-1').blueSpot, 'no blue spot while it stands to set down').toBe(false);
+    await expect(page.locator('.equipment-label[data-equipment="forklift-1"] .equipment-value')).toHaveText(/^(parked|to the pallet|picking up|to the racks|putting away|back to its spot)( · forks \d+\.\d m)?$/);
     expect(pageProblems).toEqual([]);
   });
 
