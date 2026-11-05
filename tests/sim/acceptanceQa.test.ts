@@ -5,7 +5,7 @@
 // phase3Config() (day 1 06:00, no filler breakdowns), only the named keys changed, seed 81006,
 // t = snapshot.timeS − 21,600, tolerances from the rows.
 import { describe, expect, it } from 'vitest';
-import { LINE_POINT_IDS, type LinePointId, type PlantConfig, type Sim, type Snapshot } from '../../src/contracts';
+import { UHT_LINE_POINT_IDS, type PlantConfig, type Sim, type Snapshot, type UhtLinePointId } from '../../src/contracts';
 import { createSim } from '../../src/sim';
 import type { LiquidLine } from '../../src/sim/liquidLine';
 import { expectWithin } from '../helpers/expectWithin';
@@ -59,7 +59,7 @@ function divertAtStart(run: Run): Snapshot {
 describe('normal run, the rest of H76–H82', () => {
   it('H76: every line point at t = 600 s, noise off', () => {
     const snap = start(quiet()).runTo(600);
-    const expected: Record<LinePointId, [tempC: number, flowLph: number]> = {
+    const expected: Record<UhtLinePointId, [tempC: number, flowLph: number]> = {
       silo: [4, 16_222.22],
       separator: [60, 16_000],
       feedTank: [4, 16_000],
@@ -73,7 +73,7 @@ describe('normal run, the rest of H76–H82', () => {
       asepticTank: [20, 15_000],
       filler: [20, 15_000],
     };
-    for (const id of LINE_POINT_IDS) {
+    for (const id of UHT_LINE_POINT_IDS) {
       const [tempC, flowLph] = expected[id];
       expect(Math.abs(snap.line[id].tempC - tempC), `${id}: ${snap.line[id].tempC} °C`).toBeLessThanOrEqual(0.01);
       expect(Math.abs(snap.line[id].flowLph - flowLph), `${id}: ${snap.line[id].flowLph} L/h`).toBeLessThanOrEqual(0.01);

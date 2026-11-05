@@ -5,8 +5,10 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CONTRACT_VERSION,
   LINE_POINT_IDS,
+  UHT_LINE_POINT_IDS,
+  YOGURT_LINE_POINT_IDS,
   dayToS,
-  type LinePointId,
+  type UhtLinePointId,
   type PlantConfig,
   type Sim,
   type Snapshot,
@@ -40,7 +42,7 @@ function expectWellFormedLine(snap: Snapshot, where: string): void {
  * The stage value each point's temperature is read off, so a pipe's colour and the info panel agree.
  * The divert line carries what leaves the holding tube, so it shows the stage 4 temperature too.
  */
-const POINT_SOURCES: Record<LinePointId, [stage: StageId, key: string]> = {
+const POINT_SOURCES: Record<UhtLinePointId, [stage: StageId, key: string]> = {
   silo: [1, 'siloTempC'],
   separator: [1, 'separatorTempC'],
   feedTank: [1, 'feedTankTempC'],
@@ -56,7 +58,7 @@ const POINT_SOURCES: Record<LinePointId, [stage: StageId, key: string]> = {
 };
 
 function expectLineMatchesStages(snap: Snapshot, where: string): void {
-  for (const id of LINE_POINT_IDS) {
+  for (const id of UHT_LINE_POINT_IDS) {
     const [stage, key] = POINT_SOURCES[id];
     const valueC = snap.stages[stage].values[key];
     if (snap.line[id].tempC !== valueC) {
@@ -66,12 +68,16 @@ function expectLineMatchesStages(snap: Snapshot, where: string): void {
 }
 
 describe('contracts v1', () => {
-  it('CONTRACT_VERSION is 7 (contracts v7, phase 13; v1 is a subset of it)', () => {
-    expect(CONTRACT_VERSION).toBe(7);
+  it('CONTRACT_VERSION is 8 (contracts v8, phase 15; v1 is a subset of it)', () => {
+    expect(CONTRACT_VERSION).toBe(8);
   });
 
-  it('LINE_POINT_IDS lists the 12 measuring points once each, in flow order', () => {
-    expect(LINE_POINT_IDS).toEqual([
+  it('LINE_POINT_IDS lists the UHT line\'s points, then the yogurt line\'s (contracts v8)', () => {
+    expect(LINE_POINT_IDS).toEqual([...UHT_LINE_POINT_IDS, ...YOGURT_LINE_POINT_IDS]);
+  });
+
+  it('UHT_LINE_POINT_IDS lists the 12 measuring points once each, in flow order', () => {
+    expect(UHT_LINE_POINT_IDS).toEqual([
       'silo',
       'separator',
       'feedTank',
@@ -119,7 +125,7 @@ describe.each(SIMS)('%s: Snapshot.line', (name, create) => {
 // The line points of plan/hand-calculations.md (H64–H75): the chart values of plan 02 ("Chart values as
 // text") and the R7 homogenizer outlet, for the plant as it opens at full flow with both fillers running and
 // no divert. Only `process` changes an expected value here, with a source (ownership rule 4).
-const LINE_POINTS_H: [h: string, id: LinePointId, tempC: number, flowLph: number, why: string][] = [
+const LINE_POINTS_H: [h: string, id: UhtLinePointId, tempC: number, flowLph: number, why: string][] = [
   ['H64', 'silo', 4, 16_222.22, 'raw milk to the separator: phase 3, 16,000 L/h of 3.5% milk needs 16,222.22 L/h (H3)'],
   ['H65', 'separator', 60, 16_000, 'standardized milk to the mixing tank'],
   ['H66', 'feedTank', 4, 16_000, 'the mixing tank, which feeds the UHT plant'],
@@ -138,7 +144,7 @@ describe('createSim: the line opens on the hand-calculated line points', () => {
   const line = () => createSim(plantConfig).snapshot().line;
 
   it('has one hand value for each of the 12 points', () => {
-    expect(LINE_POINTS_H.map(([, id]) => id)).toEqual([...LINE_POINT_IDS]);
+    expect(LINE_POINTS_H.map(([, id]) => id)).toEqual([...UHT_LINE_POINT_IDS]);
   });
 
   it.each(LINE_POINTS_H)('%s %s: %s °C at %s L/h (%s)', (_h, id, tempC, flowLph) => {

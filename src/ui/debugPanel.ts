@@ -34,6 +34,9 @@ export function createDebugPanel(
     uhtSetpointC: sent.uhtSetpointC ?? 140,
     homogenizerStage1Bar: sent.homogenizerStage1Bar ?? 200,
     fillerRatePacksPerH: sent.fillerRatePacksPerH ?? 7_500,
+    yogurtHeatC: sent.yogurtHeatC ?? 92,
+    fermentTempC: sent.fermentTempC ?? 43,
+    p8RateCupsPerH: sent.p8RateCupsPerH ?? 21_600,
   };
   const setpointControls: Controller[] = [];
   for (const spec of Object.values(SETPOINT_SLIDERS)) {

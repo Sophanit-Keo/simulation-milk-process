@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   CONTRACT_VERSION,
   STAGE_IDS,
+  UHT_STAGE_IDS,
+  YOGURT_STAGE_IDS,
   dayToS,
   hToS,
   minToS,
@@ -95,9 +97,14 @@ describe('createSim: snapshot', () => {
     expect(snap.paused).toBe(false);
   });
 
-  it('opens running at its set points: every stage ok, but stage 9 amber with its batches on hold (D11)', () => {
+  it('opens running at its set points: every UHT stage ok, but stage 9 amber with its batches on hold (D11)', () => {
     const snap = createSim(plantConfig).snapshot();
-    for (const id of STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe(id === 9 ? 'warn' : 'ok');
+    for (const id of UHT_STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe(id === 9 ? 'warn' : 'ok');
+  });
+
+  it('opens with the yogurt line standing: stages 11–16 idle until phase 17 makes them live (D25)', () => {
+    const snap = createSim(plantConfig).snapshot();
+    for (const id of YOGURT_STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe('idle');
   });
 
   it('writes the first log entry at creation', () => {

@@ -20,6 +20,8 @@ import {
   type Snapshot,
   type StageId,
   type StageSnapshot,
+  type YogurtProductId,
+  type YogurtSnapshot,
 } from '../contracts';
 import { Clock, type StepHandler } from './clock';
 import { EventQueue, type QueuedEvent } from './eventQueue';
@@ -31,6 +33,9 @@ const SETPOINT_TEXT: Record<SetpointKey, { name: string; unit: string }> = {
   uhtSetpointC: { name: 'UHT set point', unit: '°C' },
   homogenizerStage1Bar: { name: 'Homogenizer stage 1 pressure', unit: 'bar' },
   fillerRatePacksPerH: { name: 'Filler rate', unit: 'packs/h' },
+  yogurtHeatC: { name: 'Yogurt heat-treatment set point', unit: '°C' },
+  fermentTempC: { name: 'Fermentation temperature', unit: '°C' },
+  p8RateCupsPerH: { name: 'Line P8 rate', unit: 'cups/h' },
 };
 
 export interface CoreOptions {
@@ -47,6 +52,8 @@ export interface CoreOptions {
   onScenario?: (id: ScenarioId, variant: ScenarioVariant | undefined) => void;
   /** A resetScenarios command (phase 5). */
   onResetScenarios?: () => void;
+  /** A setYogurtProduct command (contracts v8), for the yogurt line; without one the core logs that it can't apply it. */
+  onYogurtProduct?: (product: YogurtProductId) => void;
   /**
    * Every log entry before it is kept, with what it is about: returns the scenario that caused it and why, if
    * one did (phase 5). The scenarios gather their logs here.
@@ -65,7 +72,7 @@ export interface SimCore {
   cancel(seq: number): boolean;
   step(realDtS: number): void;
   dispatch(command: Command): void;
-  /** Wraps the caller's stages, KPIs, liquid line, packs and scenarios with the clock, queue and log state. */
+  /** Wraps the caller's stages, KPIs, liquid line, packs, scenarios and yogurt line with the clock, queue and log state. */
   snapshot(
     stages: Record<StageId, StageSnapshot>,
     kpis: Kpis,
@@ -73,6 +80,7 @@ export interface SimCore {
     liquid: LiquidSnapshot,
     packs: PacksSnapshot,
     scenarios: ScenariosSnapshot,
+    yogurt: YogurtSnapshot,
   ): Snapshot;
 }
 
@@ -99,6 +107,9 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
     uhtSetpointC: config.uht.setpointC,
     homogenizerStage1Bar: config.homogenizer.stage1Bar,
     fillerRatePacksPerH: config.fillers.ratePacksPerH,
+    yogurtHeatC: config.yogurt.heat.setpointC,
+    fermentTempC: config.yogurt.ferment.tempC,
+    p8RateCupsPerH: config.yogurt.p8.rateCupsPerH,
   };
 
   function runEvent(event: QueuedEvent): void {
@@ -178,6 +189,10 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
         if (options.onQaResult) options.onQaResult(command.batchId, command.result);
         else log.add(clock.timeS, 'info', `QA result "${command.result}" for batch ${command.batchId} not applied: this sim keeps no batches`);
         return;
+      case 'setYogurtProduct':
+        if (options.onYogurtProduct) options.onYogurtProduct(command.product);
+        else log.add(clock.timeS, 'info', `Yogurt product "${command.product}" not set: this sim has no yogurt line`);
+        return;
       default:
         unknownCommand(command);
     }
@@ -203,7 +218,7 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       clock.advance(realDtS, onStep, () => queue.peek()?.timeS);
     },
     dispatch,
-    snapshot: (stages, kpis, line, liquid, packs, scenarios) => ({
+    snapshot: (stages, kpis, line, liquid, packs, scenarios, yogurt) => ({
       version: CONTRACT_VERSION,
       timeS: clock.timeS,
       speed: clock.speed,
@@ -214,6 +229,7 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
       liquid,
       packs,
       scenarios,
+      yogurt,
       kpis,
       log: log.entries(),
     }),

@@ -19,6 +19,9 @@ export const defaultSetpoints = (config: PlantConfig): Setpoints => ({
   uhtSetpointC: config.uht.setpointC,
   homogenizerStage1Bar: config.homogenizer.stage1Bar,
   fillerRatePacksPerH: config.fillers.ratePacksPerH,
+  yogurtHeatC: config.yogurt.heat.setpointC,
+  fermentTempC: config.yogurt.ferment.tempC,
+  p8RateCupsPerH: config.yogurt.p8.rateCupsPerH,
 });
 
 /** The shipped config with no display noise, for checks against noise-free hand values. */

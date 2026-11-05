@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 9,
+  "schemaVersion": 10,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -162,5 +162,76 @@
     "spikeTrucks": 12,
     "spikeEveryS": 300,
     "lateTruckDelayS": 24000
+  },
+  "yogurt": {
+    "silo": { "capacityL": 30000, "startFrac": 0.6, "tempC": 4 },
+    "mix": {
+      "capacityLph": 6000,
+      "fatPct": 3.0,
+      "snfPct": 11.0,
+      "milkSnfPct": 8.7,
+      "powderSnfPct": 95,
+      "stabilizerPct": 0.3,
+      "tankL": 6000
+    },
+    "homogenizer": { "bar": 180, "tempC": 68 },
+    "heat": {
+      "setpointC": 92,
+      "holdS": 300,
+      "divertBelowC": 85,
+      "minHoldS": 180,
+      "denatTargetPct": 85,
+      "betaLgGPerL": 4.0,
+      "reprocessTankL": 2000
+    },
+    "ferment": {
+      "tempC": 43,
+      "tanks": 3,
+      "tankL": 10000,
+      "startPh": 6.6,
+      "endPh": 4.55,
+      "floorPh": 4.2,
+      "endAtOptS": 14400,
+      "minC": 15,
+      "optC": 43,
+      "maxC": 50,
+      "startTaPct": 0.19,
+      "endTaPct": 0.9
+    },
+    "cooling": { "outletC": 18 },
+    "buffer": { "capacityL": 4000, "setMaxWaitS": 2700 },
+    "fruit": { "dosePct": 15 },
+    "p8": {
+      "cupG": 125,
+      "lanes": 12,
+      "rateCupsPerH": 21600,
+      "fill": { "targetG": 127, "sigmaG": 1.0, "underBelowG": 120.5, "overAboveG": 135 },
+      "seal": { "tempC": 200, "timeS": 1.0, "bar": 5.0, "minTempC": 180, "maxTempC": 220, "minTimeS": 0.8, "maxTimeS": 1.2, "minBar": 4.0, "maxBar": 6.0 },
+      "sealTest": { "cups": 5, "everyS": 7200 },
+      "hepa": { "minPa": 15, "normalPa": 25 },
+      "sip": { "tempC": 121, "holdS": 1200 },
+      "atpMaxRlu": 10
+    },
+    "cip": { "lyePct": 1.8, "lyeTempC": 78, "acidPct": 0.8, "acidTempC": 68 },
+    "coldChain": {
+      "cupsPerTray": 24,
+      "traysPerPallet": 120,
+      "warmRoomC": 43,
+      "releasePh": 4.6,
+      "chillToC": 4,
+      "roomC": 3,
+      "roomMinC": 2,
+      "roomMaxC": 4,
+      "minHoldS": 86400,
+      "maxHoldS": 172800,
+      "shelfLifeDays": 28,
+      "palletsPerTruck": 26
+    },
+    "products": [
+      { "id": "plainStirred", "name": "Plain stirred yogurt", "route": "stirred", "fruit": false },
+      { "id": "strawberryStirred", "name": "Strawberry stirred yogurt", "route": "stirred", "fruit": true },
+      { "id": "plainSet", "name": "Plain set yogurt", "route": "set", "fruit": false }
+    ],
+    "shiftProducts": ["plainStirred", "strawberryStirred", "plainSet"]
   }
 }
