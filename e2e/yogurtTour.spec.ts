@@ -13,7 +13,10 @@ test('the yogurt tour flies to stage 11 with its caption, moves on to stage 12 a
   test.setTimeout(180_000);
   await page.goto('/');
   await waitForClock(page);
-  await expect(yogurtButton(page)).toHaveText('Yogurt tour');
+  // In the yogurt group's header (phase 21): "Tour", named "Yogurt tour".
+  await expect(yogurtButton(page)).toHaveText('Tour');
+  await expect(yogurtButton(page)).toHaveAccessibleName('Yogurt tour');
+  await expect(page.getByTestId('rail-group-yogurt').locator('..').getByTestId('tour-yogurt')).toBeVisible();
   await expect(yogurtButton(page)).toHaveAttribute('title', /stages 11 to 16 .* about 2 minutes/);
   await yogurtButton(page).click();
   await expect(yogurtButton(page)).toHaveAttribute('aria-pressed', 'true');

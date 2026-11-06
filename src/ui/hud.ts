@@ -183,12 +183,16 @@ export function createHud(
   let yogurtTour: Tour | null = null;
   const tour = createTour({ bus, stages: tourStages, view: viewRoot, button: tourButton, signal, beforeStart: () => yogurtTour?.stop() });
   if (yogurtTourStages.length > 0) {
-    const yogurtButton = el('button', 'link tour-open', 'Yogurt tour');
+    // In the yogurt group's header (phase 21), so the rail head keeps one row; beside the tour where the rail is ungrouped.
+    const groupHead = rail.groupHead('yogurt');
+    const yogurtButton = el('button', groupHead ? 'link tour-open tour-group' : 'link tour-open', groupHead ? 'Tour' : 'Yogurt tour');
     yogurtButton.type = 'button';
     yogurtButton.dataset.testid = 'tour-yogurt';
     yogurtButton.title = `Yogurt tour: stages ${yogurtTourStages[0]?.id} to ${yogurtTourStages.at(-1)?.id} with a caption each, about 2 minutes`;
+    yogurtButton.setAttribute('aria-label', 'Yogurt tour');
     yogurtButton.setAttribute('aria-pressed', 'false');
-    tourButton.after(yogurtButton);
+    if (groupHead) groupHead.append(yogurtButton);
+    else tourButton.after(yogurtButton);
     yogurtTour = createTour({
       bus,
       stages: yogurtTourStages,

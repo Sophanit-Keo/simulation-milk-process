@@ -550,6 +550,23 @@ a.link {
   cursor: pointer;
   transition: background-color 150ms ease;
 }
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.group-head > .group-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* The yogurt tour in its group's header (phase 21): as small as the header's own text, so the row keeps its height. */
+.group-head > .tour-group {
+  flex: none;
+  margin-left: 0;
+  padding: 2px 6px;
+  font-size: 12.5px;
+  line-height: 1;
+}
 .group-toggle:hover {
   background: var(--raised);
 }
