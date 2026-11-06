@@ -26,6 +26,7 @@ import {
 } from './liquidLine';
 import type { Equipment, EquipmentFactory } from './types';
 import * as at from './yogurt/layout';
+import { coldChainTokens } from './yogurt/coldChainScene';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
 import { finite, HEAT_MODE_TEXT, heatValveLamp, phRingFrac, tankStirs, yogurtFill, yogurtOf } from './yogurt/readings';
 
@@ -125,6 +126,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
     warmRoom(kit),
     blastChiller(kit),
     coldRoom(kit),
+    coldChainTokens(kit),
   ];
 };
 
@@ -512,32 +514,88 @@ function rejectBin(kit: Kit): Equipment {
 
 /* stage 16: tray packer, palletizer, wrapper, warm room, blast chiller, cold room */
 
+/** P8 runs: the tray packer and the palletizer work while it fills. */
+const p8Running = (s: Snapshot): boolean => yogurtOf(s)?.p8.state === 'running';
+
 function trayPacker(kit: Kit): Equipment {
   const { xM, zM } = at.TRAY_PACKER;
   const { xMinM, xMaxM } = at.OUTFEED;
-  return fixture(kit, 'p8-tray-packer', 16, 'Tray packer', [xM, zM], 1.9, (b) => {
-    b.part('box', 'rubber', [(xMinM + xMaxM) / 2, 0.72, zM], [xMaxM - xMinM, 0.06, 0.45]); // the outfeed from P8
-    for (const px of [xMinM + 0.2, xMaxM - 0.2]) b.part('box', 'steelDark', [px, 0.35, zM], [0.08, 0.7, 0.4]);
-    body(b, xM + 0.1, zM, [1.8, 1.0, 1.4]);
-    b.part('box', 'glass', [xM + 0.1, 1.35, zM], [1.8, 0.7, 1.4]); // the pick-and-place cell
+  const b = new MachineBuilder(kit, 'p8-tray-packer', [xM, 0, zM]);
+  b.part('box', 'rubber', [(xMinM + xMaxM) / 2, 0.72, zM], [xMaxM - xMinM, 0.06, 0.45]); // the outfeed from P8
+  for (const px of [xMinM + 0.2, xMaxM - 0.2]) b.part('box', 'steelDark', [px, 0.35, zM], [0.08, 0.7, 0.4]);
+  body(b, xM + 0.1, zM, [1.8, 1.0, 1.4]);
+  b.part('box', 'glass', [xM + 0.1, 1.35, zM], [1.8, 0.7, 1.4]); // the pick-and-place cell
+  // The pick-and-place head: it shuttles a row of cups from the outfeed into the tray while P8 fills (phase 19).
+  const head = b.pivot('pickHead', [xM + 0.1, 1.55, zM]);
+  b.part('box', 'steelDark', [0, 0, 0], [0.3, 0.12, 0.9], { parent: head });
+  let phaseRad = 0;
+  return machine(b, {
+    id: 'p8-tray-packer',
+    stage: 16,
+    label: 'Tray packer',
+    labelAnchorM: [xM, 2.35, zM],
+    update(s, realDtS) {
+      if (p8Running(s)) phaseRad = (phaseRad + 2.5 * motionDtS(s, realDtS)) % FULL_TURN_RAD;
+      head.position.x = b.local([xM + 0.1, 0, zM]).x + 0.55 * Math.sin(phaseRad);
+    },
+    debugState: () => ({ headM: head.position.x, running: phaseRad !== 0 }),
   });
 }
 
 function palletizer(kit: Kit): Equipment {
   const { xM, zM } = at.PALLETIZER;
-  return fixture(kit, 'yogurt-palletizer', 16, 'Palletizer', [xM, zM], 2.8, (b) => {
-    b.part('box', 'steelDark', [xM, 0.15, zM + 0.9], [1.3, 0.3, 1.1]); // the pallet place
-    b.part('cyl', 'paint', [xM, 0.3, zM - 0.6], [0.45, 0.6, 0.45]); // the robot's base
-    b.part('box', 'paint', [xM, 1.5, zM - 0.6], [0.35, 1.8, 0.35]); // its column
-    b.part('box', 'paint', [xM, 2.45, zM - 0.1], [0.3, 0.3, 1.3]); // its arm
+  const b = new MachineBuilder(kit, 'yogurt-palletizer', [xM, 0, zM]);
+  b.part('box', 'steelDark', [xM, 0.15, zM + 0.9], [1.3, 0.3, 1.1]); // the pallet place
+  b.part('cyl', 'paint', [xM, 0.3, zM - 0.6], [0.45, 0.6, 0.45]); // the robot's base
+  b.part('box', 'paint', [xM, 1.5, zM - 0.6], [0.35, 1.8, 0.35]); // its column
+  // Its arm swings from the infeed to the pallet while P8 fills (phase 19); the pallet it builds is a cold-chain token.
+  const arm = b.pivot('arm', [xM, 2.45, zM - 0.6]);
+  b.part('box', 'paint', [0, 0, 0.5], [0.3, 0.3, 1.3], { parent: arm });
+  let phaseRad = 0;
+  return machine(b, {
+    id: 'yogurt-palletizer',
+    stage: 16,
+    label: 'Palletizer',
+    labelAnchorM: [xM, 3.25, zM],
+    update(s, realDtS) {
+      if (p8Running(s)) phaseRad = (phaseRad + 1.6 * motionDtS(s, realDtS)) % FULL_TURN_RAD;
+      arm.rotation.y = 0.9 * Math.sin(phaseRad);
+    },
+    debugState: () => ({ armRad: arm.rotation.y }),
   });
 }
 
+/** The wrapper turns a closed pallet this long, in animation seconds. */
+const WRAP_S = 6;
+
 function wrapper(kit: Kit): Equipment {
   const { xM, zM } = at.WRAPPER;
-  return fixture(kit, 'yogurt-wrapper', 16, 'Stretch wrapper', [xM, zM], 2.5, (b) => {
-    b.part('cyl', 'steelDark', [xM, 0.1, zM], [0.95, 0.2, 0.95]); // turntable
-    b.part('box', 'paint', [xM + 1.2, 1.25, zM], [0.25, 2.5, 0.35], { castShadow: true }); // mast
+  const b = new MachineBuilder(kit, 'yogurt-wrapper', [xM, 0, zM]);
+  b.part('box', 'paint', [xM + 1.2, 1.25, zM], [0.25, 2.5, 0.35], { castShadow: true }); // mast
+  // The turntable turns each pallet the palletizer closes (phase 19), the newest pallet's id telling one has.
+  const table = b.pivot('turntable', [xM, 0.1, zM]);
+  b.part('cyl8', 'steelDark', [0, 0, 0], [0.95, 0.2, 0.95], { parent: table });
+  let newest: number | null = null;
+  let wrapLeftS = 0;
+  return machine(b, {
+    id: 'yogurt-wrapper',
+    stage: 16,
+    label: 'Stretch wrapper',
+    labelAnchorM: [xM, 2.95, zM],
+    update(s, realDtS) {
+      const pallets = yogurtOf(s)?.coldChain.pallets;
+      if (pallets && pallets.length > 0) {
+        const id = pallets.reduce((most, pallet) => Math.max(most, pallet.id), 0);
+        if (newest !== null && id > newest) wrapLeftS = WRAP_S;
+        newest = id;
+      }
+      const dtS = motionDtS(s, realDtS);
+      if (wrapLeftS > 0) {
+        wrapLeftS = Math.max(0, wrapLeftS - dtS);
+        table.rotation.y = (table.rotation.y + 2.2 * dtS) % FULL_TURN_RAD;
+      }
+    },
+    debugState: () => ({ wrapping: wrapLeftS > 0, tableRad: table.rotation.y }),
   });
 }
 
