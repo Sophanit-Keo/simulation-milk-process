@@ -1,7 +1,9 @@
 // Stage 16 in the 3D view (phase 19, D29): the cold chain's pallets and the reefers at the north dock, drawn from the
 // snapshot's coldChain. Every pallet and every reefer is boxes in one InstancedMesh, coloured per box (a wooden base, a
 // load: cream, a warm cream in the warm room, frosted blue in the chiller), and the rooms' lamps are a second: the warm
-// room's orange glow while it holds pallets, the chiller's frost while it chills. Two draw calls in all.
+// room's orange glow while it holds pallets, the chiller's frost while it chills, and since phase 20 (D30) the cold room's
+// alarm strip in an excursion: amber while its air is over the limit, red while pallets are on QA hold, which show a
+// red load. Two draw calls in all.
 //
 // The warm room shows each of its pallets, two high; the chiller and the cold room show how full they are, one box for
 // each share of their positions, since the tunnel and the racks hold fewer visible places than the sim's positions.
@@ -19,7 +21,9 @@ import { yogurtOf } from './readings';
 export const YOGURT_PALLET_M = { widthM: 1.2, depthM: 1.0, baseM: 0.14, loadM: 0.85 } as const;
 const PALLET_TALL_M = YOGURT_PALLET_M.baseM + YOGURT_PALLET_M.loadM;
 
-const COLORS = { base: 0x9a7a52, load: 0xf2efe6, warm: 0xf4dcb6, frost: 0xcfe3f2, trailer: 0xe9ecef, tractor: 0x4f7896, unit: 0x3c454d } as const;
+const COLORS = { base: 0x9a7a52, load: 0xf2efe6, warm: 0xf4dcb6, frost: 0xcfe3f2, held: 0xd98a80, trailer: 0xe9ecef, tractor: 0x4f7896, unit: 0x3c454d } as const;
+/** The cold room's alarm strip in an excursion (phase 20): amber over the limit, red with pallets on hold. */
+const ALARM_HEX = { over: 0xffb020, held: 0xff3b30 } as const;
 
 /** Floor places, centres in world metres, for a grid of `cols` × `rows` pallets inside a rect's walls. */
 function grid(rect: { xMinM: number; xMaxM: number; zMinM: number; zMaxM: number }, cols: number, rows: number, levels: number, levelM: number, floorM = 0): [number, number, number][] {
@@ -94,7 +98,7 @@ export function coldChainTokens(kit: Kit): Equipment {
   boxes.boundingSphere = new THREE.Sphere(centre, 32);
   // The rooms' lamps: unlit, so they read as light in both themes.
   const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
-  const glows = new THREE.InstancedMesh(kit.shape('box'), glowMaterial, 2);
+  const glows = new THREE.InstancedMesh(kit.shape('box'), glowMaterial, 3);
   glows.name = 'roomGlows';
   glows.boundingSphere = new THREE.Sphere(centre, 32);
   const noPick = (): void => {};
@@ -113,10 +117,12 @@ export function coldChainTokens(kit: Kit): Equipment {
   const glowAt = [
     { xM: (at.WARM_ROOM.xMinM + at.WARM_ROOM.xMaxM) / 2, yM: at.WARM_ROOM.wallM - 0.15, zM: at.WARM_ROOM.zMaxM - 0.15, sizeM: [at.WARM_ROOM.xMaxM - at.WARM_ROOM.xMinM - 0.6, 0.12, 0.08], hex: 0xff9a3c },
     { xM: (at.BLAST_CHILLER.xMinM + at.BLAST_CHILLER.xMaxM) / 2, yM: at.BLAST_CHILLER.heightM - 0.25, zM: (at.BLAST_CHILLER.zMinM + at.BLAST_CHILLER.zMaxM) / 2, sizeM: [at.BLAST_CHILLER.xMaxM - at.BLAST_CHILLER.xMinM - 0.4, 0.06, 1.6], hex: 0x9fd4ff },
+    // The cold room's alarm, along the top of its south wall, facing the aisle; its colour is the excursion's.
+    { xM: (at.COLD_ROOM.xMinM + at.COLD_ROOM.xMaxM) / 2, yM: at.COLD_ROOM.wallM - 0.15, zM: at.COLD_ROOM.zMaxM + 0.06, sizeM: [at.COLD_ROOM.xMaxM - at.COLD_ROOM.xMinM - 0.6, 0.14, 0.08], hex: ALARM_HEX.over },
   ] as const;
 
   let shownKey = '';
-  const state = { warm: 0, chiller: 0, cold: 0, staging: 0, forming: 0, reefers: 0, warmGlow: false, frostGlow: false };
+  const state = { warm: 0, chiller: 0, cold: 0, held: 0, staging: 0, forming: 0, reefers: 0, warmGlow: false, frostGlow: false, alarm: 'off' as 'off' | 'over' | 'held' };
 
   function place(snapshot: Snapshot): void {
     const chain = coldChainOf(snapshot);
@@ -128,7 +134,12 @@ export function coldChainTokens(kit: Kit): Equipment {
     const staging = Math.min(count('staging'), STAGING_PLACES.length);
     const formingFrac = chain?.trays ? chain.trays.openTrays / plantJson.yogurt.coldChain.traysPerPallet : 0;
     const reefers = (chain?.reefers ?? []).map((reefer) => ({ door: reefer.door, offsetM: reeferOffsetM(reefer.state, reefer.untilS, snapshot.timeS) }));
-    const key = `${warm}|${chilling}|${cold}|${staging}|${formingFrac.toFixed(3)}|${reefers.map((r) => `${r.door}:${r.offsetM.toFixed(2)}`).join(',')}`;
+    // The cold room's excursion (phase 20): its share of held pallets shows red, and the alarm strip lights.
+    const excursion = chain?.coldRoom.excursion ?? null;
+    const heldCount = count('coldRoom') > 0 ? pallets.reduce((n, each) => n + (each.place === 'coldRoom' && each.qaHold ? 1 : 0), 0) : 0;
+    const held = chain && heldCount > 0 ? Math.min(cold, Math.max(1, Math.round((cold * heldCount) / Math.max(1, chain.coldRoom.positionsUsed)))) : 0;
+    const alarm: 'off' | 'over' | 'held' = (excursion?.palletsHeld ?? 0) > 0 ? 'held' : excursion && (excursion.overSinceS !== null || excursion.coolingDown) ? 'over' : 'off';
+    const key = `${warm}|${chilling}|${cold}|${held}|${alarm}|${staging}|${formingFrac.toFixed(3)}|${reefers.map((r) => `${r.door}:${r.offsetM.toFixed(2)}`).join(',')}`;
     if (key === shownKey) return;
     shownKey = key;
     let n = 0;
@@ -145,7 +156,7 @@ export function coldChainTokens(kit: Kit): Equipment {
     };
     WARM_PLACES.slice(0, warm).forEach((at_) => pallet(at_, colorOf.warm));
     CHILLER_PLACES.slice(0, chilling).forEach((at_) => pallet(at_, colorOf.frost));
-    COLD_PLACES.slice(0, cold).forEach((at_) => pallet(at_, colorOf.load));
+    COLD_PLACES.slice(0, cold).forEach((at_, i) => pallet(at_, i < held ? colorOf.held : colorOf.load));
     STAGING_PLACES.slice(0, staging).forEach((at_) => pallet(at_, colorOf.load));
     if (formingFrac > 0) pallet(FORMING_AT, colorOf.load, formingFrac);
     for (const reefer of reefers) {
@@ -161,19 +172,19 @@ export function coldChainTokens(kit: Kit): Equipment {
     if (boxes.instanceColor) boxes.instanceColor.needsUpdate = true;
     // The glows: lit while the room holds pallets.
     let g = 0;
-    const lit = [warm > 0, chilling > 0];
+    const lit = [warm > 0, chilling > 0, alarm !== 'off'];
     glowAt.forEach((glow, i) => {
       if (!lit[i]) return;
       const [sx, sy, sz] = glow.sizeM;
       matrix.compose(position.set(glow.xM, glow.yM, glow.zM), quaternion, scale.set(sx, sy, sz));
       glows.setMatrixAt(g, matrix);
-      glows.setColorAt(g, color.setHex(glow.hex));
+      glows.setColorAt(g, color.setHex(i === 2 && alarm === 'held' ? ALARM_HEX.held : glow.hex));
       g += 1;
     });
     glows.count = g;
     glows.instanceMatrix.needsUpdate = true;
     if (glows.instanceColor) glows.instanceColor.needsUpdate = true;
-    Object.assign(state, { warm, chiller: chilling, cold, staging, forming: formingFrac, reefers: reefers.length, warmGlow: lit[0], frostGlow: lit[1] });
+    Object.assign(state, { warm, chiller: chilling, cold, held, staging, forming: formingFrac, reefers: reefers.length, warmGlow: lit[0], frostGlow: lit[1], alarm });
   }
 
   return {

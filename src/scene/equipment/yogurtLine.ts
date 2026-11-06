@@ -24,11 +24,16 @@ import {
   type FillReading,
   type MachineSpec,
 } from './liquidLine';
-import type { Equipment, EquipmentFactory } from './types';
+import { HERO_MODELS, swapInHero } from './heroes';
+import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
 import * as at from './yogurt/layout';
 import { coldChainTokens } from './yogurt/coldChainScene';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
 import { finite, HEAT_MODE_TEXT, heatValveLamp, phRingFrac, tankStirs, yogurtFill, yogurtOf } from './yogurt/readings';
+
+/** A held tank's lamp (phase 20, D30): red, over its pH probe, at about the probe's height plus a little. */
+const HELD_LAMP_HEX = 0xff3b30;
+const HELD_LAMP_Y_M = 2.15;
 
 /** The yogurt line, stages 11–16: one Equipment per machine. */
 export const yogurtLine: EquipmentFactory = (ctx) => {
@@ -81,6 +86,8 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
         domeM: at.FERMENT_TANK.domeM,
         drive: true,
         stir: (s) => tankStirs(yogurtOf(s)?.ferment.tanks[i]),
+        hero: { ctx, path: HERO_MODELS.fermentTank },
+        held: (s) => yogurtOf(s)?.ferment.tanks[i]?.held === true,
         fill: yogurtFill((y) => y.ferment.tanks[i]),
         labelText: (s) => {
           const ph = finite(yogurtOf(s)?.ferment.tanks[i]?.ph);
@@ -113,7 +120,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
       fill: yogurtFill((y) => y.buffer),
       labelText: (s) => labelValue(stageValue(s, 14, 'levelPct'), 0, '%'),
     }),
-    p8Filler(kit, carrier),
+    p8Filler(kit, carrier, ctx),
     // The gates stand 1.1 m apart, so their labels stand at three heights, one above the other at the stage's stop.
     checkGate(kit, 'p8-checkweigher', 'Checkweigher', at.CHECK_GATES.checkweigher, 'weigh', 0.9, (s) => labelValue(stageValue(s, 15, 'fillTargetG'), 0, 'g')),
     checkGate(kit, 'p8-metal-detector', 'Metal detector', at.CHECK_GATES.metalDetector, 'arch', 1.7),
@@ -149,6 +156,10 @@ interface VesselSpec {
   stir?: (snapshot: Snapshot) => boolean;
   /** The tank's level, on a gauge down its front. */
   fill?: FillReading;
+  /** A hero model in place of the grey box (phase 20), with the scene's context that loads it. */
+  hero?: { ctx: EquipmentContext; path: string };
+  /** A red lamp over the pH probe while this says the tank is held (phase 20, D30: a stalled fermentation). */
+  held?: (snapshot: Snapshot) => boolean;
   labelText?: MachineSpec['labelText'];
   labelRing?: MachineSpec['labelRing'];
 }
@@ -173,16 +184,32 @@ function vessel(kit: Kit, spec: VesselSpec): Equipment {
     b.part('box', 'steelDark', [xM, topM + 0.22, zM], [0.4, 0.44, 0.4]);
     topM += 0.44;
   }
-  const agitator = spec.drive && spec.stir ? b.mesh('agitator', 'box', 'steelDark', [xM, topM + 0.03, zM], [Math.min(1.1, radiusM), 0.06, 0.12]) : undefined;
+  let agitator: THREE.Object3D | undefined = spec.drive && spec.stir ? b.mesh('agitator', 'box', 'steelDark', [xM, topM + 0.03, zM], [Math.min(1.1, radiusM), 0.06, 0.12]) : undefined;
   if (agitator) topM += 0.06;
   const level = spec.fill && levelGauge(b, [xM, 0, zM + radiusM + 0.02], bodyBottomM + 0.1, bodyM - 0.2, 0.1, spec.fill);
+  // The hold lamp (phase 20): over the pH probe on the +x, +z side, shown only while the tank is held.
+  const heldSpec = spec.held;
+  const heldMaterial = heldSpec ? new THREE.MeshBasicMaterial({ color: HELD_LAMP_HEX }) : undefined;
+  const heldLamp = heldMaterial ? new THREE.Mesh(kit.shape('sphere'), heldMaterial) : undefined;
+  if (heldLamp) {
+    heldLamp.name = 'heldLamp';
+    heldLamp.position.copy(b.local([xM + radiusM * Math.SQRT1_2, HELD_LAMP_Y_M, zM + radiusM * Math.SQRT1_2]));
+    heldLamp.scale.setScalar(0.14);
+    heldLamp.visible = false;
+    b.root.add(heldLamp);
+  }
+  let heldNow = false;
   const stir = spec.stir;
   let spinRadPerS = 0;
   let stirring = false;
   const update =
-    level || (agitator && stir)
+    level || (agitator && stir) || heldLamp
       ? (s: Snapshot, realDtS: number) => {
           level?.update(s);
+          if (heldLamp && heldSpec) {
+            heldNow = heldSpec(s);
+            heldLamp.visible = heldNow;
+          }
           if (agitator && stir) {
             const dtS = motionDtS(s, realDtS);
             stirring = stir(s);
@@ -196,8 +223,11 @@ function vessel(kit: Kit, spec: VesselSpec): Equipment {
       ? () => ({
           ...(level ? { fillFrac: level.fillFrac() } : {}),
           ...(agitator ? { stirring, spinRadPerS, angleRad: agitator.rotation.y } : {}),
+          ...(heldLamp ? { held: heldNow } : {}),
         })
       : undefined;
+  const hero = spec.hero;
+  const milk = b.root.getObjectByName('milk');
   return machine(b, {
     id: spec.id,
     stage: spec.stage,
@@ -207,6 +237,17 @@ function vessel(kit: Kit, spec: VesselSpec): Equipment {
     labelRing: spec.labelRing,
     update,
     debugState,
+    dispose: heldMaterial ? () => heldMaterial.dispose() : undefined,
+    onBuilt: hero
+      ? (object, isAlive) => {
+          // The scene keeps the gauge's level and the hold lamp; the model brings the rest, the agitator its own.
+          const keep = [milk, heldLamp].filter((each): each is THREE.Object3D => each !== undefined);
+          swapInHero(hero.ctx, object, { path: hero.path, nodes: ['agitator', 'ph_probe'], keep }, (nodes) => {
+            if (agitator) nodes.agitator.rotation.y = agitator.rotation.y;
+            agitator = nodes.agitator;
+          }, isAlive);
+        }
+      : undefined,
   });
 }
 

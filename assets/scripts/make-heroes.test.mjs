@@ -24,8 +24,10 @@ import {
   bakeAo,
   compress,
   HERO_BUILDERS,
+  FERMENT_TANK,
   HERO_SPECS,
   heroGlbs,
+  P8_LAYOUT,
   LIQUID_END_Z_M,
   PALLETIZER_BOOM,
   PALLETIZER_LIFT_ROD,
@@ -120,7 +122,7 @@ for (const [key, spec] of Object.entries(HERO_SPECS)) {
       assert.ok(generated[spec.file].length <= 2 * 1024 * 1024, `${generated[spec.file].length} bytes, over 2 MB`);
       for (const warning of summary.warnings) assert.match(warning, /^footprint centre is at |^required extensions need loader support: EXT_meshopt_compression$/);
       const glass = summary.materials.filter((m) => m.alphaMode !== 'OPAQUE');
-      assert.deepEqual(glass.map((m) => m.alphaMode), key === 'asepticFiller' ? ['BLEND'] : [], 'glass only on the filler');
+      assert.deepEqual(glass.map((m) => m.alphaMode), key === 'asepticFiller' || key === 'p8Filler' ? ['BLEND'] : [], 'glass only on the fillers');
     });
 
     it('puts a flange of about 0.24 m across at each pipe nozzle', () => {
@@ -503,6 +505,107 @@ function aoAt(key, meshName, pointM, normal) {
   return shaded.geometry.getAttribute('color').getX(best) / plain.geometry.getAttribute('color').getX(best);
 }
 const AO_NEAR_M = 0.1;
+
+
+describe('the yogurt wing\'s heroes (phase 20)', () => {
+  /** The first opaque part a ray from `camera` toward `point` meets: glass and the P8 hood's glass node let it through. */
+  function seen(model, camera, point) {
+    const raycaster = new THREE.Raycaster();
+    raycaster.set(camera, new THREE.Vector3(...point).sub(camera).normalize());
+    const hit = raycaster.intersectObject(model, true).find((h) => !h.object.name.endsWith('_glass') && h.object.name !== 'hood');
+    let owner = hit?.object;
+    while (owner && owner.parent && owner.parent !== model) owner = owner.parent;
+    return owner?.name;
+  }
+
+  it('P8: leaves the cups\' band over the carrier clear, from the de-nester to the ramp, whatever the stations do', () => {
+    const model = build('p8Filler');
+    const L = P8_LAYOUT;
+    const laneHalfM = ((L.lanes - 1) * L.lanePitchM) / 2 + 0.036;
+    const band = new THREE.Box3(new THREE.Vector3(L.denesterXM, L.carrierTopM + 0.005, -laneHalfM), new THREE.Vector3(L.rampM.fromXM, L.cupTopM, laneHalfM));
+    // Each station at the bottom of its stroke: the pistons 0.12 m down, the pick and the heads 0.09 m.
+    for (const [name, downM] of [['pistons', 0.12], ['foil_pick', 0.09], ['seal_heads', 0.09]]) model.getObjectByName(name).position.y -= downM;
+    model.updateMatrixWorld(true);
+    model.traverse((object) => {
+      if (!(object instanceof THREE.Mesh) || object.name === 'hood') return;
+      const box = new THREE.Box3().setFromObject(object, true);
+      if (!box.intersectsBox(band)) return;
+      // A part may reach into the band's box only where no cup is: no triangle of it may take up room in the band.
+      for (const triangle of trianglesOf(object)) {
+        const inside = new THREE.Box3().setFromPoints([triangle.a, triangle.b, triangle.c]).intersect(band);
+        if (inside.isEmpty()) continue;
+        const size = inside.getSize(new THREE.Vector3());
+        assert.ok(Math.min(size.x, size.y, size.z) < 1e-6, `${object.name} reaches into the cups' band at ${triangle.getMidpoint(new THREE.Vector3()).toArray().map((v) => v.toFixed(3))}`);
+      }
+    });
+  });
+
+  it('P8: the pistons, the foil pick and the sealing heads show from the stage-15 camera, through the hood', () => {
+    const model = build('p8Filler');
+    // Stage 15's camera, (8.3, 1.2, -47.5) + (1, 9, 15), from P8's origin (6.5, 0, -47).
+    const camera = new THREE.Vector3(2.8, 10.2, 14.5);
+    // The nozzles, the suction cups and the heads over the front lane.
+    assert.equal(seen(model, camera, [0.5, 1.35, 0.5225]), 'pistons');
+    assert.equal(seen(model, camera, [1.8, 1.4, 0.5225]), 'foil_pick');
+    assert.equal(seen(model, camera, [2.8, 1.36, 0.5225]), 'seal_heads');
+    assert.equal(seen(model, camera, [-1.4, 1.37, 0.3]), 'uv_tunnel');
+  });
+
+  it('P8: the hood is the one glass node, round the stations and under the filter housing', () => {
+    const model = build('p8Filler');
+    const hood = model.getObjectByName('hood');
+    assert.ok(hood.material.transparent, 'the hood is glass');
+    const box = boxOf(hood);
+    assert.deepEqual([box.min.y, box.max.y].map((v) => Math.round(v * 1000) / 1000), [0.95, 2.3]);
+    for (const name of ['pistons', 'foil_pick', 'seal_heads', 'uv_tunnel']) {
+      const part = boxOf(model.getObjectByName(name));
+      assert.ok(box.containsBox(part), `${name} under the hood`);
+    }
+  });
+
+  it('fermentation tank: the agitator turns on the tank\'s axis over its drive, and the pH probe sits on the +z side', () => {
+    const model = build('fermentTank');
+    const agitator = model.getObjectByName('agitator');
+    const rest = boxOf(agitator);
+    agitator.rotation.y = 1.1;
+    model.updateMatrixWorld(true);
+    const turned = boxOf(agitator);
+    for (const box of [rest, turned]) {
+      assert.ok(Math.hypot((box.min.x + box.max.x) / 2, (box.min.z + box.max.z) / 2) < 0.01, 'centred on the axis');
+      assert.ok(box.min.y >= 4.64 - MM && box.max.y <= HERO_SPECS.fermentTank.boundsM.max[1] + MM, 'over the drive, under the top');
+    }
+    agitator.rotation.y = 0;
+    model.updateMatrixWorld(true);
+    const probe = boxOf(model.getObjectByName('ph_probe'));
+    assert.ok(probe.min.z > 0.85 && probe.min.x > 0.85, 'on the +x, +z side of the shell');
+    // Stage 13's camera, (-21, 2, -48) + (1, 10, 15), from tank 2's origin (-20, 0, -48.5).
+    const camera = new THREE.Vector3(0, 12, 15.5);
+    assert.equal(seen(model, camera, [0.3, 4.67, 0]), 'agitator');
+    assert.equal(seen(model, camera, [1.0, 1.95, 1.0]), 'ph_probe');
+  });
+
+  it('fermentation tank: the inlet flange meets its pipe along z, the outlet is under the cone, the gauge strip is plain', () => {
+    const model = build('fermentTank');
+    const raycaster = new THREE.Raycaster();
+    const [ix, iy, iz] = FERMENT_TANK.inletM;
+    for (const [dx, dy] of [[0, 0], [0.07, 0], [-0.07, 0], [0, 0.07], [0, -0.07]]) {
+      raycaster.set(new THREE.Vector3(ix + dx, iy + dy, iz + 2), new THREE.Vector3(0, 0, -1));
+      const [hit] = raycaster.intersectObject(model, true);
+      assert.ok(hit && Math.abs(hit.point.z - (iz + 0.015)) <= 0.03, `the inlet's flange at z ${hit?.point.z.toFixed(3)}`);
+    }
+    const [, oy] = FERMENT_TANK.outletM;
+    raycaster.set(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 1, 0));
+    const [up] = raycaster.intersectObject(model, true);
+    assert.ok(up && up.point.y >= oy - 0.05 && up.point.y <= FERMENT_TANK.legsM, `the outlet's valve at y ${up?.point.y.toFixed(3)}`);
+    // The strip the scene's level shows in: only the gauge's frame stands proud of the shell there.
+    const { gaugeM } = FERMENT_TANK;
+    for (const y of [1.5, 2.5, 3.5]) {
+      raycaster.set(new THREE.Vector3(0, y, 3), new THREE.Vector3(0, 0, -1));
+      const [hit] = raycaster.intersectObject(model, true);
+      assert.ok(hit && Math.abs(hit.point.z - (gaugeM.zM + 0.02)) < MM, `the gauge's frame at y ${y}`);
+    }
+  });
+});
 
 describe('the baked ambient occlusion', () => {
   for (const key of Object.keys(HERO_SPECS)) {

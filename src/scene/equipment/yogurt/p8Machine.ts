@@ -21,7 +21,8 @@ import { MachineBuilder } from '../liquid/builder';
 import type { Kit } from '../liquid/kit';
 import { labelValue, stageValue } from '../liquid/readings';
 import { ease, machine } from '../liquidLine';
-import type { Equipment } from '../types';
+import { HERO_MODELS, swapInHero } from '../heroes';
+import type { Equipment, EquipmentContext } from '../types';
 import * as at from './layout';
 import { yogurtOf } from './readings';
 
@@ -133,7 +134,11 @@ const UV_HEX = 0x8a5cff;
 
 const HEPA_MIN_PA = plantJson.yogurt.p8.hepa.minPa;
 
-export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
+/** The hood's glass while the cabin is under its limit (phase 20): a red tint, so a stopped hood reads from afar. */
+const HOOD_ALARM_HEX = 0xff3b30;
+const HOOD_ALARM_INTENSITY = 0.45;
+
+export function p8Filler(kit: Kit, carrier: P8Carrier, ctx?: EquipmentContext): Equipment {
   const { xMinM, xMaxM, zM, widthM, bodyM, hoodM } = at.P8;
   const xM = (xMinM + xMaxM) / 2;
   const lengthM = xMaxM - xMinM;
@@ -184,6 +189,10 @@ export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
   b.part('box', 'steelDark', [(st.foilXM - st.sealerXM) / 2, 0.06, 0], [st.sealerXM - st.foilXM, 0.03, 0.1], { parent: lidder });
   const pistonRestY = pistons.position.y;
   const lidderRestY = lidder.position.y;
+  // What the stations' strokes move: the grey pivots, or the hero's nodes once it loads (phase 20).
+  let pistonNode: THREE.Object3D = pistons;
+  let lidderNodes: THREE.Object3D[] = [lidder];
+  let hoodMaterial: THREE.MeshStandardMaterial | null = null;
 
   // The UV-C lamps' glow under the tunnel's roof, and the HEPA lamp on its housing: materials of their own.
   const uvMaterial = new THREE.MeshStandardMaterial({ color: 0x1b1530, emissive: UV_HEX, emissiveIntensity: 0, roughness: 0.4 });
@@ -230,10 +239,13 @@ export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
       carrier.advance(s, realDtS);
       const p8 = p8Of(s);
       showLamp(hepaLamp(p8, HEPA_MIN_PA));
+      // The hero's hood glows red while the cabin is under its limit (phase 20, D30).
+      if (hoodMaterial) hoodMaterial.emissiveIntensity = lamp === 'bad' ? HOOD_ALARM_INTENSITY : 0;
       // The stations stroke during the dwell, and stand up while P8 does.
       const dwell = carrier.running ? carrier.dwellFrac() : 0;
-      pistons.position.y = pistonRestY - PISTON_STROKE_M * stroke(dwell, 0.1, 0.75);
-      lidder.position.y = lidderRestY - SEAL_STROKE_M * stroke(dwell, 0.25, 0.8);
+      pistonNode.position.y = pistonRestY - PISTON_STROKE_M * stroke(dwell, 0.1, 0.75);
+      const lidderY = lidderRestY - SEAL_STROKE_M * stroke(dwell, 0.25, 0.8);
+      for (const node of lidderNodes) node.position.y = lidderY;
       const wantUv = carrier.running ? 1.4 : 0;
       uvMaterial.emissiveIntensity = ease(uvMaterial.emissiveIntensity, wantUv, 6, realDtS);
       uvOn = uvMaterial.emissiveIntensity > 0.05;
@@ -242,10 +254,12 @@ export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
       running: carrier.running,
       cycles: carrier.cycles,
       phase: carrier.phase,
-      pistonDownM: pistonRestY - pistons.position.y,
-      sealDownM: lidderRestY - lidder.position.y,
+      pistonDownM: pistonRestY - pistonNode.position.y,
+      sealDownM: lidderRestY - (lidderNodes[0]?.position.y ?? lidderRestY),
       uvOn,
       lamp: lamp ?? 'off',
+      hero: hoodMaterial !== null,
+      hoodAlarm: (hoodMaterial?.emissiveIntensity ?? 0) > 0,
     }),
     applyTheme() {
       palette.applyTheme();
@@ -254,6 +268,28 @@ export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
     dispose() {
       uvMaterial.dispose();
       lampMaterial.dispose();
+      hoodMaterial?.dispose();
+    },
+    onBuilt(object, isAlive) {
+      if (!ctx) return;
+      // The hero (phase 20): the scene keeps its UV glow and its HEPA lamp; the strokes move the hero's stations.
+      const swap = { path: HERO_MODELS.p8Filler, nodes: ['carrier', 'uv_tunnel', 'pistons', 'foil_pick', 'seal_heads', 'hood'] as const, keep: [uv, lampMesh] };
+      swapInHero(ctx, object, swap, (nodes) => {
+        pistonNode = nodes.pistons;
+        lidderNodes = [nodes.foil_pick, nodes.seal_heads];
+        let hood: THREE.Mesh | null = null;
+        nodes.hood.traverse((each) => {
+          if (!hood && each instanceof THREE.Mesh) hood = each;
+        });
+        if (!hood) return;
+        const glass: THREE.Mesh = hood;
+        // Its own copy, so the tint stays on this machine.
+        const material = (glass.material as THREE.MeshStandardMaterial).clone();
+        material.emissive.setHex(HOOD_ALARM_HEX);
+        material.emissiveIntensity = 0;
+        glass.material = material;
+        hoodMaterial = material;
+      }, isAlive);
     },
   });
 }

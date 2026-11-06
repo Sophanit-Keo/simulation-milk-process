@@ -6,7 +6,7 @@ How 3D models and textures get into the plant: where files go, the rules every m
 
 | Path | What | In git |
 |---|---|---|
-| `public/models/hero/` | The five hero models, `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb` and (phase 12) `stretch-wrapper.glb`, made by `assets/scripts/make-heroes.mjs`: block-outs in phase 3, final since phase 5 (faces cut for the AO, AO baked into the vertex colours, meshopt-compressed) | Yes, from phase 3 |
+| `public/models/hero/` | The hero models, `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb`, (phase 12) `stretch-wrapper.glb` and (phase 20) the yogurt wing's `p8-filler.glb` and `ferment-tank.glb`, made by `assets/scripts/make-heroes.mjs`: block-outs in phase 3, final since phase 5 (faces cut for the AO, AO baked into the vertex colours, meshopt-compressed) | Yes, from phase 3 |
 | `public/models/kenney/` | Kit pieces, unmodified, plus the `Textures/colormap.png` they point to and the kit's `License.txt` | Yes, from phase 2 |
 | `public/models/vehicles/` | `truck.glb`, `forklift.glb`: our own, made by `assets/scripts/make-vehicles.mjs` | Yes, from phase 2 |
 | `public/textures/` | Textures that code applies: `carton.png`, `tray.png`, `pallet.png`, made by `assets/scripts/make-textures.mjs` | Yes, from phase 2 |
@@ -52,7 +52,7 @@ The target is 60 fps on a mid-range laptop, with one shadow-casting light ([plan
 
 | Kind | Triangles | Textures | Materials, meshes | GLB after phase-5 compression |
 |---|---|---|---|---|
-| Hero: separator, homogenizer, aseptic filler, palletizer, stretch wrapper | ≤ 30,000 each | Base colour ≤ 2048²; ORM and normal ≤ 1024² | ≤ 8 materials, ≤ 20 meshes (the stretch wrapper ≤ 6, phase 12) | ≤ 2 MB |
+| Hero: separator, homogenizer, aseptic filler, palletizer, stretch wrapper, Line P8 (≤ 10 meshes), fermentation tank (≤ 15,000 triangles, ≤ 6 meshes) | ≤ 30,000 each | Base colour ≤ 2048²; ORM and normal ≤ 1024² | ≤ 8 materials, ≤ 20 meshes (the stretch wrapper ≤ 6, phase 12) | ≤ 2 MB |
 | Other models: kit pieces, truck, forklift, racks | ≤ 5,000 each | ≤ 1024² | ≤ 4 materials; the truck ≤ 7 meshes (phase 12), the forklift ≤ 8 (phase 14) | ≤ 500 KB |
 | Tokens: carton, tray, pallet | Plain boxes, 12 each, built in code as `InstancedMesh` | One print each in `public/textures/`, ≤ 1024² (512² is enough) | 1 | none |
 

@@ -406,3 +406,32 @@ The refrigeration unit on the front wall of the articulated truck's trailer (`pu
 - **Node:** `fan`, the condenser fan behind the front grille, rest (0, 3.30, 5.70), turning about +z while the unit runs.
 - **Budget:** ≤ 2,000 triangles, ≤ 2 materials.
 
+
+## Phase 20: the yogurt wing's models, as built
+
+`make-heroes.mjs` builds `p8-filler.glb` and `ferment-tank.glb` as the phase-5 heroes are built: faces cut for the AO, the AO baked into the vertex colours, meshopt geometry, plain greys, own work. `make-heroes.test.mjs` checks both as it checks the others, and adds the yogurt wing's own checks (below). The scene swaps them in (`src/scene/equipment/yogurt/p8Machine.ts`, `yogurtLine.ts`); `?greybox` keeps the boxes.
+
+**Where they follow phase 18, not the phase-16 specs above.** Phase 18 built P8's grey box after these specs were written, and the swap must drive the hero's nodes with the grey nodes' writes, so the models follow the grey box as it stands:
+
+| | Phase-16 spec | As built (the grey box of phase 18) |
+|---|---|---|
+| P8's bounds | x ±5.10 | x −5.10 to **+5.80**: the ramp from the carrier down to the check gates' belt is part of the machine |
+| Cup magazines | 4 boxes | **12 tubes**, one over each lane, at x −4.20 |
+| `pistons` | (1.20, 1.55, 0) | **(0.50, 1.39, 0)**, the stroke 0.12 m down, the nozzles' tips 0.11 m under the node |
+| `foil_pick` | (2.20, 1.60, 0), a swing about +z | **(1.80, 1.41, 0)**, stroking down 0.09 m with the heads: the grey box's one lidder beam drives both |
+| `seal_heads` | (2.80, 1.65, 0) | **(2.80, 1.41, 0)** |
+| `carrier` | indexed by the scene | **(0, 0.99, 0)**, static: the cups index over it (phase 18), and the chain's slats repeat at the pitch |
+| `uv_tunnel` | none | **(−1.40, 1.33, 0)**, the tunnel's shell; the violet glow under its roof stays the scene's |
+| `hood` | (0, 1.625, 0) | **(0, 0.95, 0)**, the glass from the cabinet's top to the filter housing, the model's one glass material; the scene tints it red while the cabin is under +15 Pa |
+| `reject_flap` (phase card) | — | **Not in the model:** the flap stands at the check gates (x 14.45), 3 m past P8's end, and the scene's cups (`p8Cups`) draw and drive it |
+| The tank's `ph_probe` | a port | **(0.99, 1.80, 0.99)**, a node: the scene hangs the tank's hold lamp over it |
+| The tank's `agitator` | (0, 4.20, 0) | **(0, 4.64, 0)**, the coupling and paddle over the drive, as the grey box's |
+
+| Model | Triangles | Meshes | File | Kept by the scene |
+|---|---|---|---|---|
+| `p8-filler.glb` | 15,288 | 8 (2 body, 6 nodes) | 239 KB | the UV glow, the HEPA lamp |
+| `ferment-tank.glb` | 5,216 | 4 (2 body, 2 nodes) | 94 KB | the gauge's level, the hold lamp |
+
+**The extra checks:** P8 leaves the cups' band over the carrier clear (x −4.2 to 5.0, y 1.035 to 1.10, |z| < 0.56) with every station at the bottom of its stroke; its pistons, foil pick, sealing heads and UV tunnel show from the stage-15 camera through the hood; the hood holds every station. The tank's agitator turns on its axis over the drive; the agitator and the pH probe show from the stage-13 camera; the inlet's flange meets its pipe along z, the outlet valve is under the cone, and only the gauge's frame stands proud in the gauge's strip.
+
+**Not built in phase 20, for phase 21 to build or cut:** the 125 g cup and the 24-cup tray (the scene's 1,400-odd instanced cups draw 16 triangles each; at the spec's 80 they would add some 90,000 triangles to the overview), and the reefer unit (the wing's reefers are boxes in one instanced mesh, phase 19; the unit needs the truck model at the wing's dock first).
