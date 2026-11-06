@@ -8,6 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CLEANING_FLUIDS, degToRad, LINE_POINT_IDS, type CleaningFluid, type LinePoint, type LinePointId, type StageId } from '../contracts';
 import type { PointM } from './layout';
 import { advancePhase } from './motion';
+import { YOGURT_RUNS, YOGURT_UTILITY_PATHS } from './yogurtPipes';
 import { createLampPalette } from './lamps';
 import { LAMP_GLOW_HEX, readSceneColor, type SceneColorVar } from './theme';
 
@@ -21,9 +22,10 @@ export type PipeTemp = LinePointId | { readonly from: LinePointId; readonly to: 
  * One vertex of a route, in flow order: position, the temperature it carries (the measuring point
  * upstream of it), and optionally the point whose flow moves the milk on from here, when that is
  * not the temperature's point (the product line just past the divert valve is still at holding-tube
- * temperature but only flows when the flash vessel does).
+ * temperature but only flows when the flash vessel does), or 'still' for a line no point's flow describes
+ * (the yogurt line's divert to its reprocess tank, phase 16).
  */
-export type RouteVertex = readonly [xM: number, yM: number, zM: number, temp: PipeTemp, flow?: LinePointId];
+export type RouteVertex = readonly [xM: number, yM: number, zM: number, temp: PipeTemp, flow?: LinePointId | 'still'];
 
 export interface PipePath {
   /** In flow order: the stripes run from the first vertex to the last. */
@@ -41,8 +43,10 @@ export interface PipeRun {
   readonly id: string;
   readonly paths: readonly PipePath[];
   readonly joints?: readonly PipeJoint[];
-  /** A click on the run selects this stage. Only the holding tube, which is stage 4's centrepiece, has one. */
+  /** A click on the run selects this stage: the holding tube (stage 4) and the yogurt line's holding cell (12). */
   readonly stage?: StageId;
+  /** False for a run too thin for its shadow to show (the yogurt wing's): a shadow is a draw call more. */
+  readonly castShadow?: boolean;
 }
 
 /** Part-way from one point's temperature to the next; the fractions reproduce the preview's in-between values. */
@@ -376,11 +380,12 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
   divertMaterial.emissiveIntensity = 0;
   let divertLit = false;
 
-  const runs = MILK_RUNS.map((run) => buildMilkRun(run));
+  // The milk's runs, then the yogurt wing's (phase 16): one mesh each, on the same material and phase table.
+  const runs = [...MILK_RUNS, ...YOGURT_RUNS].map((run) => buildMilkRun(run));
   const meshes = runs.map(({ run, geometry }) => {
     const mesh = new THREE.Mesh(geometry, run.id === DIVERT_RUN_ID ? divertMaterial : milkMaterial);
     mesh.name = `pipe-${run.id}`;
-    mesh.castShadow = true;
+    mesh.castShadow = run.castShadow ?? true;
     mesh.receiveShadow = true;
     scene.add(mesh);
     return mesh;
@@ -401,7 +406,7 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
     return { mesh, colors };
   });
 
-  const utilityGeometry = mergeOrThrow(UTILITY_PATHS.map(({ pointsM, radiusM }) => buildPath(pointsM, radiusM).geometry));
+  const utilityGeometry = mergeOrThrow([...UTILITY_PATHS, ...YOGURT_UTILITY_PATHS].map(({ pointsM, radiusM }) => buildPath(pointsM, radiusM).geometry));
   const utilityMesh = new THREE.Mesh(utilityGeometry, utilityMaterial);
   utilityMesh.name = 'pipe-utilities';
   utilityMesh.castShadow = true;
@@ -594,10 +599,11 @@ function buildMilkRun(run: PipeRun): MilkRunGeometry {
       const { segment, frac } = sample;
       const start = vertices[segment];
       const end = vertices[segment + 1];
+      const flow = start[4];
       // The segment flows at its upstream end's speed; its temperature ramps from one end to the other.
       pushVertex(
         [...tempWeights(start[3], 1 - frac), ...tempWeights(end[3], frac)],
-        slotOf(start[4] ?? upstreamPoint(start[3])),
+        flow === 'still' ? STILL_SLOT : slotOf(flow ?? upstreamPoint(start[3])),
         sample.arcM,
         start[0] + frac * (end[0] - start[0]),
       );

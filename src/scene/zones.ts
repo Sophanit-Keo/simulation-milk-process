@@ -1,11 +1,11 @@
-// The seven zone floors and the truck apron (preview: "floor and zones"): tinted slabs a few
-// centimetres above the floor, a thin outline round each zone and its name just in front of it.
+// The zone floors, the truck apron and the yogurt wing's reefer yard (preview: "floor and zones"): tinted slabs a
+// few centimetres above the floor, a thin outline round each zone and its name just in front of it.
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { StageId } from '../contracts';
 import type { FloorGrid } from './floorGrid';
-import { APRON, ZONES, type PointM, type RectM, type Zone } from './layout';
+import { APRON, REEFER_YARD, ZONES, type PointM, type RectM, type Zone } from './layout';
 import { readSceneColor } from './theme';
 
 /** Slab thickness: enough to read as a floor marking from a low camera, too little to trip over. */
@@ -58,10 +58,11 @@ export function zoneLabelPlacement(zone: Zone): { anchorM: PointM; center: reado
 
 /** `grid`, if given, draws the dark theme's floor grid on the slabs too, so its lines run on across the zones. */
 export function createZones(scene: THREE.Scene, labelRoot: THREE.Object3D, grid?: FloorGrid): Zones {
-  // All slabs are one mesh with a colour per vertex: eight boxes would cost eight draw calls for nothing.
+  // All slabs are one mesh with a colour per vertex: thirteen boxes would cost thirteen draw calls for nothing.
   const slabs = [
     ...ZONES.map((zone) => ({ rect: zone.rect, heightM: SLAB_HEIGHT_M, colorVar: zone.colorVar })),
     { rect: APRON.rect, heightM: APRON_HEIGHT_M, colorVar: APRON.colorVar },
+    { rect: REEFER_YARD.rect, heightM: APRON_HEIGHT_M, colorVar: REEFER_YARD.colorVar },
   ];
   const parts = slabs.map(({ rect, heightM }) => {
     const box = new THREE.BoxGeometry(rect.xMaxM - rect.xMinM, heightM, rect.zMaxM - rect.zMinM);
@@ -81,7 +82,7 @@ export function createZones(scene: THREE.Scene, labelRoot: THREE.Object3D, grid?
   slabMesh.receiveShadow = true;
   scene.add(slabMesh);
 
-  // One line set for all seven outlines, for the same reason.
+  // One line set for all the outlines, for the same reason.
   const outlinePoints = ZONES.flatMap(({ rect }) => outlineSegments(rect));
   const outlineMaterial = new THREE.LineBasicMaterial({ transparent: true, opacity: 0.7 });
   const outlines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(outlinePoints), outlineMaterial);

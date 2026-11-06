@@ -263,7 +263,10 @@ for (const path of ['/', '/?mock']) {
   test(`the KPI strip fills every slot with a formatted value, and every lamp has a status (${path})`, async ({ page }) => {
     await page.goto(path);
     await waitForClock(page);
-    await expect(page.locator('#kpis [data-kpi]')).toHaveCount(KPI_SLOTS.length);
+    // The milk's eight cards in the strip's UHT group, shown while no yogurt stage is selected (phase 16).
+    await expect(page.locator('#kpis [data-line="uht"] [data-kpi]')).toHaveCount(KPI_SLOTS.length);
+    await expect(page.locator('#kpis [data-line="uht"]')).toBeVisible();
+    await expect(page.locator('#kpis [data-line="yogurt"]')).toBeHidden();
     await expect(async () => {
       const read = await kpiTexts(page);
       for (const slot of KPI_SLOTS) {
@@ -294,12 +297,15 @@ for (const path of ['/', '/?mock']) {
       const lamps = await visibleLamps(page);
       // Ten on the rail and one for the run state in the bar, at least.
       expect(lamps.length, 'lamps on screen').toBeGreaterThanOrEqual(11);
+      // Each rail group's header (phase 16) shows its worst stage: the milk's amber with stage 9, the standing
+      // yogurt line's unlit.
+      const groupOpening: Record<string, string> = { 'rail-group-uht': 'warn', 'rail-group-yogurt': 'idle' };
       for (const lamp of lamps) {
         // The plant opens running every stage and the clock: green, but for stage 9, amber while batches are
         // on hold (from the opening on, D11). The mock may show any status. The event log's lamps show each
         // entry's kind, not a status: a plain note is the unlit ring there.
         const stage = /^rail-stage-(\d+)$/.exec(lamp.where)?.[1];
-        const opening = stage ? STATIC_VALUES[Number(stage) as keyof typeof STATIC_VALUES].status : 'ok';
+        const opening = stage ? STATIC_VALUES[Number(stage) as keyof typeof STATIC_VALUES].status : (groupOpening[lamp.where] ?? 'ok');
         const expected = path === '/' && lamp.where !== 'event-log' ? opening : expect.stringMatching(/^(ok|warn|bad|idle)$/);
         expect(lamp.status, `lamp in ${lamp.where}`).toEqual(expected);
       }

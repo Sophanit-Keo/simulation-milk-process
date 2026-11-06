@@ -1,4 +1,4 @@
-import { lineOfStage, SPEEDS, type Command, type Hud, type LineId, type SetpointKey, type Snapshot, type StageInfo, type ViewBus } from '../contracts';
+import { LINE_IDS, lineOfStage, SPEEDS, type Command, type Hud, type LineId, type SetpointKey, type Snapshot, type StageInfo, type ViewBus } from '../contracts';
 import { createAbout } from './about';
 import { createBatchList } from './batchList';
 import { el, onPress } from './dom';
@@ -22,8 +22,8 @@ export interface HudOptions {
   /** A slider's top where plant.json sets it: the filler rate's machine maximum. */
   setpointMax?: Partial<Record<SetpointKey, number>>;
   /**
-   * The lines whose stages the rail and the info panel show (contracts v8): the UHT line's alone by default, and the
-   * yogurt line's too behind ?yogurt until its wing is built in phase 16. The guided tour keeps to the UHT line.
+   * The lines whose stages the rail and the info panel show (contracts v8): both by default, the rail grouped by line
+   * (phase 16). The guided tour keeps to the UHT line; the yogurt line's tour comes in phase 20.
    */
   lines?: readonly LineId[];
 }
@@ -67,7 +67,7 @@ export function createHud(
   stages: readonly StageInfo[],
   options: HudOptions = {},
 ): MainHud {
-  const lines = options.lines ?? ['uht'];
+  const lines = options.lines ?? LINE_IDS;
   const shownStages = stages.filter((info) => lines.includes(lineOfStage(info.id)));
   const tourStages = stages.filter((info) => lineOfStage(info.id) === 'uht');
   const part = (selector: string): HTMLElement => {
@@ -136,9 +136,12 @@ export function createHud(
     if (event.type === 'selectStage') {
       rail.select(event.stage);
       panel.show(event.stage, lastSnapshot);
+      // The KPI strip shows the selected stage's line: the milk's group, or the yogurt line's (phase 16).
+      kpis.showLine(lineOfStage(event.stage));
     } else if (event.type === 'overview') {
       rail.clear();
       panel.clear();
+      kpis.showLine('uht');
     } else if (event.type === 'selectBatch') {
       selectedBatch = event.batchId;
       // A batch lives in quarantine: its stage 9 panel lists it, picked, whichever stage was shown. A pick in
@@ -146,6 +149,7 @@ export function createHud(
       if (panel.stage !== 9) {
         rail.select(9);
         panel.show(9, lastSnapshot);
+        kpis.showLine('uht');
       } else if (lastSnapshot) {
         panel.update(lastSnapshot);
       }

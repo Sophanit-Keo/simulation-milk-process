@@ -13,6 +13,9 @@ const LIGHT_FALLBACKS = {
   '--zone-pack': '#d5d2c8',
   '--zone-quar': '#e5d4a8',
   '--zone-ware': '#c8d0d6',
+  '--zone-yog': '#d6cfe3',
+  '--zone-clean': '#cce3df',
+  '--zone-cold': '#c6d9ea',
   '--apron': '#b9c3ca',
   // Shared equipment materials (equipmentHost.ts) and the zone outlines.
   '--steel': '#b4c0c8',

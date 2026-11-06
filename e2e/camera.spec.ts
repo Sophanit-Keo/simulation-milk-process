@@ -1,8 +1,7 @@
 import type { Page } from '@playwright/test';
-import type { UhtStageId } from '../src/contracts';
 import { OVERVIEW, STAGE_VIEWS } from '../src/scene/layout';
 import { expect, test } from './fixtures';
-import { expectLanded, expectOverview, railButton, steadyStagePoint, waitForClock, waitForScene, wholePlantButton } from './helpers';
+import { expectLanded, expectOverview, railButton, showOnRail, steadyStagePoint, waitForClock, waitForScene, wholePlantButton } from './helpers';
 
 // Where the camera goes (phase-2 shared spec, gate G1). stages.spec.ts checks that a selection lands the
 // camera; this checks where it lands: on the stage's stop in src/scene/layout.ts (STAGE_VIEWS), looking
@@ -32,7 +31,7 @@ const unit = (v: Vector): Vector => {
 const show = (v: Vector): string => `(${v.map((x) => x.toFixed(2)).join(', ')})`;
 
 /** The camera has landed on the stage's stop. */
-async function expectAtStop(page: Page, stage: UhtStageId): Promise<void> {
+async function expectAtStop(page: Page, stage: keyof typeof STAGE_VIEWS): Promise<void> {
   await expectLanded(page, stage);
   const { focusM, cameraOffsetM } = STAGE_VIEWS[stage];
   const { targetM, positionM } = await cameraPose(page);
@@ -59,9 +58,10 @@ test('the camera lands on the stop of the stage the rail or a 3D click selects, 
   await waitForClock(page);
   await expectAtOverview(page, 'at load');
 
-  // Both ends of the stop table, by rail.
-  for (const stage of [1, 10] as const) {
+  // Both ends of each line's stops, by rail: the milk's and the yogurt wing's (phase 16).
+  for (const stage of [1, 10, 11, 16] as const) {
     await test.step(`rail-stage-${stage}`, async () => {
+      await showOnRail(page, stage);
       await railButton(page, stage).click();
       await expectAtStop(page, stage);
     });

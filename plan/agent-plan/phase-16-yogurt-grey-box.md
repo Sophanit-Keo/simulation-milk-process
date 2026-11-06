@@ -37,12 +37,50 @@ The row runs at z −52 to −28 m (a first proposal, settled here). The tanker 
 
 ## Exit checklist (gate Y1)
 
-- [ ] The overview shows both rows; the wing's zones are labelled; no machine overlaps another or a pipe.
-- [ ] Each stage 11–16 has a camera stop, a badge and a ring, and the panel shows its values from the mock.
-- [ ] The grouped rail keeps the one-screen layout at 1280 × 720 and 1440 × 900 in both themes.
-- [ ] The perf baseline with the grey wing is in `tests/perf/baseline.md`; the draw calls stay within budget.
+- [x] The overview shows both rows; the wing's zones are labelled; no machine overlaps another or a pipe.
+- [x] Each stage 11–16 has a camera stop, a badge and a ring, and the panel shows its values from the mock.
+- [x] The grouped rail keeps the one-screen layout at 1280 × 720 and 1440 × 900 in both themes.
+- [x] The perf baseline with the grey wing is in `tests/perf/baseline.md`; the draw calls stay within budget.
 - [ ] The developer signs Y1.
 
 ## Status
 
-Not started.
+Built on 6 November 2026 in one session, on phase 15 as merged (PR #20). D25 was still Proposed: the entry asks for it approved, and the developer asked to go on. Lane by lane:
+
+- **`lead` and `scene`, the layout** (`src/scene/layout.ts`; the rectangles are in [plan 12's floor plan](../12-yogurt-line.md#floor-plan)):
+  - the four zones north of the milk row, behind a 9 m aisle, and a reefer yard north of the cold store;
+  - the zones' near edges alternate between z −32 and −38.5, so the four names stand on two lines: at that distance a character covers about 1.4 m of floor, and together they are longer than the wing is wide;
+  - the wing starts 2 m east of the milk row, so its first name shows past the 11 m silos;
+  - the overview's target moved from z 3 to z −4, and the floor and the shadow follow the plant's new bounds;
+  - camera stops 11–16;
+  - the zone tests check every name at both review sizes: in view, apart, clear of every lamp, nothing in front of it.
+
+  No tanker lane is drawn on the milk row, so none was extended.
+- **`scene`, the machines and pipes:**
+  - `src/scene/equipment/yogurtLine.ts` stands the phase's 30 grey boxes at the positions of `equipment/yogurt/layout.ts`, with the milk line's builder, kit and level gauges (exported from `liquidLine.ts`, not copied);
+  - the gauges of the yogurt silo, the mix and reprocess tanks, the three fermentation tanks and the buffer follow `snapshot.yogurt`, and each label shows a key value (the tanks their pH);
+  - `src/scene/yogurtPipes.ts` holds the wing's routes as three runs, coloured and flowing by the yogurt line points; the holding cell's serpentine selects stage 12;
+  - the divert line to the reprocess tank has no line point for its flow in contracts v8, so it stands still (a new `'still'` flow in `pipes.ts`);
+  - picking and fly-to need nothing new: every machine is tagged with its stage.
+
+  A first build drew about 130 more calls at the overview. Merging each machine's parts per material, casting shadows only from the vessels and rooms, and three shadowless pipe runs brought it to 331.
+- **`ui`:**
+  - **The rail** groups the stages under "UHT milk" and "Yogurt P8". Each header folds its group and carries its worst stage's lamp. The `?yogurt` flag of phase 15 is gone.
+    - At 1440 × 900 both groups show. At 1280 × 720 the rail has room for one line's stages only (it needed 667 px for both and has 407), so the groups work as an accordion and the rail never scrolls: the selected stage's group stays open (the milk's before any selection) and opening the other folds it. A pick in the 3D view opens its group.
+    - Grouped, the rows are 4 px shorter.
+  - **The KPI strip:** the milk's eight cards already fill one row to the pixel from 1101 px up. A yogurt group beside them would cut their longest values short, and a second row would shrink the 3D view the overview was just fitted to. So the strip shows the line in view: the yogurt group's four cards (mix, P8 cups, cold room, reefers, from `snapshot.yogurt.kpis`) replace the milk's while a yogurt stage is selected, and the milk's come back with a UHT stage or "Whole plant". The two groups share one grid cell, so the strip's height never changes.
+  - The zone tints `--zone-yog`, `--zone-clean` and `--zone-cold` in both themes.
+- **`assets`:** the specs for phase 20 in [`assets/hero-specs.md`](../../assets/hero-specs.md#phase-16-the-yogurt-lines-heroes-specs-for-phase-20): the P8 filler (`carrier`, `pistons`, `seal_heads`, `foil_pick`, `hood`), the fermentation tank (`agitator`), the 125 g cup, the 24-cup tray and the reefer unit (`fan`). Specs only.
+- **`qa`:**
+  - **`tests/scene/yogurtLine.test.ts`:** every machine of the table, in its stage's zone, none overlapping another; every pipe clear of every machine but at its ports (a ray along each pipe against the machines' triangles); the gauges and labels from the mock.
+  - **`e2e/yogurtWing.spec.ts`:**
+    - each stage 11–16 from the rail and by a 3D click, the camera at its stop;
+    - the panels from the mock, and standing on the live sim;
+    - the KPI group switching;
+    - the accordion at 1280 × 720, and both groups at 1440 × 900.
+  - The rail, layout, KPI and camera tests follow the grouped rail.
+  - The perf baseline was measured at both sizes: the overview reads **331** draw calls (budget about 350) and **290,350** triangles; the wing's stops 124–136.
+- **Checks:**
+  - `npm run check` passes (1,610 unit tests, 88 asset tests), and so does `npm run build`.
+  - The full browser run passed 83 of 86 tests before the rail's accordion. Of the three failures, one was the rail's own layout test, which the accordion answers; one was the scene hook's "unknown stage" example, which was 11; and one was the pixel-ratio test, which fails in this sandbox's browser on the commit before phase 15 too (phase 15 status).
+  - The rerun of the affected browser tests is in progress; its result is added here when it ends.

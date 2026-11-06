@@ -322,3 +322,87 @@ Phase 12's scene (lane A) stands `arm_lift` out along the boom over each tray's 
 1. **Drive the trolley.** In `palletizer()` (`src/scene/equipment/packsLine.ts`): a grey group `arm_trolley` under `arm` at `ARM_LIFT_AT_M` (a small box on it if the grey box should show one), `trolley` in `ArmJoints`, `'arm_trolley'` in the swap's `nodes`, `trolley: nodes.arm_trolley` in the swap callback, and in `applyPose()` `joints.trolley.position.x = pose.reachM`. In `tests/scene/heroes.test.ts` and `palletizing.test.ts`, the stand-in models' palletizer node lists gain `arm_trolley`.
 2. **Keep the rod.** `lift-rod` stays as it is (radius 0.07, from the top of the gripper to `BOOM_TOP_M`, hung on the model's `arm_lift`); the trolley is built round it. Do not thicken it past 0.08 m: the slot is 0.085 m each side of the axis.
 3. **Nothing else:** the rest transforms, the node names the scene already drives and the 2.45 m rest reach are unchanged. The grey boom can stay 3.055 m long. 8 draw calls per pass, both materials opaque.
+
+## Phase 16: the yogurt line's heroes (specs for phase 20)
+
+The yogurt wing's grey boxes stand since phase 16 ([phase card](../plan/agent-plan/phase-16-yogurt-grey-box.md), [plan 12](../plan/12-yogurt-line.md)); phase 20 swaps in these models. Specs only for now: no model is made in phase 16. The positions come from `src/scene/equipment/yogurt/layout.ts` and the grey boxes from `src/scene/equipment/yogurtLine.ts`; the general rules above ("How the swap works", the budgets, the export checklist) all apply. Axes as everywhere: +x along the flow, +y up, **+z toward the stage cameras**, which for the wing look north (−z) from the aisle between the wing and the milk row.
+
+| Hero | File | Machine id(s) | Stage | Moving nodes the scene will drive |
+|---|---|---|---|---|
+| Line P8 cup filler | `public/models/hero/p8-filler.glb` | `p8-filler` | 15 | `carrier`, `pistons`, `seal_heads`, `foil_pick`, `hood` |
+| Fermentation tank | `public/models/hero/ferment-tank.glb` | `ferment-tank-1`, `-2`, `-3` | 13 | `agitator` |
+| 125 g cup with its foil lid | `public/models/tokens/cup-125g.glb` | (instanced tokens, phase 18) | 15–16 | none |
+| 24-cup tray | `public/models/tokens/tray-24-cups.glb` | (instanced tokens, phase 19) | 16 | none |
+| Reefer unit | `public/models/vehicles/reefer-unit.glb` | (on the truck at the reefer dock, phase 19) | 16 | `fan` |
+
+### Line P8 cup filler
+
+A linear cup filler, 12 lanes across, product flowing along +x under a clear HEPA hood: de-nester and cup magazines, ionized air and UV-C, piston fillers, foil pick and sealing heads, coder, then out at +x to the check gates (SOP Part 2). Machine origin: world (6.5, 0, −47), the footprint centre on the floor.
+
+| Part (grey box) | Shape and size (m) | Centre, from the origin (m) |
+|---|---|---|
+| Machine body | box 10.0 × 0.95 × 1.20 | (0, 0.475, 0) |
+| Carrier chain | box 10.0 × 0.08 × 1.30 | (0, 0.99, 0) |
+| Cup magazines | 4 boxes 0.30 × 0.80 × 0.90 | x −4.20, −3.75, −3.30, −2.85; y 1.40 |
+| Piston manifold | box 1.20 × 0.60 × 0.90 | (1.20, 1.30, 0) |
+| Foil magazines and sealing heads | box 0.90 × 0.70 × 0.90 | (2.80, 1.35, 0) |
+| HEPA hood (glass) | box 10.20 × 1.35 × 1.60 | (0, 1.625, 0) |
+| Filter housing | box 9.00 × 0.30 × 1.20 | (0, 2.45, 0) |
+
+- **Bounds:** x −5.10 to +5.10, y 0 to 2.60, z −0.80 to +0.80, so **10.2 × 2.6 × 1.6 m**. Envelope (5%): 10.71 × 2.73 × 1.68 m.
+- **Label anchor:** (0, 3.10, 0). Keep the model below 3.0 m.
+- **Nozzle:** the product from the P8 buffer at (−5.00, 0.70, 0), on the −x end (pipe radius 0.08 m: a flange of about 0.18 m).
+- **Glass:** the hood only, one alpha-blended material, so the carrier, the pistons and the sealing heads show from the stage-15 camera.
+- **Cups:** phase 18 rides the cup tokens on the carrier: 12 lanes at 0.09 m pitch across z (−0.495 to +0.495), the cup rims at y 1.09 (the carrier's top 1.03 plus a 0.06 m cup). Leave that band clear under the hood.
+
+| Node | Parent | Rest position (m) | Motion | Driven by |
+|---|---|---|---|---|
+| `carrier` | scene | (0, 0.99, 0) | Indexes along +x by one pitch (0.10 m) per cycle, then returns to rest unseen (the chain's links repeat at the pitch) | Phase 18: `carrier.position.x` = the cycle's share of a pitch, at 30 cycles a minute |
+| `pistons` | scene | (1.20, 1.55, 0), the heads' top | Stroke along −y, 0 to 0.12 m, once a cycle; the 12 anti-drip nozzles hang below the node | Phase 18: `pistons.position.y = 1.55 − strokeM` |
+| `seal_heads` | scene | (2.80, 1.65, 0) | Down 0.10 m, dwell 1.0 s (the seal time), up, once a cycle | Phase 18: `seal_heads.position.y` |
+| `foil_pick` | scene | (2.20, 1.60, 0), its arm's pivot | Swings about +z between the foil magazine (0 rad) and the cups (−0.6 rad) once a cycle | Phase 18: `foil_pick.rotation.z` |
+| `hood` | scene | (0, 1.625, 0) | Static; a node of its own so the scene can tint its glass by the HEPA pressure (green at or above +15 Pa, red below) | Phase 18: its material's emissive |
+
+Design notes: the stations in order along +x as the SOP has them: de-nester under the magazines (x −4.5 to −2.5), ionized air and vacuum shroud (−2.3), UV-C tunnel (−1.6 to −0.4, a violet glow strip the scene may light), pistons (+1.2), foil pick (+2.2), sealing heads (+2.8), coder (+4.0, a small head on the +z side). Budget: ≤ 30,000 triangles and **≤ 10 draw calls** with the glass.
+
+### Fermentation tank
+
+An insulated, cone-bottomed process tank of 10,000 L (D26) on four legs, with a top-mounted slow agitator; the same model three times. Machine origin: world (x, 0, −48.5) for x −24, −20 and −16, on the tank's axis at the floor.
+
+| Part (grey box) | Shape and size (m) | Centre, from the origin (m) |
+|---|---|---|
+| Legs | 4 cylinders, radius 0.07, 1.20 tall, on a circle of radius 1.01 (the first at 0.4 rad) | y 0.60 |
+| Cone bottom | cone, radius 1.40 to 0.31, 0.50 tall | (0, 0.95, 0) |
+| Body (insulated shell) | cylinder, radius 1.40, 2.60 tall | (0, 2.50, 0) |
+| Dome | half sphere, radius 1.40, 0.40 tall | from y 3.80 |
+| Agitator drive | box 0.40 × 0.44 × 0.40 | (0, 4.42, 0) |
+
+- **Bounds:** x −1.40 to +1.40, y 0 to 4.64, z −1.40 to +1.40, so **2.8 × 4.64 × 2.8 m**.
+- **Label anchor:** (0, 5.14, 0). Keep the model below 5.0 m.
+- **Level gauge:** the scene draws it, down the +z face at z +1.42 from y 1.30 to 3.70, 0.10 m wide. Keep that strip of the shell plain.
+- **Nozzles:** the inoculated mix in at (0, 1.40, +1.40) on the +z face; out at the cone's tip, (0, 0.60, 0), to the manifold at −z.
+
+| Node | Parent | Rest position (m) | Motion | Driven by |
+|---|---|---|---|---|
+| `agitator` | scene | (0, 4.20, 0), on the shaft's axis at the dome's top | Turns about +y without limit, slowly (a low-shear anchor stirrer). Holds the shaft coupling above the dome, so the turn shows outside, and the stirrer inside, seen through a manway sight glass on the +z face at y 3.2 | Phase 17: `agitator.rotation.y += ω·dt` while the tank fills or ferments |
+
+Design notes: stainless cladding over the insulation, a manway on the dome, a pH probe port on the +z side at y 1.8 (its label shows the pH since phase 15). Budget: ≤ 15,000 triangles and ≤ 6 draw calls: there are three.
+
+### 125 g cup and 24-cup tray
+
+Instanced tokens: thousands at once (phase 18 and 19), so they are tiny.
+
+| Token | Size (m) | Origin | Budget | Materials |
+|---|---|---|---|---|
+| `cup-125g` | rim Ø 0.075, base Ø 0.055, 0.060 tall; foil lid 0.078 square with a tab | the base's centre, on the floor of the carrier pocket | ≤ 80 triangles | vertex colours: white cup, metallic foil (one material) |
+| `tray-24-cups` | 0.470 × 0.320 × 0.065 (6 × 4 cups at 0.078 pitch in a 0.040-tall card tray) | the tray's bottom centre | ≤ 800 triangles, the cups merged in | vertex colours, one material |
+
+### Reefer unit
+
+The refrigeration unit on the front wall of the articulated truck's trailer (`public/models/vehicles/truck.glb`, whose root is the trailer), for the reefer trucks at the cold store's north dock (phase 19). Origin: on the trailer's centre line at its front wall, model frame of the truck: (0, 0, 5.35).
+
+- **Size:** 2.20 wide (x) × 1.70 tall (y 2.20 to 3.90) × 0.45 deep (z 5.35 to 5.80).
+- **Clearance:** the tractor turns about its kingpin up to its limit (make-vehicles.mjs); the unit must clear the cab's back wall and roof deflector at every angle. Check it with `assets/scripts/clearance.mjs` as the forklift's mast was (phase 14).
+- **Node:** `fan`, the condenser fan behind the front grille, rest (0, 3.30, 5.70), turning about +z while the unit runs.
+- **Budget:** ≤ 2,000 triangles, ≤ 2 materials.
+
