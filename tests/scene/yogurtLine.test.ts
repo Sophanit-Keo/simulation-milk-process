@@ -343,3 +343,20 @@ describe('Line P8 in the 3D view (phase 18)', () => {
     cups.dispose();
   });
 });
+
+describe('P8\'s cups take no clicks (phase 18)', () => {
+  stubTheme();
+  it('lets a ray through to the machine under them, so a moving cup never picks stage 15 over the tray packer', () => {
+    const carrier = createP8Carrier();
+    const cups = p8Cups(createKit(makeContext()), carrier);
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    cups.update(sim.snapshot(), 1 / 60);
+    cups.object.updateMatrixWorld(true);
+    // Straight down onto a row of cups on the outfeed, over the tray packer's belt.
+    const raycaster = new THREE.Raycaster(new THREE.Vector3(17, 3, P8.zM), new THREE.Vector3(0, -1, 0));
+    expect(Number(cups.debugState?.().cups)).toBeGreaterThan(1_000);
+    expect(raycaster.intersectObject(cups.object, true)).toEqual([]);
+    cups.dispose();
+  });
+});

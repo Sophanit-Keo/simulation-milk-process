@@ -341,6 +341,10 @@ export function p8Cups(kit: Kit, carrier: P8Carrier): Equipment {
   // Drawn only while it kicks: a draw call less the rest of the time.
   flapPivot.visible = false;
   root.add(bodies, tops, kicked, flapPivot);
+  // The cups take no clicks: a click on one picks the machine it rides on (the carrier, a gate, the tray packer's
+  // belt), so a moving cup never steals the click meant for what is under it, and no click tests 1,450 instances.
+  const noPick = (): void => {};
+  for (const mesh of [bodies, tops, kicked, flap]) mesh.raycast = noPick;
   // The flap uses the kit's shared box and paint, so the cups hold the kit as the machines do.
   const release = kit.hold();
 

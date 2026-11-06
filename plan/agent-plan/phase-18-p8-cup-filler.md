@@ -98,7 +98,8 @@ Built on 6 November 2026 in one session, on phase 17 as merged (PR #22). Y1 is n
     - they ride the carrier in rows of 12, fill under the pistons and take their foil;
     - they run down a ramp and four abreast through the gates to the tray packer;
     - a reject is kicked by the flap into the bin;
-    - their label shows the batch code and its best-before day.
+    - their label shows the batch code and its best-before day;
+    - they take no clicks: a click on one picks the machine it rides on.
   - **One carrier clock** at P8's rate on animation time drives both, so at ×1 the carrier indexes every 2 s. A clean empties the line, and it fills again row by row.
 - **`qa`:**
   - **`tests/sim/yogurt/p8.test.ts`:**
@@ -109,6 +110,13 @@ Built on 6 November 2026 in one session, on phase 17 as merged (PR #22). Y1 is n
   - **`tests/sim/yogurt/yogurtLine.test.ts`:** the 24 h run checks the numbers above, and a whole-sim run puts a short SIP and a dirty swab into the 22:00 changeover.
   - **`tests/scene`:** the carrier clock, the strokes, the lamps, the cup counts and the reject kick.
   - **`e2e/p8.spec.ts`:** the panel in words with its histogram and rate slider, the line moving at ×1 with its frame pace, and a reject kicked into the bin.
-- **Checks:** `npm run check` passes (1,748 unit tests, 88 asset tests), and so does `npm run build`. The full browser run is under way.
+- **Checks:**
+  - `npm run check` passes (1,749 unit tests, 88 asset tests), and so does `npm run build`.
+  - **The perf baseline** ([`tests/perf/baseline.md`](../../tests/perf/baseline.md#phase-18-line-p8s-moving-parts-and-its-cups)): the overview reads **345** draw calls (budget about 350) and **322,734** triangles, 32,384 more than phase 16. `measure.mjs` now opens a folded rail group before it clicks a stage, so it measures at 1280 × 720 again.
+  - **Two full browser runs** each found a problem with the cups, both fixed:
+    - **First run, 90 of 93:** the first cups cost 113,600 triangles and halved the overview's frame rate on software GL, so the energy and theme tests ran out of time. The cups are now lighter and culled with the line.
+    - **Second run, 91 of 93:** the wing's 3D-click test aimed at stage 16, and a cup riding the tray packer's belt took the click as stage 15. The cups now take no clicks; a click picks the machine they ride on.
+    - **After both fixes:** the energy, theme, wing and P8 specs pass (12 of 12, then 8 of 8), and the click test twice more.
+    - **The other failure in both runs** is the pixel-ratio test, which fails in this sandbox's browser on the commit before phase 15 too (phase 15 status).
 
 **For the developer:** please watch P8 at ×1 from stage 15's camera stop. The carrier indexes every 2 s, the pistons and the sealing heads stroke, and the cups take their foil and leave for the gates. At ×1,000 a vision reject is kicked into the bin about every 3 s. Then sign Y1, approve or amend D25–D28, and tick the last box.
