@@ -35,9 +35,9 @@ export const STATIC_PACKS = staticSnapshot.packs;
 
 /**
  * The lamps of the plant as it runs from the opening. The UHT line's are those of the opening snapshot. The yogurt
- * line (phase 17) starts on the first step, so its lamps are those one step in: the mix, the tanks, the buffer and
- * P8 green, the heat treatment standing until a tank is free (4.4 sim hours on), and the cold chain empty until
- * phase 19. They hold for the few sim minutes a test runs at ×10.
+ * line (phase 17) starts on the first step, so its lamps are those one step in: the mix, the tanks, the buffer, P8 and
+ * the cold chain (with the last two days' pallets, phase 19) green, the heat treatment standing until a tank is free
+ * (4.4 sim hours on). They hold for the few sim minutes a test runs at ×10.
  */
 const steppedSim = createSim(plantConfig);
 steppedSim.step(0.1);

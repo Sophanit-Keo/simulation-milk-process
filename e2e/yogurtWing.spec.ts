@@ -88,7 +88,7 @@ test('each yogurt stage selects by a click on its machines from the overview', a
   }
 });
 
-test('on the live sim the yogurt line runs from the opening: each stage\'s values and lamp, green but for the heat treatment and the cold chain', async ({ page }) => {
+test('on the live sim the yogurt line runs from the opening: each stage\'s values and lamp, green but for the heat treatment', async ({ page }) => {
   test.setTimeout(WING_TIMEOUT_MS);
   await page.goto('/');
   await waitForClock(page);
