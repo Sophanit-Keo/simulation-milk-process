@@ -102,9 +102,20 @@ describe('createSim: snapshot', () => {
     for (const id of UHT_STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe(id === 9 ? 'warn' : 'ok');
   });
 
-  it('opens with the yogurt line standing: stages 11–16 idle until phase 17 makes them live (D25)', () => {
-    const snap = createSim(plantConfig).snapshot();
-    for (const id of YOGURT_STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe('idle');
+  it('opens with the yogurt line running (phase 17, D27): P8 on its first tank, the heat treatment waiting for one to fill', () => {
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    const snap = sim.snapshot();
+    // Two tanks ready and the third fermenting: no tank to fill, so the heat treatment stands; the cold chain too (phase 19).
+    expect({ 11: snap.stages[11].status, 12: snap.stages[12].status, 13: snap.stages[13].status, 14: snap.stages[14].status, 15: snap.stages[15].status, 16: snap.stages[16].status }).toEqual({
+      11: 'ok',
+      12: 'idle',
+      13: 'ok',
+      14: 'ok',
+      15: 'ok',
+      16: 'idle',
+    });
+    expect(YOGURT_STAGE_IDS).toHaveLength(6);
   });
 
   it('writes the first log entry at creation', () => {

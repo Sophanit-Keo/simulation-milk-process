@@ -131,11 +131,14 @@ describe('the 3D view’s update', () => {
       world.update({ ...snapshot, ...changes, liquid: { ...snapshot.liquid, uhtMode: mode, cleaning } }, 0.02);
       return mocks.pipesUpdate.mock.calls[0];
     };
-    expect(at({ speed: 1 })).toEqual([snapshot.line, 0.02, false, null]);
+    expect(at({ speed: 1 })).toEqual([snapshot.line, 0.02, false, null, false]);
     const [, fastDtS] = at({ speed: 10_000 });
     expect(fastDtS).toBeCloseTo(0.02 * MAX_MOTION_RATE, 12);
-    expect(at({ speed: 10_000, paused: true })).toEqual([snapshot.line, 0, false, null]);
-    expect(at({ speed: 1 }, 'divert')).toEqual([snapshot.line, 0.02, true, null]);
-    expect(at({ speed: 1 }, 'cip', lye).slice(2)).toEqual([false, { fluid: 'lye', flowLph: 24_000 }]);
+    expect(at({ speed: 10_000, paused: true })).toEqual([snapshot.line, 0, false, null, false]);
+    expect(at({ speed: 1 }, 'divert')).toEqual([snapshot.line, 0.02, true, null, false]);
+    expect(at({ speed: 1 }, 'cip', lye).slice(2)).toEqual([false, { fluid: 'lye', flowLph: 24_000 }, false]);
+    // The yogurt line's divert (phase 17) lights its own route, whatever the UHT plant does.
+    const yogurtDivert = { yogurt: { ...snapshot.yogurt, heat: { ...snapshot.yogurt.heat, mode: 'divert' as const } } };
+    expect(at({ speed: 1, ...yogurtDivert }).slice(2)).toEqual([false, null, true]);
   });
 });

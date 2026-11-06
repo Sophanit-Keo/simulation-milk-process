@@ -115,3 +115,42 @@
   background: var(--bad);
   box-shadow: var(--glow-bad);
 }
+
+/*
+ * A ring round the lamp (phase 17): a fermentation tank's pH on its way from the start pH to the end pH, filled
+ * clockwise from the top in the accent, on the chip's line colour. Hidden (the [hidden] attribute) while the tank
+ * holds nothing, when the lamp stands bare. Far away the label is its lamp alone, and the ring goes with the rest.
+ */
+.equipment-ring {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent) calc(var(--ring-pct, 0) * 1%), var(--line) 0);
+}
+.equipment-ring::before {
+  content: '';
+  grid-area: 1 / 1;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--raised);
+}
+.equipment-ring > .equipment-lamp {
+  grid-area: 1 / 1;
+  position: relative;
+}
+.equipment-ring[hidden] {
+  display: contents;
+}
+.equipment-ring[hidden]::before {
+  content: none;
+}
+.equipment-label.is-compact .equipment-ring {
+  display: contents;
+}
+.equipment-label.is-compact .equipment-ring::before {
+  content: none;
+}

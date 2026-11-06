@@ -1,16 +1,32 @@
 // Stages 11–16, the yogurt wing (phase 16, plan 12, D25), as grey boxes: every machine of the phase 16 table at
 // the positions of yogurt/layout.ts, built with the milk line's builder and kit (reuse, not copy). The pipes
 // between them belong to pipes.ts, the holding cell's serpentine among them. Driven by the snapshot's yogurt
-// part (contracts v8): tank levels on their gauges and a key value on each label. Agitators, the divert valve's
-// flip, cups and pallets come in phases 17–19.
+// part (contracts v8): tank levels on their gauges and a key value on each label. Phase 17 adds the agitators of
+// the mix tank, the fermentation tanks and the fruit tank, the divert valve's flag and lamp, and the pH ring on each
+// fermentation tank's label; cups and pallets come in phases 18–19.
+import * as THREE from 'three';
 import type { Snapshot, StageId } from '../../contracts';
+import { DARK_LAMP_BODY_HEX, createLampPalette, glowInDark } from '../lamps';
+import { advancePhase, motionDtS } from '../motion';
+import { LAMP_COLOR_VAR, LAMP_GLOW_HEX, type LampStatus } from '../theme';
 import { labelValue, stageValue } from './liquid/readings';
 import { MachineBuilder } from './liquid/builder';
 import { createKit, type Kit, type LiquidMaterial } from './liquid/kit';
-import { levelGauge, machine, type FillReading, type MachineSpec } from './liquidLine';
+import {
+  AGITATOR_RAD_PER_S,
+  ease,
+  easeSpin,
+  FULL_TURN_RAD,
+  levelGauge,
+  machine,
+  MAX_TURN_PER_FRAME_RAD,
+  VALVE_EASE_PER_S,
+  type FillReading,
+  type MachineSpec,
+} from './liquidLine';
 import type { Equipment, EquipmentFactory } from './types';
 import * as at from './yogurt/layout';
-import { finite, HEAT_MODE_TEXT, yogurtFill, yogurtOf } from './yogurt/readings';
+import { finite, HEAT_MODE_TEXT, heatValveLamp, phRingFrac, tankStirs, yogurtFill, yogurtOf } from './yogurt/readings';
 
 /** The yogurt line, stages 11–16: one Equipment per machine. */
 export const yogurtLine: EquipmentFactory = (ctx) => {
@@ -27,6 +43,8 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
       ...at.MIX_TANK,
       domeM: 0.3,
       drive: true,
+      // It stirs while it holds mix, so the powder stays in suspension.
+      stir: (s) => (yogurtOf(s)?.mix.tanks.mixTank.levelL ?? 0) > 0,
       fill: yogurtFill((y) => y.mix.tanks.mixTank),
       labelText: (s) => labelValue(stageValue(s, 11, 'mixTankLevelPct'), 0, '%'),
     }),
@@ -58,11 +76,13 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
         bodyM: at.FERMENT_TANK.bodyM,
         domeM: at.FERMENT_TANK.domeM,
         drive: true,
+        stir: (s) => tankStirs(yogurtOf(s)?.ferment.tanks[i]),
         fill: yogurtFill((y) => y.ferment.tanks[i]),
         labelText: (s) => {
           const ph = finite(yogurtOf(s)?.ferment.tanks[i]?.ph);
           return ph === undefined ? '' : `pH ${labelValue(ph, 2, '')}`;
         },
+        labelRing: (s) => phRingFrac(yogurtOf(s)?.ferment.tanks[i]),
       }),
     ),
     smoothingValve(kit),
@@ -74,6 +94,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
       ...at.FRUIT_TANK,
       domeM: 0.25,
       drive: true,
+      stir: (s) => (yogurtOf(s)?.buffer.fruitDosePct ?? 0) > 0,
       labelText: (s) => {
         const pct = labelValue(stageValue(s, 14, 'fruitDosePct'), 0, '%');
         return pct && `${pct} dosed`;
@@ -118,12 +139,18 @@ interface VesselSpec {
   coneM?: number;
   /** An agitator drive on top. */
   drive?: boolean;
+  /** Whether the agitator turns now (phase 17), shown by a paddle on the drive; it eases to a stop when not. */
+  stir?: (snapshot: Snapshot) => boolean;
   /** The tank's level, on a gauge down its front. */
   fill?: FillReading;
   labelText?: MachineSpec['labelText'];
+  labelRing?: MachineSpec['labelRing'];
 }
 
-/** A vertical steel vessel on legs: an optional cone bottom, the body, a dome, an agitator drive and a level gauge. */
+/**
+ * A vertical steel vessel on legs: an optional cone bottom, the body, a dome, an agitator drive and a level gauge.
+ * A vessel that stirs has a paddle on its drive, which turns while `stir` says so, as the milk line's mixing tank's.
+ */
 function vessel(kit: Kit, spec: VesselSpec): Equipment {
   const { xM, zM, radiusM, legsM, bodyM } = spec;
   const coneM = spec.coneM ?? 0;
@@ -140,15 +167,40 @@ function vessel(kit: Kit, spec: VesselSpec): Equipment {
     b.part('box', 'steelDark', [xM, topM + 0.22, zM], [0.4, 0.44, 0.4]);
     topM += 0.44;
   }
+  const agitator = spec.drive && spec.stir ? b.mesh('agitator', 'box', 'steelDark', [xM, topM + 0.03, zM], [Math.min(1.1, radiusM), 0.06, 0.12]) : undefined;
+  if (agitator) topM += 0.06;
   const level = spec.fill && levelGauge(b, [xM, 0, zM + radiusM + 0.02], bodyBottomM + 0.1, bodyM - 0.2, 0.1, spec.fill);
+  const stir = spec.stir;
+  let spinRadPerS = 0;
+  let stirring = false;
+  const update =
+    level || (agitator && stir)
+      ? (s: Snapshot, realDtS: number) => {
+          level?.update(s);
+          if (agitator && stir) {
+            const dtS = motionDtS(s, realDtS);
+            stirring = stir(s);
+            spinRadPerS = easeSpin(spinRadPerS, stirring, AGITATOR_RAD_PER_S, dtS);
+            agitator.rotation.y = advancePhase(agitator.rotation.y, spinRadPerS * dtS, MAX_TURN_PER_FRAME_RAD, FULL_TURN_RAD);
+          }
+        }
+      : undefined;
+  const debugState =
+    level || agitator
+      ? () => ({
+          ...(level ? { fillFrac: level.fillFrac() } : {}),
+          ...(agitator ? { stirring, spinRadPerS, angleRad: agitator.rotation.y } : {}),
+        })
+      : undefined;
   return machine(b, {
     id: spec.id,
     stage: spec.stage,
     label: spec.label,
     labelAnchorM: [xM, topM + 0.5, zM],
     labelText: spec.labelText,
-    update: level && ((s) => level.update(s)),
-    debugState: level && (() => ({ fillFrac: level.fillFrac() })),
+    labelRing: spec.labelRing,
+    update,
+    debugState,
   });
 }
 
@@ -308,26 +360,69 @@ function holdingCell(kit: Kit): Equipment {
   );
 }
 
+/** The divert valve's lamp colours: the milk line's, and off (a dark body) while the line stands. */
+const VALVE_LAMP_OFF_HEX = 0x2a3036;
+
+/**
+ * The heat treatment's divert valve, the CCP's (phase 17): its flag points down the open outlet, +x forward to the
+ * regeneration or −z to the reprocess tank, and the lamp on top is green forward, red diverting, amber while the wing
+ * cleans, and off while the line stands. The flip follows the state even while paused, as the milk line's valve does.
+ */
 function divertValve(kit: Kit): Equipment {
   const { xM, zM } = at.DIVERT_VALVE;
-  return fixture(
-    kit,
-    'yogurt-divert-valve',
-    12,
-    'Divert valve',
-    [xM, zM],
-    1.5,
-    (b) => {
-      b.part('box', 'steelDark', [xM, at.PIPE_Y_M, zM], [0.4, 0.4, 0.4]);
-      b.part('cylLo', 'steelDark', [xM, 1.2, zM], [0.07, 0.2, 0.07]);
-      b.part('box', 'paint', [xM, 1.35, zM], [0.3, 0.12, 0.3]); // actuator
-      b.part('cylLo', 'steelDark', [xM, at.PIPE_Y_M / 2, zM], [0.05, at.PIPE_Y_M, 0.05]); // stand
-    },
-    (s) => {
+  const b = new MachineBuilder(kit, 'yogurt-divert-valve', [xM, 0, zM]);
+  b.part('box', 'steelDark', [xM, at.PIPE_Y_M, zM], [0.4, 0.4, 0.4]);
+  b.part('cylLo', 'steelDark', [xM, 1.2, zM], [0.07, 0.2, 0.07]);
+  b.part('box', 'paint', [xM, 1.35, zM], [0.3, 0.12, 0.3]); // actuator
+  b.part('cylLo', 'steelDark', [xM, at.PIPE_Y_M / 2, zM], [0.05, at.PIPE_Y_M, 0.05]); // stand
+  const flag = b.pivot('flag', [xM, 1.45, zM]);
+  b.part('box', 'paint', [0.16, 0, 0], [0.32, 0.05, 0.09], { parent: flag });
+  const lampMaterial = kit.material('lamp');
+  b.mesh('lamp', 'sphere', 'lamp', [xM, 1.56, zM], [0.065, 0.065, 0.065]);
+  const palette = createLampPalette(LAMP_GLOW_HEX, LAMP_COLOR_VAR);
+  let lamp: LampStatus | 'off' | null = null;
+  let diverting = false;
+  const paintLamp = (status: LampStatus | 'off'): void => {
+    if (!(lampMaterial instanceof THREE.MeshStandardMaterial)) return;
+    if (status === 'off') {
+      lampMaterial.color.setHex(palette.dark ? DARK_LAMP_BODY_HEX : VALVE_LAMP_OFF_HEX);
+      lampMaterial.emissiveIntensity = 0;
+    } else if (palette.dark) {
+      glowInDark(lampMaterial, palette.color(status));
+    } else {
+      lampMaterial.color.setHex(0x000000);
+      lampMaterial.emissive.copy(palette.color(status));
+      lampMaterial.emissiveIntensity = 1;
+    }
+  };
+  const showLamp = (status: LampStatus | 'off'): void => {
+    if (status === lamp) return;
+    lamp = status;
+    paintLamp(status);
+  };
+  showLamp('off');
+  return machine(b, {
+    id: 'yogurt-divert-valve',
+    stage: 12,
+    label: 'Divert valve',
+    labelAnchorM: [xM, 1.95, zM],
+    labelText: (s) => {
       const mode = yogurtOf(s)?.heat.mode;
       return mode ? HEAT_MODE_TEXT[mode] : '';
     },
-  );
+    update(s, realDtS) {
+      const mode = yogurtOf(s)?.heat.mode;
+      diverting = mode === 'divert';
+      showLamp(heatValveLamp(mode));
+      // Rotating +x by +90° about y points it along −z, toward the reprocess tank.
+      flag.rotation.y = ease(flag.rotation.y, diverting ? Math.PI / 2 : 0, VALVE_EASE_PER_S, realDtS);
+    },
+    debugState: () => ({ diverting, lamp: lamp ?? 'off', flagRad: flag.rotation.y }),
+    applyTheme() {
+      palette.applyTheme();
+      paintLamp(lamp ?? 'off');
+    },
+  });
 }
 
 /* stage 13: the culture dosing pump (the tanks are vessels) */

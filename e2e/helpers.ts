@@ -8,7 +8,7 @@
 // by the fixtures (fixtures.ts), so no test needs to collect them itself.
 import { readFileSync } from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
-import { isUhtStage, parseStages, type PlantConfig, type StageInfo, type StageValueInfo } from '../src/contracts';
+import { isUhtStage, parseStages, type PlantConfig, type StageId, type StageInfo, type StageValueInfo, type Status } from '../src/contracts';
 import { createSim } from '../src/sim';
 import type { ThemePref } from '../src/ui/theme';
 import { expect } from './fixtures';
@@ -20,7 +20,7 @@ export const plantConfig = readJson('../src/data/plant.json') as PlantConfig;
 export const ALL_STAGES: readonly StageInfo[] = parseStages(readJson('../src/data/stages.json'));
 /** The stages the rail shows without ?yogurt: the UHT line's 1–10, which the tour also walks. */
 export const STAGES: readonly StageInfo[] = ALL_STAGES.filter((stage) => isUhtStage(stage.id));
-/** The yogurt line's stages, on the rail behind ?yogurt until its wing is built (phase 16). */
+/** The yogurt line's stages, 11–16, on the rail under "Yogurt P8" since phase 16. */
 export const YOGURT_STAGES: readonly StageInfo[] = ALL_STAGES.filter((stage) => !isUhtStage(stage.id));
 
 /**
@@ -32,6 +32,19 @@ const staticSnapshot = createSim(plantConfig).snapshot();
 export const STATIC_VALUES = staticSnapshot.stages;
 export const STATIC_KPIS = staticSnapshot.kpis;
 export const STATIC_PACKS = staticSnapshot.packs;
+
+/**
+ * The lamps of the plant as it runs from the opening. The UHT line's are those of the opening snapshot. The yogurt
+ * line (phase 17) starts on the first step, so its lamps are those one step in: the mix, the tanks, the buffer and
+ * P8 green, the heat treatment standing until a tank is free (4.4 sim hours on), and the cold chain empty until
+ * phase 19. They hold for the few sim minutes a test runs at ×10.
+ */
+const steppedSim = createSim(plantConfig);
+steppedSim.step(0.1);
+const steppedSnapshot = steppedSim.snapshot();
+export const OPENING_STATUS = Object.fromEntries(
+  ALL_STAGES.map(({ id }) => [id, (isUhtStage(id) ? staticSnapshot : steppedSnapshot).stages[id].status]),
+) as Readonly<Record<StageId, Status>>;
 
 /**
  * Stage values that move with sim time even in steady production (phase 3's live line), and how far each
@@ -226,8 +239,11 @@ export interface SceneDebug {
   equipmentIds(): string[];
   /** What a machine shows now, e.g. { fillFrac } for a tank or { diverting, lamp, flagRad } for the divert valve (phase 3). */
   equipmentState(id: string): Record<string, number | string | boolean> | null;
-  /** Whether the divert route is lit, and each line point's stripe offset in metres (phase 3). */
-  pipeState(): { divertLit: boolean; phaseM: Record<string, number>; cleaning: string | null; cleanPhaseM: number };
+  /**
+   * Whether the divert route is lit, and each line point's stripe offset in metres (phase 3); and whether the yogurt
+   * line's route to its reprocess tank is (phase 17).
+   */
+  pipeState(): { divertLit: boolean; yogurtDivertLit?: boolean; phaseM: Record<string, number>; cleaning: string | null; cleanPhaseM: number };
 }
 
 /** Calls one method of window.__scene in the page. */

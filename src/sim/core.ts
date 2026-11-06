@@ -99,7 +99,8 @@ export function createCore(config: PlantConfig, options: CoreOptions = {}): SimC
   const simLog = createLog();
   const log = {
     add(timeS: number, kind: LogKind, message: string, tag?: LogTag): void {
-      simLog.add(timeS, kind, message, options.annotateLog?.({ timeS, kind, message }, tag));
+      const note = options.annotateLog?.({ timeS, kind, message }, tag);
+      simLog.add(timeS, kind, message, tag?.line ? { ...note, line: tag.line } : note);
     },
     entries: () => simLog.entries(),
   };

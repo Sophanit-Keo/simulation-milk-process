@@ -216,6 +216,24 @@ describe('createPipes', () => {
     pipes.dispose();
   });
 
+  it('lights the yogurt line\'s divert to its reprocess tank on its own (phase 17)', () => {
+    const { pipes, scene, line } = setUp();
+    const material = (run: string): THREE.MeshStandardMaterial =>
+      (scene.getObjectByName(`pipe-${run}`) as THREE.Mesh).material as THREE.MeshStandardMaterial;
+    expect(pipes.state().yogurtDivertLit).toBe(false);
+    pipes.update(line, 0.016, false, null, true);
+    expect(pipes.state()).toMatchObject({ divertLit: false, yogurtDivertLit: true });
+    expect(material('y-divert').emissiveIntensity).toBeGreaterThan(0);
+    expect(material('y-divert').emissive.getHex()).toBe(LAMP_GLOW_HEX.bad);
+    expect(material('divert').emissiveIntensity).toBe(0);
+    for (const run of ['y-holding-cell', 'y-ferment']) expect(material(run), run).not.toBe(material('y-divert'));
+    // The UHT plant's divert leaves the yogurt route dark.
+    pipes.update(line, 0.016, true, null, false);
+    expect(pipes.state()).toMatchObject({ divertLit: true, yogurtDivertLit: false });
+    expect(material('y-divert').emissiveIntensity).toBe(0);
+    pipes.dispose();
+  });
+
   it('while the plant cleans, the CIP circuit and the CIP lines carry the fluid’s colour; milk keeps its own outside the circuit (phase 7)', () => {
     const { pipes, scene, line } = setUp();
     const lye = stop('--clean-lye');

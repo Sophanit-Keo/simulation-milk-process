@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import type { Kpis } from '../src/contracts';
 import { fillerOeeText, formatKpi, kpiSubText, type KpiText } from '../src/ui/format';
 import { expect, test } from './fixtures';
-import { STATIC_KPIS, STATIC_PACKS, STATIC_VALUES, formatted, showTheme, waitForClock } from './helpers';
+import { OPENING_STATUS, STATIC_KPIS, STATIC_PACKS, formatted, showTheme, waitForClock } from './helpers';
 
 // The KPI strip (phase-2 shared spec): the eight slots of index.html, each with one [data-kpi-value]
 // showing its formatted value from the snapshot, and the other KPIs of plan 06 as [data-kpi-sub]
@@ -297,15 +297,16 @@ for (const path of ['/', '/?mock']) {
       const lamps = await visibleLamps(page);
       // Ten on the rail and one for the run state in the bar, at least.
       expect(lamps.length, 'lamps on screen').toBeGreaterThanOrEqual(11);
-      // Each rail group's header (phase 16) shows its worst stage: the milk's amber with stage 9, the standing
-      // yogurt line's unlit.
-      const groupOpening: Record<string, string> = { 'rail-group-uht': 'warn', 'rail-group-yogurt': 'idle' };
+      // Each rail group's header (phase 16) shows its worst stage: the milk's amber with stage 9, the yogurt line's
+      // green, as it runs from the opening (phase 17).
+      const groupOpening: Record<string, string> = { 'rail-group-uht': 'warn', 'rail-group-yogurt': 'ok' };
       for (const lamp of lamps) {
         // The plant opens running every stage and the clock: green, but for stage 9, amber while batches are
-        // on hold (from the opening on, D11). The mock may show any status. The event log's lamps show each
-        // entry's kind, not a status: a plain note is the unlit ring there.
+        // on hold (from the opening on, D11), and the yogurt heat treatment and cold chain, idle (OPENING_STATUS).
+        // The mock may show any status. The event log's lamps show each entry's kind, not a status: a plain note
+        // is the unlit ring there.
         const stage = /^rail-stage-(\d+)$/.exec(lamp.where)?.[1];
-        const opening = stage ? STATIC_VALUES[Number(stage) as keyof typeof STATIC_VALUES].status : (groupOpening[lamp.where] ?? 'ok');
+        const opening = stage ? OPENING_STATUS[Number(stage) as keyof typeof OPENING_STATUS] : (groupOpening[lamp.where] ?? 'ok');
         const expected = path === '/' && lamp.where !== 'event-log' ? opening : expect.stringMatching(/^(ok|warn|bad|idle)$/);
         expect(lamp.status, `lamp in ${lamp.where}`).toEqual(expected);
       }

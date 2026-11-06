@@ -15,14 +15,15 @@ const run = (sim: Sim, commands: Command[], seconds: number): Snapshot => {
   return sim.snapshot();
 };
 
-describe('the live sim until phase 17', () => {
-  it('reports stages 11–16 idle, with the recipe from plant.json, and a well-formed yogurt snapshot', () => {
-    const snap = createSim(plantConfig).snapshot();
-    for (const id of YOGURT_STAGE_IDS) expect(snap.stages[id].status).toBe('idle');
+describe('the live sim (phase 17)', () => {
+  it('opens with the recipe from plant.json, P8 on plain stirred, and a well-formed yogurt snapshot', () => {
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    const snap = sim.snapshot();
     expectWellFormedYogurt(snap, plantConfig, 'opening');
     expect(snap.yogurt.mix.powderKgPerT).toBeCloseTo(26.95, 2);
-    expect(snap.yogurt.mix.tanks.silo.levelL).toBe(18_000);
     expect(snap.yogurt.product).toEqual({ id: 'plainStirred', route: 'stirred', fruit: false, next: 'strawberryStirred' });
+    expect(snap.yogurt.ferment.tanks.map((tank) => tank.state)).toEqual(['emptying', 'ready', 'fermenting']);
   });
 
   it('follows the product day at the shift changes: strawberry stirred from 14:00, plain set from 22:00', () => {
@@ -36,13 +37,13 @@ describe('the live sim until phase 17', () => {
     sim.dispatch({ type: 'setYogurtProduct', product: 'plainSet' });
     let snap = sim.snapshot();
     expect(snap.yogurt.product).toMatchObject({ id: 'plainStirred', next: 'plainSet' });
-    expect(snap.log[0]).toMatchObject({ kind: 'info', message: 'Yogurt line: the next shift (day 8, 14:00) makes plain set yogurt' });
+    expect(snap.log.find((entry) => entry.message.startsWith('Yogurt line: the next shift'))).toMatchObject({ kind: 'info', message: 'Yogurt line: the next shift (day 8, 14:00) makes plain set yogurt' });
     snap = run(sim, [], hToS(8.5));
     expect(snap.yogurt.product).toMatchObject({ id: 'plainSet', route: 'set', next: 'plainSet' });
     snap = run(sim, [], hToS(8));
     expect(snap.yogurt.product).toMatchObject({ id: 'plainSet', next: 'plainStirred' });
     sim.dispatch({ type: 'setYogurtProduct', product: 'kefir' as never });
-    expect(sim.snapshot().log[0]).toMatchObject({ kind: 'warn', message: expect.stringMatching(/Yogurt product "kefir" not set/) });
+    expect(sim.snapshot().log.find((entry) => /Yogurt product "kefir" not set/.test(entry.message))?.kind).toBe('warn');
   });
 
   it('takes the yogurt set points inside their ranges and refuses them outside', () => {
@@ -89,6 +90,17 @@ describe('the mock (?mock)', () => {
     expect(positionsUsed).toBeGreaterThan(100);
     expect(positionsUsed).toBeLessThan(240);
     for (const id of YOGURT_STAGE_IDS) expect(snap.stages[id].status, `stage ${id}`).toBe('ok');
+  });
+
+  it('fills the live line\'s v9 fields: the steam near H125d\'s 255 kg/h at 92 °C, the buffer\'s product, no changeover', () => {
+    const sim = createMockSim(plantConfig);
+    let snap = sim.snapshot();
+    expect(snap.yogurt.energy?.steamKgPerH).toBeGreaterThan(250);
+    expect(snap.yogurt.energy?.steamKgPerH).toBeLessThan(260);
+    expect(snap.yogurt.buffer).toMatchObject({ product: 'plainStirred', changeover: null });
+    expect(snap.yogurt.heat).toMatchObject({ modeRemainingS: 0, cleaning: null });
+    snap = run(sim, [], hToS(1));
+    expect(snap.yogurt.energy?.steamKg).toBeCloseTo(snap.yogurt.energy?.steamKgPerH ?? 0, -1);
   });
 
   it('keeps well-formed as the tanks turn over a day, at every shift', () => {

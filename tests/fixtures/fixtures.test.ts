@@ -88,7 +88,7 @@ const PHASE_4_KEYS: Readonly<Record<7 | 8 | 9 | 10, readonly string[]>> = {
 /** Every shape rule of contracts v4 (src/contracts/snapshot.ts, packs.ts, scenarios.ts) that a consumer may rely on. */
 function expectContracts(snap: Snapshot, where: string): void {
   expect(snap.version, `${where}: version`).toBe(CONTRACT_VERSION);
-  expect(CONTRACT_VERSION).toBe(8);
+  expect(CONTRACT_VERSION).toBe(9);
   expect(Number.isFinite(snap.timeS), `${where}: timeS`).toBe(true);
   expect(isSpeed(snap.speed), `${where}: speed ${snap.speed}`).toBe(true);
   expect(typeof snap.paused, `${where}: paused`).toBe('boolean');
@@ -202,14 +202,19 @@ describe.each(NAMES)('fixture snapshot-%s.json', (name) => {
     expect(uhtFingerprint(stored)).toBe(V7_UHT_FINGERPRINTS[name]);
   });
 
-  it('the yogurt line stands, as it does until phase 17: stages 11–16 idle, nothing flowing, nothing made', () => {
-    for (const id of [11, 12, 13, 14, 15, 16] as const) expect(stored.stages[id].status, `stage ${id}`).toBe('idle');
+  it('the yogurt line runs as it opens (phase 17): P8 on plain stirred from the first tank, the cold chain standing', () => {
     const { yogurt } = stored;
-    expect(yogurt.heat.mode).toBe('idle');
-    expect(yogurt.p8).toEqual({ state: 'idle', cupsPerH: 0, cupsMade: 0, cupsRejected: 0 });
-    expect(yogurt.ferment.tanks.every((tank) => tank.state === 'empty')).toBe(true);
+    // The night left two tanks ready and the third half way (D27); P8 empties the oldest ready one.
+    expect(yogurt.product.id).toBe('plainStirred');
+    expect(yogurt.buffer.product).toBe('plainStirred');
+    expect(yogurt.p8.state).toBe('running');
+    expect(stored.stages[15].status).toBe('ok');
+    expect(stored.stages[16].status).toBe('idle');
+    expect(yogurt.coldChain.coldRoom.positionsUsed).toBe(0);
+    expect(yogurt.heat.divertCount).toBe(0);
     for (const id of ['ySilo', 'yMixTank', 'yHeater', 'yHoldingCell', 'yInoculation', 'yFermentTank', 'yCooler', 'p8Buffer', 'p8Filler'] as const) {
-      expect(stored.line[id], id).toEqual({ tempC: plantConfig.yogurt.silo.tempC, flowLph: 0 });
+      const { tempC, flowLph } = stored.line[id];
+      if (!(Number.isFinite(tempC) && flowLph >= 0)) expect.fail(`line.${id} is ${tempC} °C, ${flowLph} L/h`);
     }
   });
 

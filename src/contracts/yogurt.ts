@@ -1,9 +1,10 @@
-import type { TankLevel } from './snapshot';
+import type { CleaningSnapshot, TankLevel } from './snapshot';
 
 /**
  * The yogurt line, Line P8 (plan 12, D25, D26; contracts v8): stages 11–16 beyond their per-stage values. Phase 15
  * sets the shape; phases 17–19 make it live, and add fields (only add) as P8 and the cold chain gain detail.
- * Until phase 17 the live sim reports the line standing (idle, nothing made) and ?mock fills it.
+ * Since phase 17 the live sim runs stages 11–14 (D27), with P8's draw stubbed at its rate and the cold chain standing
+ * until phases 18–19; ?mock fills every stage.
  */
 
 /** The yogurt line's products (D26): P8 makes one at a time, one a shift. */
@@ -73,6 +74,23 @@ export interface ColdChainSnapshot {
   reefersShipped: number;
 }
 
+/**
+ * What runs between two products on Line P8 (contracts v9, phase 17, D27): a rinse of the buffer and the fruit line
+ * before a stirred product, and before set yogurt the wing's CIP of the buffer and P8, then P8's SIP.
+ */
+export type YogurtChangeoverKind = 'rinse' | 'cip' | 'sip';
+
+export const YOGURT_CHANGEOVER_KINDS: readonly YogurtChangeoverKind[] = ['rinse', 'cip', 'sip'];
+
+/** The heat treatment's steam and the boiler's gas for it (contracts v9, phase 17), counted apart from the UHT's. */
+export interface YogurtEnergySnapshot {
+  steamKgPerH: number;
+  gasKw: number;
+  /** Since the plant opened. */
+  steamKg: number;
+  gasKwh: number;
+}
+
 /** The yogurt group of the KPI strip (phase 16 shows it). */
 export interface YogurtKpis {
   /** Mix through the heat treatment now. */
@@ -110,6 +128,10 @@ export interface YogurtSnapshot {
     denatPct: number;
     divertCount: number;
     reprocessTank: TankLevel;
+    /** Time left in a divert or a clean; 0 otherwise (contracts v9). Absent from an older snapshot. */
+    modeRemainingS?: number;
+    /** The step of the wing's CIP after a divert, while it runs; null otherwise (contracts v9). */
+    cleaning?: CleaningSnapshot | null;
   };
   /** Stage 13: inoculation and the three fermentation tanks. */
   ferment: { tempC: number; tanks: FermentTank[] };
@@ -126,10 +148,16 @@ export interface YogurtSnapshot {
     coolerOutletC: number | null;
     /** Fruit preparation dosed into the flow; 0 without a fruit recipe. */
     fruitDosePct: number;
+    /** The product in the buffer, or the one it is made ready for; null while it changes over (contracts v9). */
+    product?: YogurtProductId | null;
+    /** The changeover under way between two products on P8, or null (contracts v9). */
+    changeover?: { kind: YogurtChangeoverKind; remainingS: number } | null;
   };
   /** Stage 15. */
   p8: P8Snapshot;
   /** Stage 16. */
   coldChain: ColdChainSnapshot;
   kpis: YogurtKpis;
+  /** The heat treatment's steam (contracts v9, phase 17). Absent from an older snapshot. */
+  energy?: YogurtEnergySnapshot;
 }

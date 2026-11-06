@@ -1,16 +1,17 @@
 import type { ScenarioId } from './commands';
 import type { PacksSnapshot } from './packs';
 import type { ScenariosSnapshot } from './scenarios';
-import type { LinePointId, Speed, StageId, Status } from './stages';
+import type { LineId, LinePointId, Speed, StageId, Status } from './stages';
 import type { YogurtSnapshot } from './yogurt';
 
 /**
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
  * v0 week 1, v1 at G1, v2 at week 6, v3 at G2, v4 in phase 5 (scenarios), v5 in phase 7 (cleaning steps), v6 in
  * phase 8 (steam and energy), v7 in phase 13 (the CIP station's chemicals and returns), v8 in phase 15 (the yogurt
- * line: stages 11–16, their line points and Snapshot.yogurt). From v3 on, fields may only be added.
+ * line: stages 11–16, their line points and Snapshot.yogurt), v9 in phase 17 (the live yogurt line's heat treatment
+ * clean, buffer changeover and steam). From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 8;
+export const CONTRACT_VERSION = 9;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -201,6 +202,8 @@ export interface LogEntry {
   scenario?: ScenarioId;
   /** Why it happened, one or two sentences, for the scenario log (contracts v4). */
   why?: string;
+  /** The line it is about, where it is the yogurt line's (contracts v9); absent for the UHT line's and the plant's. */
+  line?: LineId;
 }
 
 /** One plain-object picture of the plant, built once per frame; the 3D view and the UI read only this. */

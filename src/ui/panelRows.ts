@@ -1,6 +1,17 @@
 import type { Snapshot, StageId } from '../contracts';
 import { STATE_ROWS as LIQUID_STATE_ROWS, type StateRow, type StateText } from './liquidRows';
 import { dockText, fillerText, lastPalletText, lastSsccText, nextPickText, packerText, palletText } from './packsRows';
+import {
+  bufferProductText,
+  changeoverText,
+  heatCleaningText,
+  heatModeText,
+  nextProductText,
+  productText,
+  setWaitText,
+  steamText,
+  tankText,
+} from './yogurtRows';
 
 /** A state row of the info panel, read from the whole snapshot. */
 export interface PanelStateRow {
@@ -24,11 +35,20 @@ export function sterileAirText(snapshot: Pick<Snapshot, 'scenarios'>): StateText
 }
 const traysPerPallet = (snapshot: Snapshot): number => snapshot.stages[8]?.values.traysPerPallet ?? 0;
 
+/** The yogurt part of a snapshot, or undefined for an older one. */
+const yogurtOf = (snapshot: Snapshot) => (snapshot as Partial<Snapshot>).yogurt;
+
+/** The yogurt line's three fermentation tanks, numbered from 1 as the stage's values are. */
+const TANK_NUMBERS = [1, 2, 3] as const;
+
 /**
  * Every stage's state rows above its values: the liquid line's (liquidRows.ts), the tank's sterile air (v4) and, from contracts v3, each
  * filler's state (stage 7), each tray packer lane and the pallet it builds, with the newest pallet's SSCC
  * (stage 8), and the next pick and the dock (stage 10). Stage 9 lists its batches in a panel part instead
  * (batchList.ts). The plant has two fillers, A and B; a missing one reads "—".
+ *
+ * The yogurt line's (phase 17, yogurtRows.ts): the product and the next shift's (stage 11), the heat treatment's mode,
+ * its clean and its steam (12), each fermentation tank (13), and the buffer's product, changeover and set-mix wait (14).
  */
 export const PANEL_STATE_ROWS: Readonly<Partial<Record<StageId, readonly PanelStateRow[]>>> = {
   4: fromLiquid(LIQUID_STATE_ROWS[4]),
@@ -47,5 +67,24 @@ export const PANEL_STATE_ROWS: Readonly<Partial<Record<StageId, readonly PanelSt
   10: [
     { key: 'nextPick', label: 'Next pick', read: (snapshot) => (snapshot.packs ? nextPickText(snapshot.packs.warehouse) : { text: '—', status: 'idle' }) },
     { key: 'dock', label: 'Dock', read: (snapshot) => (snapshot.packs ? dockText(snapshot.packs.warehouse) : { text: '—', status: 'idle' }) },
+  ],
+  11: [
+    { key: 'product', label: 'Product', read: (snapshot) => productText(yogurtOf(snapshot)) },
+    { key: 'nextProduct', label: 'Next shift', read: (snapshot) => nextProductText(yogurtOf(snapshot)) },
+  ],
+  12: [
+    { key: 'heatMode', label: 'Mode', read: (snapshot) => heatModeText(yogurtOf(snapshot)) },
+    { key: 'heatCleaning', label: 'Cleaning step', read: (snapshot) => heatCleaningText(yogurtOf(snapshot)) },
+    { key: 'steam', label: 'Steam', read: (snapshot) => steamText(yogurtOf(snapshot)) },
+  ],
+  13: TANK_NUMBERS.map((n) => ({
+    key: `tank${n}`,
+    label: `Tank ${n}`,
+    read: (snapshot: Snapshot) => tankText(yogurtOf(snapshot)?.ferment.tanks[n - 1], snapshot.timeS),
+  })),
+  14: [
+    { key: 'bufferProduct', label: 'In the buffer', read: (snapshot) => bufferProductText(yogurtOf(snapshot)) },
+    { key: 'changeover', label: 'Changeover', read: (snapshot) => changeoverText(yogurtOf(snapshot)) },
+    { key: 'setWait', label: 'Set mix waited', read: (snapshot) => setWaitText(yogurtOf(snapshot)) },
   ],
 };

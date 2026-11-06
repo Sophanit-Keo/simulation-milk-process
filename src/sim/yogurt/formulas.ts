@@ -1,6 +1,5 @@
 // The yogurt line's formulas (phase 15, D26), as pure functions, with the expected values of H122–H125 in
-// plan/hand-calculations.md. Phase 17 builds the live stages 11–14 on them; until then the mock and the idle line
-// use them for the values they show. Every unit conversion goes through units.ts (D6).
+// plan/hand-calculations.md. The live stages 11–14 (yogurtLine.ts, phase 17) and the mock build on them. Every unit conversion goes through units.ts (D6).
 import { cToK, fracToPct, gToKg, pctToFrac, type YogurtConfig } from '../../contracts';
 
 /** A tonne of mix, in kilograms. */

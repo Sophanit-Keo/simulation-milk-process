@@ -14,9 +14,11 @@ function canonical(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** The snapshot without its version and without what the yogurt line added. */
+/** The snapshot without its version and without what the yogurt line added: its part, stages, points and log entries. */
 export function uhtPart(snapshot: unknown): Record<string, unknown> {
   const { version: _version, yogurt: _yogurt, ...rest } = snapshot as Record<string, unknown>;
+  // Since contracts v9 the yogurt line logs too; its entries say so (LogEntry.line).
+  if (Array.isArray(rest.log)) rest.log = (rest.log as { line?: string }[]).filter((entry) => entry.line !== 'yogurt');
   const stages = { ...(rest.stages as Record<string, unknown>) };
   for (const id of YOGURT_STAGE_IDS) delete stages[id];
   const line = { ...(rest.line as Record<string, unknown>) };

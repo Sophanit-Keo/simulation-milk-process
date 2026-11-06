@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "timeS": 627090,
   "speed": 10,
   "paused": false,
@@ -144,14 +144,14 @@
     },
     "11": {
       "id": 11,
-      "status": "idle",
+      "status": "ok",
       "values": {
-        "flowLph": 0,
+        "flowLph": 6000,
         "fatPct": 3,
         "snfPct": 11,
         "powderKgPerT": 26.953650057937438,
-        "siloLevelPct": 60,
-        "mixTankLevelPct": 0
+        "siloLevelPct": 56.18776554654432,
+        "mixTankLevelPct": 69.16666666666517
       }
     },
     "12": {
@@ -159,7 +159,7 @@
       "status": "idle",
       "values": {
         "flowLph": 0,
-        "tempC": 4,
+        "tempC": 92,
         "setpointC": 92,
         "holdS": 0,
         "denatPct": 0,
@@ -171,35 +171,35 @@
     },
     "13": {
       "id": 13,
-      "status": "idle",
+      "status": "ok",
       "values": {
         "tempC": 43,
         "setpointC": 43,
         "endPh": 4.55,
         "timeToEndS": 14400,
-        "fermentingCount": 0,
-        "tank1Ph": 6.6,
-        "tank2Ph": 6.6,
-        "tank3Ph": 6.6
+        "fermentingCount": 1,
+        "tank1Ph": 4.55,
+        "tank2Ph": 4.55,
+        "tank3Ph": 5.448510045787023
       }
     },
     "14": {
       "id": 14,
-      "status": "idle",
+      "status": "ok",
       "values": {
-        "inflowLph": 0,
-        "outflowLph": 0,
-        "tempC": 4,
-        "levelPct": 0,
+        "inflowLph": 6000,
+        "outflowLph": 2743.2,
+        "tempC": 18,
+        "levelPct": 15.605500000000161,
         "fruitDosePct": 0
       }
     },
     "15": {
       "id": 15,
-      "status": "idle",
+      "status": "ok",
       "values": {
-        "cupsPerH": 0,
-        "cupsMade": 0,
+        "cupsPerH": 21600,
+        "cupsMade": 4140,
         "cupsRejected": 0,
         "setRateCupsPerH": 21600,
         "cupG": 125,
@@ -272,7 +272,7 @@
     },
     "ySilo": {
       "tempC": 4,
-      "flowLph": 0
+      "flowLph": 6000
     },
     "yMixTank": {
       "tempC": 4,
@@ -291,20 +291,20 @@
       "flowLph": 0
     },
     "yFermentTank": {
-      "tempC": 4,
-      "flowLph": 0
+      "tempC": 43,
+      "flowLph": 6000
     },
     "yCooler": {
-      "tempC": 4,
-      "flowLph": 0
+      "tempC": 18,
+      "flowLph": 6000
     },
     "p8Buffer": {
-      "tempC": 4,
-      "flowLph": 0
+      "tempC": 18,
+      "flowLph": 2743.2
     },
     "p8Filler": {
-      "tempC": 4,
-      "flowLph": 0
+      "tempC": 18,
+      "flowLph": 2743.2
     }
   },
   "liquid": {
@@ -1201,17 +1201,17 @@
       "next": "strawberryStirred"
     },
     "mix": {
-      "flowLph": 0,
+      "flowLph": 6000,
       "fatPct": 3,
       "snfPct": 11,
       "powderKgPerT": 26.953650057937438,
       "tanks": {
         "silo": {
-          "levelL": 18000,
+          "levelL": 16856.329663963297,
           "capacityL": 30000
         },
         "mixTank": {
-          "levelL": 0,
+          "levelL": 4149.99999999991,
           "capacityL": 6000
         }
       }
@@ -1219,64 +1219,68 @@
     "heat": {
       "mode": "idle",
       "flowLph": 0,
-      "outletC": 4,
+      "outletC": 92,
       "holdS": 0,
       "denatPct": 0,
       "divertCount": 0,
       "reprocessTank": {
         "levelL": 0,
         "capacityL": 2000
-      }
+      },
+      "modeRemainingS": 0,
+      "cleaning": null
     },
     "ferment": {
       "tempC": 43,
       "tanks": [
         {
-          "levelL": 0,
+          "levelL": 8850.000000000418,
           "capacityL": 10000,
-          "state": "empty",
-          "product": null,
-          "ph": 6.6,
-          "taPct": 0.19,
-          "startedS": null,
-          "readyAtS": null
+          "state": "emptying",
+          "product": "plainStirred",
+          "ph": 4.55,
+          "taPct": 0.8999999999999999,
+          "startedS": 604800,
+          "readyAtS": 619200
         },
         {
-          "levelL": 0,
+          "levelL": 10000,
           "capacityL": 10000,
-          "state": "empty",
-          "product": null,
-          "ph": 6.6,
-          "taPct": 0.19,
-          "startedS": null,
-          "readyAtS": null
+          "state": "ready",
+          "product": "plainStirred",
+          "ph": 4.55,
+          "taPct": 0.8999999999999999,
+          "startedS": 608400,
+          "readyAtS": 622800
         },
         {
-          "levelL": 0,
+          "levelL": 10000,
           "capacityL": 10000,
-          "state": "empty",
-          "product": null,
-          "ph": 6.6,
-          "taPct": 0.19,
-          "startedS": null,
-          "readyAtS": null
+          "state": "fermenting",
+          "product": "plainStirred",
+          "ph": 5.448510045787023,
+          "taPct": 0.5888087158493724,
+          "startedS": 619200,
+          "readyAtS": 633600
         }
       ]
     },
     "buffer": {
-      "levelL": 0,
+      "levelL": 624.2200000000064,
       "capacityL": 4000,
-      "inflowLph": 0,
-      "outflowLph": 0,
-      "tempC": 4,
+      "inflowLph": 6000,
+      "outflowLph": 2743.2,
+      "tempC": 18,
       "waitS": null,
-      "coolerOutletC": null,
-      "fruitDosePct": 0
+      "coolerOutletC": 18,
+      "fruitDosePct": 0,
+      "product": "plainStirred",
+      "changeover": null
     },
     "p8": {
-      "state": "idle",
-      "cupsPerH": 0,
-      "cupsMade": 0,
+      "state": "running",
+      "cupsPerH": 21600,
+      "cupsMade": 4140,
       "cupsRejected": 0
     },
     "coldChain": {
@@ -1297,10 +1301,16 @@
     "kpis": {
       "mixLph": 0,
       "divertedL": 0,
-      "cupsPerH": 0,
-      "cupsMade": 0,
+      "cupsPerH": 21600,
+      "cupsMade": 4140,
       "coldRoomPallets": 0,
       "reefersShipped": 0
+    },
+    "energy": {
+      "steamKgPerH": 0,
+      "gasKw": 0,
+      "steamKg": 0,
+      "gasKwh": 0
     }
   },
   "kpis": {

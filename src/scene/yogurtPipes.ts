@@ -82,8 +82,8 @@ const CELL_PATH: Path = {
 };
 
 /**
- * Mix that falls short of the CCP, to the reprocess tank. No line point carries its flow in contracts v8, so it
- * stands still until phase 17 diverts.
+ * Mix that falls short of the CCP, to the reprocess tank. No line point carries its flow, so its stripes stand still;
+ * since phase 17 it is a run of its own, which glows red while the heat treatment diverts, as the milk's divert does.
  */
 const DIVERT_PATH: Path = {
   radiusM: RADIUS_M,
@@ -165,10 +165,14 @@ const P8_FEED_PATH: Path = {
   ],
 };
 
+/** The run from the yogurt divert valve to the reprocess tank, which lights up while the heat treatment diverts. */
+export const YOGURT_DIVERT_RUN_ID = 'y-divert';
+
 /**
- * The yogurt line's milk routes, in flow order, as three runs, one mesh each: silo to the heat exchanger, the holding
- * cell with the divert and forward lines, and the inoculated mix from the heat exchanger through the tanks, the
- * cooler and the buffer to Line P8. Thin as they are, they cast no shadow: a mesh and its shadow are a draw call each.
+ * The yogurt line's milk routes, in flow order, as four runs, one mesh each: silo to the heat exchanger, the holding
+ * cell with the forward line, the divert to the reprocess tank (lit while it diverts), and the inoculated mix from
+ * the heat exchanger through the tanks, the cooler and the buffer to Line P8. Thin as they are, they cast no shadow:
+ * a mesh and its shadow are a draw call each.
  */
 export const YOGURT_RUNS: readonly PipeRun[] = [
   {
@@ -180,11 +184,18 @@ export const YOGURT_RUNS: readonly PipeRun[] = [
   },
   {
     // From the heating section round the holding cell's serpentine to the divert valve, then forward back into the
-    // heat exchanger, or to the reprocess tank. A click on it selects stage 12, as the UHT holding tube selects 4.
+    // heat exchanger. A click on it selects stage 12, as the UHT holding tube selects 4.
     id: 'y-holding-cell',
     stage: 12,
     castShadow: false,
-    paths: [CELL_PATH, DIVERT_PATH, FORWARD_PATH],
+    paths: [CELL_PATH, FORWARD_PATH],
+  },
+  {
+    // From the divert valve to the reprocess tank; it carries mix only while the heat treatment diverts.
+    id: YOGURT_DIVERT_RUN_ID,
+    stage: 12,
+    castShadow: false,
+    paths: [DIVERT_PATH],
   },
   {
     // Cooled to 43 °C and inoculated, into the tanks; out of their cone bottoms to the smoothing valve, the cooler,

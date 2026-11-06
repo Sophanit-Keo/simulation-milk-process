@@ -3,6 +3,7 @@ import { STAGE_VIEWS } from '../src/scene/layout';
 import { expect, test } from './fixtures';
 import {
   ALL_STAGES,
+  OPENING_STATUS,
   expectOverview,
   expectSelected,
   railButton,
@@ -17,7 +18,8 @@ import {
 
 // The yogurt wing in grey boxes (phase 16, gate Y1): stages 11–16 on the rail under "Yogurt P8", each selectable
 // from the rail and by a click in the 3D view, the camera at its stop, the panel filled from the mock (phase 15) or
-// standing on the live sim, and the KPI strip showing the yogurt group while one of them is selected.
+// from the live line (phase 17, stages 11–14; P8 stubbed and the cold chain standing until phases 18–19), and the
+// KPI strip showing the yogurt group while one of them is selected.
 
 /** Six stages, each a fly and a panel on software GL. */
 const WING_TIMEOUT_MS = 240_000;
@@ -86,7 +88,7 @@ test('each yogurt stage selects by a click on its machines from the overview', a
   }
 });
 
-test('on the live sim the yogurt stages stand, with plant.json\'s values, until phase 17', async ({ page }) => {
+test('on the live sim the yogurt line runs from the opening: each stage\'s values and lamp, green but for the heat treatment and the cold chain', async ({ page }) => {
   test.setTimeout(WING_TIMEOUT_MS);
   await page.goto('/');
   await waitForClock(page);
@@ -94,8 +96,8 @@ test('on the live sim the yogurt stages stand, with plant.json\'s values, until 
     await test.step(`rail-stage-${stage.id}`, async () => {
       await showOnRail(page, stage.id);
       await railButton(page, stage.id).click();
-      await expectSelected(page, stage, { staticValues: true });
-      await expect(railButton(page, stage.id).locator('[data-status]')).toHaveAttribute('data-status', 'idle');
+      await expectSelected(page, stage);
+      await expect(railButton(page, stage.id).locator('[data-status]')).toHaveAttribute('data-status', OPENING_STATUS[stage.id]);
     });
   }
 });

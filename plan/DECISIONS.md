@@ -32,6 +32,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D24](#d24-the-forklifts-in-detail) | The forklifts as a 2 t electric counterbalance truck from its datasheet | — | Proposed |
 | [D25](#d25-the-yogurt-line-line-p8) | The yogurt line, Line P8: stages 11–16 in a new wing, set and stirred, the UHT line unchanged | — | Proposed |
 | [D26](#d26-the-yogurt-lines-defaults) | The yogurt line's defaults: mix, heat treatment, fermentation, P8, cold chain (schema 10) | — | Proposed |
+| [D27](#d27-the-yogurt-line-live-stages-1114) | The yogurt line live, stages 11–14: the product day on P8, the routing, the CCP and the wing's CIP (schema 11) | — | Proposed |
 
 ## D1. Batch size
 
@@ -597,6 +598,47 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - the `yogurt` block of `plant.json` (schema 10);
   - a "Yogurt line" part in [default settings](06-simulation-model.md#default-settings);
   - H122 onwards in [Hand calculations](hand-calculations.md).
+
+## D27. The yogurt line live (stages 11–14)
+
+- **Status:** Proposed
+- **Date:** 2026-11-06
+- **Review note:** none ([phase 17](agent-plan/phase-17-yogurt-liquid-line.md))
+- **Decision:** the yogurt line's liquid side runs live, from its silo to the P8 buffer, with P8's draw stubbed at its rate (phase 18 builds the filler) and the cold chain standing (phase 19). It runs in the core's step after the UHT line, draws nothing from the seeded streams and queues no events, so every UHT number stays as it was (D25). Its log entries say they are the yogurt line's (contracts v9, `LogEntry.line`). New keys in `plant.json` (schema 11), under `yogurt`:
+
+| Setting | Default | `plant.json` key | Basis |
+|---|---|---|---|
+| Silo tanker | 20,000 L, called below 30% (9,000 L), unloading at the shared bay's 30,000 L/h while its UHT lane is free | `silo.tankerL`, `silo.tankerBelowFrac` | Sim assumption: a rigid tanker; at the threshold it fits, and the silo outlasts a UHT tanker's 50 min at the bay with 4,028 L to spare (H125a) |
+| Mix tank at opening | 50% | `mix.tankStartFrac` | Sim assumption, as the UHT mixing tank (D13) |
+| Heater lag; divert | 30 s; 3 min to the reprocess tank before the wing's CIP | `heat.lagS`, `heat.divertS` | Sim assumptions, as the UHT preheater's lag (D13) and divert (D2) |
+| Tank clean | 45 min after a tank is emptied | `ferment.tankCleanS` | Sim assumption |
+| Transfer to the buffer | 6,000 L/h through the smoothing valve and the cooler | `cooling.flowLph` | Sim assumption: the line's capacity, above P8's 2,743.2 L/h |
+| Buffer levels | Stirred to 90%; set mix held at 40% (1,600 L) by a level control with a 10 min time constant | `buffer.highFrac`, `buffer.setHighFrac`, `buffer.levelLagS` | Sim assumptions; at 40% set mix leaves after 35.0 min, inside its 45 (H125c) |
+| Rinse | 15 min before a stirred product | `changeover.rinseS` | Sim assumption |
+| The wing's CIP | Lye 84.2 mS/cm, acid 45.0 mS/cm at 20 °C; 12,000 L/h through a 300 L circuit | `cip.lyeConductivityMsPerCm`, `cip.acidConductivityMsPerCm`, `cip.circulateLph`, `cip.circuitL` | CRC Handbook, linear at 1.8% NaOH and 0.8% HNO₃ (H125b); the circuit a sim assumption with D23's 90 s turnover |
+
+- **Rules with no key:**
+  - **The product day is P8's.**
+    - Each shift's product (D26) is what P8 fills.
+    - P8 finishes what the buffer holds of the last product, then the changeover runs: a rinse before a stirred product, and before set yogurt the wing's CIP (80 min) and P8's SIP (20 min, `p8.sip.holdS`).
+    - In the last part of a shift before another product, the buffer is filled only for the time left, so it runs empty at the shift's end.
+  - **The heat treatment works ahead.** Every stirred product is plain yogurt base until the buffer: fruit is dosed after the cooler. So the heat treatment feeds set mix to the buffer first, while P8 fills set yogurt, and fills the tanks with what is left of its 6,000 L/h whenever one is empty and clean. A ready tank waits, cooled, for P8's next stirred shift. With nothing to feed, it stands.
+  - **The holding cell is a plug-flow delay of 500 L (H123).** Each parcel keeps the temperature it entered with.
+    - The parcel at its outlet is the CCP's: below `heat.divertBelowC`, or held under `heat.minHoldS`, the line diverts to the reprocess tank for `heat.divertS`, then runs the wing's CIP, then runs again.
+    - The CIP ends with the line full of water brought up to the set point, so the mix starts again behind it: the holding cell holds no mix from before the divert, and the CCP judges the new mix as it reaches the outlet. A set point still under the limit diverts again at once.
+    - The CIP is D16's steps at the SOP's temperatures, with D23's chemistry through the wing's circuit.
+    - The reprocess tank is pumped out to rework by the clean's end.
+    - The denaturation shown is the outlet parcel's, for the time it was held (H124).
+  - **The steam** heats the mix from the homogenizer's 68 °C to the outlet's; the regeneration does the rest. It is counted apart from the UHT's (`YogurtSnapshot.energy`), on the same boiler figures (D17). The steam for the wing's CIP is not counted.
+  - **The tanks** ferment on H125's curve, its clock running at the cardinal factor of the fermentation set point, so a change mid-way acts on what is left. Each tank is filled one at a time and emptied one at a time, the longest ready first.
+  - **Set mix** that waits in the buffer past `buffer.setMaxWaitS` goes to rework.
+  - **The opening:** the wing opens as the night left it. Two tanks are ready (the older first), the third is half way through its fermentation, the buffer is empty and ready for the shift's product, and the silo and mix tank are at their start levels.
+- **Why:** the line then shows what a yogurt plant juggles: fermentation runs hours ahead of the filler, set yogurt must reach the cup within minutes, the CCP sends short-held mix back, and one filler serves three products with a changeover between them. At the defaults P8 never waits outside its changeovers (H125e).
+- **What it changes:**
+  - the keys above (schema 11) and their rows in [default settings](06-simulation-model.md#yogurt-line);
+  - contracts v9: `YogurtSnapshot.heat.modeRemainingS` and `cleaning`, `buffer.product` and `changeover`, `energy`, and `LogEntry.line`;
+  - `src/sim/yogurt/` (`mix.ts`, `heat.ts`, `ferment.ts`, `routing.ts`, `yogurtLine.ts`);
+  - panels 11–14, their sliders and the next-product picker.
 
 ---
 
