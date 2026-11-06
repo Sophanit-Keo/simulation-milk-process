@@ -17,6 +17,7 @@ import { createTopBar, speedKey } from './topBar';
 import { createTour } from './tour';
 import { createTrendChart, TREND_CHARTS } from './trendChart';
 import { createTrendHistory } from './trends';
+import { createYogurtBatchList } from './yogurtBatchList';
 
 export interface HudOptions {
   /** The set points the sim starts from (plant.json), for a slider whose stage reports no set point of its own. */
@@ -116,6 +117,8 @@ export function createHud(
     }
     if (stage === 10) built.push(createStockList(host));
     if (stage === 11) built.push(createProductPicker(host, send));
+    // The yogurt batches in the cold chain (phase 19), beside the milk's in stage 9.
+    if (stage === 16) built.push(createYogurtBatchList(host));
     return built;
   };
 
