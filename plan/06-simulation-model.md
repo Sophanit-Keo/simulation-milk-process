@@ -126,9 +126,14 @@ Stages 11–16, Line P8 ([plan 12](12-yogurt-line.md)), from the `yogurt` block 
 | Sealing and checks | 200 °C, 1.0 s, 5.0 bar inside 180–220 °C, 0.8–1.2 s, 4–6 bar; 5 cups tested every 2 operating hours | SOP P8 step 5 and Part 3 |
 | P8 hygiene | HEPA cabin at +25 Pa, stopping below +15 Pa; SIP at ≥ 121 °C for 20 min; ATP swab < 10 RLU; the wing's CIP lye 1.8% NaOH at 78 °C, acid 0.8% HNO₃ at 68 °C | SOP Part 3; the +25 Pa and the strengths within the SOP's ranges are sim assumptions |
 | Cold chain | 24 cups a tray, 120 trays a pallet; set yogurt in the 43 °C warm room until pH ≤ 4.60; blast-chilled to ≤ 4 °C; cold room at 3 °C (2–4 °C), held 24–48 h; 28 days' shelf life; reefers of 26 pallets | SOP P8 step 7; the counts, the shelf life and the reefer load are sim assumptions, settled in phase 19 (H130–H133) |
-| Product day | Plain stirred 06:00–14:00, strawberry stirred 14:00–22:00, plain set 22:00–06:00, on the shifts of [D1](DECISIONS.md#d1-batch-size); the next shift's product can be changed | Sim assumption ([plan 12](12-yogurt-line.md#product-plan)) |
+| Product day | Plain stirred 06:00–14:00, strawberry stirred 14:00–22:00, plain set 22:00–06:00, on the shifts of [D1](DECISIONS.md#d1-batch-size), as P8 fills them; the next shift's product can be changed | Sim assumption ([plan 12](12-yogurt-line.md#product-plan), [D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)) |
+| Yogurt silo tanker | 20,000 L, called below 30%, unloading at the shared bay's 30,000 L/h while its UHT lane is free | Sim assumption ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114), H125a) |
+| Heat treatment control | Outlet lags its set point by 30 s; a divert sends 3 min to the reprocess tank before the wing's CIP; the mix tank opens 50% full | Sim assumptions, as the UHT's ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)) |
+| Routing and buffer | Set mix to the buffer first, the rest of 6,000 L/h into the tanks; a tank emptied at 6,000 L/h, cleaned 45 min; the buffer filled to 90% (stirred) or held at 40% (set, 10 min level control) | Sim assumptions ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114), H125c) |
+| Changeovers on P8 | A 15 min rinse before a stirred product; the wing's CIP (80 min) and P8's SIP (20 min) before set yogurt | Sim assumptions; the CIP and SIP from SOP Part 3 ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)) |
+| Wing CIP circuit | 12,000 L/h through 300 L; lye 84.2 mS/cm, acid 45.0 mS/cm at 20 °C | CRC Handbook, linear (H125b); the circuit a sim assumption ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)) |
 
-> Until phase 17 makes it live, the live sim reports the yogurt line standing: its silo full to its opening level, every other vessel empty, nothing flowing, and stages 11–16 grey. `?mock` fills it; `?yogurt` puts stages 11–16 on the rail.
+> Since phase 17 stages 11–14 run live ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)); P8's draw is stubbed at its rate until phase 18, and the cold chain stands until phase 19.
 
 ## KPIs on screen
 

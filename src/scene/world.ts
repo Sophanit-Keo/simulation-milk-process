@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
-import { msToS, type ViewBus, type World } from '../contracts';
+import { msToS, type Snapshot, type ViewBus, type World } from '../contracts';
 import { createCameraFlight } from './cameraFlight';
 import { debugRequested, installDebugHook, type DebugHook } from './debugHook';
 import { uhtModeOf } from './equipment/liquid/visuals';
@@ -304,7 +304,9 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
       // Paused means the plant's time stands still: the milk stops flowing with it (motionDtS is 0).
       // While the UHT plant cleans (contracts v5), its pipes carry the step's fluid at the circulation.
       const cleaning = snapshot.liquid?.cleaning ?? null;
-      pipes.update(snapshot.line, motionDtS(snapshot, realDtS), uhtModeOf(snapshot) === 'divert', cleaning && { fluid: cleaning.fluid, flowLph: cleaning.flowLph });
+      // The yogurt line's divert (phase 17) lights its own route to the reprocess tank.
+      const yogurtDiverting = (snapshot as Partial<Snapshot>).yogurt?.heat.mode === 'divert';
+      pipes.update(snapshot.line, motionDtS(snapshot, realDtS), uhtModeOf(snapshot) === 'divert', cleaning && { fluid: cleaning.fluid, flowLph: cleaning.flowLph }, yogurtDiverting);
       // The labels count real time, not realDtS, which counts no frame as longer than maxFrameS: right for the
       // camera (a stall doesn't make it jump), but slow frames would leave the labels behind the rail.
       const nowMs = performance.now();

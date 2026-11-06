@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "timeS": 648400.7527456576,
   "speed": 10,
   "paused": false,
@@ -150,8 +150,8 @@
         "fatPct": 3,
         "snfPct": 11,
         "powderKgPerT": 26.953650057937438,
-        "siloLevelPct": 60,
-        "mixTankLevelPct": 0
+        "siloLevelPct": 83.57184241020896,
+        "mixTankLevelPct": 100
       }
     },
     "12": {
@@ -159,7 +159,7 @@
       "status": "idle",
       "values": {
         "flowLph": 0,
-        "tempC": 4,
+        "tempC": 92,
         "setpointC": 92,
         "holdS": 0,
         "denatPct": 0,
@@ -171,35 +171,35 @@
     },
     "13": {
       "id": 13,
-      "status": "idle",
+      "status": "ok",
       "values": {
         "tempC": 43,
         "setpointC": 43,
         "endPh": 4.55,
         "timeToEndS": 14400,
-        "fermentingCount": 0,
-        "tank1Ph": 6.6,
+        "fermentingCount": 1,
+        "tank1Ph": 5.98461173369333,
         "tank2Ph": 6.6,
-        "tank3Ph": 6.6
+        "tank3Ph": 4.55
       }
     },
     "14": {
       "id": 14,
-      "status": "idle",
+      "status": "ok",
       "values": {
-        "inflowLph": 0,
-        "outflowLph": 0,
-        "tempC": 4,
-        "levelPct": 0,
+        "inflowLph": 2743.2,
+        "outflowLph": 2743.2,
+        "tempC": 18,
+        "levelPct": 90,
         "fruitDosePct": 0
       }
     },
     "15": {
       "id": 15,
-      "status": "idle",
+      "status": "ok",
       "values": {
-        "cupsPerH": 0,
-        "cupsMade": 0,
+        "cupsPerH": 21600,
+        "cupsMade": 132004,
         "cupsRejected": 0,
         "setRateCupsPerH": 21600,
         "cupG": 125,
@@ -291,20 +291,20 @@
       "flowLph": 0
     },
     "yFermentTank": {
-      "tempC": 4,
-      "flowLph": 0
+      "tempC": 43,
+      "flowLph": 2743.2
     },
     "yCooler": {
-      "tempC": 4,
-      "flowLph": 0
+      "tempC": 18,
+      "flowLph": 2743.2
     },
     "p8Buffer": {
-      "tempC": 4,
-      "flowLph": 0
+      "tempC": 18,
+      "flowLph": 2743.2
     },
     "p8Filler": {
-      "tempC": 4,
-      "flowLph": 0
+      "tempC": 18,
+      "flowLph": 2743.2
     }
   },
   "liquid": {
@@ -1200,11 +1200,11 @@
       "powderKgPerT": 26.953650057937438,
       "tanks": {
         "silo": {
-          "levelL": 18000,
+          "levelL": 25071.55272306269,
           "capacityL": 30000
         },
         "mixTank": {
-          "levelL": 0,
+          "levelL": 6000,
           "capacityL": 6000
         }
       }
@@ -1212,22 +1212,34 @@
     "heat": {
       "mode": "idle",
       "flowLph": 0,
-      "outletC": 4,
+      "outletC": 92,
       "holdS": 0,
       "denatPct": 0,
       "divertCount": 0,
       "reprocessTank": {
         "levelL": 0,
         "capacityL": 2000
-      }
+      },
+      "modeRemainingS": 0,
+      "cleaning": null
     },
     "ferment": {
       "tempC": 43,
       "tanks": [
         {
+          "levelL": 10000,
+          "capacityL": 10000,
+          "state": "fermenting",
+          "product": "plainStirred",
+          "ph": 5.98461173369333,
+          "taPct": 0.4031344727208465,
+          "startedS": 643499.5175889863,
+          "readyAtS": 657898.5175889863
+        },
+        {
           "levelL": 0,
           "capacityL": 10000,
-          "state": "empty",
+          "state": "cleaning",
           "product": null,
           "ph": 6.6,
           "taPct": 0.19,
@@ -1235,41 +1247,33 @@
           "readyAtS": null
         },
         {
-          "levelL": 0,
+          "levelL": 9635.426407807729,
           "capacityL": 10000,
-          "state": "empty",
-          "product": null,
-          "ph": 6.6,
-          "taPct": 0.19,
-          "startedS": null,
-          "readyAtS": null
-        },
-        {
-          "levelL": 0,
-          "capacityL": 10000,
-          "state": "empty",
-          "product": null,
-          "ph": 6.6,
-          "taPct": 0.19,
-          "startedS": null,
-          "readyAtS": null
+          "state": "emptying",
+          "product": "plainStirred",
+          "ph": 4.55,
+          "taPct": 0.8999999999999999,
+          "startedS": 619200,
+          "readyAtS": 633600
         }
       ]
     },
     "buffer": {
-      "levelL": 0,
+      "levelL": 3600,
       "capacityL": 4000,
-      "inflowLph": 0,
-      "outflowLph": 0,
-      "tempC": 4,
+      "inflowLph": 2743.2,
+      "outflowLph": 2743.2,
+      "tempC": 18,
       "waitS": null,
-      "coolerOutletC": null,
-      "fruitDosePct": 0
+      "coolerOutletC": 18,
+      "fruitDosePct": 0,
+      "product": "plainStirred",
+      "changeover": null
     },
     "p8": {
-      "state": "idle",
-      "cupsPerH": 0,
-      "cupsMade": 0,
+      "state": "running",
+      "cupsPerH": 21600,
+      "cupsMade": 132004,
       "cupsRejected": 0
     },
     "coldChain": {
@@ -1290,10 +1294,16 @@
     "kpis": {
       "mixLph": 0,
       "divertedL": 0,
-      "cupsPerH": 0,
-      "cupsMade": 0,
+      "cupsPerH": 21600,
+      "cupsMade": 132004,
       "coldRoomPallets": 0,
       "reefersShipped": 0
+    },
+    "energy": {
+      "steamKgPerH": 0,
+      "gasKw": 0,
+      "steamKg": 425.45454545452156,
+      "gasKwh": 329.74106290440494
     }
   },
   "kpis": {
@@ -1319,6 +1329,12 @@
       "timeS": 648078.7527456576,
       "kind": "bad",
       "message": "Filler A broke down: repair about 10 min with re-sterilizing"
+    },
+    {
+      "timeS": 647922.3946951648,
+      "kind": "info",
+      "message": "Fermentation tank 2 empty: cleaning",
+      "line": "yogurt"
     },
     {
       "timeS": 646817.3946951648,
@@ -1361,9 +1377,21 @@
       "message": "Filler B repaired: re-sterilizing its aseptic zone for 2 min"
     },
     {
+      "timeS": 643499.5175889863,
+      "kind": "info",
+      "message": "Fermentation tank 1 full: fermenting at 43 °C",
+      "line": "yogurt"
+    },
+    {
       "timeS": 643303.5175889863,
       "kind": "bad",
       "message": "Filler B broke down: repair about 17 min with re-sterilizing"
+    },
+    {
+      "timeS": 641131,
+      "kind": "info",
+      "message": "Tanker unloading into the yogurt silo: 20,000 L",
+      "line": "yogurt"
     },
     {
       "timeS": 639600,
@@ -1376,9 +1404,21 @@
       "message": "Truck 2 docked at door 1: loading 22 pallets, earliest best-before first"
     },
     {
+      "timeS": 634799,
+      "kind": "info",
+      "message": "Fermentation tank 1 empty: cleaning",
+      "line": "yogurt"
+    },
+    {
       "timeS": 633600,
       "kind": "ok",
       "message": "Truck 1 left with 22 pallets"
+    },
+    {
+      "timeS": 633600,
+      "kind": "ok",
+      "message": "Fermentation tank 3 at pH 4.55: cooled, ready for P8",
+      "line": "yogurt"
     },
     {
       "timeS": 632400,

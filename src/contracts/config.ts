@@ -43,8 +43,11 @@ export interface YogurtProductConfig {
  * here is the yogurt line's own; the UHT line's keys outside this block keep their values.
  */
 export interface YogurtConfig {
-  /** The wing's own raw-milk silo, filled from the shared tanker bay (D25). */
-  silo: { capacityL: number; startFrac: number; tempC: number };
+  /**
+   * The wing's own raw-milk silo, filled from the shared tanker bay (D25): a tanker of tankerL starts unloading, at
+   * standardization.tankerUnloadLph, when the silo falls below tankerBelowFrac and the bay's UHT lane is free (D27).
+   */
+  silo: { capacityL: number; startFrac: number; tempC: number; tankerL: number; tankerBelowFrac: number };
   /** Stage 11: standardized milk, fortified with skim-milk powder to the SNF target, then stabilizer (H122). */
   mix: {
     capacityLph: number;
@@ -56,6 +59,8 @@ export interface YogurtConfig {
     stabilizerPct: number;
     /** The mix tank after the powder station, which feeds the heat treatment. */
     tankL: number;
+    /** Its level when the plant opens (D27). */
+    tankStartFrac: number;
   };
   /** Stage 12. */
   homogenizer: { bar: number; tempC: number };
@@ -72,6 +77,10 @@ export interface YogurtConfig {
     /** Native β-lactoglobulin in the mix before heating, for the 1.5-order kinetics (H124). */
     betaLgGPerL: number;
     reprocessTankL: number;
+    /** The heater outlet follows its set point with this time constant (D27, as the UHT's preheater). */
+    lagS: number;
+    /** A divert runs this long before the wing's CIP starts (D27, as the UHT's 3 min). */
+    divertS: number;
   };
   /** Stage 13: the pH curve (H125) falls from startPh toward floorPh, reaching endPh at endAtOptS at the optimum, optC. */
   ferment: {
@@ -89,11 +98,18 @@ export interface YogurtConfig {
     /** Titratable acidity at startPh and at endPh, % lactic acid; linear in the pH between them. */
     startTaPct: number;
     endTaPct: number;
+    /** A tank's clean after it is emptied, before it may fill again (D27). */
+    tankCleanS: number;
   };
-  /** Stage 14: the plate cooler after the stirred tanks. */
-  cooling: { outletC: number };
-  /** Stage 14: the P8 buffer; set mix may wait in it at most setMaxWaitS before it starts to set. */
-  buffer: { capacityL: number; setMaxWaitS: number };
+  /** Stage 14: the plate cooler after the stirred tanks, and the transfer pump that empties a tank through it. */
+  cooling: { outletC: number; flowLph: number };
+  /**
+   * Stage 14: the P8 buffer; set mix may wait in it at most setMaxWaitS before it starts to set. A stirred tank fills it
+   * to highFrac; set mix is held at setHighFrac, by a level control with the time constant levelLagS (D27).
+   */
+  buffer: { capacityL: number; setMaxWaitS: number; highFrac: number; setHighFrac: number; levelLagS: number };
+  /** Between two products on P8: a rinse before a stirred product; before set yogurt the wing's CIP and P8's SIP (D27). */
+  changeover: { rinseS: number };
   fruit: { dosePct: number };
   /** Stage 15: Line P8. */
   p8: {
@@ -119,8 +135,20 @@ export interface YogurtConfig {
     sip: { tempC: number; holdS: number };
     atpMaxRlu: number;
   };
-  /** The wing's CIP, on D23's model at the SOP's strengths. */
-  cip: { lyePct: number; lyeTempC: number; acidPct: number; acidTempC: number };
+  /**
+   * The wing's CIP, on D23's model at the SOP's strengths: the solutions' conductivities at 20 °C, and its own
+   * circulation and circuit (D27). Its steps and times are the UHT CIP's (cleaning.cipSteps).
+   */
+  cip: {
+    lyePct: number;
+    lyeTempC: number;
+    acidPct: number;
+    acidTempC: number;
+    lyeConductivityMsPerCm: number;
+    acidConductivityMsPerCm: number;
+    circulateLph: number;
+    circuitL: number;
+  };
   /** Stage 16. */
   coldChain: {
     cupsPerTray: number;
@@ -485,6 +513,8 @@ export const YOGURT_NUMBER_KEYS = [
   'silo.capacityL',
   'silo.startFrac',
   'silo.tempC',
+  'silo.tankerL',
+  'silo.tankerBelowFrac',
   'mix.capacityLph',
   'mix.fatPct',
   'mix.snfPct',
@@ -492,6 +522,7 @@ export const YOGURT_NUMBER_KEYS = [
   'mix.powderSnfPct',
   'mix.stabilizerPct',
   'mix.tankL',
+  'mix.tankStartFrac',
   'homogenizer.bar',
   'homogenizer.tempC',
   'heat.setpointC',
@@ -501,6 +532,8 @@ export const YOGURT_NUMBER_KEYS = [
   'heat.denatTargetPct',
   'heat.betaLgGPerL',
   'heat.reprocessTankL',
+  'heat.lagS',
+  'heat.divertS',
   'ferment.tempC',
   'ferment.tanks',
   'ferment.tankL',
@@ -513,9 +546,15 @@ export const YOGURT_NUMBER_KEYS = [
   'ferment.maxC',
   'ferment.startTaPct',
   'ferment.endTaPct',
+  'ferment.tankCleanS',
   'cooling.outletC',
+  'cooling.flowLph',
   'buffer.capacityL',
   'buffer.setMaxWaitS',
+  'buffer.highFrac',
+  'buffer.setHighFrac',
+  'buffer.levelLagS',
+  'changeover.rinseS',
   'fruit.dosePct',
   'p8.cupG',
   'p8.lanes',
@@ -544,6 +583,10 @@ export const YOGURT_NUMBER_KEYS = [
   'cip.lyeTempC',
   'cip.acidPct',
   'cip.acidTempC',
+  'cip.lyeConductivityMsPerCm',
+  'cip.acidConductivityMsPerCm',
+  'cip.circulateLph',
+  'cip.circuitL',
   'coldChain.cupsPerTray',
   'coldChain.traysPerPallet',
   'coldChain.warmRoomC',
@@ -568,11 +611,18 @@ const YOGURT_POSITIVE_KEYS = [
   'heat.minHoldS',
   'heat.betaLgGPerL',
   'heat.reprocessTankL',
+  'heat.lagS',
   'ferment.tanks',
   'ferment.tankL',
   'ferment.endAtOptS',
+  'ferment.tankCleanS',
+  'cooling.flowLph',
   'buffer.capacityL',
   'buffer.setMaxWaitS',
+  'buffer.levelLagS',
+  'silo.tankerL',
+  'cip.circulateLph',
+  'cip.circuitL',
   'p8.cupG',
   'p8.lanes',
   'p8.fill.sigmaG',
@@ -652,7 +702,10 @@ function checkYogurt(config: PlantConfig, fail: (message: string) => void): void
   const pct = (value: number, path: string): void => {
     if (!(value >= 0 && value <= 100)) fail(`yogurt.${path} must lie in 0–100`);
   };
-  if (silo.startFrac > 1) fail('yogurt.silo.startFrac must lie in 0–1');
+  if (silo.startFrac > 1 || silo.tankerBelowFrac > 1 || mix.tankStartFrac > 1) fail('yogurt.silo.startFrac, silo.tankerBelowFrac and mix.tankStartFrac must lie in 0–1');
+  // A tanker called at the threshold must fit, and unload faster than the mix line draws raw milk (D27, H125a).
+  if (silo.tankerBelowFrac * silo.capacityL + silo.tankerL > silo.capacityL) fail('yogurt.silo: a tanker unloading at tankerBelowFrac would overfill the silo');
+  if (!(config.standardization.tankerUnloadLph > mix.capacityLph)) fail('yogurt.mix.capacityLph must be below standardization.tankerUnloadLph, or the yogurt silo runs dry');
   for (const path of ['mix.fatPct', 'mix.snfPct', 'mix.milkSnfPct', 'mix.powderSnfPct', 'mix.stabilizerPct', 'heat.denatTargetPct', 'fruit.dosePct', 'cip.lyePct', 'cip.acidPct'] as const) {
     pct(at(path) as number, path);
   }
@@ -680,6 +733,14 @@ function checkYogurt(config: PlantConfig, fail: (message: string) => void): void
   if (!(ferment.startTaPct < ferment.endTaPct)) fail('yogurt.ferment.startTaPct must be below endTaPct: the acidity rises as the pH falls');
   if (!(cooling.outletC < ferment.tempC)) fail('yogurt.cooling.outletC must be below ferment.tempC');
   if (!(buffer.setMaxWaitS > 0 && buffer.capacityL > 0)) fail('yogurt.buffer needs a capacity and a wait');
+  if (!(buffer.setHighFrac < buffer.highFrac && buffer.highFrac <= 1)) fail('yogurt.buffer needs setHighFrac < highFrac ≤ 1');
+  // Held at its set level, set mix must leave the buffer before it starts to set (D27, H125c).
+  const p8DrawLph = (p8.rateCupsPerH * p8.fill.targetG) / 1_000;
+  if (!((buffer.setHighFrac * buffer.capacityL) / p8DrawLph < sToH(buffer.setMaxWaitS))) {
+    fail('yogurt.buffer.setHighFrac holds more set mix than P8 draws within buffer.setMaxWaitS');
+  }
+  if (!(cooling.flowLph > p8DrawLph)) fail('yogurt.cooling.flowLph must be above what P8 draws, or a tank cannot keep the buffer up');
+  if (!(mix.capacityLph > p8DrawLph)) fail('yogurt.mix.capacityLph must be above what P8 draws');
   inRange(p8.rateCupsPerH, 'p8RateCupsPerH', 'p8.rateCupsPerH');
   const { fill, seal, hepa } = p8;
   if (!(fill.underBelowG < fill.targetG && fill.targetG < fill.overAboveG)) fail('yogurt.p8.fill needs underBelowG < targetG < overAboveG');
@@ -689,6 +750,10 @@ function checkYogurt(config: PlantConfig, fail: (message: string) => void): void
   if (!(seal.minBar <= seal.bar && seal.bar <= seal.maxBar)) fail('yogurt.p8.seal.bar must lie in its window, minBar–maxBar');
   if (!(hepa.minPa < hepa.normalPa)) fail('yogurt.p8.hepa.normalPa must be above minPa, or P8 never starts');
   if (!(cip.lyeTempC > 0 && cip.acidTempC > 0)) fail('yogurt.cip needs the lye\'s and the acid\'s temperatures');
+  const waterMsPerCm = config.cleaning.chemicals?.water?.conductivityMsPerCm ?? 0;
+  if (!(cip.lyeConductivityMsPerCm * config.cleaning.changeOverFrac > waterMsPerCm && cip.acidConductivityMsPerCm * config.cleaning.changeOverFrac > waterMsPerCm)) {
+    fail('yogurt.cip: the solutions\' change-over must lie above the rinse water\'s conductivity');
+  }
   if (!(coldChain.roomMinC <= coldChain.roomC && coldChain.roomC <= coldChain.roomMaxC)) fail('yogurt.coldChain.roomC must lie in roomMinC–roomMaxC');
   if (!(coldChain.chillToC < coldChain.warmRoomC)) fail('yogurt.coldChain.chillToC must be below warmRoomC');
   if (!(coldChain.minHoldS < coldChain.maxHoldS)) fail('yogurt.coldChain.minHoldS must be below maxHoldS');

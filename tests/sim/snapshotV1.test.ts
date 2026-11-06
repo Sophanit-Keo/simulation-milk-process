@@ -68,8 +68,8 @@ function expectLineMatchesStages(snap: Snapshot, where: string): void {
 }
 
 describe('contracts v1', () => {
-  it('CONTRACT_VERSION is 8 (contracts v8, phase 15; v1 is a subset of it)', () => {
-    expect(CONTRACT_VERSION).toBe(8);
+  it('CONTRACT_VERSION is 9 (contracts v9, phase 17; v1 is a subset of it)', () => {
+    expect(CONTRACT_VERSION).toBe(9);
   });
 
   it('LINE_POINT_IDS lists the UHT line\'s points, then the yogurt line\'s (contracts v8)', () => {

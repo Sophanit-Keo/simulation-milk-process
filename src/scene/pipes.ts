@@ -8,7 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CLEANING_FLUIDS, degToRad, LINE_POINT_IDS, type CleaningFluid, type LinePoint, type LinePointId, type StageId } from '../contracts';
 import type { PointM } from './layout';
 import { advancePhase } from './motion';
-import { YOGURT_RUNS, YOGURT_UTILITY_PATHS } from './yogurtPipes';
+import { YOGURT_DIVERT_RUN_ID, YOGURT_RUNS, YOGURT_UTILITY_PATHS } from './yogurtPipes';
 import { createLampPalette } from './lamps';
 import { LAMP_GLOW_HEX, readSceneColor, type SceneColorVar } from './theme';
 
@@ -323,15 +323,16 @@ export interface Pipes {
   /**
    * Colours and stripes from the snapshot's line points. Each point's stripes move at a speed proportional
    * to its flow for `animationDtS` (motion.ts: 0 while paused, so they stand still); the divert route to
-   * the reject tank glows red while `diverting`. While `cleaning`, the CIP circuit and the CIP lines take the
-   * fluid's colour and flow at its circulation instead.
+   * the reject tank glows red while `diverting`, and the yogurt line's to its reprocess tank while `yogurtDiverting`
+   * (phase 17). While `cleaning`, the CIP circuit and the CIP lines take the fluid's colour and flow at its
+   * circulation instead.
    */
-  update(line: Readonly<Record<LinePointId, LinePoint>>, animationDtS: number, diverting?: boolean, cleaning?: PipeCleaning | null): void;
+  update(line: Readonly<Record<LinePointId, LinePoint>>, animationDtS: number, diverting?: boolean, cleaning?: PipeCleaning | null, yogurtDiverting?: boolean): void;
   /**
-   * For tests and the ?debug hook: whether the divert route is lit, each line point's stripe offset, and the
+   * For tests and the ?debug hook: whether the divert routes are lit, each line point's stripe offset, and the
    * fluid in the CIP circuit (null while it carries milk) with its stripes' offset.
    */
-  state(): { divertLit: boolean; phaseM: Record<LinePointId, number>; cleaning: CleaningFluid | null; cleanPhaseM: number };
+  state(): { divertLit: boolean; yogurtDivertLit: boolean; phaseM: Record<LinePointId, number>; cleaning: CleaningFluid | null; cleanPhaseM: number };
   applyTheme(): void;
   dispose(): void;
 }
@@ -379,11 +380,18 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
   divertMaterial.emissive.copy(divertGlow.color('bad'));
   divertMaterial.emissiveIntensity = 0;
   let divertLit = false;
+  // The yogurt line's divert to its reprocess tank (phase 17), lit apart: the two lines divert on their own.
+  const yogurtDivertMaterial = makeMilkMaterial('milk-pipe-yogurt-divert');
+  yogurtDivertMaterial.emissive.copy(divertGlow.color('bad'));
+  yogurtDivertMaterial.emissiveIntensity = 0;
+  let yogurtDivertLit = false;
+  const materialOf = (runId: string): THREE.MeshStandardMaterial =>
+    runId === DIVERT_RUN_ID ? divertMaterial : runId === YOGURT_DIVERT_RUN_ID ? yogurtDivertMaterial : milkMaterial;
 
   // The milk's runs, then the yogurt wing's (phase 16): one mesh each, on the same material and phase table.
   const runs = [...MILK_RUNS, ...YOGURT_RUNS].map((run) => buildMilkRun(run));
   const meshes = runs.map(({ run, geometry }) => {
-    const mesh = new THREE.Mesh(geometry, run.id === DIVERT_RUN_ID ? divertMaterial : milkMaterial);
+    const mesh = new THREE.Mesh(geometry, materialOf(run.id));
     mesh.name = `pipe-${run.id}`;
     mesh.castShadow = run.castShadow ?? true;
     mesh.receiveShadow = true;
@@ -480,6 +488,7 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
     idleLineColor.set(readSceneColor('--steel'));
     divertGlow.applyTheme();
     divertMaterial.emissive.copy(divertGlow.color('bad'));
+    yogurtDivertMaterial.emissive.copy(divertGlow.color('bad'));
     pipeGlow.value = divertGlow.dark ? DARK_PIPE_GLOW : 0;
     if (coloured) recolour();
   };
@@ -490,7 +499,7 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
       const stage = runs[i].run.stage;
       return stage === undefined ? [] : [{ object: mesh, stage }];
     }),
-    update(line, animationDtS, diverting = false, cleaning = null) {
+    update(line, animationDtS, diverting = false, cleaning = null, yogurtDiverting = false) {
       // Recolour only the runs whose temperatures moved: the static plant never does; the live model's
       // display noise moves only the UHT section, so the silo and filler runs stay as they are.
       let changed = false;
@@ -514,6 +523,10 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
         divertLit = diverting;
         divertMaterial.emissiveIntensity = diverting ? DIVERT_LIT_INTENSITY : 0;
       }
+      if (yogurtDiverting !== yogurtDivertLit) {
+        yogurtDivertLit = yogurtDiverting;
+        yogurtDivertMaterial.emissiveIntensity = yogurtDiverting ? DIVERT_LIT_INTENSITY : 0;
+      }
 
       if (!(animationDtS > 0)) return;
       for (let i = 0; i < LINE_POINT_IDS.length; i++) {
@@ -528,6 +541,7 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
     state() {
       return {
         divertLit,
+        yogurtDivertLit,
         phaseM: Object.fromEntries(LINE_POINT_IDS.map((id, i) => [id, phaseM[i]])) as Record<LinePointId, number>,
         cleaning: cleaningFluid,
         cleanPhaseM: phaseM[CLEAN_SLOT],
@@ -541,6 +555,7 @@ export function createPipes(scene: THREE.Scene, utilityMaterial: THREE.Material)
       }
       milkMaterial.dispose();
       divertMaterial.dispose();
+      yogurtDivertMaterial.dispose();
       flowTexture.dispose();
       // utilityMaterial is shared (equipmentHost) and disposed there.
     },

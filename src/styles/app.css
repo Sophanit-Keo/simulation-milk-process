@@ -1217,6 +1217,28 @@ kbd {
   color: var(--muted);
 }
 
+/* Stage 11's next-product picker (productPicker.ts): the three products as one segmented control, the panel's width. */
+.next-product {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.next-product .seg {
+  flex-wrap: nowrap;
+}
+.next-product .seg > .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 6px;
+  white-space: normal;
+  line-height: 1.2;
+}
+.next-product .hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 /* Stage 9's batch list and the picked batch, stage 10's dock and stock (batchList.ts, stockList.ts). */
 .batches,
 .stock {

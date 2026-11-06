@@ -6,7 +6,9 @@ import { OUTFEED } from '../../src/scene/equipment/yogurt/layout';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
 import { REEFER_YARD, STAGE_VIEWS, ZONES, type RectM } from '../../src/scene/layout';
 import { YOGURT_RUNS } from '../../src/scene/yogurtPipes';
+import { createSim } from '../../src/sim';
 import { createMockSim } from '../../src/sim/mock';
+import { heatValveLamp, phRingFrac, tankStirs } from '../../src/scene/equipment/yogurt/readings';
 import { plantConfig } from '../helpers/plantConfig';
 import { stubTheme } from './browserStubs';
 
@@ -147,5 +149,91 @@ describe('the yogurt wing in grey boxes', () => {
     expect(label('ferment-tank-1')).toMatch(/^pH \d\.\d\d$/);
     expect(label('yogurt-divert-valve')).toBe('forward');
     expect(label('p8-filler')).toMatch(/cups\/h$/);
+  });
+});
+
+// Phase 17: the live line moves the wing. The agitators turn while their tank stirs, the divert valve's flag points
+// to the reprocess tank in a divert, and each fermentation tank's label carries a ring for its pH.
+describe('the yogurt wing on the live line (phase 17)', () => {
+  stubTheme();
+  const machines = yogurtLine(makeContext());
+  const byId = (id: string): Equipment => {
+    const item = machines.find((candidate) => candidate.id === id);
+    if (!item) expect.fail(`no ${id}`);
+    return item;
+  };
+  /** Runs `seconds` of animation on the snapshot, one 60 Hz frame at a time. */
+  const animate = (snapshot: Snapshot, seconds: number): void => {
+    for (let frame = 0; frame < seconds * 60; frame++) for (const item of machines) item.update(snapshot, 1 / 60);
+  };
+
+  it('stirs a fermentation tank while it fills, and once ready while it empties; it stands still while the yogurt sets', () => {
+    expect(['empty', 'filling', 'fermenting', 'ready', 'emptying', 'cleaning'].filter((state) => tankStirs({ state } as never))).toEqual(['filling', 'ready', 'emptying']);
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    const snapshot = sim.snapshot();
+    expect(snapshot.yogurt.ferment.tanks.map((tank) => tank.state)).toEqual(['emptying', 'ready', 'fermenting']);
+    animate(snapshot, 3);
+    const state = (id: string) => byId(id).debugState?.() ?? {};
+    expect(state('ferment-tank-1')).toMatchObject({ stirring: true });
+    expect(state('ferment-tank-2')).toMatchObject({ stirring: true });
+    expect(state('ferment-tank-3')).toMatchObject({ stirring: false, spinRadPerS: 0 });
+    expect(Number(state('ferment-tank-1').spinRadPerS)).toBeGreaterThan(1);
+    // The mix tank stirs while it holds mix; the fruit tank only while fruit is dosed (plain stirred has none).
+    expect(state('yogurt-mix-tank').stirring).toBe(snapshot.yogurt.mix.tanks.mixTank.levelL > 0);
+    expect(state('fruit-tank')).toMatchObject({ stirring: false, spinRadPerS: 0 });
+  });
+
+  it('stands every agitator still while the sim is paused', () => {
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    sim.dispatch({ type: 'pause', paused: true });
+    const snapshot = sim.snapshot();
+    const before = byId('ferment-tank-1').debugState?.().angleRad;
+    animate(snapshot, 1);
+    expect(byId('ferment-tank-1').debugState?.().angleRad).toBe(before);
+  });
+
+  it('flips the divert valve\'s flag to the reprocess tank and lights its lamp red in a divert, amber in the clean', () => {
+    expect(heatValveLamp('production')).toBe('ok');
+    expect(heatValveLamp('divert')).toBe('bad');
+    expect(heatValveLamp('cleaning')).toBe('warn');
+    expect(heatValveLamp('idle')).toBe('off');
+    const sim = createSim(plantConfig);
+    sim.dispatch({ type: 'setSetpoint', key: 'yogurtHeatC', value: 84 });
+    sim.dispatch({ type: 'setSpeed', speed: 100 });
+    let snapshot = sim.snapshot();
+    for (let frame = 0; frame < 2_000 && snapshot.yogurt.heat.mode !== 'divert'; frame++) {
+      sim.step(0.1);
+      snapshot = sim.snapshot();
+    }
+    expect(snapshot.yogurt.heat.mode).toBe('divert');
+    const valve = byId('yogurt-divert-valve');
+    animate(snapshot, 1);
+    expect(valve.debugState?.()).toMatchObject({ diverting: true, lamp: 'bad' });
+    expect(Number(valve.debugState?.().flagRad)).toBeCloseTo(Math.PI / 2, 3);
+    expect(valve.labelText(snapshot)).toBe('diverting');
+    snapshot = { ...snapshot, yogurt: { ...snapshot.yogurt, heat: { ...snapshot.yogurt.heat, mode: 'cleaning' } } };
+    animate(snapshot, 1);
+    expect(valve.debugState?.()).toMatchObject({ diverting: false, lamp: 'warn' });
+    expect(Number(valve.debugState?.().flagRad)).toBeCloseTo(0, 3);
+  });
+
+  it('fills the pH ring from the start pH to the end pH, full once ready, hidden while a tank holds nothing', () => {
+    const { startPh, endPh } = plantConfig.yogurt.ferment;
+    expect(phRingFrac({ state: 'filling', ph: startPh })).toBe(0);
+    expect(phRingFrac({ state: 'fermenting', ph: (startPh + endPh) / 2 })).toBeCloseTo(0.5, 9);
+    expect(phRingFrac({ state: 'fermenting', ph: endPh - 0.1 })).toBe(1);
+    expect(phRingFrac({ state: 'ready', ph: 4.5 })).toBe(1);
+    expect(phRingFrac({ state: 'emptying', ph: 4.55 })).toBe(1);
+    expect(phRingFrac({ state: 'empty', ph: startPh })).toBeNull();
+    expect(phRingFrac({ state: 'cleaning', ph: startPh })).toBeNull();
+    expect(phRingFrac(undefined)).toBeNull();
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    const snapshot = sim.snapshot();
+    expect(byId('ferment-tank-3').labelRing?.(snapshot)).toBeCloseTo((startPh - snapshot.yogurt.ferment.tanks[2].ph) / (startPh - endPh), 9);
+    // Only the fermentation tanks have a ring.
+    expect(machines.filter((item) => item.labelRing).map((item) => item.id)).toEqual(['ferment-tank-1', 'ferment-tank-2', 'ferment-tank-3']);
   });
 });

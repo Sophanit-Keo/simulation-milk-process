@@ -1,5 +1,5 @@
 // What stages 11–16 show, read off one YogurtSnapshot (contracts v8): the per-stage values the info panel's rows
-// name (src/data/stages.json), the lamps, and the yogurt line's measuring points. The idle line and the mock both
+// name (src/data/stages.json), the lamps, and the yogurt line's measuring points. The live line and the mock both
 // build a YogurtSnapshot and pass it through here, so the panels, the lamps and the snapshot always agree.
 import {
   fracToPct,

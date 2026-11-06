@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 10,
+  "schemaVersion": 11,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -164,7 +164,7 @@
     "lateTruckDelayS": 24000
   },
   "yogurt": {
-    "silo": { "capacityL": 30000, "startFrac": 0.6, "tempC": 4 },
+    "silo": { "capacityL": 30000, "startFrac": 0.6, "tempC": 4, "tankerL": 20000, "tankerBelowFrac": 0.3 },
     "mix": {
       "capacityLph": 6000,
       "fatPct": 3.0,
@@ -172,7 +172,8 @@
       "milkSnfPct": 8.7,
       "powderSnfPct": 95,
       "stabilizerPct": 0.3,
-      "tankL": 6000
+      "tankL": 6000,
+      "tankStartFrac": 0.5
     },
     "homogenizer": { "bar": 180, "tempC": 68 },
     "heat": {
@@ -182,7 +183,9 @@
       "minHoldS": 180,
       "denatTargetPct": 85,
       "betaLgGPerL": 4.0,
-      "reprocessTankL": 2000
+      "reprocessTankL": 2000,
+      "lagS": 30,
+      "divertS": 180
     },
     "ferment": {
       "tempC": 43,
@@ -196,10 +199,12 @@
       "optC": 43,
       "maxC": 50,
       "startTaPct": 0.19,
-      "endTaPct": 0.9
+      "endTaPct": 0.9,
+      "tankCleanS": 2700
     },
-    "cooling": { "outletC": 18 },
-    "buffer": { "capacityL": 4000, "setMaxWaitS": 2700 },
+    "cooling": { "outletC": 18, "flowLph": 6000 },
+    "buffer": { "capacityL": 4000, "setMaxWaitS": 2700, "highFrac": 0.9, "setHighFrac": 0.4, "levelLagS": 600 },
+    "changeover": { "rinseS": 900 },
     "fruit": { "dosePct": 15 },
     "p8": {
       "cupG": 125,
@@ -212,7 +217,16 @@
       "sip": { "tempC": 121, "holdS": 1200 },
       "atpMaxRlu": 10
     },
-    "cip": { "lyePct": 1.8, "lyeTempC": 78, "acidPct": 0.8, "acidTempC": 68 },
+    "cip": {
+      "lyePct": 1.8,
+      "lyeTempC": 78,
+      "acidPct": 0.8,
+      "acidTempC": 68,
+      "lyeConductivityMsPerCm": 84.2,
+      "acidConductivityMsPerCm": 45.0,
+      "circulateLph": 12000,
+      "circuitL": 300
+    },
     "coldChain": {
       "cupsPerTray": 24,
       "traysPerPallet": 120,

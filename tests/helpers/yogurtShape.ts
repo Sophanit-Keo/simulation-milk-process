@@ -63,10 +63,12 @@ export function expectWellFormedYogurt(snap: Snapshot, config: PlantConfig, wher
   for (const key of ['inflowLph', 'outflowLph', 'tempC', 'fruitDosePct'] as const) {
     if (!finiteAtLeast0(buffer[key])) expect.fail(`${where}: buffer.${key} is ${buffer[key]}`);
   }
-  // While the buffer holds product: set mix waits and skips the cooler, stirred yogurt comes through it. Empty, nothing waits.
+  // While the buffer holds product: set mix waits and skips the cooler, stirred yogurt comes through it. Empty, nothing
+  // waits. Its product (contracts v9) may still be the last shift's, which P8 finishes before the changeover.
+  const bufferRoute = buffer.product ? config.yogurt.products.find((entry) => entry.id === buffer.product)?.route : product.route;
   if (buffer.levelL > 0) {
-    expect(buffer.waitS === null, `${where}: a wait only for set yogurt`).toBe(product.route === 'stirred');
-    expect(buffer.coolerOutletC === null, `${where}: no cooler for set yogurt`).toBe(product.route === 'set');
+    expect(buffer.waitS === null, `${where}: a wait only for set yogurt`).toBe(bufferRoute === 'stirred');
+    expect(buffer.coolerOutletC === null, `${where}: no cooler for set yogurt`).toBe(bufferRoute === 'set');
   } else {
     expect(buffer.waitS, `${where}: nothing waits in an empty buffer`).toBeNull();
   }

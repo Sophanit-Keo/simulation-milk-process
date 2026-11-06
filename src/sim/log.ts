@@ -1,5 +1,5 @@
 // The event log the UI shows, newest first and capped so a long run at ×10,000 stays small.
-import { SECONDS_PER_DAY, SECONDS_PER_HOUR, sToDay, sToH, sToMin, type BatchFlag, type LogEntry, type LogKind, type ScenarioId } from '../contracts';
+import { SECONDS_PER_DAY, SECONDS_PER_HOUR, sToDay, sToH, sToMin, type BatchFlag, type LineId, type LogEntry, type LogKind, type ScenarioId } from '../contracts';
 
 export const LOG_LIMIT = 50;
 
@@ -29,7 +29,8 @@ export type LogTopic =
   | 'truckGotLoad'
   | 'truckLeft'
   | 'trucksArrived'
-  | 'scenario';
+  | 'scenario'
+  | 'yogurt';
 
 export interface LogTag {
   topic: LogTopic;
@@ -44,13 +45,15 @@ export interface LogTag {
   scenario?: ScenarioId;
   run?: number;
   why?: string;
+  /** The yogurt line's entries say so (contracts v9), so the UHT line's log reads as it did without them. */
+  line?: LineId;
 }
 
 /** How the models write to the log: the entry, and what it is about. */
 export type LogWriter = (timeS: number, kind: LogKind, message: string, tag?: LogTag) => void;
 
 export interface SimLog {
-  add(timeS: number, kind: LogKind, message: string, note?: Pick<LogEntry, 'scenario' | 'why'>): LogEntry;
+  add(timeS: number, kind: LogKind, message: string, note?: Pick<LogEntry, 'scenario' | 'why' | 'line'>): LogEntry;
   /** Fresh copies, newest first, so a snapshot can't change the log it came from. */
   entries(): LogEntry[];
 }
@@ -62,6 +65,7 @@ export function createLog(limit = LOG_LIMIT): SimLog {
       const entry: LogEntry = { timeS, kind, message };
       if (note?.scenario) entry.scenario = note.scenario;
       if (note?.why) entry.why = note.why;
+      if (note?.line) entry.line = note.line;
       entries.unshift(entry);
       if (entries.length > limit) entries.length = limit;
       return { ...entry };

@@ -4,7 +4,8 @@
 // of a cycle apart, so at opening one fills, one ferments half way and one feeds the P8 buffer; P8 runs; the cold
 // room is part full. The pH, the hold and the denaturation follow the yogurt formulas (H122–H125) at the live set
 // points, and a heat set point under the divert limit diverts; the rest drifts on seeded waves of sim time. The
-// cycle's hold, clean and history numbers are mock numbers, not plant.json.
+// cycle's hold, clean and history numbers are mock numbers, not plant.json. Since contracts v9 it fills the live
+// line's fields too: the steam, as the live line counts it, the buffer's product, and no changeover or clean.
 import {
   hToS,
   sToH,
@@ -17,6 +18,7 @@ import {
 } from '../contracts';
 import type { Setpoints } from './core';
 import { holdTimeS, tubeVolumeL } from './formulas';
+import { boilerGasKw, boilerGasKwh, steamLph } from './liquid/stageModels';
 import { createRng } from './rng';
 import { betaLgDenaturedPct, fermentPh, p8DrawLph, powderKgPerT, timeToPhS, titratableAcidityPct } from './yogurt/formulas';
 import { createProductPlan } from './yogurt/products';
@@ -53,6 +55,13 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
   let reprocessL = 0;
   let divertCount = 0;
   let wasDiverting = false;
+  let steamKg = 0;
+
+  /**
+   * The steam that heats the mix from the homogenizer's temperature to the outlet's, as the live line counts it; the
+   * mock's heater runs at the mix line's capacity, forward or diverting.
+   */
+  const steamAt = (outletC: number): number => steamLph(config, plant.mix.capacityLph, plant.homogenizer.tempC, Math.max(outletC, plant.homogenizer.tempC));
 
   /** The holding-cell outlet, and whether the CCP diverts it, at a heat set point. */
   const heatAt = (timeS: number, setpoints: Readonly<Setpoints>): { outletC: number; holdS: number; diverting: boolean } => {
@@ -109,6 +118,7 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
     const cupsMade = Math.floor(CUPS_BEFORE_OPENING + setpoints.p8RateCupsPerH * sToH(t) * (1 - REJECT_FRAC));
     const reefersShipped = REEFERS_BEFORE_OPENING + Math.floor(t / REEFER_EVERY_S);
     const coldRoomPallets = Math.round(170 + 60 * wave(timeS, hToS(24), 4));
+    const steamKgPerH = steamAt(heat.outletC);
     return {
       product,
       mix: {
@@ -129,6 +139,8 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
         denatPct: betaLgDenaturedPct(heat.outletC, heat.holdS, plant.heat.betaLgGPerL),
         divertCount,
         reprocessTank: { levelL: reprocessL, capacityL: plant.heat.reprocessTankL },
+        modeRemainingS: 0,
+        cleaning: null,
       },
       ferment: { tempC: fermentC, tanks },
       buffer: {
@@ -139,6 +151,8 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
         waitS: set ? 0.6 * plant.buffer.setMaxWaitS * (0.5 + 0.5 * wave(timeS, hToS(1), 9)) : null,
         coolerOutletC: set ? null : bufferC,
         fruitDosePct: product.fruit ? plant.fruit.dosePct : 0,
+        product: product.id,
+        changeover: null,
       },
       p8: {
         state: 'running',
@@ -154,13 +168,15 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
         reefersShipped,
       },
       kpis: { mixLph: forwardLph, divertedL, cupsPerH, cupsMade, coldRoomPallets, reefersShipped },
+      energy: { steamKgPerH, gasKw: boilerGasKw(config, steamKgPerH), steamKg, gasKwh: boilerGasKwh(config, steamKg) },
     };
   }
 
   return {
     setNextProduct: (product, timeS, log) => plan.setNext(product, timeS, log),
     step(dtS, timeS, setpoints) {
-      const { diverting } = heatAt(timeS, setpoints);
+      const { diverting, outletC } = heatAt(timeS, setpoints);
+      steamKg += steamAt(outletC) * sToH(dtS);
       if (diverting) {
         const litres = sToH(dtS) * plant.mix.capacityLph;
         divertedL += litres;

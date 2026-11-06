@@ -5,6 +5,7 @@ import { el, onPress } from './dom';
 import { createEventLog } from './eventLog';
 import { createKpiStrip } from './kpiStrip';
 import { createPipeLegend } from './pipeLegend';
+import { createProductPicker } from './productPicker';
 import { createScenarioLog } from './scenarioLog';
 import { createScenarioMenu } from './scenarioMenu';
 import { createSetpointSlider, SETPOINT_SLIDERS } from './setpointSlider';
@@ -111,6 +112,7 @@ export function createHud(
       built.push(createBatchList(host, { selected: () => selectedBatch, onSelect: (batchId) => bus.emit({ type: 'selectBatch', batchId }), dispatch: send }));
     }
     if (stage === 10) built.push(createStockList(host));
+    if (stage === 11) built.push(createProductPicker(host, send));
     return built;
   };
 

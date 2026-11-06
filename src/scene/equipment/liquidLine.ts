@@ -44,8 +44,8 @@ const STOPPED_RAD_PER_S = 0.02;
  * The most a spinning part turns in one frame: under half of one of the bowl's eight facets, so on a slow
  * frame at a high speed it never seems to stand still or run backwards.
  */
-const MAX_TURN_PER_FRAME_RAD = 0.35;
-const AGITATOR_RAD_PER_S = 1.2;
+export const MAX_TURN_PER_FRAME_RAD = 0.35;
+export const AGITATOR_RAD_PER_S = 1.2;
 /** Piston cycle at full UHT flow; slower at reduced flow, still at zero flow. */
 const PISTON_RAD_PER_S = 7;
 const PISTON_STROKE_M = 0.12;
@@ -53,8 +53,8 @@ const PISTON_STROKE_M = 0.12;
 const MAX_CRANK_PER_FRAME_RAD = Math.PI / 3;
 /** The three cranks sit a third of a turn apart. */
 const PISTON_PHASE_RAD = (2 * Math.PI) / 3;
-const VALVE_EASE_PER_S = 8;
-const FULL_TURN_RAD = 2 * Math.PI;
+export const VALVE_EASE_PER_S = 8;
+export const FULL_TURN_RAD = 2 * Math.PI;
 
 /** The plates' glow at the preheat set point: the pipe ramp's 80 °C orange (--t80), given off at this strength. */
 const GLOW_HEX = 0xea8027;
@@ -101,6 +101,8 @@ export interface MachineSpec {
   label: string;
   labelAnchorM: PointM;
   labelText?: (snapshot: Snapshot) => string;
+  /** A ring round the label's lamp (Equipment.labelRing). */
+  labelRing?: (snapshot: Snapshot) => number | null;
   update?: (snapshot: Snapshot, realDtS: number) => void;
   debugState?: () => Readonly<Record<string, number | string | boolean>>;
   /** Re-reads the theme into the machine's own materials (Equipment.applyTheme). */
@@ -132,16 +134,17 @@ export function machine(builder: MachineBuilder, spec: MachineSpec): Equipment {
   };
   if (spec.debugState) equipment.debugState = spec.debugState;
   if (spec.applyTheme) equipment.applyTheme = spec.applyTheme;
+  if (spec.labelRing) equipment.labelRing = spec.labelRing;
   spec.onBuilt?.(object, () => alive);
   return equipment;
 }
 
 /** Moves `current` toward `target` by a share of the gap that grows with dt, without overshooting. */
-const ease = (current: number, target: number, ratePerS: number, dtS: number): number =>
+export const ease = (current: number, target: number, ratePerS: number, dtS: number): number =>
   current + (target - current) * Math.min(1, ratePerS * dtS);
 
 /** A spin rate eased toward full speed while milk flows, and toward a stop, which it then reaches, while none does. */
-function easeSpin(spinRadPerS: number, flowing: boolean, fullRadPerS: number, dtS: number): number {
+export function easeSpin(spinRadPerS: number, flowing: boolean, fullRadPerS: number, dtS: number): number {
   const next = ease(spinRadPerS, flowing ? fullRadPerS : 0, SPIN_EASE_PER_S, dtS);
   return !flowing && next < STOPPED_RAD_PER_S ? 0 : next;
 }

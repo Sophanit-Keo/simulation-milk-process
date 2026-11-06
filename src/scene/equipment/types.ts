@@ -54,6 +54,11 @@ export interface Equipment {
   labelAnchorNowM?(): PointM;
   /** One key value for the label, e.g. '200 bar'; '' for none. Called a few times a second. */
   labelText(snapshot: Snapshot): string;
+  /**
+   * Optional: a ring round the label's lamp, filled to this fraction (0–1), or null to hide it; called with labelText.
+   * A fermentation tank's shows how far its pH has come from the start to the end pH (phase 17).
+   */
+  labelRing?(snapshot: Snapshot): number | null;
   /** Per-frame animation from the snapshot; grey boxes may do nothing yet. */
   update(snapshot: Snapshot, realDtS: number): void;
   /**

@@ -25,9 +25,9 @@ function withYogurt(path: string, value: unknown): PlantConfig {
 
 const problemsWith = (path: string, value: unknown): string[] => checkPlantConfig(withYogurt(path, value));
 
-describe('plant.json schema 10', () => {
-  it('is at schema 10 and passes checkPlantConfig', () => {
-    expect(plantConfig.schemaVersion).toBe(10);
+describe('plant.json schema 11', () => {
+  it('is at schema 11 (phase 17 added the live line\'s keys) and passes checkPlantConfig', () => {
+    expect(plantConfig.schemaVersion).toBe(11);
     expect(checkPlantConfig(plantConfig)).toEqual([]);
   });
 
@@ -92,7 +92,12 @@ describe('checkPlantConfig refuses a yogurt block', () => {
     ['mix.snfPct', 8, /milkSnfPct < snfPct < powderSnfPct/],
     ['mix.fatPct', 4.5, /mix.fatPct must be below the raw milk's fat/],
     ['mix.stabilizerPct', 120, /stabilizerPct must lie in 0–100/],
-    ['silo.startFrac', 1.2, /silo.startFrac must lie in 0–1/],
+    ['silo.startFrac', 1.2, /silo.startFrac, silo.tankerBelowFrac and mix.tankStartFrac must lie in 0–1/],
+    ['silo.tankerBelowFrac', 0.5, /a tanker unloading at tankerBelowFrac would overfill the silo/],
+    ['buffer.setHighFrac', 0.95, /setHighFrac < highFrac/],
+    ['buffer.setHighFrac', 0.6, /holds more set mix than P8 draws within buffer.setMaxWaitS/],
+    ['cooling.flowLph', 2_000, /cooling.flowLph must be above what P8 draws/],
+    ['cip.lyeConductivityMsPerCm', 0.5, /change-over must lie above the rinse water/],
     ['p8.rateCupsPerH', 30_000, /p8RateCupsPerH set point's range/],
     ['p8.fill.underBelowG', 128, /underBelowG < targetG < overAboveG/],
     ['p8.seal.tempC', 230, /seal.tempC must lie in its window/],

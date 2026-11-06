@@ -1,8 +1,9 @@
 // The sim the app runs: the clock, the event queue with shift changes and every command (core.ts), stages
 // 1–6 live from the fixed-step liquid-line model (liquidLine.ts), run once per step, and stages 7–10 from the
 // discrete packs model (packsLine.ts), whose fillers draw from the liquid line's aseptic tank and whose
-// breakdowns, batches, incubations and trucks run through the core's event queue. Stages 11–16, the yogurt line,
-// stand (yogurt/idleLine.ts) until phase 17 makes them live.
+// breakdowns, batches, incubations and trucks run through the core's event queue. Stages 11–14, the yogurt line's
+// liquid side, run in the same step after them (yogurt/yogurtLine.ts, phase 17), P8's draw stubbed and the cold chain
+// standing until phases 18 and 19.
 import type { PlantConfig, Sim } from '../contracts';
 import { createCore } from './core';
 import { createLiquidLine, LIQUID_STAGE_IDS, type LiquidLine, type LiquidLineOptions } from './liquidLine';
@@ -10,7 +11,7 @@ import { createPacksLine, PACKS_STAGE_IDS, type PacksLine } from './packsLine';
 import { createRng, type Rng } from './rng';
 import { createScenarios, type Scenarios } from './scenarios';
 import { linePoints, staticPlant, toStages } from './staticPlant';
-import { createIdleYogurtLine, type YogurtLine } from './yogurt/idleLine';
+import { createYogurtLine, type YogurtLine } from './yogurt/yogurtLine';
 
 export interface SimOptions extends Omit<LiquidLineOptions, 'fillers'> {
   /** Every random draw of the liquid line (the display noise); defaults to one seeded from plant.json's seed. */
@@ -25,6 +26,8 @@ export interface SimOptions extends Omit<LiquidLineOptions, 'fillers'> {
   onLiquidLine?: (line: LiquidLine) => void;
   /** Called once with the packs model, likewise. */
   onPacksLine?: (line: PacksLine) => void;
+  /** Called once with the yogurt line's model, likewise (phase 17). */
+  onYogurtLine?: (line: YogurtLine) => void;
 }
 
 /** The packs model's seed: plant.json's seed, mixed so its stream never runs in step with the liquid line's. */
@@ -38,6 +41,8 @@ export function createSim(config: PlantConfig, options: SimOptions = {}): Sim {
       models.liquid?.step(dtS, timeS, core.setpoints, core.log);
       models.packs?.afterStep(timeS, core.setpoints);
       models.scenarios?.afterStep(timeS);
+      // Last, reading the UHT line's tanker so the yogurt silo's waits while the bay's UHT lane is in use.
+      models.yogurt?.step(dtS, timeS, core.setpoints, (models.liquid?.state.tankerLeftL ?? 0) > 0, core.log);
     },
     onEvent: (event) => (models.packs?.onEvent(event, core.setpoints) || models.scenarios?.onEvent(event)) ?? false,
     onQaResult: (batchId, result) => models.packs?.setQaResult(batchId, result, core.timeS),
@@ -59,11 +64,13 @@ export function createSim(config: PlantConfig, options: SimOptions = {}): Sim {
     log: core.log,
   });
   models.scenarios = scenarios;
-  // Last, and drawing nothing from the seeded streams, so the UHT line's draws and numbers stay as they were (D25).
-  const yogurt = createIdleYogurtLine(config);
+  // Last, and drawing nothing from the seeded streams nor queueing events, so the UHT line's steps, draws and numbers
+  // stay as they were (D25).
+  const yogurt = createYogurtLine(config, core.timeS);
   models.yogurt = yogurt;
   options.onLiquidLine?.(liquid);
   options.onPacksLine?.(packs);
+  options.onYogurtLine?.(yogurt);
   return {
     step: (realDtS) => core.step(realDtS),
     dispatch: (command) => core.dispatch(command),
