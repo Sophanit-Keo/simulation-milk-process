@@ -23,6 +23,8 @@ export interface HoldingCell {
   push(litres: number, tempC: number, atS: number): void;
   /** The parcel at the outlet now. */
   outlet(): CellParcel;
+  /** Fills the cell afresh at `tempC`, as if it entered `heldS` before `atS`: after a clean, with water at the set point. */
+  refill(tempC: number, atS: number, heldS: number): void;
 }
 
 /** Litres this close count as the same place in the cell. */
@@ -46,6 +48,9 @@ export function createHoldingCell(volumeL: number, tempC: number, atS: number, h
     outlet() {
       const exitL = cumInL - volumeL;
       return parcels.find((parcel) => parcel.cumL >= exitL - CELL_EPS_L) ?? parcels[parcels.length - 1];
+    },
+    refill(refillTempC, refillAtS, refillHeldS) {
+      parcels = [{ cumL: cumInL, tempC: refillTempC, enteredS: refillAtS - refillHeldS }];
     },
   };
 }

@@ -209,6 +209,30 @@ describe('the CCP: a heat set point under 85 °C (H125f)', () => {
   });
 });
 
+describe('the restart after the clean, with the set point back over the limit', () => {
+  // The divert above, then 92 °C again while it diverts: the clean ends with the line full of water at the set
+  // point, so the cold mix of before the divert is gone and the line runs on.
+  const run = runner([
+    { atS: hToS(3.5), command: { type: 'setSetpoint', key: 'yogurtHeatC', value: 84 } },
+    { atS: hToS(3.5) + 400, command: { type: 'setSetpoint', key: 'yogurtHeatC', value: 92 } },
+  ]);
+  let log: { atS: number; message: string; kind: string }[] = [];
+  const modes: string[] = [];
+  beforeAll(() => {
+    const end = run.runTo(hToS(3.5) + 8_000, (snap) => {
+      if (modes.at(-1) !== snap.yogurt.heat.mode) modes.push(snap.yogurt.heat.mode);
+    });
+    log = yogurtLog(end, run.openS);
+  }, 120_000);
+
+  it('diverts once, cleans, and goes forward again for good', () => {
+    expect(log.filter((entry) => /diverted to the reprocess tank/.test(entry.message))).toHaveLength(1);
+    expect(modes.slice(modes.indexOf('divert'))).toEqual(['divert', 'cleaning', 'production']);
+    const ready = log.find((entry) => /clean, ready to run again/.test(entry.message));
+    expect(ready?.kind).toBe('ok');
+  });
+});
+
 describe('fermenting at 40 °C (H125 live)', () => {
   const config = copyConfig();
   const run = runner([{ atS: 0, command: { type: 'setSetpoint', key: 'fermentTempC', value: 40 } }], config);

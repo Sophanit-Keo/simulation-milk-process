@@ -625,6 +625,7 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - **The heat treatment works ahead.** Every stirred product is plain yogurt base until the buffer: fruit is dosed after the cooler. So the heat treatment feeds set mix to the buffer first, while P8 fills set yogurt, and fills the tanks with what is left of its 6,000 L/h whenever one is empty and clean. A ready tank waits, cooled, for P8's next stirred shift. With nothing to feed, it stands.
   - **The holding cell is a plug-flow delay of 500 L (H123).** Each parcel keeps the temperature it entered with.
     - The parcel at its outlet is the CCP's: below `heat.divertBelowC`, or held under `heat.minHoldS`, the line diverts to the reprocess tank for `heat.divertS`, then runs the wing's CIP, then runs again.
+    - The CIP ends with the line full of water brought up to the set point, so the mix starts again behind it: the holding cell holds no mix from before the divert, and the CCP judges the new mix as it reaches the outlet. A set point still under the limit diverts again at once.
     - The CIP is D16's steps at the SOP's temperatures, with D23's chemistry through the wing's circuit.
     - The reprocess tank is pumped out to rework by the clean's end.
     - The denaturation shown is the outlet parcel's, for the time it was held (H124).

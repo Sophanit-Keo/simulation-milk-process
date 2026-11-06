@@ -154,8 +154,11 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
   let p8Lph = 0;
   let cupsMade = 0;
   let starvedLogged = false;
-  /** The step just ended a changeover: P8 is ready and starts from the next one. */
-  let readyToRun = false;
+  /**
+   * The step just ended a changeover: P8 is ready and starts from the next one. The plant opens so too, P8 ready for
+   * the first tank's yogurt, so the opening view shows it standing ready, not starved.
+   */
+  let readyToRun = true;
 
   const routeOf = (id: YogurtProductId) => products[id].route;
   const tag = { topic: 'yogurt' as const, line: 'yogurt' as const };
@@ -230,6 +233,11 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
         if (modeLeftS <= EPS) {
           mode = 'idle';
           modeLeftS = 0;
+          // The clean ends with the line full of water brought up to the set point: the mix starts again behind it,
+          // so the cold mix of before the divert is gone from the holding cell, and the CCP judges the new mix as
+          // it reaches the outlet. A set point still under the limit diverts again at once.
+          outletC = setpoints.yogurtHeatC;
+          cell.refill(outletC, timeS, plant.heat.holdS);
           log(timeS, 'ok', 'Yogurt heat treatment clean, ready to run again', tag);
         }
       } else {

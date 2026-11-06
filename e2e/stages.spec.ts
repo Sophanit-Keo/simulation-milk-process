@@ -4,8 +4,8 @@ import { expect, test } from './fixtures';
 import {
   ALL_STAGES,
   NO_STAGE_TITLE,
+  OPENING_STATUS,
   STAGES,
-  STATIC_VALUES,
   afterHudUpdates,
   clockTimeS,
   expectLanded,
@@ -173,10 +173,12 @@ test.describe('the stage rail', () => {
         expect(button.tag, `rail-stage-${stage.id} is a <button>`).toBe('BUTTON');
         expect(button.text, `rail-stage-${stage.id} shows its short name`).toContain(stage.shortName);
         // The plant opens running every UHT stage at its set point: every lamp green once the HUD has drawn, but
-        // stage 9's, amber while batches are on hold, which they are from the opening on (D11). The yogurt line
-        // stands until phase 17: its lamps are the unlit ring.
-        const opening = STATIC_VALUES[stage.id].status;
-        expect(opening, `stage ${stage.id} opens green, stage 9 amber, the yogurt line idle`).toBe(stage.id > 10 ? 'idle' : stage.id === 9 ? 'warn' : 'ok');
+        // stage 9's, amber while batches are on hold, which they are from the opening on (D11). The yogurt line runs
+        // from the opening (phase 17): green but for the heat treatment, which waits for a tank, and the cold chain,
+        // empty until phase 19, the unlit ring.
+        const opening = OPENING_STATUS[stage.id];
+        const expected = stage.id === 12 || stage.id === 16 ? 'idle' : stage.id === 9 ? 'warn' : 'ok';
+        expect(opening, `stage ${stage.id} opens green, stage 9 amber, the heat treatment and the cold chain idle`).toBe(expected);
         expect(button.lamps, `rail-stage-${stage.id} has one lamp, ${opening}`).toEqual([opening]);
         expect(button.current, `rail-stage-${stage.id} is not current`).toBeNull();
       }
@@ -193,7 +195,7 @@ test.describe('the stage rail', () => {
     );
     expect(groups).toEqual([
       { id: 'rail-group-uht', text: 'UHT milk 1–10', expanded: 'true', lamp: 'warn' },
-      { id: 'rail-group-yogurt', text: 'Yogurt P8 11–16', expanded: 'false', lamp: 'idle' },
+      { id: 'rail-group-yogurt', text: 'Yogurt P8 11–16', expanded: 'false', lamp: 'ok' },
     ]);
     const shown = await selectionState(page);
     expect(shown.title).toBe(NO_STAGE_TITLE);
