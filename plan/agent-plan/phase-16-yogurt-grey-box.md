@@ -81,6 +81,9 @@ Built on 6 November 2026 in one session, on phase 15 as merged (PR #20). D25 was
   - The rail, layout, KPI and camera tests follow the grouped rail.
   - The perf baseline was measured at both sizes: the overview reads **331** draw calls (budget about 350) and **290,350** triangles; the wing's stops 124–136.
 - **Checks:**
-  - `npm run check` passes (1,610 unit tests, 88 asset tests), and so does `npm run build`.
-  - The full browser run passed 83 of 86 tests before the rail's accordion. Of the three failures, one was the rail's own layout test, which the accordion answers; one was the scene hook's "unknown stage" example, which was 11; and one was the pixel-ratio test, which fails in this sandbox's browser on the commit before phase 15 too (phase 15 status).
-  - The rerun of the affected browser tests is in progress; its result is added here when it ends.
+  - `npm run check` passes (1,611 unit tests, 88 asset tests), and so does `npm run build`.
+  - **The full browser run, before the rail's accordion:** 83 of 86 passed. Of the three failures:
+    - one was the rail's own layout test, which the accordion answers;
+    - one was the scene hook's "unknown stage" example, which was 11 and is now 17;
+    - one was the pixel-ratio test, which fails in this sandbox's browser on the commit before phase 15 too (phase 15 status).
+  - **After the accordion:** every browser test the change touches passed, 18 of 18: `yogurtWing.spec.ts`, `camera.spec.ts`, the rail's tests in `stages.spec.ts`, the one-screen layout in `liquid.spec.ts`, `kpis.spec.ts` and the scene hook.
