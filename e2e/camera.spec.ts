@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import type { UhtStageId } from '../src/contracts';
 import { OVERVIEW, STAGE_VIEWS } from '../src/scene/layout';
 import { expect, test } from './fixtures';
 import { expectLanded, expectOverview, railButton, steadyStagePoint, waitForClock, waitForScene, wholePlantButton } from './helpers';
@@ -31,7 +32,7 @@ const unit = (v: Vector): Vector => {
 const show = (v: Vector): string => `(${v.map((x) => x.toFixed(2)).join(', ')})`;
 
 /** The camera has landed on the stage's stop. */
-async function expectAtStop(page: Page, stage: keyof typeof STAGE_VIEWS): Promise<void> {
+async function expectAtStop(page: Page, stage: UhtStageId): Promise<void> {
   await expectLanded(page, stage);
   const { focusM, cameraOffsetM } = STAGE_VIEWS[stage];
   const { targetM, positionM } = await cameraPose(page);

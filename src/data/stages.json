@@ -576,5 +576,312 @@
       "Released pallets wait in the racks at room temperature.",
       "A truck takes 22 pallets every 100 min, earliest best-before first."
     ]
+  },
+  {
+    "id": 11,
+    "name": "Yogurt Mix Preparation",
+    "shortName": "Yogurt mix",
+    "zone": "yogurtMix",
+    "description": "Milk from the wing's own silo is standardized to about 3.1% fat, then skim-milk powder raises its solids-not-fat to 11% and a stabilizer is dosed, for a mix of about 14% dry matter.",
+    "values": [
+      {
+        "key": "flowLph",
+        "label": "Mix made",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "fatPct",
+        "label": "Mix fat",
+        "unit": "%",
+        "decimals": 1
+      },
+      {
+        "key": "snfPct",
+        "label": "Mix solids-not-fat",
+        "unit": "%",
+        "decimals": 1
+      },
+      {
+        "key": "powderKgPerT",
+        "label": "Skim-milk powder",
+        "unit": "kg/t",
+        "decimals": 1
+      },
+      {
+        "key": "siloLevelPct",
+        "label": "Yogurt silo",
+        "unit": "%",
+        "decimals": 0
+      },
+      {
+        "key": "mixTankLevelPct",
+        "label": "Mix tank",
+        "unit": "%",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Milk from the yogurt silo is standardized, then fortified with milk powder.",
+      "The extra solids give the yogurt its body: about 14% dry matter in the mix."
+    ]
+  },
+  {
+    "id": 12,
+    "name": "Deaeration, Homogenization & Heat Treatment",
+    "shortName": "Heat treatment",
+    "zone": "yogurtProcess",
+    "description": "The mix is deaerated, homogenized at 180 bar and held at about 92 °C for 5 min, which denatures the whey proteins so the gel holds water. Below 85 °C, or with a hold under 3 min, it is diverted to the reprocess tank.",
+    "values": [
+      {
+        "key": "flowLph",
+        "label": "Flow",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "holdS",
+        "label": "Holding time",
+        "unit": "s",
+        "decimals": 0
+      },
+      {
+        "key": "tempC",
+        "label": "Holding-cell outlet",
+        "unit": "°C",
+        "decimals": 1
+      },
+      {
+        "key": "setpointC",
+        "label": "Set point",
+        "unit": "°C",
+        "decimals": 1
+      },
+      {
+        "key": "divertLimitC",
+        "label": "Divert limit",
+        "unit": "°C",
+        "decimals": 0
+      },
+      {
+        "key": "denatPct",
+        "label": "β-lactoglobulin denatured",
+        "unit": "%",
+        "decimals": 1
+      },
+      {
+        "key": "homogenizerBar",
+        "label": "Homogenizer",
+        "unit": "bar",
+        "decimals": 0
+      },
+      {
+        "key": "reprocessLevelL",
+        "label": "Reprocess tank",
+        "unit": "L",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "The mix is homogenized, then held at 92 °C for 5 minutes in a holding cell.",
+      "The heat sets the whey proteins for a firm gel; too cool, and the mix is diverted."
+    ]
+  },
+  {
+    "id": 13,
+    "name": "Inoculation & Fermentation",
+    "shortName": "Fermentation",
+    "zone": "yogurtProcess",
+    "description": "Cooled to 43 °C and inoculated with L. bulgaricus and S. thermophilus, stirred yogurt ferments in three insulated tanks until its pH falls from 6.6 to 4.55, in about 4 h. Set yogurt goes on warm and sets in the cup.",
+    "values": [
+      {
+        "key": "tempC",
+        "label": "Fermentation temperature",
+        "unit": "°C",
+        "decimals": 1
+      },
+      {
+        "key": "endPh",
+        "label": "End pH",
+        "unit": "",
+        "decimals": 2
+      },
+      {
+        "key": "timeToEndS",
+        "label": "Time to the end pH",
+        "unit": "h",
+        "decimals": 1,
+        "scale": 0.0002777777777777778
+      },
+      {
+        "key": "fermentingCount",
+        "label": "Tanks fermenting",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "tank1Ph",
+        "label": "Tank 1 pH",
+        "unit": "",
+        "decimals": 2
+      },
+      {
+        "key": "tank2Ph",
+        "label": "Tank 2 pH",
+        "unit": "",
+        "decimals": 2
+      },
+      {
+        "key": "tank3Ph",
+        "label": "Tank 3 pH",
+        "unit": "",
+        "decimals": 2
+      }
+    ],
+    "tourCaption": [
+      "Cooled to 43 °C, the mix gets its culture and ferments in insulated tanks.",
+      "In about 4 hours its pH falls from 6.6 to 4.55 and it sets into yogurt."
+    ]
+  },
+  {
+    "id": 14,
+    "name": "Smoothing, Cooling & the P8 Buffer",
+    "shortName": "P8 buffer",
+    "zone": "yogurtProcess",
+    "description": "Stirred yogurt is smoothed gently, cooled to 18 °C and pumped to the P8 buffer, with fruit preparation dosed in-line for a fruit recipe. Set yogurt skips the cooler and may wait at most 45 min before it starts to set.",
+    "values": [
+      {
+        "key": "inflowLph",
+        "label": "Into the buffer",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "outflowLph",
+        "label": "To Line P8",
+        "unit": "L/h",
+        "decimals": 0
+      },
+      {
+        "key": "levelPct",
+        "label": "Buffer level",
+        "unit": "%",
+        "decimals": 0
+      },
+      {
+        "key": "tempC",
+        "label": "Buffer temperature",
+        "unit": "°C",
+        "decimals": 1
+      },
+      {
+        "key": "fruitDosePct",
+        "label": "Fruit dosed",
+        "unit": "%",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "The curd is smoothed gently and cooled to 18 °C on its way to the P8 buffer.",
+      "Fruit is dosed in step with the flow; set yogurt goes on warm."
+    ]
+  },
+  {
+    "id": 15,
+    "name": "Line P8: Cup Filling & In-line Checks",
+    "shortName": "P8 cup filler",
+    "zone": "p8",
+    "description": "Under a HEPA hood, P8 drops cups from their magazines, cleans them with ionized air and UV-C light, fills 125 g with piston fillers, heat-seals a foil lid and codes it, then checks every cup's weight, metal and lid.",
+    "values": [
+      {
+        "key": "cupsPerH",
+        "label": "Cups per hour",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "setRateCupsPerH",
+        "label": "Rate set point",
+        "unit": "cups/h",
+        "decimals": 0
+      },
+      {
+        "key": "cupsMade",
+        "label": "Cups made since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "cupsRejected",
+        "label": "Cups rejected since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "fillTargetG",
+        "label": "Fill target",
+        "unit": "g",
+        "decimals": 0
+      },
+      {
+        "key": "sealTempC",
+        "label": "Seal temperature",
+        "unit": "°C",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Under a clean-air hood, P8 fills 12 cups at a time and seals a foil lid on each.",
+      "Every cup is weighed, checked for metal and inspected before it goes on."
+    ]
+  },
+  {
+    "id": 16,
+    "name": "Trays, Pallets & the Cold Chain",
+    "shortName": "Cold chain",
+    "zone": "coldChain",
+    "description": "Cups are packed 24 to a tray and 120 trays to a pallet. Set yogurt waits in the 43 °C warm room until its pH reaches 4.60; then every pallet is blast-chilled to 4 °C and held 24–48 h in the 2–4 °C cold room before a reefer truck takes it.",
+    "values": [
+      {
+        "key": "warmRoomPallets",
+        "label": "Pallets in the warm room",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "chillerPallets",
+        "label": "Pallets in the blast chiller",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "coldRoomPallets",
+        "label": "Pallets in the cold room",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "coldRoomTempC",
+        "label": "Cold room",
+        "unit": "°C",
+        "decimals": 1
+      },
+      {
+        "key": "reefersShipped",
+        "label": "Reefers shipped since opening",
+        "unit": "",
+        "decimals": 0
+      },
+      {
+        "key": "cupsPerPallet",
+        "label": "Cups per pallet",
+        "unit": "",
+        "decimals": 0
+      }
+    ],
+    "tourCaption": [
+      "Cups go into trays and onto pallets; set yogurt first sets in a warm room.",
+      "Every pallet is chilled to 4 °C and rests a day in the cold room before dispatch."
+    ]
   }
 ]

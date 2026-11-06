@@ -4,7 +4,7 @@
 // and stages now and then turn amber or red. Now and then the UHT plant also runs a
 // divert (divert, CIP, sterilize, back to production) or an intermediate clean, so
 // every liquid-line mode shows. Everything is seeded and depends only on sim time and
-// the commands, so two runs with the same input match.
+// the commands, so two runs with the same input match. Stages 11–16, the yogurt line, come from mockYogurt.ts.
 import {
   dayToS,
   fracToPct,
@@ -15,20 +15,20 @@ import {
   pctToFrac,
   SCENARIO_IDS,
   sToH,
-  STAGE_IDS,
+  UHT_STAGE_IDS,
   type EnergySnapshot,
   type Kpis,
   type LinePoint,
-  type LinePointId,
   type LiquidSnapshot,
   type PacksSnapshot,
   type PlantConfig,
   type ScenariosSnapshot,
   type Sim,
-  type StageId,
   type Status,
   type SteamUse,
+  type UhtLinePointId,
   type UhtMode,
+  type UhtStageId,
 } from '../contracts';
 import { createCore } from './core';
 import { bStar, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, tubeVolumeL } from './formulas';
@@ -47,6 +47,7 @@ import {
   steamLph,
 } from './liquid/stageModels';
 import { mockPacks } from './mockPacks';
+import { createMockYogurt } from './mockYogurt';
 import { createRng, mulberry32 } from './rng';
 import { fillerDrawLph, linePoints, staticLiquid, staticPlant, toStages, type StageValues } from './staticPlant';
 
@@ -71,7 +72,7 @@ const EPISODE_LOG: Record<UhtMode, [kind: 'ok' | 'info' | 'warn' | 'bad', messag
   aic: ['info', 'Mock: UHT plant in an intermediate clean'],
 };
 
-const STAGE_NAMES: Record<StageId, string> = {
+const STAGE_NAMES: Record<UhtStageId, string> = {
   1: 'Standardization',
   2: 'Preheater and deaerator',
   3: 'Homogenizer',
@@ -90,7 +91,7 @@ const worst = (a: Status, b: Status): Status => (STATUS_RANK[a] >= STATUS_RANK[b
 /** What each step needs: the status windows, the episode and the flow. */
 interface MockPulse {
   /** The random status windows, which the log follows. */
-  statuses: Record<StageId, Status>;
+  statuses: Record<UhtStageId, Status>;
   episode: UhtMode;
   episodeRemainingS: number;
   diverting: boolean;
@@ -102,8 +103,8 @@ interface MockState extends MockPulse {
   kpis: Kpis;
   packs: PacksSnapshot;
   /** What the lamps show: the statuses with the episode's mode laid over stages 2–5. */
-  shown: Record<StageId, Status>;
-  line: Record<LinePointId, LinePoint>;
+  shown: Record<UhtStageId, Status>;
+  line: Record<UhtLinePointId, LinePoint>;
   liquid: LiquidSnapshot;
 }
 
@@ -120,11 +121,11 @@ export function createMockSim(config: PlantConfig): Sim {
   const phases = Array.from({ length: 12 }, () => rng.next() * 2 * Math.PI);
   const wave = (timeS: number, periodS: number, index: number): number => Math.sin((2 * Math.PI * timeS) / periodS + phases[index]);
   // Stagger the status windows so the stages don't all change at once.
-  const windowOffsetS = Object.fromEntries(STAGE_IDS.map((id) => [id, rng.next() * STATUS_WINDOW_S])) as Record<StageId, number>;
+  const windowOffsetS = Object.fromEntries(UHT_STAGE_IDS.map((id) => [id, rng.next() * STATUS_WINDOW_S])) as Record<UhtStageId, number>;
   const tubeL = tubeVolumeL(uht.holdAtCapacityS, uht.capacityLph);
 
   // A stateless hash of (seed, stage, window): the first draw of a freshly seeded mulberry32.
-  function randomStatus(id: StageId, timeS: number): Status {
+  function randomStatus(id: UhtStageId, timeS: number): Status {
     const windowIndex = Math.floor((timeS + windowOffsetS[id]) / STATUS_WINDOW_S);
     const draw = mulberry32(config.seed ^ Math.imul(id, 0x9e3779b1) ^ Math.imul(windowIndex, 0x85ebca6b))();
     if (draw < BAD_FRAC) return 'bad';
@@ -196,7 +197,7 @@ export function createMockSim(config: PlantConfig): Sim {
   function stateAt(timeS: number): MockState;
   function stateAt(timeS: number, full: false): MockPulse;
   function stateAt(timeS: number, full = true): MockState | MockPulse {
-    const statuses = Object.fromEntries(STAGE_IDS.map((id) => [id, randomStatus(id, timeS)])) as Record<StageId, Status>;
+    const statuses = Object.fromEntries(UHT_STAGE_IDS.map((id) => [id, randomStatus(id, timeS)])) as Record<UhtStageId, Status>;
 
     // 6: the tank level swings over six hours; above the throttle level the UHT plant runs at reduced flow.
     const levelFrac = 0.5 + 0.48 * wave(timeS, hToS(6), 6);
@@ -385,7 +386,8 @@ export function createMockSim(config: PlantConfig): Sim {
     return { ...pulse, values, kpis, shown, line, liquid, packs: discrete.packs };
   }
 
-  let lastStatuses: Record<StageId, Status> | undefined;
+  let lastStatuses: Record<UhtStageId, Status> | undefined;
+  const yogurt = createMockYogurt(config);
   let lastEpisode: UhtMode = 'production';
   let lastDiverting = false;
 
@@ -406,7 +408,8 @@ export function createMockSim(config: PlantConfig): Sim {
       lastDiverting = diverting;
       if (episode !== lastEpisode) core.log(timeS, ...EPISODE_LOG[episode]);
       lastEpisode = episode;
-      for (const id of STAGE_IDS) {
+      yogurt.step(dtS, timeS, core.setpoints);
+      for (const id of UHT_STAGE_IDS) {
         const status = statuses[id];
         if (!lastStatuses || status === lastStatuses[id]) continue;
         const name = STAGE_NAMES[id];
@@ -416,6 +419,7 @@ export function createMockSim(config: PlantConfig): Sim {
       }
       lastStatuses = statuses;
     },
+    onYogurtProduct: (product) => yogurt.setNextProduct(product, core.timeS, core.log),
   });
   const opening = stateAt(core.timeS, false);
   lastStatuses = opening.statuses;
@@ -426,7 +430,17 @@ export function createMockSim(config: PlantConfig): Sim {
     dispatch: (command) => core.dispatch(command),
     snapshot() {
       const { values, kpis, shown, line, liquid, packs } = stateAt(core.timeS);
-      return core.snapshot(toStages(values, (id) => shown[id]), kpis, line, liquid, packs, mockScenarios());
+      const wing = yogurt.view(core.setpoints, core.timeS);
+      const statuses = { ...shown, ...wing.statuses };
+      return core.snapshot(
+        toStages({ ...values, ...wing.values }, (id) => statuses[id]),
+        kpis,
+        { ...line, ...wing.line },
+        liquid,
+        packs,
+        mockScenarios(),
+        wing.yogurt,
+      );
     },
   };
 }

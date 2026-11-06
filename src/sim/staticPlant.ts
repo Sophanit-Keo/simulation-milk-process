@@ -6,17 +6,19 @@ import {
   STAGE_IDS,
   type Kpis,
   type LinePoint,
-  type LinePointId,
   type LiquidSnapshot,
   type PlantConfig,
   type StageId,
   type StageSnapshot,
   type Status,
+  type UhtLinePointId,
+  type UhtStageId,
 } from '../contracts';
 import type { Setpoints } from './core';
 import { bStar, creamShareFrac, divertLimitC, f0Min, holdTimeS, homogenizerOutletC, tubeVolumeL } from './formulas';
 
-export type StageValues = Record<StageId, Record<string, number>>;
+/** The UHT line's stage values, 1–10; the yogurt line's come from src/sim/yogurt/ (contracts v8). */
+export type StageValues = Record<UhtStageId, Record<string, number>>;
 
 export function emptyKpis(): Kpis {
   return {
@@ -118,8 +120,8 @@ export interface LineFlows {
   fillerLph: number;
 }
 
-/** The liquid line's measuring points (contracts v1), read off the stage values in flow order. */
-export function linePoints(values: StageValues, flows: LineFlows): Record<LinePointId, LinePoint> {
+/** The UHT liquid line's measuring points (contracts v1), read off the stage values in flow order. */
+export function linePoints(values: StageValues, flows: LineFlows): Record<UhtLinePointId, LinePoint> {
   const point = (tempC: number, flowLph: number): LinePoint => ({ tempC, flowLph });
   const { rawLph, standardizedLph, uhtLph, divertLph, fillerLph } = flows;
   // What the divert valve doesn't send to the reject tank goes on to the flash vessel.
@@ -167,7 +169,8 @@ export function staticLiquid(config: PlantConfig): LiquidSnapshot {
 export const fillerDrawLph = (config: PlantConfig, runningFillers: number, ratePacksPerH: number): number =>
   runningFillers * ratePacksPerH * config.product.packVolumeL;
 
-export function toStages(values: StageValues, statusOf: (id: StageId) => Status = () => 'ok'): Record<StageId, StageSnapshot> {
+/** Every stage's snapshot, 1–16, from both lines' values. */
+export function toStages(values: Record<StageId, Record<string, number>>, statusOf: (id: StageId) => Status = () => 'ok'): Record<StageId, StageSnapshot> {
   const stages = {} as Record<StageId, StageSnapshot>;
   for (const id of STAGE_IDS) stages[id] = { id, status: statusOf(id), values: values[id] };
   return stages;

@@ -2,14 +2,15 @@ import type { ScenarioId } from './commands';
 import type { PacksSnapshot } from './packs';
 import type { ScenariosSnapshot } from './scenarios';
 import type { LinePointId, Speed, StageId, Status } from './stages';
+import type { YogurtSnapshot } from './yogurt';
 
 /**
  * Bump on every contract change (plan/agent-plan/README.md#contracts):
  * v0 week 1, v1 at G1, v2 at week 6, v3 at G2, v4 in phase 5 (scenarios), v5 in phase 7 (cleaning steps), v6 in
- * phase 8 (steam and energy), v7 in phase 13 (the CIP station's chemicals and returns). From v3 on, fields may
- * only be added.
+ * phase 8 (steam and energy), v7 in phase 13 (the CIP station's chemicals and returns), v8 in phase 15 (the yogurt
+ * line: stages 11–16, their line points and Snapshot.yogurt). From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 7;
+export const CONTRACT_VERSION = 8;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -211,8 +212,9 @@ export interface Snapshot {
   paused: boolean;
   /** Sim time of the next queued event, or null if the queue is empty. */
   nextEventS: number | null;
+  /** Every stage, 1–16 (contracts v8 adds the yogurt line's 11–16). */
   stages: Record<StageId, StageSnapshot>;
-  /** Temperature and flow at each point of the liquid line, for pipe colours and flow (contracts v1). */
+  /** Temperature and flow at each point of the UHT line and, from contracts v8, of the yogurt line, for pipe colours and flow (contracts v1). */
   line: Record<LinePointId, LinePoint>;
   /** Stages 1–6 beyond their per-stage values: modes, tank levels and filler draw (contracts v2). */
   liquid: LiquidSnapshot;
@@ -220,6 +222,9 @@ export interface Snapshot {
   packs: PacksSnapshot;
   /** The fault scenarios triggered so far, and those that cannot start now (contracts v4). */
   scenarios: ScenariosSnapshot;
+  /** Stages 11–16, the yogurt line on Line P8, beyond their per-stage values (contracts v8). */
+  yogurt: YogurtSnapshot;
+  /** The UHT line's KPIs; the yogurt line's are in yogurt.kpis. */
   kpis: Kpis;
   /** Newest first, capped in length by the sim. */
   log: readonly LogEntry[];

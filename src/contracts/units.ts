@@ -17,6 +17,11 @@
  *   Packs, Trays, Pallets, PacksPerH    counts and count rates
  *   PerPack            a probability (0–1) per pack, such as failurePerPack
  *   M, Rad, Deg, Px    metres (three.js world units), radians, degrees, CSS pixels
+ *   K                  kelvin, absolute temperature (the Arrhenius law of the yogurt heat treatment, phase 15)
+ *   G, GPerL, KgPerT   grams (a cup, a fill weight), grams per litre (a protein), kilograms per tonne (a powder dose)
+ *   Ph, TaPct          pH, titratable acidity as % lactic acid (the yogurt's fermentation)
+ *   Pa, Rlu            pascals (the P8 cabin's overpressure), relative light units (an ATP swab)
+ *   Cups, CupsPerH     counts and count rates, as for packs
  *
  * Examples: `flowLph`, `holdS`, `levelL`, `setpointC`, `tankLevelPct`.
  */
@@ -45,6 +50,11 @@ export const kwSToKwh = (kw: number, durationS: number): number => (kw * duratio
 export const kjToKwh = (kj: number): number => kj / SECONDS_PER_HOUR;
 /** Litres of milk as tonnes: litres count as kilograms (D13), and a tonne is 1,000 kg. */
 export const lToT = (litres: number): number => litres / 1_000;
+
+/** Degrees Celsius as kelvin, for the Arrhenius law (phase 15). */
+export const cToK = (tempC: number): number => tempC + 273.15;
+/** Grams as kilograms: a cup's fill (phase 15). */
+export const gToKg = (grams: number): number => grams / 1_000;
 
 export const fracToPct = (frac: number): number => frac * 100;
 export const pctToFrac = (pct: number): number => pct / 100;

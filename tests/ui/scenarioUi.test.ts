@@ -47,7 +47,7 @@ describe('the scenario menu (src/data/scenarios.json)', () => {
     variant.scenarios[0] = { ...variant.scenarios[0], variant: 'demandSpike' };
     expect(() => parseScenarioMenu(variant)).toThrow(/variant goes with demandSpikeOrLateTruck only/);
     const stage = copy();
-    stage.scenarios[1] = { ...stage.scenarios[1], stage: 11 };
+    stage.scenarios[1] = { ...stage.scenarios[1], stage: 17 };
     expect(() => parseScenarioMenu(stage)).toThrow(/unknown stage/);
   });
 

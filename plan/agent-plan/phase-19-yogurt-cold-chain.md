@@ -36,14 +36,11 @@ At the end of this phase both routes run from silo to truck, and the scope freez
 
 ## Contracts (`lead`)
 
-`YogurtSnapshot.coldChain` (only added):
+Contracts v8 (phase 15) already give `YogurtSnapshot.coldChain` its `warmRoom: { tempC, pallets }`, `chiller: { pallets }`, `coldRoom: { tempC, positionsUsed }` and the shipped totals, `palletsShipped` and `reefersShipped`. It gains (only added):
 - `trays`;
 - `pallets[]`, each with its batch, place, `tempC`, `ph` and `holdUntilS`;
-- `warmRoom: { tempC, pallets }`;
-- `chiller: { pallets, capacity }`;
-- `coldRoom: { tempC, positionsUsed, capacity }`;
-- `reefers[]`;
-- the shipped totals.
+- `chiller.capacity` and `coldRoom.capacity` (H131, H132);
+- `reefers[]`.
 
 ## Who does what
 

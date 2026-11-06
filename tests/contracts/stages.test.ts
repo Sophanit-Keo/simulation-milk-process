@@ -193,7 +193,7 @@ describe('ZONE_NAMES', () => {
     expect(new Set(Object.values(ZONE_NAMES)).size).toBe(ZONE_IDS.length);
   });
 
-  it("names the zones as the floor plan does (plan 05; the G1 checklist's zone headings)", () => {
+  it("names the zones as the floor plans do (plan 05, the G1 checklist's zone headings; plan 12's wing, contracts v8)", () => {
     expect(ZONE_IDS.map((zone) => ZONE_NAMES[zone])).toEqual([
       'Silo yard & mixing',
       'UHT process hall',
@@ -202,6 +202,10 @@ describe('ZONE_NAMES', () => {
       'Packaging hall',
       'Quarantine & QA lab',
       'Warehouse & dispatch',
+      'Yogurt mix room',
+      'Yogurt process hall',
+      'Cup filling room (Line P8)',
+      'Incubation & cold store',
     ]);
   });
 });

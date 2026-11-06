@@ -1,7 +1,9 @@
+import { SETPOINT_RANGES } from './commands';
 import { CLEANING_FLUIDS, CLEANING_STEP_IDS, type CleaningFluid, type CleaningStepId } from './snapshot';
 import { MAX_PALLETS_PER_BATCH } from './sscc';
 import { isSpeed } from './stages';
 import { dayToS, sToH } from './units';
+import { YOGURT_PRODUCT_IDS, YOGURT_ROUTES, type YogurtProductId, type YogurtRoute } from './yogurt';
 
 /**
  * One step of a cleaning programme (phase 7, D16). JSON gives `step` and `fluid` as plain strings:
@@ -22,6 +24,122 @@ export interface CipStepConfig extends CleaningStepConfig {
 export interface CleaningChemicalConfig {
   concentrationPct: number;
   conductivityMsPerCm: number;
+}
+
+/**
+ * One of the yogurt line's products (D26). JSON gives `id` and `route` as plain strings: checkPlantConfig refuses
+ * any but YOGURT_PRODUCT_IDS and YOGURT_ROUTES, and yogurtProducts() narrows them.
+ */
+export interface YogurtProductConfig {
+  id: string;
+  name: string;
+  route: string;
+  /** True when fruit preparation is dosed in-line (fruit.dosePct). */
+  fruit: boolean;
+}
+
+/**
+ * The yogurt line, Line P8 (phase 15, D26; plan 12): stages 11–16, in a wing with its own raw-milk silo. Every key
+ * here is the yogurt line's own; the UHT line's keys outside this block keep their values.
+ */
+export interface YogurtConfig {
+  /** The wing's own raw-milk silo, filled from the shared tanker bay (D25). */
+  silo: { capacityL: number; startFrac: number; tempC: number };
+  /** Stage 11: standardized milk, fortified with skim-milk powder to the SNF target, then stabilizer (H122). */
+  mix: {
+    capacityLph: number;
+    fatPct: number;
+    snfPct: number;
+    /** The standardized milk's own solids-not-fat, before the powder. */
+    milkSnfPct: number;
+    powderSnfPct: number;
+    stabilizerPct: number;
+    /** The mix tank after the powder station, which feeds the heat treatment. */
+    tankL: number;
+  };
+  /** Stage 12. */
+  homogenizer: { bar: number; tempC: number };
+  /** Stage 12: the heat treatment and its holding cell, sized for holdS at mix.capacityLph (H123). */
+  heat: {
+    setpointC: number;
+    holdS: number;
+    /** The CCP: the mix is diverted below this at the holding-cell outlet... */
+    divertBelowC: number;
+    /** ...or with a hold shorter than this. */
+    minHoldS: number;
+    /** β-lactoglobulin denaturation the heat treatment aims for (H124). */
+    denatTargetPct: number;
+    /** Native β-lactoglobulin in the mix before heating, for the 1.5-order kinetics (H124). */
+    betaLgGPerL: number;
+    reprocessTankL: number;
+  };
+  /** Stage 13: the pH curve (H125) falls from startPh toward floorPh, reaching endPh at endAtOptS at the optimum, optC. */
+  ferment: {
+    tempC: number;
+    tanks: number;
+    tankL: number;
+    startPh: number;
+    endPh: number;
+    floorPh: number;
+    endAtOptS: number;
+    /** The culture's cardinal temperatures (Rosso's model): no acidification at or below minC or at or above maxC. */
+    minC: number;
+    optC: number;
+    maxC: number;
+    /** Titratable acidity at startPh and at endPh, % lactic acid; linear in the pH between them. */
+    startTaPct: number;
+    endTaPct: number;
+  };
+  /** Stage 14: the plate cooler after the stirred tanks. */
+  cooling: { outletC: number };
+  /** Stage 14: the P8 buffer; set mix may wait in it at most setMaxWaitS before it starts to set. */
+  buffer: { capacityL: number; setMaxWaitS: number };
+  fruit: { dosePct: number };
+  /** Stage 15: Line P8. */
+  p8: {
+    cupG: number;
+    lanes: number;
+    rateCupsPerH: number;
+    /** Fill weight, normal around targetG; the checkweigher rejects below underBelowG and above overAboveG. */
+    fill: { targetG: number; sigmaG: number; underBelowG: number; overAboveG: number };
+    /** The sealing heads' set points and their window (SOP P8 step 5). */
+    seal: {
+      tempC: number;
+      timeS: number;
+      bar: number;
+      minTempC: number;
+      maxTempC: number;
+      minTimeS: number;
+      maxTimeS: number;
+      minBar: number;
+      maxBar: number;
+    };
+    sealTest: { cups: number; everyS: number };
+    hepa: { minPa: number; normalPa: number };
+    sip: { tempC: number; holdS: number };
+    atpMaxRlu: number;
+  };
+  /** The wing's CIP, on D23's model at the SOP's strengths. */
+  cip: { lyePct: number; lyeTempC: number; acidPct: number; acidTempC: number };
+  /** Stage 16. */
+  coldChain: {
+    cupsPerTray: number;
+    traysPerPallet: number;
+    warmRoomC: number;
+    /** Set yogurt leaves the warm room at or below this pH. */
+    releasePh: number;
+    chillToC: number;
+    roomC: number;
+    roomMinC: number;
+    roomMaxC: number;
+    minHoldS: number;
+    maxHoldS: number;
+    shelfLifeDays: number;
+    palletsPerTruck: number;
+  };
+  products: YogurtProductConfig[];
+  /** The product of each shift of a day, from the first shift (quality.firstShiftStartS: 06:00, 14:00, 22:00). */
+  shiftProducts: string[];
 }
 
 /**
@@ -274,6 +392,8 @@ export interface PlantConfig {
     /** Late trucks: no truck comes for this long after the trigger; the ones due meanwhile then arrive together (sim assumption). */
     lateTruckDelayS: number;
   };
+  /** The yogurt line, stages 11–16 (schema 10, D26). */
+  yogurt: YogurtConfig;
 }
 
 // Durations, rates and sizes the model divides by or steps with; zero would stall or divide by zero.
@@ -356,6 +476,252 @@ const INTEGER_KEYS = [
   'scenarios.spikeTrucks',
   'clock.maxStepsPerFrame',
 ] as const;
+
+/**
+ * Every number of the yogurt block (schema 10, D26), each of which must be there and finite: the block is checked
+ * key by key, so a missing one is named rather than read as 0.
+ */
+export const YOGURT_NUMBER_KEYS = [
+  'silo.capacityL',
+  'silo.startFrac',
+  'silo.tempC',
+  'mix.capacityLph',
+  'mix.fatPct',
+  'mix.snfPct',
+  'mix.milkSnfPct',
+  'mix.powderSnfPct',
+  'mix.stabilizerPct',
+  'mix.tankL',
+  'homogenizer.bar',
+  'homogenizer.tempC',
+  'heat.setpointC',
+  'heat.holdS',
+  'heat.divertBelowC',
+  'heat.minHoldS',
+  'heat.denatTargetPct',
+  'heat.betaLgGPerL',
+  'heat.reprocessTankL',
+  'ferment.tempC',
+  'ferment.tanks',
+  'ferment.tankL',
+  'ferment.startPh',
+  'ferment.endPh',
+  'ferment.floorPh',
+  'ferment.endAtOptS',
+  'ferment.minC',
+  'ferment.optC',
+  'ferment.maxC',
+  'ferment.startTaPct',
+  'ferment.endTaPct',
+  'cooling.outletC',
+  'buffer.capacityL',
+  'buffer.setMaxWaitS',
+  'fruit.dosePct',
+  'p8.cupG',
+  'p8.lanes',
+  'p8.rateCupsPerH',
+  'p8.fill.targetG',
+  'p8.fill.sigmaG',
+  'p8.fill.underBelowG',
+  'p8.fill.overAboveG',
+  'p8.seal.tempC',
+  'p8.seal.timeS',
+  'p8.seal.bar',
+  'p8.seal.minTempC',
+  'p8.seal.maxTempC',
+  'p8.seal.minTimeS',
+  'p8.seal.maxTimeS',
+  'p8.seal.minBar',
+  'p8.seal.maxBar',
+  'p8.sealTest.cups',
+  'p8.sealTest.everyS',
+  'p8.hepa.minPa',
+  'p8.hepa.normalPa',
+  'p8.sip.tempC',
+  'p8.sip.holdS',
+  'p8.atpMaxRlu',
+  'cip.lyePct',
+  'cip.lyeTempC',
+  'cip.acidPct',
+  'cip.acidTempC',
+  'coldChain.cupsPerTray',
+  'coldChain.traysPerPallet',
+  'coldChain.warmRoomC',
+  'coldChain.releasePh',
+  'coldChain.chillToC',
+  'coldChain.roomC',
+  'coldChain.roomMinC',
+  'coldChain.roomMaxC',
+  'coldChain.minHoldS',
+  'coldChain.maxHoldS',
+  'coldChain.shelfLifeDays',
+  'coldChain.palletsPerTruck',
+] as const;
+
+// The yogurt keys the model divides by or counts with; zero would stall or divide by zero.
+const YOGURT_POSITIVE_KEYS = [
+  'silo.capacityL',
+  'mix.capacityLph',
+  'mix.tankL',
+  'mix.powderSnfPct',
+  'heat.holdS',
+  'heat.minHoldS',
+  'heat.betaLgGPerL',
+  'heat.reprocessTankL',
+  'ferment.tanks',
+  'ferment.tankL',
+  'ferment.endAtOptS',
+  'buffer.capacityL',
+  'buffer.setMaxWaitS',
+  'p8.cupG',
+  'p8.lanes',
+  'p8.fill.sigmaG',
+  'p8.sealTest.cups',
+  'p8.sealTest.everyS',
+  'p8.sip.holdS',
+  'coldChain.cupsPerTray',
+  'coldChain.traysPerPallet',
+  'coldChain.minHoldS',
+  'coldChain.shelfLifeDays',
+  'coldChain.palletsPerTruck',
+] as const;
+
+const YOGURT_INTEGER_KEYS = [
+  'ferment.tanks',
+  'p8.lanes',
+  'p8.sealTest.cups',
+  'coldChain.cupsPerTray',
+  'coldChain.traysPerPallet',
+  'coldChain.palletsPerTruck',
+] as const;
+
+/** A yogurt product with its id and route narrowed: what yogurtProducts() returns. */
+export interface YogurtProduct {
+  id: YogurtProductId;
+  name: string;
+  route: YogurtRoute;
+  fruit: boolean;
+}
+
+/** The yogurt products of a config checkPlantConfig passed, narrowed, keyed by id. */
+export function yogurtProducts(config: PlantConfig): Readonly<Record<YogurtProductId, YogurtProduct>> {
+  return Object.fromEntries(
+    config.yogurt.products.map((product) => [product.id, { ...product, id: product.id as YogurtProductId, route: product.route as YogurtRoute }]),
+  ) as Record<YogurtProductId, YogurtProduct>;
+}
+
+/** The product of each shift of a day, from the first, of a config checkPlantConfig passed. */
+export const yogurtShiftProducts = (config: PlantConfig): readonly YogurtProductId[] => config.yogurt.shiftProducts as YogurtProductId[];
+
+/** Every problem in the yogurt block (schema 10); `yogurt` is what plant.json gave, which may be partial. */
+function checkYogurt(config: PlantConfig, fail: (message: string) => void): void {
+  const given = (config as Partial<PlantConfig>).yogurt as unknown;
+  if (given === null || typeof given !== 'object') {
+    fail('yogurt is missing: plant.json schema 10 needs the yogurt line\'s block');
+    return;
+  }
+  const at = (path: string): unknown => path.split('.').reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], given);
+  let complete = true;
+  for (const path of YOGURT_NUMBER_KEYS) {
+    const value = at(path);
+    if (value === undefined) {
+      fail(`yogurt.${path} is missing`);
+      complete = false;
+    } else if (!(typeof value === 'number' && Number.isFinite(value))) {
+      fail(`yogurt.${path} must be a finite number`);
+      complete = false;
+    }
+  }
+  for (const path of YOGURT_POSITIVE_KEYS) {
+    const value = at(path);
+    if (typeof value === 'number' && !(value > 0)) fail(`yogurt.${path} must be greater than 0`);
+  }
+  for (const path of YOGURT_INTEGER_KEYS) {
+    const value = at(path);
+    if (typeof value === 'number' && !Number.isInteger(value)) fail(`yogurt.${path} must be a whole number`);
+  }
+  const yogurt = given as YogurtConfig;
+  checkYogurtProducts(yogurt, config.quality.batchS, fail);
+  if (!complete) return;
+
+  const { silo, mix, homogenizer, heat, ferment, cooling, buffer, p8, cip, coldChain } = yogurt;
+  const inRange = (value: number, key: keyof typeof SETPOINT_RANGES, path: string): void => {
+    const { min, max } = SETPOINT_RANGES[key];
+    if (!(value >= min && value <= max)) fail(`yogurt.${path} must lie in the ${key} set point's range, ${min}–${max}`);
+  };
+  const pct = (value: number, path: string): void => {
+    if (!(value >= 0 && value <= 100)) fail(`yogurt.${path} must lie in 0–100`);
+  };
+  if (silo.startFrac > 1) fail('yogurt.silo.startFrac must lie in 0–1');
+  for (const path of ['mix.fatPct', 'mix.snfPct', 'mix.milkSnfPct', 'mix.powderSnfPct', 'mix.stabilizerPct', 'heat.denatTargetPct', 'fruit.dosePct', 'cip.lyePct', 'cip.acidPct'] as const) {
+    pct(at(path) as number, path);
+  }
+  // The powder raises the SNF from the milk's to the target, so the target lies between them; milk, powder and
+  // stabilizer then make up the tonne, with room left for the milk's fat (H122).
+  if (!(mix.milkSnfPct < mix.snfPct && mix.snfPct < mix.powderSnfPct)) fail('yogurt.mix needs milkSnfPct < snfPct < powderSnfPct: the powder raises the SNF to the target');
+  if (!(mix.fatPct + mix.snfPct + mix.stabilizerPct < 100)) fail('yogurt.mix: fat, SNF and stabilizer must leave room for the water');
+  if (!(mix.fatPct < config.standardization.rawMilkFatPct)) fail('yogurt.mix.fatPct must be below the raw milk\'s fat (standardization.rawMilkFatPct), which the skid takes cream from');
+  if (!(homogenizer.bar > 0)) fail('yogurt.homogenizer.bar must be greater than 0');
+  inRange(heat.setpointC, 'yogurtHeatC', 'heat.setpointC');
+  // The set point must hold the mix forward, and the hold it is sized for must meet the CCP (H123).
+  if (!(heat.divertBelowC < heat.setpointC)) fail('yogurt.heat.divertBelowC must be below heat.setpointC, or the mix is always diverted');
+  if (!(heat.minHoldS <= heat.holdS)) fail('yogurt.heat.minHoldS must not exceed heat.holdS, or the holding cell is too small for the CCP');
+  inRange(ferment.tempC, 'fermentTempC', 'ferment.tempC');
+  if (!(ferment.minC < ferment.optC && ferment.optC < ferment.maxC)) fail('yogurt.ferment needs minC < optC < maxC');
+  if (!(ferment.minC < ferment.tempC && ferment.tempC < ferment.maxC)) fail('yogurt.ferment.tempC must lie between minC and maxC, or the culture never acidifies');
+  // Every temperature the slider can set must be one the culture acidifies at, or the time to the end pH is endless.
+  const fermentRange = SETPOINT_RANGES.fermentTempC;
+  if (!(ferment.minC < fermentRange.min && fermentRange.max < ferment.maxC)) {
+    fail(`yogurt.ferment needs minC below and maxC above the fermentTempC set point's range, ${fermentRange.min}–${fermentRange.max}`);
+  }
+  // The curve falls from startPh toward floorPh and passes endPh on the way; set yogurt is released once it passes releasePh.
+  if (!(ferment.floorPh < ferment.endPh && ferment.endPh < ferment.startPh)) fail('yogurt.ferment needs floorPh < endPh < startPh');
+  if (!(ferment.floorPh < coldChain.releasePh && coldChain.releasePh < ferment.startPh)) fail('yogurt.coldChain.releasePh must lie between ferment.floorPh and ferment.startPh, or set yogurt never leaves the warm room');
+  if (!(ferment.startTaPct < ferment.endTaPct)) fail('yogurt.ferment.startTaPct must be below endTaPct: the acidity rises as the pH falls');
+  if (!(cooling.outletC < ferment.tempC)) fail('yogurt.cooling.outletC must be below ferment.tempC');
+  if (!(buffer.setMaxWaitS > 0 && buffer.capacityL > 0)) fail('yogurt.buffer needs a capacity and a wait');
+  inRange(p8.rateCupsPerH, 'p8RateCupsPerH', 'p8.rateCupsPerH');
+  const { fill, seal, hepa } = p8;
+  if (!(fill.underBelowG < fill.targetG && fill.targetG < fill.overAboveG)) fail('yogurt.p8.fill needs underBelowG < targetG < overAboveG');
+  if (!(fill.underBelowG <= p8.cupG)) fail('yogurt.p8.fill.underBelowG must not exceed the cup\'s nominal p8.cupG');
+  if (!(seal.minTempC <= seal.tempC && seal.tempC <= seal.maxTempC)) fail('yogurt.p8.seal.tempC must lie in its window, minTempC–maxTempC');
+  if (!(seal.minTimeS <= seal.timeS && seal.timeS <= seal.maxTimeS)) fail('yogurt.p8.seal.timeS must lie in its window, minTimeS–maxTimeS');
+  if (!(seal.minBar <= seal.bar && seal.bar <= seal.maxBar)) fail('yogurt.p8.seal.bar must lie in its window, minBar–maxBar');
+  if (!(hepa.minPa < hepa.normalPa)) fail('yogurt.p8.hepa.normalPa must be above minPa, or P8 never starts');
+  if (!(cip.lyeTempC > 0 && cip.acidTempC > 0)) fail('yogurt.cip needs the lye\'s and the acid\'s temperatures');
+  if (!(coldChain.roomMinC <= coldChain.roomC && coldChain.roomC <= coldChain.roomMaxC)) fail('yogurt.coldChain.roomC must lie in roomMinC–roomMaxC');
+  if (!(coldChain.chillToC < coldChain.warmRoomC)) fail('yogurt.coldChain.chillToC must be below warmRoomC');
+  if (!(coldChain.minHoldS < coldChain.maxHoldS)) fail('yogurt.coldChain.minHoldS must be below maxHoldS');
+  if (!(coldChain.maxHoldS < dayToS(coldChain.shelfLifeDays))) fail('yogurt.coldChain.maxHoldS must be shorter than the shelf life');
+}
+
+/** The products: each known id once, a known route, a name and a fruit flag; and one product a shift for a whole day. */
+function checkYogurtProducts(yogurt: Partial<YogurtConfig>, batchS: number, fail: (message: string) => void): void {
+  const products: unknown = yogurt.products;
+  if (!Array.isArray(products)) fail('yogurt.products must list the products');
+  else {
+    const seen = new Set<string>();
+    for (const [i, product] of (products as Partial<YogurtProductConfig>[]).entries()) {
+      const where = `yogurt.products[${i}]`;
+      if (!YOGURT_PRODUCT_IDS.includes(product.id as YogurtProductId)) fail(`${where}.id must be one of ${YOGURT_PRODUCT_IDS.join(', ')}`);
+      else if (seen.has(product.id as string)) fail(`${where}.id ${String(product.id)} appears twice`);
+      else seen.add(product.id as string);
+      if (!(typeof product.name === 'string' && product.name.trim().length > 0)) fail(`${where}.name must be non-empty text`);
+      if (!YOGURT_ROUTES.includes(product.route as YogurtRoute)) fail(`${where}.route must be one of ${YOGURT_ROUTES.join(', ')}`);
+      if (typeof product.fruit !== 'boolean') fail(`${where}.fruit must be true or false`);
+    }
+    for (const id of YOGURT_PRODUCT_IDS) if (!seen.has(id)) fail(`yogurt.products has no ${id}`);
+  }
+  const shifts: unknown = yogurt.shiftProducts;
+  const shiftsADay = dayToS(1) / batchS;
+  if (!Array.isArray(shifts)) fail('yogurt.shiftProducts must list a product for each shift of a day');
+  else {
+    if (shifts.length !== shiftsADay) fail(`yogurt.shiftProducts must give ${shiftsADay} products, one for each shift of a day (quality.batchS)`);
+    for (const [i, id] of (shifts as unknown[]).entries()) {
+      if (!YOGURT_PRODUCT_IDS.includes(id as YogurtProductId)) fail(`yogurt.shiftProducts[${i}] must be one of ${YOGURT_PRODUCT_IDS.join(', ')}`);
+    }
+  }
+}
 
 /** A cleaning step with its step and fluid narrowed: what cleaningSteps() returns. */
 export interface CleaningStep {
@@ -513,5 +879,7 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   const { energy } = config;
   if (energy.boilerEfficiencyFrac > 1) fail('energy.boilerEfficiencyFrac must lie in 0–1');
   if (energy.boilerHeatKjPerKg < uht.steamLatentKjPerKg) fail('energy.boilerHeatKjPerKg must be at least uht.steamLatentKjPerKg, the heat a kilogram of steam gives the milk');
+  // Phase 15: the yogurt line's block (schema 10), key by key.
+  checkYogurt(config, fail);
   return problems;
 }

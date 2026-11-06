@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { STAGE_IDS, type StageId } from '../../src/contracts';
+import { UHT_STAGE_IDS, YOGURT_STAGE_IDS, type UhtStageId } from '../../src/contracts';
 import { createCameraFlight, type CameraFlight } from '../../src/scene/cameraFlight';
 import { OVERVIEW, STAGE_VIEWS, type PointM } from '../../src/scene/layout';
 import { stubMatchMedia, stubTheme } from './browserStubs';
@@ -60,7 +60,7 @@ describe('createCameraFlight', () => {
   it('flies to each stage’s stop: it looks at focusM from focusM + cameraOffsetM, and rings the stage', () => {
     const { camera, controls, host, flight, ring } = setUp();
     // Stage after stage, as the rail's arrow keys go, and each one from the stop before.
-    for (const stage of STAGE_IDS) {
+    for (const stage of UHT_STAGE_IDS) {
       const view = STAGE_VIEWS[stage];
       flight.flyTo(stage);
       expect(flight.flying, `stage ${stage}: flying`).toBe(true);
@@ -82,6 +82,24 @@ describe('createCameraFlight', () => {
     }
   });
 
+  it('leaves the camera where it is for a yogurt stage, which has no stop until phase 16, and rings nothing', () => {
+    const { camera, controls, host, flight, ring } = setUp();
+    flight.flyTo(4);
+    flyUntilLanded(flight, controls);
+    const position = camera.position.clone();
+    const target = controls.target.clone();
+    for (const stage of YOGURT_STAGE_IDS) {
+      expect(STAGE_VIEWS[stage], `stage ${stage} has no stop yet`).toBeUndefined();
+      flight.flyTo(stage);
+      expect(flight.flying).toBe(false);
+      expect(flight.focusStage).toBeNull();
+      expect(host.dataset.focusStage).toBeUndefined();
+      expect(host.dataset.flying).toBeUndefined();
+      expect(ring.visible).toBe(false);
+      expect(camera.position.equals(position) && controls.target.equals(target), `stage ${stage}: the camera stays`).toBe(true);
+    }
+  });
+
   it('flies home to the view it is given, lands on no stage and hides the ring', () => {
     const { camera, controls, host, flight, ring } = setUp();
     flight.flyTo(4);
@@ -100,7 +118,7 @@ describe('createCameraFlight', () => {
 
   it('with reduced motion, jumps to the stop at once', () => {
     const { camera, controls, host, flight } = setUp({ reducedMotion: true });
-    const stage: StageId = 9;
+    const stage: UhtStageId = 9;
     const view = STAGE_VIEWS[stage];
     flight.flyTo(stage);
     expect(flight.flying).toBe(false);

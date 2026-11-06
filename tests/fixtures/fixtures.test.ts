@@ -1,6 +1,7 @@
 // The recorded snapshot fixtures (tests/fixtures/record.ts): each one still matches what createSim
 // records now, keeps every contracts v3 shape rule, and shows the state it is named for. With
 // RECORD_FIXTURES=1 the files are written first, so the comparison then passes and git shows the diff.
+// Re-recorded at contracts v8 (phase 15): outside the yogurt line, every value is what it was at v7.
 import { describe, expect, it } from 'vitest';
 import {
   CONTRACT_VERSION,
@@ -18,7 +19,21 @@ import { expectWithin } from '../helpers/expectWithin';
 import { expectPacksMatchKpis, expectWellFormedPacks } from '../helpers/packsShape';
 import { expectWellFormedScenarios } from '../helpers/scenariosShape';
 import { plantConfig } from '../helpers/plantConfig';
+import { expectWellFormedYogurt } from '../helpers/yogurtShape';
 import { FIXTURES, loadFixture, recordFixture, writeFixture, type FixtureName } from './record';
+import { uhtFingerprint } from './uhtPart';
+
+/**
+ * The fingerprint (uhtPart.ts) of each fixture's UHT part as recorded at contracts v7, before the yogurt line
+ * (phase 14's files). At v8 the fixtures add the yogurt line and nothing else may change (D25).
+ */
+const V7_UHT_FINGERPRINTS: Readonly<Record<FixtureName, string>> = {
+  production: '3ca2737ebbddbfe27fe168ea40bbe77c6f3ec8232726e4bf11afb04863c89c22',
+  divert: '1e80c1c4873b5cf9807ab8d7fb402e405b577ef1c03ded582233d26dd2b3cec8',
+  throttled: '82bbf6541b80cf8d8b96f233b363a62b84890f51f02b7147c5c0274e8ce12c41',
+  fillerDown: 'f57aa9e64bae20de782bec4e41e949120215b383ff14444e399aeddcc21a102b',
+  quarantineFull: '91a8ad51f39217a4a26b8bf4194fa8b9437536d53663eea8c9e802debf4ba232',
+};
 
 const NAMES = Object.keys(FIXTURES) as FixtureName[];
 const RECORDING = Boolean(process.env.RECORD_FIXTURES);
@@ -73,7 +88,7 @@ const PHASE_4_KEYS: Readonly<Record<7 | 8 | 9 | 10, readonly string[]>> = {
 /** Every shape rule of contracts v4 (src/contracts/snapshot.ts, packs.ts, scenarios.ts) that a consumer may rely on. */
 function expectContracts(snap: Snapshot, where: string): void {
   expect(snap.version, `${where}: version`).toBe(CONTRACT_VERSION);
-  expect(CONTRACT_VERSION).toBe(7);
+  expect(CONTRACT_VERSION).toBe(8);
   expect(Number.isFinite(snap.timeS), `${where}: timeS`).toBe(true);
   expect(isSpeed(snap.speed), `${where}: speed ${snap.speed}`).toBe(true);
   expect(typeof snap.paused, `${where}: paused`).toBe('boolean');
@@ -93,6 +108,7 @@ function expectContracts(snap: Snapshot, where: string): void {
   }
   expectWellFormedPacks(snap, plantConfig, where);
   expectWellFormedScenarios(snap, where);
+  expectWellFormedYogurt(snap, plantConfig, where);
   // Every row the info panel shows (stages.json) has its value in the snapshot.
   for (const stage of parseStages(stagesJson)) {
     for (const { key } of stage.values) expect(snap.stages[stage.id].values, `${where}: stage ${stage.id} row`).toHaveProperty([key]);
@@ -179,6 +195,22 @@ describe.each(NAMES)('fixture snapshot-%s.json', (name) => {
 
   it('matches what tests/fixtures/record.ts records from createSim now (RECORD_FIXTURES=1 npx vitest run tests/fixtures re-records)', () => {
     expect(differences(recorded, stored)).toEqual([]);
+  });
+
+  it('outside the yogurt line, keeps every value it had at contracts v7 (D25: the UHT line is unchanged)', () => {
+    // On a failure, re-record and read the JSON diff: only `yogurt`, stages 11–16 and the y* and p8* line points may differ.
+    expect(uhtFingerprint(stored)).toBe(V7_UHT_FINGERPRINTS[name]);
+  });
+
+  it('the yogurt line stands, as it does until phase 17: stages 11–16 idle, nothing flowing, nothing made', () => {
+    for (const id of [11, 12, 13, 14, 15, 16] as const) expect(stored.stages[id].status, `stage ${id}`).toBe('idle');
+    const { yogurt } = stored;
+    expect(yogurt.heat.mode).toBe('idle');
+    expect(yogurt.p8).toEqual({ state: 'idle', cupsPerH: 0, cupsMade: 0, cupsRejected: 0 });
+    expect(yogurt.ferment.tanks.every((tank) => tank.state === 'empty')).toBe(true);
+    for (const id of ['ySilo', 'yMixTank', 'yHeater', 'yHoldingCell', 'yInoculation', 'yFermentTank', 'yCooler', 'p8Buffer', 'p8Filler'] as const) {
+      expect(stored.line[id], id).toEqual({ tempC: plantConfig.yogurt.silo.tempC, flowLph: 0 });
+    }
   });
 
   it('keeps every contracts v3 shape rule, and its tanks, stage values and KPIs agree', () => {

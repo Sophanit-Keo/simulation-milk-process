@@ -8,7 +8,7 @@
 // by the fixtures (fixtures.ts), so no test needs to collect them itself.
 import { readFileSync } from 'node:fs';
 import type { Locator, Page } from '@playwright/test';
-import { parseStages, type PlantConfig, type StageInfo, type StageValueInfo } from '../src/contracts';
+import { isUhtStage, parseStages, type PlantConfig, type StageInfo, type StageValueInfo } from '../src/contracts';
 import { createSim } from '../src/sim';
 import type { ThemePref } from '../src/ui/theme';
 import { expect } from './fixtures';
@@ -16,7 +16,12 @@ import { expect } from './fixtures';
 /** The app's own data files, read as the app reads them (parseStages checks stages.json the same way). */
 const readJson = (path: string): unknown => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 export const plantConfig = readJson('../src/data/plant.json') as PlantConfig;
-export const STAGES: readonly StageInfo[] = parseStages(readJson('../src/data/stages.json'));
+/** Every stage in stages.json, the yogurt line's 11–16 included (contracts v8). */
+export const ALL_STAGES: readonly StageInfo[] = parseStages(readJson('../src/data/stages.json'));
+/** The stages the rail shows without ?yogurt: the UHT line's 1–10, which the tour also walks. */
+export const STAGES: readonly StageInfo[] = ALL_STAGES.filter((stage) => isUhtStage(stage.id));
+/** The yogurt line's stages, on the rail behind ?yogurt until its wing is built (phase 16). */
+export const YOGURT_STAGES: readonly StageInfo[] = ALL_STAGES.filter((stage) => !isUhtStage(stage.id));
 
 /**
  * Stage values and KPIs of the plant as it opens (the app without ?mock). They follow from plant.json alone,

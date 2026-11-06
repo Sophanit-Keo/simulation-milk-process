@@ -1,4 +1,4 @@
-import { ZONE_NAMES, type StageId, type ZoneId } from '../contracts';
+import { ZONE_NAMES, type StageId, type UhtStageId, type YogurtStageId, type ZoneId } from '../contracts';
 
 /**
  * The plant's floor layout, ported from the preview (uht-plant-preview.html: ZONES, the apron,
@@ -74,7 +74,8 @@ export interface StageView {
   ringRadiusM: number;
 }
 
-export const STAGE_VIEWS: Readonly<Record<StageId, StageView>> = {
+/** The UHT line's stops; the yogurt line's (11–16) come with its wing in phase 16, and until then it has none. */
+export const STAGE_VIEWS: Readonly<Record<UhtStageId, StageView> & Partial<Record<YogurtStageId, StageView>>> = {
   1: { focusM: [-50, 1.5, -14], cameraOffsetM: [3, 15, 21], badgeM: [-50.5, 3.6, -14], ringRadiusM: 10.5 },
   2: { focusM: [-28, 1.5, -14], cameraOffsetM: [1, 7.5, 12], badgeM: [-28.9, 3.0, -14], ringRadiusM: 4.4 },
   3: { focusM: [-20.5, 1, -14], cameraOffsetM: [1, 5, 9], badgeM: [-20.5, 2.2, -14], ringRadiusM: 2.6 },

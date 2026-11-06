@@ -19,7 +19,10 @@ const RING_PULSE = 0.25;
 const RING_PULSE_RAD_PER_S = 3;
 
 export interface CameraFlight {
-  /** Flies to the stage's stop (jumps with reduced motion) and rings it; a repeat flies again. */
+  /**
+   * Flies to the stage's stop (jumps with reduced motion) and rings it; a repeat flies again. A stage with no stop
+   * yet (the yogurt line's, until its wing is built in phase 16) leaves the camera where it is, ringing nothing.
+   */
   flyTo(stage: StageId): void;
   /** Flies back to the whole-plant view and hides the ring; it lands on no stage. */
   flyHome(toPosition: THREE.Vector3, toTarget: THREE.Vector3): void;
@@ -102,6 +105,14 @@ export function createCameraFlight(
   return {
     flyTo(stage) {
       const view = STAGE_VIEWS[stage];
+      if (!view) {
+        fly = null;
+        delete host.dataset.flying;
+        ring.visible = false;
+        focusStage = null;
+        delete host.dataset.focusStage;
+        return;
+      }
       const toTarget = new THREE.Vector3(...view.focusM);
       const toPosition = toTarget.clone().add(new THREE.Vector3(...view.cameraOffsetM));
       ring.position.set(view.focusM[0], RING_Y_M, view.focusM[2]);

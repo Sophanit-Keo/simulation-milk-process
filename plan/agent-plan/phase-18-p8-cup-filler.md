@@ -38,10 +38,8 @@ The SOP's hygiene limits act as interlocks.
 
 ## Contracts (`lead`)
 
-`YogurtSnapshot.p8` gains these fields (only added):
-- `state`;
+Contracts v8 (phase 15) already give `YogurtSnapshot.p8` its `state` (`idle`, `cleaning`, `sterilizing`, `running`, `starved`, `stopped`), `cupsPerH`, `cupsMade` and `cupsRejected`. It gains these fields (only added):
 - `cyclesPerMin`;
-- `cupsMade`;
 - the rejects by cause (`underFill`, `overFill`, `metal`, `vision`, `sealHold`);
 - `lastFillG`;
 - `seal: { tempC, timeS, bar }`;

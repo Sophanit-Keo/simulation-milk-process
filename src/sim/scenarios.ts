@@ -18,8 +18,8 @@ import {
   type ScenariosSnapshot,
   type ScenarioVariant,
   type Status,
-  type StageId,
   type UhtMode,
+  type UhtStageId,
 } from '../contracts';
 import type { Setpoints } from './core';
 import type { QueuedEvent } from './eventQueue';
@@ -56,7 +56,7 @@ export interface Scenarios {
   /** A queued scenario event; false if the event is not one. */
   onEvent(event: QueuedEvent): boolean;
   /** Stage statuses a running scenario makes worse: the aseptic tank amber during a filter deviation. */
-  adjustStatuses(statuses: Record<StageId, Status>): void;
+  adjustStatuses(statuses: Record<UhtStageId, Status>): void;
   snapshot(nowS: number): ScenariosSnapshot;
 }
 

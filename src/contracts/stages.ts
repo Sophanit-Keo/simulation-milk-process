@@ -1,7 +1,37 @@
 /** The 10 stages of the UHT line (plan 02). */
-export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+export type UhtStageId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
-export const STAGE_IDS: readonly StageId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+/** The 6 stages of the yogurt line, Line P8 (plan 12, D25; contracts v8): mix to cold chain. */
+export type YogurtStageId = 11 | 12 | 13 | 14 | 15 | 16;
+
+/** Every stage of the plant: the UHT line's 1–10 and the yogurt line's 11–16 (contracts v8). */
+export type StageId = UhtStageId | YogurtStageId;
+
+/** The plant's two lines (contracts v8): UHT milk, stages 1–10, and yogurt on Line P8, stages 11–16. */
+export type LineId = 'uht' | 'yogurt';
+
+export const LINE_IDS: readonly LineId[] = ['uht', 'yogurt'];
+
+/** The lines' names, as the stage rail groups them (plan 12, D25). */
+export const LINE_NAMES: Readonly<Record<LineId, string>> = { uht: 'UHT milk', yogurt: 'Yogurt P8' };
+
+export const UHT_STAGE_IDS: readonly UhtStageId[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+export const YOGURT_STAGE_IDS: readonly YogurtStageId[] = [11, 12, 13, 14, 15, 16];
+
+/** Each line's stages, in flow order (contracts v8). */
+export const STAGE_IDS_BY_LINE: Readonly<{ uht: readonly UhtStageId[]; yogurt: readonly YogurtStageId[] }> = {
+  uht: UHT_STAGE_IDS,
+  yogurt: YOGURT_STAGE_IDS,
+};
+
+/** Every stage, the UHT line's then the yogurt line's: the keys of Snapshot.stages, in order. */
+export const STAGE_IDS: readonly StageId[] = [...UHT_STAGE_IDS, ...YOGURT_STAGE_IDS];
+
+export const isUhtStage = (id: StageId): id is UhtStageId => id <= 10;
+
+/** The line a stage belongs to (contracts v8). */
+export const lineOfStage = (id: StageId): LineId => (isUhtStage(id) ? 'uht' : 'yogurt');
 
 /** Lamp colours used everywhere (plan 08): green running, amber hold or warning, red stopped or blocked. */
 export type Status = 'ok' | 'warn' | 'bad' | 'idle';
@@ -13,12 +43,30 @@ export const SPEEDS: readonly Speed[] = [1, 10, 100, 1_000, 10_000];
 
 export const isSpeed = (value: number): value is Speed => (SPEEDS as readonly number[]).includes(value);
 
-/** The seven zones of the U-shaped floor plan (plan 05), in milk-flow order. */
-export type ZoneId = 'silo' | 'process' | 'aseptic' | 'filling' | 'packaging' | 'quarantine' | 'warehouse';
+/**
+ * The zones of the floor plan (plan 05), in flow order: the U-shaped milk row's seven, then the yogurt wing's four,
+ * a row north of it (plan 12, D25; contracts v8).
+ */
+export type ZoneId =
+  | 'silo'
+  | 'process'
+  | 'aseptic'
+  | 'filling'
+  | 'packaging'
+  | 'quarantine'
+  | 'warehouse'
+  | 'yogurtMix'
+  | 'yogurtProcess'
+  | 'p8'
+  | 'coldChain';
 
-export const ZONE_IDS: readonly ZoneId[] = ['silo', 'process', 'aseptic', 'filling', 'packaging', 'quarantine', 'warehouse'];
+export const UHT_ZONE_IDS: readonly ZoneId[] = ['silo', 'process', 'aseptic', 'filling', 'packaging', 'quarantine', 'warehouse'];
 
-/** Zone names as the floor plan has them (plan 05). The 3D zone labels and the info panel both show these. */
+export const YOGURT_ZONE_IDS: readonly ZoneId[] = ['yogurtMix', 'yogurtProcess', 'p8', 'coldChain'];
+
+export const ZONE_IDS: readonly ZoneId[] = [...UHT_ZONE_IDS, ...YOGURT_ZONE_IDS];
+
+/** Zone names as the floor plans have them (plan 05, plan 12). The 3D zone labels and the info panel both show these. */
 export const ZONE_NAMES: Readonly<Record<ZoneId, string>> = {
   silo: 'Silo yard & mixing',
   process: 'UHT process hall',
@@ -27,13 +75,18 @@ export const ZONE_NAMES: Readonly<Record<ZoneId, string>> = {
   packaging: 'Packaging hall',
   quarantine: 'Quarantine & QA lab',
   warehouse: 'Warehouse & dispatch',
+  yogurtMix: 'Yogurt mix room',
+  yogurtProcess: 'Yogurt process hall',
+  p8: 'Cup filling room (Line P8)',
+  coldChain: 'Incubation & cold store',
 };
 
 /**
- * Measuring points along the liquid line (plan 02, "Chart values as text"), in flow order.
- * The 3D view colours each pipe from the point it leaves; phase 3 makes the values live.
+ * Measuring points along the liquid line (plan 02, "Chart values as text"), in flow order: the UHT line's twelve,
+ * then the yogurt line's nine (plan 12; contracts v8), from its own silo to the P8 filler's manifold.
+ * The 3D view colours each pipe from the point it leaves; phase 3 makes the UHT values live, phase 17 the yogurt's.
  */
-export type LinePointId =
+export type UhtLinePointId =
   | 'silo'
   | 'separator'
   | 'feedTank'
@@ -47,7 +100,20 @@ export type LinePointId =
   | 'asepticTank'
   | 'filler';
 
-export const LINE_POINT_IDS: readonly LinePointId[] = [
+export type YogurtLinePointId =
+  | 'ySilo'
+  | 'yMixTank'
+  | 'yHeater'
+  | 'yHoldingCell'
+  | 'yInoculation'
+  | 'yFermentTank'
+  | 'yCooler'
+  | 'p8Buffer'
+  | 'p8Filler';
+
+export type LinePointId = UhtLinePointId | YogurtLinePointId;
+
+export const UHT_LINE_POINT_IDS: readonly UhtLinePointId[] = [
   'silo',
   'separator',
   'feedTank',
@@ -61,6 +127,27 @@ export const LINE_POINT_IDS: readonly LinePointId[] = [
   'asepticTank',
   'filler',
 ];
+
+export const YOGURT_LINE_POINT_IDS: readonly YogurtLinePointId[] = [
+  'ySilo',
+  'yMixTank',
+  'yHeater',
+  'yHoldingCell',
+  'yInoculation',
+  'yFermentTank',
+  'yCooler',
+  'p8Buffer',
+  'p8Filler',
+];
+
+/** Each line's measuring points, in flow order (contracts v8). */
+export const LINE_POINT_IDS_BY_LINE: Readonly<{ uht: readonly UhtLinePointId[]; yogurt: readonly YogurtLinePointId[] }> = {
+  uht: UHT_LINE_POINT_IDS,
+  yogurt: YOGURT_LINE_POINT_IDS,
+};
+
+/** Every measuring point: the keys of Snapshot.line. */
+export const LINE_POINT_IDS: readonly LinePointId[] = [...UHT_LINE_POINT_IDS, ...YOGURT_LINE_POINT_IDS];
 
 /** How the info panel shows one live value of a stage (src/data/stages.json). */
 export interface StageValueInfo {
@@ -101,7 +188,7 @@ export function parseStages(raw: unknown): StageInfo[] {
     const at = `stages.json[${index}]`;
     if (!isRecord(entry)) return void problems.push(`${at} is not an object`);
     const { id, name, shortName, zone, description, values, tourCaption } = entry;
-    if (!STAGE_IDS.includes(id as StageId)) problems.push(`${at}.id must be a stage 1–10`);
+    if (!STAGE_IDS.includes(id as StageId)) problems.push(`${at}.id must be a stage 1–16`);
     else if (byId.has(id as number)) problems.push(`${at}.id ${String(id)} appears twice`);
     for (const [field, value] of Object.entries({ name, shortName, description })) {
       if (!isText(value)) problems.push(`${at}.${field} must be non-empty text`);

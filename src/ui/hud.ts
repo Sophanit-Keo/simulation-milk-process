@@ -1,4 +1,4 @@
-import { SPEEDS, type Command, type Hud, type SetpointKey, type Snapshot, type StageInfo, type ViewBus } from '../contracts';
+import { lineOfStage, SPEEDS, type Command, type Hud, type LineId, type SetpointKey, type Snapshot, type StageInfo, type ViewBus } from '../contracts';
 import { createAbout } from './about';
 import { createBatchList } from './batchList';
 import { el, onPress } from './dom';
@@ -21,6 +21,11 @@ export interface HudOptions {
   setpoints?: Partial<Record<SetpointKey, number>>;
   /** A slider's top where plant.json sets it: the filler rate's machine maximum. */
   setpointMax?: Partial<Record<SetpointKey, number>>;
+  /**
+   * The lines whose stages the rail and the info panel show (contracts v8): the UHT line's alone by default, and the
+   * yogurt line's too behind ?yogurt until its wing is built in phase 16. The guided tour keeps to the UHT line.
+   */
+  lines?: readonly LineId[];
 }
 
 /** The HUD, plus the way into the sim it uses, for other controls (the ?debug panel) to share. */
@@ -62,6 +67,9 @@ export function createHud(
   stages: readonly StageInfo[],
   options: HudOptions = {},
 ): MainHud {
+  const lines = options.lines ?? ['uht'];
+  const shownStages = stages.filter((info) => lines.includes(lineOfStage(info.id)));
+  const tourStages = stages.filter((info) => lineOfStage(info.id) === 'uht');
   const part = (selector: string): HTMLElement => {
     const node = root.querySelector<HTMLElement>(selector);
     if (!node) throw new Error(`createHud needs a ${selector} element inside the app root (see index.html)`);
@@ -116,9 +124,9 @@ export function createHud(
   });
   barRoot.append(scenarioMenu.root);
   const about = createAbout(barRoot, signal);
-  const rail = createStageRail(railRoot, stages, (stage) => bus.emit({ type: 'selectStage', stage }), signal);
+  const rail = createStageRail(railRoot, shownStages, (stage) => bus.emit({ type: 'selectStage', stage }), signal);
   const log = createEventLog(logRoot);
-  const panel = createStagePanel(panelRoot, stages, panelParts);
+  const panel = createStagePanel(panelRoot, shownStages, panelParts);
   const kpis = createKpiStrip(kpiRoot);
   const legend = createPipeLegend(viewRoot);
 
@@ -157,7 +165,7 @@ export function createHud(
   tourButton.setAttribute('aria-pressed', 'false');
   if (overview) overview.before(tourButton);
   else railRoot.querySelector('.rail-head')?.append(tourButton);
-  const tour = createTour({ bus, stages, view: viewRoot, button: tourButton, signal });
+  const tour = createTour({ bus, stages: tourStages, view: viewRoot, button: tourButton, signal });
 
   const doc = root.ownerDocument;
   doc.addEventListener(
