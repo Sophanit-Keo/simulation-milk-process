@@ -52,6 +52,31 @@ export const P8 = { xMinM: 1.5, xMaxM: 11.5, zM: LINE_Z_M, widthM: 1.6, bodyM: 0
 export const CHECK_GATES = { checkweigher: 12.8, metalDetector: 13.9, vision: 15 } as const;
 export const REJECT_BIN: Footprint = { xM: 13.9, zM: -49.2 };
 
+/**
+ * P8's stations along its carrier (phase 18), in the SOP's order: the de-nester under the cup magazines, the ionized
+ * air and vacuum shroud, the UV-C tunnel, the piston filler, the foil pick, the sealing heads and the coder.
+ */
+export const P8_STATIONS = {
+  denesterXM: 2.3,
+  ionizerXM: 3.3,
+  uvFromXM: 4,
+  uvToXM: 6.2,
+  fillerXM: 7,
+  foilXM: 8.3,
+  sealerXM: 9.3,
+  coderXM: 10.4,
+} as const;
+/**
+ * The carrier's pockets: 12 lanes across, a row every 0.1 m, the cups' bases on its top. Past P8 a ramp takes the cups
+ * down to the check gates' belts, where they run four abreast to the tray packer (OUTFEED).
+ */
+export const P8_CARRIER = { pitchM: 0.1, lanePitchM: 0.095, topM: P8.bodyM + 0.08 } as const;
+export const P8_GATE_BELT = { topM: 0.76, lanes: 4, lanePitchM: 0.09, pitchM: 0.1, rampToXM: 12.3 } as const;
+/** The cup token, a 125 g cup at its real size: 72 mm across the rim, 60 at the base, 70 mm tall. */
+export const CUP_M = { rimRadiusM: 0.036, baseRadiusM: 0.03, heightM: 0.07 } as const;
+/** Where a cup the checks reject is kicked off the belt, between the metal detector and the vision check. */
+export const REJECT_KICK_XM = 14.45;
+
 /** Stage 16: the tray packer, palletizer and wrapper on the line; the warm room, the blast chiller and the cold room. */
 export const TRAY_PACKER: Footprint = { xM: 21, zM: LINE_Z_M };
 /** The belt from P8's last gate to the tray packer. */
