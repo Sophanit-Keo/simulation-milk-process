@@ -2,6 +2,7 @@ import { LINE_IDS, lineOfStage, SPEEDS, type Command, type Hud, type LineId, typ
 import { createAbout } from './about';
 import { createBatchList } from './batchList';
 import { el, onPress } from './dom';
+import { createFillHistogram } from './fillHistogram';
 import { createEventLog } from './eventLog';
 import { createKpiStrip } from './kpiStrip';
 import { createPipeLegend } from './pipeLegend';
@@ -102,6 +103,8 @@ export function createHud(
     const built: PanelPart[] = [];
     const chart = TREND_CHARTS[stage];
     if (chart) built.push(createTrendChart(host, stage, chart, history));
+    // Line P8's fill weights (phase 18), above its rate slider.
+    if (stage === 15) built.push(createFillHistogram(host));
     const spec = SETPOINT_SLIDERS[stage];
     if (spec) {
       const max = options.setpointMax?.[spec.key];
