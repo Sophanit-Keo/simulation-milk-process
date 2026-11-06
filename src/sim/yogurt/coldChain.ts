@@ -15,6 +15,7 @@ import {
   yogurtProducts,
   yogurtShiftProducts,
   type ColdChainSnapshot,
+  type ColdRoomExcursion,
   type PlantConfig,
   type YogurtPallet,
   type YogurtPalletPlace,
@@ -55,6 +56,9 @@ export interface ColdChainTotals {
   peak: { staging: number; warmRoom: number; chiller: number; coldRoom: number };
   /** Cups in the trays, the pallets and the reefers when the plant opened. */
   openingCups: number;
+  /** Pallets and cups QA destroyed after a cold-room excursion (phase 20, D30). */
+  palletsDestroyed: number;
+  cupsDestroyed: number;
 }
 
 interface Pallet {
@@ -80,6 +84,8 @@ interface Pallet {
   coldFromC: number;
   reefer: number | null;
   overLogged: boolean;
+  /** On QA hold after a cold-room excursion (D30). */
+  qaHold: boolean;
 }
 
 interface Reefer {
@@ -100,6 +106,14 @@ export interface ColdChain {
   totals(): Readonly<ColdChainTotals>;
   /** Cups now in the trays, the pallets and the reefers. */
   cupsInChain(): number;
+  /** The cold room's cooling fails at `timeS` (phase 20, D30): its air warms toward the fault's. */
+  failCooling(timeS: number): void;
+  /** The cooling is repaired at `timeS`: the air cools back toward the room's set point. */
+  repairCooling(timeS: number, log: LogWriter): void;
+  /** The excursion, from the failure until QA's verdict and the air back at the set point; null otherwise. */
+  excursion(timeS: number): ColdRoomExcursion | null;
+  /** Pallets in the cold room now. */
+  readonly coldRoomPallets: number;
 }
 
 export interface ColdChainOptions {
@@ -108,6 +122,13 @@ export interface ColdChainOptions {
 }
 
 const nothing: LogWriter = () => {};
+
+/** "2 h 20 min", "45 min". */
+function formatDuration(seconds: number): string {
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  return hours === 0 ? `${minutes} min` : minutes % 60 === 0 ? `${hours} h` : `${hours} h ${minutes % 60} min`;
+}
 
 export function createColdChain(config: PlantConfig, openS: number, options: ColdChainOptions = {}): ColdChain {
   const { yogurt } = config;
@@ -135,6 +156,8 @@ export function createColdChain(config: PlantConfig, openS: number, options: Col
     longestHoldS: 0,
     peak: { staging: 0, warmRoom: 0, chiller: 0, coldRoom: 0 },
     openingCups: 0,
+    palletsDestroyed: 0,
+    cupsDestroyed: 0,
   };
   // Each place in the order its pallets came: set yogurt waiting for the warm room, stirred for the chiller.
   let stagingSet: Pallet[] = [];
@@ -187,6 +210,7 @@ export function createColdChain(config: PlantConfig, openS: number, options: Col
         coldFromC: chain.chillToC,
         reefer: null,
         overLogged: false,
+        qaHold: false,
       };
       (route === 'set' ? stagingSet : stagingStirred).push(pallet);
       totals.palletsMade += 1;
@@ -266,11 +290,11 @@ export function createColdChain(config: PlantConfig, openS: number, options: Col
     cold = strip(cold);
     totals.cupsHeld += cups;
     totals.palletsHeld += emptied;
-    log(atS, 'warn', `Cold chain: ${cups.toLocaleString('en-US')} cups pulled for the failed seal test${emptied > 0 ? `, ${emptied} ${emptied === 1 ? 'pallet' : 'pallets'} emptied` : ''}`, tag);
+    log(atS, 'warn', `Cold chain: ${cups.toLocaleString('en-US')} cups pulled for the failed seal test${emptied > 0 ? `, ${emptied} ${emptied === 1 ? 'pallet' : 'pallets'} emptied` : ''}`, { ...tag, event: 'cupsPulled' });
   }
 
   function released(pallet: Pallet, timeS: number): boolean {
-    if (pallet.place !== 'coldRoom' || timeS < pallet.coldS + chain.minHoldS) return false;
+    if (pallet.qaHold || pallet.place !== 'coldRoom' || timeS < pallet.coldS + chain.minHoldS) return false;
     for (const testWindow of pallet.windows.keys()) if (!passed.has(testWindow)) return false;
     return true;
   }
@@ -286,13 +310,160 @@ export function createColdChain(config: PlantConfig, openS: number, options: Col
         return chain.warmRoomC;
       case 'chiller':
         return chain.chillerAirC + (pallet.chillFromC - chain.chillerAirC) * Math.exp(-(timeS - pallet.chillFromS) / tauS);
-      case 'coldRoom':
-        return chain.roomC + (pallet.coldFromC - chain.roomC) * Math.exp(-(timeS - pallet.coldS) / tauS);
+      case 'coldRoom': {
+        const usual = chain.roomC + (pallet.coldFromC - chain.roomC) * Math.exp(-(timeS - pallet.coldS) / tauS);
+        // In an excursion the cores follow the warming air (D30, H138).
+        return exc && timeS >= exc.startS ? Math.max(usual, coreAt(timeS)) : usual;
+      }
       case 'reefer':
         return chain.roomC;
       default:
         return pallet.chillFromC;
     }
+  }
+
+  // The cold room's excursion (phase 20, D30, H138). The air follows its target first-order with airTauS, the
+  // pallets' cores follow the air with chillTauS; each stretch (cooling down, then repaired) has a closed form, so the
+  // times things happen (the air over the limit, the hold, back under) are worked out, not stepped.
+  const room = yogurt.faults.coldRoom;
+  interface Excursion {
+    startS: number;
+    /** When the cooling came back; Infinity while it is down. */
+    repairS: number;
+    /** The air and the cores at the repair. */
+    airAtRepairC: number;
+    coreAtRepairC: number;
+    overLogged: boolean;
+    holdS: number | null;
+    decisionS: number | null;
+    verdict: 'released' | 'destroyed' | null;
+    peakCoreC: number;
+    backLogged: boolean;
+  }
+  let exc: Excursion | null = null;
+
+  /** First-order air, and the cores lagging it, from (a0, c0) at t = 0 toward `target`: H138's closed forms. */
+  const airFrom = (a0: number, target: number, tS: number): number => target + (a0 - target) * Math.exp(-tS / room.airTauS);
+  function coreFrom(a0: number, c0: number, target: number, tS: number): number {
+    const a = 1 / room.airTauS;
+    const c = 1 / tauS;
+    const k = ((a0 - target) * c) / (c - a);
+    return target + k * Math.exp(-a * tS) + (c0 - target - k) * Math.exp(-c * tS);
+  }
+  function airAt(timeS: number): number {
+    if (!exc || timeS < exc.startS) return chain.roomC;
+    if (timeS < exc.repairS) return airFrom(chain.roomC, room.airC, timeS - exc.startS);
+    return airFrom(exc.airAtRepairC, chain.roomC, timeS - exc.repairS);
+  }
+  function coreAt(timeS: number): number {
+    if (!exc || timeS < exc.startS) return chain.roomC;
+    if (timeS < exc.repairS) return coreFrom(chain.roomC, chain.roomC, room.airC, timeS - exc.startS);
+    return coreFrom(exc.airAtRepairC, exc.coreAtRepairC, chain.roomC, timeS - exc.repairS);
+  }
+  /** When the air passes the limit going up, and comes back under it after the repair (Infinity before the repair). */
+  function overFromS(): number {
+    if (!exc) return Infinity;
+    const upS = exc.startS + room.airTauS * Math.log((room.airC - chain.roomC) / (room.airC - room.limitC));
+    return upS < exc.repairS ? upS : Infinity;
+  }
+  function backUnderS(): number {
+    if (!exc || !Number.isFinite(exc.repairS)) return Infinity;
+    if (exc.airAtRepairC <= room.limitC) return exc.repairS;
+    return exc.repairS + room.airTauS * Math.log((exc.airAtRepairC - chain.roomC) / (room.limitC - chain.roomC));
+  }
+  /** The warmest the cores get from the failure to `untilS`, on a minute's grid and at its ends. */
+  function peakCore(untilS: number): number {
+    if (!exc) return chain.roomC;
+    let peak = coreAt(untilS);
+    for (let t = exc.startS; t < untilS; t += 60) peak = Math.max(peak, coreAt(t));
+    return peak;
+  }
+
+  /** The excursion at `timeS`: the air over the limit, the hold, QA's verdict, the end. */
+  function excursionStep(timeS: number, log: LogWriter): void {
+    if (!exc) return;
+    const overS = overFromS();
+    const backS = backUnderS();
+    if (!exc.overLogged && timeS >= overS && timeS < backS) {
+      exc.overLogged = true;
+      log(timeS, 'warn', `Cold room's air over ${room.limitC} °C: ${airAt(timeS).toFixed(1)} °C`, { ...tag, event: 'coldRoomOver' });
+    }
+    // Long enough over the limit: what is in the room goes on hold, and so does any pallet that comes in until the air
+    // is back under it. A pallet already called to a reefer was released before: it leaves.
+    const holdDueS = overS + room.overS;
+    if (holdDueS < backS && timeS >= holdDueS && (exc.holdS === null || timeS < backS)) {
+      let held = 0;
+      for (const pallet of cold) {
+        if (pallet.qaHold || pallet.reefer !== null) continue;
+        pallet.qaHold = true;
+        held += 1;
+      }
+      if (held > 0) changes += 1;
+      if (exc.holdS === null) {
+        exc.holdS = timeS;
+        log(timeS, 'bad', `Cold room over ${room.limitC} °C for ${Math.round(sToH(room.overS))} h: ${held} ${held === 1 ? 'pallet' : 'pallets'} on QA hold`, { ...tag, event: 'coldRoomHold' });
+      }
+    }
+    if (!exc.backLogged && timeS >= backS) {
+      exc.backLogged = true;
+      if (exc.holdS === null) {
+        const text = exc.overLogged ? `Cold room back under ${room.limitC} °C after ${formatDuration(backS - exc.startS)}: no pallet held` : `Cold room's air stayed under ${room.limitC} °C: no pallet held`;
+        log(timeS, 'ok', text, { ...tag, event: 'coldRoomBack' });
+      } else {
+        exc.decisionS = Math.max(backS, exc.holdS) + room.qaDecisionS;
+        log(timeS, 'ok', `Cold room back under ${room.limitC} °C: QA decides on the held pallets by ${formatDayTime(exc.decisionS)}`, { ...tag, event: 'coldRoomBack' });
+      }
+    }
+    if (exc.decisionS !== null && exc.verdict === null && timeS >= exc.decisionS) {
+      exc.peakCoreC = peakCore(exc.decisionS);
+      const heldPallets = cold.filter((pallet) => pallet.qaHold);
+      const cups = heldPallets.reduce((total, pallet) => total + pallet.cups, 0);
+      changes += 1;
+      if (exc.peakCoreC <= room.maxCoreC) {
+        exc.verdict = 'released';
+        for (const pallet of heldPallets) pallet.qaHold = false;
+        log(
+          timeS,
+          'ok',
+          `QA releases the ${heldPallets.length} held pallets: their cores peaked at ${exc.peakCoreC.toFixed(1)} °C, within ${room.maxCoreC} °C`,
+          { ...tag, event: 'qaReleased' },
+        );
+      } else {
+        exc.verdict = 'destroyed';
+        cold = cold.filter((pallet) => !pallet.qaHold);
+        totals.palletsDestroyed += heldPallets.length;
+        totals.cupsDestroyed += cups;
+        log(
+          timeS,
+          'bad',
+          `QA destroys the ${heldPallets.length} held pallets, ${cups.toLocaleString('en-US')} cups: their cores reached ${exc.peakCoreC.toFixed(1)} °C, over ${room.maxCoreC} °C`,
+          { ...tag, event: 'qaDestroyed' },
+        );
+      }
+    }
+    // Over once the cooling is back, any verdict is given, and the air is back at the set point.
+    const settled = exc.holdS === null ? timeS >= backS : exc.verdict !== null;
+    if (Number.isFinite(exc.repairS) && settled && airAt(timeS) - chain.roomC < 0.05) {
+      exc = null;
+      changes += 1;
+    }
+  }
+
+  function excursionView(timeS: number): ColdRoomExcursion | null {
+    if (!exc) return null;
+    const over = overFromS();
+    const back = backUnderS();
+    const heldNow = cold.filter((pallet) => pallet.qaHold).length;
+    return {
+      coolingDown: !Number.isFinite(exc.repairS),
+      overSinceS: timeS >= over && timeS < back ? over : null,
+      limitC: room.limitC,
+      holdS: exc.holdS,
+      palletsHeld: heldNow,
+      peakCoreC: exc.verdict ? exc.peakCoreC : Math.max(chain.roomC, peakCore(timeS)),
+      decisionS: exc.decisionS,
+      verdict: exc.verdict,
+    };
   }
 
   function peaks(): void {
@@ -338,6 +509,7 @@ export function createColdChain(config: PlantConfig, openS: number, options: Col
     // A pallet chilled with the cold room full stays, and is looked at again next step.
     nextChilledS = chiller.reduce((soonest, pallet) => Math.min(soonest, pallet.chilledS), Infinity);
     if (chiller.length > 0 && cold.length >= chain.coldRoomPallets) nextChilledS = Math.min(nextChilledS, timeS);
+    excursionStep(timeS, log);
     // The cold room's 48 h maximum, oldest first.
     for (const pallet of cold) {
       if (pallet.overLogged) continue;
@@ -465,6 +637,23 @@ export function createColdChain(config: PlantConfig, openS: number, options: Col
     step,
     closeBatch,
     cupsInChain,
+    get coldRoomPallets() {
+      return cold.length;
+    },
+    failCooling(timeS) {
+      if (exc && !Number.isFinite(exc.repairS)) return;
+      changes += 1;
+      exc = { startS: timeS, repairS: Infinity, airAtRepairC: room.airC, coreAtRepairC: room.airC, overLogged: false, holdS: null, decisionS: null, verdict: null, peakCoreC: chain.roomC, backLogged: false };
+    },
+    repairCooling(timeS, log) {
+      if (!exc || Number.isFinite(exc.repairS)) return;
+      changes += 1;
+      exc.airAtRepairC = airAt(timeS);
+      exc.coreAtRepairC = coreAt(timeS);
+      exc.repairS = timeS;
+      log(timeS, 'ok', `Cold room's cooling repaired: the air at ${exc.airAtRepairC.toFixed(1)} °C cools back toward ${chain.roomC} °C`, { ...tag, event: 'coolingRepaired' });
+    },
+    excursion: excursionView,
     totals: () => ({ ...totals, peak: { ...totals.peak }, shippedByRoute: { ...totals.shippedByRoute } }),
     view(timeS) {
       if (cached && cached.timeS === timeS && cached.changes === changes) return cached.view;
@@ -486,6 +675,7 @@ export function createColdChain(config: PlantConfig, openS: number, options: Col
           holdUntilS: inCold ? pallet.coldS + chain.minHoldS : null,
           leaveByS: inCold ? pallet.coldS + chain.maxHoldS : null,
           released: released(pallet, timeS),
+          ...(pallet.qaHold ? { qaHold: true } : {}),
         };
       });
       const snapshotReefers: YogurtReefer[] = reefers.map((reefer) => ({
@@ -499,7 +689,13 @@ export function createColdChain(config: PlantConfig, openS: number, options: Col
       const view: ColdChainSnapshot = {
         warmRoom: { tempC: chain.warmRoomC, pallets: warm.length, capacity: chain.warmRoomPallets },
         chiller: { pallets: chiller.length, capacity: chain.chillerPallets, airC: chain.chillerAirC },
-        coldRoom: { tempC: chain.roomC, positionsUsed: cold.length, capacity: chain.coldRoomPallets, nextReleaseS: holding ? holding.coldS + chain.minHoldS : null },
+        coldRoom: {
+          tempC: airAt(timeS),
+          positionsUsed: cold.length,
+          capacity: chain.coldRoomPallets,
+          nextReleaseS: holding ? holding.coldS + chain.minHoldS : null,
+          excursion: excursionView(timeS),
+        },
         palletsShipped: totals.palletsShipped,
         reefersShipped: totals.reefersShipped,
         trays: { made: totals.traysMade, openBatch: open?.batch ?? null, openCups: open?.trayCups ?? 0, openTrays: open?.trays ?? 0 },

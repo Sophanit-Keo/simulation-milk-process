@@ -27,7 +27,7 @@ const problemsWith = (path: string, value: unknown): string[] => checkPlantConfi
 
 describe('plant.json schema 13', () => {
   it('is at schema 13 (phase 19 added the cold chain\'s keys) and passes checkPlantConfig', () => {
-    expect(plantConfig.schemaVersion).toBe(13);
+    expect(plantConfig.schemaVersion).toBe(14);
     expect(checkPlantConfig(plantConfig)).toEqual([]);
   });
 

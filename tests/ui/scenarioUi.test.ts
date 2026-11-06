@@ -21,7 +21,7 @@ const run = (n: number, following: boolean, endedS: number | null = null): Scena
 });
 
 describe('the scenario menu (src/data/scenarios.json)', () => {
-  it('lists the six scenarios in the fault table’s order, the spike and late trucks apart, each with a stage', () => {
+  it('lists the UHT line’s six in the fault table’s order, the spike and late trucks apart, then the yogurt line’s five, each with a stage', () => {
     expect(SCENARIO_MENU.map((item) => item.variant ?? item.id)).toEqual([
       'uhtTempDrop',
       'fillerBreakdown',
@@ -30,9 +30,14 @@ describe('the scenario menu (src/data/scenarios.json)', () => {
       'homogenizerPressureLoss',
       'demandSpike',
       'lateTrucks',
+      'yogurtSlowFermentation',
+      'yogurtHeatUnderTemp',
+      'yogurtSealDrift',
+      'yogurtHepaLoss',
+      'yogurtColdRoomExcursion',
     ]);
     expect(new Set(SCENARIO_MENU.map((item) => item.id))).toEqual(new Set(SCENARIO_IDS));
-    expect(SCENARIO_MENU.map((item) => item.stage)).toEqual([4, 7, 6, 9, 3, 10, 10]);
+    expect(SCENARIO_MENU.map((item) => item.stage)).toEqual([4, 7, 6, 9, 3, 10, 10, 13, 12, 15, 15, 16]);
   });
 
   it('refuses a file that misses a scenario, repeats one, or gives a variant to the wrong one', () => {

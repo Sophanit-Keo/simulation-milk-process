@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "timeS": 627090,
   "speed": 10,
   "paused": false,
@@ -1190,7 +1190,8 @@
   "scenarios": {
     "runs": [],
     "unavailable": {
-      "uhtTempDrop": "The UHT plant is diverting; the steam dip needs it in production"
+      "uhtTempDrop": "The UHT plant is diverting; the steam dip needs it in production",
+      "yogurtHeatUnderTemp": "The yogurt heat treatment is idle; the dip needs it in production"
     }
   },
   "yogurt": {
@@ -1374,7 +1375,8 @@
         "tempC": 3,
         "positionsUsed": 181,
         "capacity": 360,
-        "nextReleaseS": 627300
+        "nextReleaseS": 627300,
+        "excursion": null
       },
       "palletsShipped": 0,
       "reefersShipped": 0,

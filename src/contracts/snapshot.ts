@@ -10,10 +10,11 @@ import type { YogurtSnapshot } from './yogurt';
  * phase 8 (steam and energy), v7 in phase 13 (the CIP station's chemicals and returns), v8 in phase 15 (the yogurt
  * line: stages 11–16, their line points and Snapshot.yogurt), v9 in phase 17 (the live yogurt line's heat treatment
  * clean, buffer changeover and steam), v10 in phase 18 (Line P8: its cycles, rejects by cause, seal, hygiene,
- * magazines and batch), v11 in phase 19 (the yogurt cold chain: trays, pallets, the rooms and the reefers). From v3 on,
- * fields may only be added.
+ * magazines and batch), v11 in phase 19 (the yogurt cold chain: trays, pallets, the rooms and the reefers), v12 in phase 20
+ * (the yogurt line's five fault scenarios: a tank held for a slow fermentation, pallets on QA hold, the cold room's
+ * excursion). From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 11;
+export const CONTRACT_VERSION = 12;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {

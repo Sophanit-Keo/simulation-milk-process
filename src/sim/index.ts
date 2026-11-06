@@ -2,8 +2,8 @@
 // 1–6 live from the fixed-step liquid-line model (liquidLine.ts), run once per step, and stages 7–10 from the
 // discrete packs model (packsLine.ts), whose fillers draw from the liquid line's aseptic tank and whose
 // breakdowns, batches, incubations and trucks run through the core's event queue. Stages 11–15, the yogurt line's
-// liquid side (phase 17) and Line P8 (phase 18), run in the same step after them (yogurt/yogurtLine.ts), the cold chain
-// standing until phase 19.
+// liquid side (phase 17), Line P8 (phase 18) and the cold chain (phase 19), run in the same step after them
+// (yogurt/yogurtLine.ts); its five fault scenarios (phase 20) start through the scenarios, which reach it by a getter.
 import type { PlantConfig, Sim } from '../contracts';
 import { createCore } from './core';
 import { createLiquidLine, LIQUID_STAGE_IDS, type LiquidLine, type LiquidLineOptions } from './liquidLine';
@@ -67,6 +67,7 @@ export function createSim(config: PlantConfig, options: SimOptions = {}): Sim {
     schedule: (timeS, type, payload) => core.schedule(timeS, type, payload),
     cancel: (seq) => core.cancel(seq),
     log: core.log,
+    yogurt: () => models.yogurt,
   });
   models.scenarios = scenarios;
   // Last, queueing no events, and P8 drawing from a stream of its own, so the UHT line's steps, draws and numbers stay

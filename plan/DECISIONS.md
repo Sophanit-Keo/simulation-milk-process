@@ -35,6 +35,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D27](#d27-the-yogurt-line-live-stages-1114) | The yogurt line live, stages 11–14: the product day on P8, the routing, the CCP and the wing's CIP (schema 11) | — | Proposed |
 | [D28](#d28-line-p8-live-stage-15) | Line P8 live, stage 15: cycles, fill weights, the in-line checks, seal tests and holds, the interlocks and the magazines (schema 12) | — | Proposed |
 | [D29](#d29-the-yogurt-cold-chain-live-stage-16) | The yogurt cold chain live, stage 16: trays, one-batch pallets, the warm room, the blast chiller, the cold-room hold and release, reefers (schema 13) | — | Proposed |
+| [D30](#d30-the-yogurt-lines-fault-scenarios) | The yogurt line's five fault scenarios: a phage, the heat dip, the seal drift, the HEPA loss, the cold-room excursion (schema 14) | — | Proposed |
 
 ## D1. Batch size
 
@@ -725,6 +726,32 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - contracts v11: `ColdChainSnapshot` gains `trays`, `pallets[]`, the rooms' `capacity`, `chiller.airC`, `coldRoom.nextReleaseS`, `reefers[]`, `cupsShipped` and `cupsHeld`;
   - `src/sim/yogurt/coldChain.ts`, and P8's output of the cups it makes and its seal tests' results;
   - the stage 16 panel and a yogurt batch list, and the cold chain in the 3D view.
+
+
+## D30. The yogurt line's fault scenarios
+
+- **Status:** Proposed
+- **Date:** 2026-11-06
+- **Review note:** none ([phase 20](agent-plan/phase-20-yogurt-detail-and-scenarios.md))
+- **Decision:** five fault scenarios for the yogurt line join the UHT line's six in the Scenarios menu, under their own heading. Each acts through the yogurt line's step (`src/sim/yogurt/yogurtLine.ts`, `p8.ts`, `coldChain.ts`), keeps its run and log in `src/sim/scenarios.ts` as the UHT faults do, and claims the line's reactions by what each entry reports (`LogTag.event`). None queues an event or draws at random, so the UHT line's steps, draws and numbers stay as they were (D25): its fingerprint is unchanged with all five running.
+
+| Scenario | What happens | `plant.json` keys (under `yogurt.faults`) | Default | Basis |
+|---|---|---|---|---|
+| Slow fermentation (bacteriophage) | The tank filling, else the youngest fermenting above the stall pH, stalls there. It is flagged and held when it is overdue, never fed to P8, and discarded; the next tank feeds P8 | `phage.stallPh`, `flagAfterS`, `discardAfterS` | pH 5.2; 2 h past its expected end; 8 h after its start | The phase plan; sim assumptions (H134) |
+| Heat treatment under temperature | The outlet heads for 82 °C for 10 min: the CCP diverts at 85 °C, the wing's CIP cleans the line, and it runs again (D27) | `heat.outletC`, `durationS` | 82 °C; 10 min | Sim assumptions (H135) |
+| Seal temperature drift | The heads fall to 160 °C over 15 min and stay there until a seal test fails; then they are set back. The failed test holds the cups since the last pass, and the cold chain pulls them (D28, D29) | `seal.driftToC`, `driftS` | 160 °C; 15 min | At 160 °C every cup leaks (H128, H136) |
+| HEPA overpressure loss | The cabin reads +5 Pa until its fan is repaired: P8 stops (D28). After the repair P8 runs an SIP and an ATP swab before it fills again | `hepa.cabinPa`, `repairS` | +5 Pa; 30 min | The SOP's hygiene limits (H137) |
+| Cold-room excursion | The cooling fails for 3 h: the air warms toward 10 °C. After 2 h over 6 °C the pallets inside go on QA hold; QA decides 2 h after the air is back under 6 °C | `coldRoom.airC`, `airTauS`, `repairS`, `limitC`, `overS`, `qaDecisionS`, `maxCoreC` | 10 °C, 30 min; 3 h; 6 °C, 2 h; 2 h; 8 °C | The phase plan; 8 °C is the usual legal maximum for chilled dairy; the rest sim assumptions (H138) |
+
+- **Rules with no key:**
+  - **A phage cannot be put right:** its run stops acting as it starts and follows the tank to the drain; a reset leaves it.
+  - **The HEPA rule is the scenario's:** D28's interlock still restarts P8 as soon as the cabin is back after a short dip. A fan repair opens the cabin to the hall, so after it P8 needs a new SIP and swab. The buffer keeps its product meanwhile, and set mix that waits past its limit goes to rework.
+  - **The seal heads stay drifted** until a seal test fails, as nothing else on P8 measures a seal; a reset sets them back at once, and the next test then judges the cups made meanwhile.
+  - **QA's verdict on the cold room** is one for all the held pallets: released if no core passed 8 °C, destroyed if one did. The cores follow the air first-order with the chiller's 1.2 h time constant, so they lag it; the model works the air and the cores in closed form for each stretch (H138). Pallets already called to a reefer were released before the hold, and still leave. The air's temperature is the cold room's reading in the panel.
+  - **Lamps:** a held tank turns stage 13 red, the seal heads out of their window turn stage 15 amber while P8 runs, and pallets on QA hold turn stage 16 red.
+  - **Let Report (as D18):** each links to Let Report's form on the product type "Yogurt": slow fermentation as a custom "Slow fermentation: bacteriophage", high, held; the heat dip as temperature, high; the seal drift as equipment, high, held; the HEPA loss as hygiene, high; the cold-room excursion as temperature, critical, held, in the cold room. Let Report drops a product type or place it doesn't know.
+- **Why:** the phase plan's five faults are the yogurt line's CCPs and hygiene limits in the SOP: the heat treatment, the culture, the seal, the clean-air cabin and the cold chain. Each shows how a fault travels down the line, as the UHT faults do.
+- **What it changes:** `plant.json` schema 14 (`yogurt.faults`), contracts v12 (the five scenario ids; `FermentTank.held`, `YogurtPallet.qaHold`, `coldRoom.excursion`), `src/sim/` (the five faults and their runs), `src/data/scenarios.json`, `src/ui/letReport.ts`, and the menu, the scenario log and the 3D view's lamps.
 
 ---
 

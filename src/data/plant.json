@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 13,
+  "schemaVersion": 14,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -253,6 +253,13 @@
       "reeferArriveS": 1800,
       "reeferLoadS": 1200,
       "reeferLatestS": 151200
+    },
+    "faults": {
+      "phage": { "stallPh": 5.2, "flagAfterS": 7200, "discardAfterS": 28800 },
+      "heat": { "outletC": 82, "durationS": 600 },
+      "seal": { "driftToC": 160, "driftS": 900 },
+      "hepa": { "cabinPa": 5, "repairS": 1800 },
+      "coldRoom": { "airC": 10, "airTauS": 1800, "repairS": 10800, "limitC": 6, "overS": 7200, "qaDecisionS": 7200, "maxCoreC": 8 }
     },
     "products": [
       { "id": "plainStirred", "name": "Plain stirred yogurt", "route": "stirred", "fruit": false },

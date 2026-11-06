@@ -28,8 +28,8 @@ export const SETPOINT_RANGES: Readonly<Record<Exclude<SetpointKey, 'fillerRatePa
   p8RateCupsPerH: { min: 10_800, max: 25_200 },
 };
 
-/** The six fault scenarios (plan 06). */
-export type ScenarioId =
+/** The six fault scenarios of the UHT line (plan 06). */
+export type UhtScenarioId =
   | 'uhtTempDrop'
   | 'fillerBreakdown'
   | 'sterileAirFilterFailure'
@@ -37,8 +37,22 @@ export type ScenarioId =
   | 'homogenizerPressureLoss'
   | 'demandSpikeOrLateTruck';
 
-/** The six, in the fault table's order (plan 06). */
-export const SCENARIO_IDS: readonly ScenarioId[] = [
+/**
+ * The yogurt line's five (contracts v12, phase 20, D30): a bacteriophage stalls a tank's fermentation, the heat
+ * treatment runs under temperature, P8's seal heads drift cool, the HEPA cabin loses its overpressure, the cold room
+ * warms past its limit.
+ */
+export type YogurtScenarioId =
+  | 'yogurtSlowFermentation'
+  | 'yogurtHeatUnderTemp'
+  | 'yogurtSealDrift'
+  | 'yogurtHepaLoss'
+  | 'yogurtColdRoomExcursion';
+
+export type ScenarioId = UhtScenarioId | YogurtScenarioId;
+
+/** The UHT line's six, in the fault table's order (plan 06). */
+export const UHT_SCENARIO_IDS: readonly UhtScenarioId[] = [
   'uhtTempDrop',
   'fillerBreakdown',
   'sterileAirFilterFailure',
@@ -46,6 +60,20 @@ export const SCENARIO_IDS: readonly ScenarioId[] = [
   'homogenizerPressureLoss',
   'demandSpikeOrLateTruck',
 ];
+
+/** The yogurt line's five, in the order of the line (phase 20): stages 13, 12, 15, 15, 16. */
+export const YOGURT_SCENARIO_IDS: readonly YogurtScenarioId[] = [
+  'yogurtSlowFermentation',
+  'yogurtHeatUnderTemp',
+  'yogurtSealDrift',
+  'yogurtHepaLoss',
+  'yogurtColdRoomExcursion',
+];
+
+/** Every scenario: the UHT line's six, then the yogurt line's five (contracts v12). */
+export const SCENARIO_IDS: readonly ScenarioId[] = [...UHT_SCENARIO_IDS, ...YOGURT_SCENARIO_IDS];
+
+export const isYogurtScenario = (id: ScenarioId): id is YogurtScenarioId => (YOGURT_SCENARIO_IDS as readonly ScenarioId[]).includes(id);
 
 /** The two forms of 'demandSpikeOrLateTruck' (contracts v4): extra trucks, or trucks held up that then come together. */
 export type ScenarioVariant = 'demandSpike' | 'lateTrucks';

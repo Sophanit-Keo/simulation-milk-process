@@ -43,6 +43,11 @@ export interface FermentTank extends TankLevel {
   startedS: number | null;
   /** Sim time it reaches, or reached, the end pH at its temperature (H125); null before it starts. */
   readyAtS: number | null;
+  /**
+   * Flagged for a slow fermentation (contracts v12, phase 20, D30): its pH stalled, so it is held, never fed to P8, and
+   * discarded. Absent from an older snapshot.
+   */
+  held?: boolean;
 }
 
 /** What Line P8 is doing (stage 15); `stopReason` says why it stopped (contracts v10). */
@@ -141,6 +146,11 @@ export interface YogurtPallet {
   leaveByS: number | null;
   /** Its hold is over and every seal test covering it passed: it may leave. */
   released: boolean;
+  /**
+   * On QA hold after a cold-room excursion (contracts v12, phase 20, D30): it may not leave until QA releases it, or it
+   * is destroyed. Absent from an older snapshot.
+   */
+  qaHold?: boolean;
 }
 
 /** A reefer at the yogurt dock (contracts v11): backing up to its door, or loading its pallets. */
@@ -161,6 +171,28 @@ export interface YogurtReefer {
 }
 
 /**
+ * A cold-room excursion (contracts v12, phase 20, D30): the room's cooling fails, its air warms past its limit, and after
+ * long enough over it the pallets inside go on QA hold until QA releases or destroys them.
+ */
+export interface ColdRoomExcursion {
+  /** The cooling is down (until its repair). */
+  coolingDown: boolean;
+  /** Since when the air has been over the limit; null while it is under. */
+  overSinceS: number | null;
+  limitC: number;
+  /** When the pallets went on hold; null before. */
+  holdS: number | null;
+  /** Pallets on QA hold now. */
+  palletsHeld: number;
+  /** The warmest any held pallet's core has been, °C. */
+  peakCoreC: number;
+  /** When QA decides; null until the air is back under the limit with pallets on hold. */
+  decisionS: number | null;
+  /** QA's verdict once given. */
+  verdict: 'released' | 'destroyed' | null;
+}
+
+/**
  * Trays, pallets and the cold chain (stage 16). Contracts v11 (phase 19, D29) adds every field marked so; each is
  * absent from an older snapshot.
  */
@@ -169,8 +201,11 @@ export interface ColdChainSnapshot {
   warmRoom: { tempC: number; pallets: number; capacity?: number };
   /** The blast-chilling tunnel: its positions and its air (v11). */
   chiller: { pallets: number; capacity?: number; airC?: number };
-  /** The 2–4 °C cold room, where every pallet holds 24–48 h before release: its positions and the next release (v11). */
-  coldRoom: { tempC: number; positionsUsed: number; capacity?: number; nextReleaseS?: number | null };
+  /**
+   * The 2–4 °C cold room, where every pallet holds 24–48 h before release: its positions and the next release (v11). Its
+   * air's temperature is `tempC`; during an excursion (v12, phase 20) it rises, and `excursion` says how it stands.
+   */
+  coldRoom: { tempC: number; positionsUsed: number; capacity?: number; nextReleaseS?: number | null; excursion?: ColdRoomExcursion | null };
   /** Since the plant opened. */
   palletsShipped: number;
   reefersShipped: number;

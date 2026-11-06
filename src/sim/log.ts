@@ -47,7 +47,33 @@ export interface LogTag {
   why?: string;
   /** The yogurt line's entries say so (contracts v9), so the UHT line's log reads as it did without them. */
   line?: LineId;
+  /** What a yogurt line entry reports, where a fault scenario may claim it (phase 20, D30); with `tank` for a tank's. */
+  event?: YogurtLogEvent;
+  tank?: number;
 }
+
+/** The yogurt line's entries a fault scenario follows (phase 20). */
+export type YogurtLogEvent =
+  | 'heatDivert'
+  | 'heatCleaning'
+  | 'heatReady'
+  | 'steamBack'
+  | 'tankFlagged'
+  | 'tankForward'
+  | 'tankDiscarded'
+  | 'sealTestFailed'
+  | 'sealReset'
+  | 'cupsPulled'
+  | 'p8Stopped'
+  | 'hepaRepaired'
+  | 'sipStart'
+  | 'p8Cleared'
+  | 'coldRoomOver'
+  | 'coldRoomHold'
+  | 'coolingRepaired'
+  | 'coldRoomBack'
+  | 'qaReleased'
+  | 'qaDestroyed';
 
 /** How the models write to the log: the entry, and what it is about. */
 export type LogWriter = (timeS: number, kind: LogKind, message: string, tag?: LogTag) => void;
