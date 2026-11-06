@@ -1,7 +1,7 @@
 // The hero machines' models (public/models/hero, made by assets/scripts/make-heroes.mjs with baked AO and
-// meshopt geometry), loaded by default since phase 5 (the stretch wrapper since phase 12); with ?greybox, or until
-// a model arrives, the grey box shows. Once a model loads it goes into the machine's root as it is, filler B's mirrored along z; the grey
-// parts it replaces are hidden, and the machine's update code is pointed at the model's moving nodes. Those
+// meshopt geometry), loaded by default since phase 5 (the stretch wrapper since phase 12, Line P8 and the fermentation
+// tanks since phase 20); with ?greybox, or until a model arrives, the grey box shows. Once a model loads it goes into
+// the machine's root as it is, filler B's mirrored along z; the grey parts it replaces are hidden, and the machine's update code is pointed at the model's moving nodes. Those
 // carry the grey nodes' names and rest transforms (assets/hero-specs.md, "What scene needs for the swap"), so
 // the same writes drive them.
 import * as THREE from 'three';
@@ -14,6 +14,9 @@ export const HERO_MODELS = {
   filler: 'hero/aseptic-filler.glb',
   palletizer: 'hero/palletizer.glb',
   stretchWrapper: 'hero/stretch-wrapper.glb',
+  // The yogurt wing's (phase 20): Line P8, and the fermentation tank, loaded once for the three.
+  p8Filler: 'hero/p8-filler.glb',
+  fermentTank: 'hero/ferment-tank.glb',
 } as const;
 
 export interface HeroSwap<Node extends string> {

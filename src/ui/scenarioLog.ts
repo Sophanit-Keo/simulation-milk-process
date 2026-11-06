@@ -3,7 +3,7 @@
 // out, or until it is hidden. Its button opens a dialog with every scenario's log, oldest step first, each
 // with the reason behind it: the scenario's own steps and the plant's reactions to it. The banner and each
 // scenario in the dialog link to Let Report, which opens its new-report form filled in for that fault (D18).
-import type { LogEntry, ScenarioRunSnapshot, Snapshot } from '../contracts';
+import { isYogurtScenario, type LogEntry, type ScenarioRunSnapshot, type Snapshot } from '../contracts';
 import { createLamp, el, onPress, setAttr, setLamp, setText } from './dom';
 import { LOG_KIND_TEXT, LOG_LAMP } from './eventLog';
 import { formatSimTime } from './format';
@@ -122,7 +122,8 @@ export function createScenarioLog(view: HTMLElement, signal: AbortSignal): Scena
         const section = el('section', 'sc-run');
         section.dataset.run = String(run.run);
         const heading = el('h3', '', scenarioName(run.id, run.variant));
-        const meta = el('p', 'sc-meta', `${runTimes(run)} · ${run.summary}`);
+        // The yogurt line's runs say so (phase 20); the UHT line's read as they did.
+        const meta = el('p', 'sc-meta', `${isYogurtScenario(run.id) ? 'Yogurt line · ' : ''}${runTimes(run)} · ${run.summary}`);
         const href = letReportHref(run);
         if (href) {
           const link = reportLink();

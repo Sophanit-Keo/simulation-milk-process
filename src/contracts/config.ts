@@ -200,6 +200,29 @@ export interface YogurtConfig {
     reeferLoadS: number;
     reeferLatestS: number;
   };
+  /**
+   * The yogurt line's five fault scenarios (schema 14, phase 20, D30; H134–H138). Each number is a sim assumption
+   * inside the SOP's limits, or the limit itself.
+   */
+  faults: {
+    /**
+     * A bacteriophage in a tank's culture: its pH stalls at stallPh; the tank is flagged flagAfterS past its expected
+     * end, held, and discarded discardAfterS after its fermentation started.
+     */
+    phage: { stallPh: number; flagAfterS: number; discardAfterS: number };
+    /** The heat treatment's steam dips: the outlet heads for outletC for durationS. */
+    heat: { outletC: number; durationS: number };
+    /** P8's seal heads drift down to driftToC over driftS, and stay there until a seal test fails. */
+    seal: { driftToC: number; driftS: number };
+    /** The HEPA cabin's fan fails: it reads cabinPa until it is repaired, repairS later. */
+    hepa: { cabinPa: number; repairS: number };
+    /**
+     * The cold room's cooling fails: its air heads for airC first-order (airTauS) until the repair, repairS later.
+     * After overS over limitC the pallets inside go on QA hold; QA decides qaDecisionS after the air is back under
+     * limitC, releasing them if no held core passed maxCoreC and destroying them if one did.
+     */
+    coldRoom: { airC: number; airTauS: number; repairS: number; limitC: number; overS: number; qaDecisionS: number; maxCoreC: number };
+  };
   products: YogurtProductConfig[];
   /** The product of each shift of a day, from the first shift (quality.firstShiftStartS: 06:00, 14:00, 22:00). */
   shiftProducts: string[];
@@ -655,6 +678,22 @@ export const YOGURT_NUMBER_KEYS = [
   'coldChain.reeferArriveS',
   'coldChain.reeferLoadS',
   'coldChain.reeferLatestS',
+  'faults.phage.stallPh',
+  'faults.phage.flagAfterS',
+  'faults.phage.discardAfterS',
+  'faults.heat.outletC',
+  'faults.heat.durationS',
+  'faults.seal.driftToC',
+  'faults.seal.driftS',
+  'faults.hepa.cabinPa',
+  'faults.hepa.repairS',
+  'faults.coldRoom.airC',
+  'faults.coldRoom.airTauS',
+  'faults.coldRoom.repairS',
+  'faults.coldRoom.limitC',
+  'faults.coldRoom.overS',
+  'faults.coldRoom.qaDecisionS',
+  'faults.coldRoom.maxCoreC',
 ] as const;
 
 // The yogurt keys the model divides by or counts with; zero would stall or divide by zero.
@@ -702,6 +741,13 @@ const YOGURT_POSITIVE_KEYS = [
   'coldChain.coldRoomPallets',
   'coldChain.dockDoors',
   'coldChain.reeferLoadS',
+  'faults.heat.durationS',
+  'faults.seal.driftS',
+  'faults.hepa.repairS',
+  'faults.coldRoom.airTauS',
+  'faults.coldRoom.repairS',
+  'faults.coldRoom.overS',
+  'faults.coldRoom.qaDecisionS',
 ] as const;
 
 const YOGURT_INTEGER_KEYS = [
@@ -847,6 +893,18 @@ function checkYogurt(config: PlantConfig, fail: (message: string) => void): void
   }
   if (!(coldChain.coldRoomPallets >= coldChain.palletsPerTruck)) fail('yogurt.coldChain.coldRoomPallets must hold at least a reefer load (palletsPerTruck)');
   if (!(coldChain.reeferArriveS >= 0)) fail('yogurt.coldChain.reeferArriveS must not be negative');
+  // The five faults (schema 14, D30): each must do what its scenario says, or it shows nothing.
+  const { faults } = yogurt;
+  if (!(ferment.endPh < faults.phage.stallPh && faults.phage.stallPh < ferment.startPh)) fail('yogurt.faults.phage.stallPh must lie between ferment.endPh and ferment.startPh');
+  if (!(faults.phage.flagAfterS > 0 && ferment.endAtOptS + faults.phage.flagAfterS < faults.phage.discardAfterS)) {
+    fail('yogurt.faults.phage needs flagAfterS > 0, and the flag (ferment.endAtOptS + flagAfterS) before discardAfterS');
+  }
+  if (!(faults.heat.outletC < heat.divertBelowC)) fail('yogurt.faults.heat.outletC must be below heat.divertBelowC, or the dip never diverts');
+  if (!(faults.seal.driftToC < seal.minTempC)) fail('yogurt.faults.seal.driftToC must be below p8.seal.minTempC, or the drift never leaks');
+  if (!(faults.hepa.cabinPa < hepa.minPa)) fail('yogurt.faults.hepa.cabinPa must be below p8.hepa.minPa, or P8 never stops');
+  const room = faults.coldRoom;
+  if (!(coldChain.roomMaxC < room.limitC && room.limitC < room.airC)) fail('yogurt.faults.coldRoom needs coldChain.roomMaxC < limitC < airC');
+  if (!(room.maxCoreC > room.limitC)) fail('yogurt.faults.coldRoom.maxCoreC must be above limitC');
 }
 
 /** The products: each known id once, a known route, a name and a fruit flag; and one product a shift for a whole day. */

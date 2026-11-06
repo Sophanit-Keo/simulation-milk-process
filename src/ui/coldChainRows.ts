@@ -44,13 +44,24 @@ export function chillerText(chain: ColdChainSnapshot | undefined): StateText {
   return { text: `${held}${air}${warmest}`, status: pallets === 0 ? 'idle' : capacity !== undefined && pallets >= capacity ? 'warn' : 'ok' };
 }
 
-/** The cold room: "180 of 360 positions · 3.0 °C"; amber outside the 2–4 °C band or full. */
+/**
+ * The cold room: "180 of 360 positions · 3.0 °C"; amber outside the 2–4 °C band or full. In an excursion (phase 20,
+ * D30) it says how it stands: "· cooling down", "· 176 pallets on QA hold", "· QA destroyed the held pallets"; red
+ * with pallets on hold.
+ */
 export function coldRoomText(chain: ColdChainSnapshot | undefined): StateText {
   if (!chain) return NONE;
-  const { positionsUsed, capacity, tempC } = chain.coldRoom;
+  const { positionsUsed, capacity, tempC, excursion } = chain.coldRoom;
   const used = capacity === undefined ? count(positionsUsed, 'position', 'positions') : `${formatNumber(positionsUsed)} of ${formatNumber(capacity)} positions`;
   const outside = tempC < CHAIN.roomMinC || tempC > CHAIN.roomMaxC;
-  return { text: `${used} · ${withUnit(formatNumber(tempC, 1), '°C')}`, status: outside || (capacity !== undefined && positionsUsed >= capacity) ? 'warn' : 'ok' };
+  let alarm = '';
+  if (excursion) {
+    if (excursion.palletsHeld > 0) alarm = ` · ${count(excursion.palletsHeld, 'pallet', 'pallets')} on QA hold`;
+    else if (excursion.verdict) alarm = ` · QA ${excursion.verdict} the held pallets`;
+    else if (excursion.coolingDown) alarm = ' · cooling down';
+  }
+  const status = (excursion?.palletsHeld ?? 0) > 0 ? 'bad' : outside || (capacity !== undefined && positionsUsed >= capacity) ? 'warn' : 'ok';
+  return { text: `${used} · ${withUnit(formatNumber(tempC, 1), '°C')}${alarm}`, status };
 }
 
 /** The next pallet released and those waiting: "In 25 min · 12 released, waiting for a reefer". */

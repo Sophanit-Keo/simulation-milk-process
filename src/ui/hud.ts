@@ -14,7 +14,7 @@ import { createStagePanel, type PanelPart } from './stagePanel';
 import { createStageRail } from './stageRail';
 import { createStockList } from './stockList';
 import { createTopBar, speedKey } from './topBar';
-import { createTour } from './tour';
+import { createTour, YOGURT_TOUR_STOP_S, type Tour } from './tour';
 import { createTrendChart, TREND_CHARTS } from './trendChart';
 import { createTrendHistory } from './trends';
 import { createYogurtBatchList } from './yogurtBatchList';
@@ -26,7 +26,8 @@ export interface HudOptions {
   setpointMax?: Partial<Record<SetpointKey, number>>;
   /**
    * The lines whose stages the rail and the info panel show (contracts v8): both by default, the rail grouped by line
-   * (phase 16). The guided tour keeps to the UHT line; the yogurt line's tour comes in phase 20.
+   * (phase 16). The guided tour keeps to the UHT line; the yogurt tour beside it walks stages 11–16 (phase 20) while
+   * the yogurt line is shown.
    */
   lines?: readonly LineId[];
 }
@@ -73,6 +74,7 @@ export function createHud(
   const lines = options.lines ?? LINE_IDS;
   const shownStages = stages.filter((info) => lines.includes(lineOfStage(info.id)));
   const tourStages = stages.filter((info) => lineOfStage(info.id) === 'uht');
+  const yogurtTourStages = lines.includes('yogurt') ? stages.filter((info) => lineOfStage(info.id) === 'yogurt') : [];
   const part = (selector: string): HTMLElement => {
     const node = root.querySelector<HTMLElement>(selector);
     if (!node) throw new Error(`createHud needs a ${selector} element inside the app root (see index.html)`);
@@ -177,7 +179,28 @@ export function createHud(
   tourButton.setAttribute('aria-pressed', 'false');
   if (overview) overview.before(tourButton);
   else railRoot.querySelector('.rail-head')?.append(tourButton);
-  const tour = createTour({ bus, stages: tourStages, view: viewRoot, button: tourButton, signal });
+  // The yogurt tour (phase 20), after it: stages 11–16, about 2 minutes. Starting one tour stops the other.
+  let yogurtTour: Tour | null = null;
+  const tour = createTour({ bus, stages: tourStages, view: viewRoot, button: tourButton, signal, beforeStart: () => yogurtTour?.stop() });
+  if (yogurtTourStages.length > 0) {
+    const yogurtButton = el('button', 'link tour-open', 'Yogurt tour');
+    yogurtButton.type = 'button';
+    yogurtButton.dataset.testid = 'tour-yogurt';
+    yogurtButton.title = `Yogurt tour: stages ${yogurtTourStages[0]?.id} to ${yogurtTourStages.at(-1)?.id} with a caption each, about 2 minutes`;
+    yogurtButton.setAttribute('aria-pressed', 'false');
+    tourButton.after(yogurtButton);
+    yogurtTour = createTour({
+      bus,
+      stages: yogurtTourStages,
+      view: viewRoot,
+      button: yogurtButton,
+      signal,
+      stopS: YOGURT_TOUR_STOP_S,
+      testIdSuffix: '-yogurt',
+      stepText: (stage, index, stops) => `Yogurt line · stage ${stage.id} (${index + 1} of ${stops}) · ${stage.name}`,
+      beforeStart: () => tour.stop(),
+    });
+  }
 
   const doc = root.ownerDocument;
   doc.addEventListener(
@@ -214,6 +237,7 @@ export function createHud(
       scenarioMenu.update(snapshot);
       scenarioLog.update(snapshot);
       tour.update(performance.now());
+      yogurtTour?.update(performance.now());
       rail.update(snapshot);
       log.update(snapshot);
       panel.update(snapshot);
@@ -229,6 +253,7 @@ export function createHud(
       scenarioMenu.dispose();
       scenarioLog.dispose();
       tour.dispose();
+      yogurtTour?.dispose();
       tourButton.remove();
       about.dispose();
       rail.dispose();

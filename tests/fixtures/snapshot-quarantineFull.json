@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "timeS": 655140,
   "speed": 10,
   "paused": false,
@@ -1367,7 +1367,8 @@
         "tempC": 3,
         "positionsUsed": 194,
         "capacity": 360,
-        "nextReleaseS": 655500
+        "nextReleaseS": 655500,
+        "excursion": null
       },
       "palletsShipped": 78,
       "reefersShipped": 3,

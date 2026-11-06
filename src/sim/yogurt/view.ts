@@ -89,7 +89,9 @@ export function yogurtStageValues(config: PlantConfig, setpoints: Readonly<Setpo
 
 /**
  * The lamps of stages 11–16: grey while a stage stands, green while it runs, amber for a clean, a set mix near its
- * wait limit, a starved filler or a cold room outside its band, red for a divert or a stopped filler.
+ * wait limit, a starved filler or a cold room outside its band, red for a divert or a stopped filler. Since phase 20
+ * (D30) a tank held for a stalled fermentation turns stage 13 red, seal heads out of their window stage 15 amber, and
+ * pallets on QA hold stage 16 red.
  */
 export function yogurtStatuses(config: PlantConfig, yogurt: YogurtSnapshot): Record<YogurtStageId, Status> {
   const { mix, heat, ferment, buffer, p8, coldChain } = yogurt;
@@ -100,15 +102,18 @@ export function yogurtStatuses(config: PlantConfig, yogurt: YogurtSnapshot): Rec
   return {
     11: mix.flowLph > 0 ? 'ok' : 'idle',
     12: ({ production: 'ok', divert: 'bad', cleaning: 'warn', idle: 'idle' } as const)[heat.mode],
-    13: busyTank ? 'ok' : 'idle',
+    13: ferment.tanks.some((tank) => tank.held) ? 'bad' : busyTank ? 'ok' : 'idle',
     14:
       buffer.levelL <= 0 && buffer.inflowLph <= 0
         ? 'idle'
         : buffer.waitS !== null && buffer.waitS > 0.8 * plantBuffer.setMaxWaitS
           ? 'warn'
           : 'ok',
-    15: ({ idle: 'idle', cleaning: 'warn', sterilizing: 'warn', running: 'ok', starved: 'warn', stopped: 'bad' } as const)[p8.state],
-    16: palletsInChain <= 0 ? 'idle' : roomOutside ? 'warn' : 'ok',
+    15:
+      p8.state === 'running' && p8.seal !== undefined && (p8.seal.tempC < config.yogurt.p8.seal.minTempC || p8.seal.tempC > config.yogurt.p8.seal.maxTempC)
+        ? 'warn'
+        : ({ idle: 'idle', cleaning: 'warn', sterilizing: 'warn', running: 'ok', starved: 'warn', stopped: 'bad' } as const)[p8.state],
+    16: (coldChain.coldRoom.excursion?.palletsHeld ?? 0) > 0 ? 'bad' : palletsInChain <= 0 ? 'idle' : roomOutside ? 'warn' : 'ok',
   };
 }
 

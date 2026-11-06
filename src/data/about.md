@@ -1,6 +1,6 @@
 # About this model
 
-This is a teaching simulation of one UHT milk plant, from the raw-milk silo to the truck. The liquid line (stages 1–6) steps in litres, degrees and bar; packs, pallets and trucks (stages 7–10) run as discrete events. It shows how the stages depend on each other: what the buffer tank absorbs, when the plant must divert, how a fault travels down the line. It is not a design tool and does not predict the output of any real plant.
+This is a teaching simulation of one UHT milk plant, from the raw-milk silo to the truck, and of a yogurt line in a wing beside it (stages 11–16). The liquid line (stages 1–6) steps in litres, degrees and bar; packs, pallets and trucks (stages 7–10) run as discrete events. It shows how the stages depend on each other: what the buffer tank absorbs, when the plant must divert, how a fault travels down the line. It is not a design tool and does not predict the output of any real plant.
 
 ## A mix of plant types
 
@@ -55,6 +55,19 @@ A batch waits in quarantine while its samples incubate for 7 days at 55 °C. If 
 
 So the quarantine holds a week of output, about 2,500 pallets. A truck comes every 100 min for 22 pallets, about 317 a day, picked earliest best-before first; it waits at the dock if the stock is short. After breakdowns the plant makes about 350 pallets a day, so the stock grows by about 30 a day. Each filler's OEE is availability × performance × quality, about 91% over a long run.
 
+## The yogurt line (Line P8)
+
+A wing beside the UHT plant makes cup yogurt on Line P8, from its own raw-milk silo, which shares the UHT line's tanker bay. Nothing in it changes the UHT line's numbers ([D25](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d25-the-yogurt-line-line-p8)).
+
+- Mix (stage 11): standardized milk at 3.0% fat, fortified with skim-milk powder to 11% solids-not-fat, 6,000 L/h.
+- Heat treatment (stage 12): homogenized at 180 bar, then held at 92 °C for 5 min, which sets most of the whey proteins for a firm gel. Under 85 °C at the holding cell's outlet the mix is diverted to a reprocess tank, and the line is cleaned before it runs again.
+- Fermentation (stage 13): at 43 °C the culture takes the pH from 6.6 to 4.55 in about 4 h, in three 10,000 L tanks.
+- Smoothing, cooling and the buffer (stage 14): stirred yogurt is smoothed, cooled to 18 °C and, for strawberry, dosed with 15% fruit. Set yogurt goes to the buffer warm, straight after inoculation, and sets in the cup.
+- Line P8 (stage 15): 12 cups a cycle, 21,600 cups of 125 g an hour, under a HEPA hood held at +25 Pa. Every cup is weighed, checked for metal and inspected; every 2 h a seal test takes 5 cups. A test that fails holds every cup since the last one that passed.
+- Cold chain (stage 16): 24 cups to a tray, 120 trays to a pallet. Set yogurt waits in a 43 °C warm room until its pH is 4.60; every pallet is blast-chilled to 4 °C and holds a day in the 2–4 °C cold room before a reefer takes 26 pallets.
+
+The day runs plain stirred yogurt from 06:00, strawberry from 14:00 and plain set yogurt from 22:00. Between products the buffer is rinsed; before set yogurt the wing cleans P8 and sterilizes it, and an ATP swab must pass before it fills.
+
 ## Why it opens on day 8
 
 A plant that started empty would release nothing for a week: the first batch would leave quarantine on day 8, and every truck until then would find no stock. So the model opens on day 8 at 06:00 with a week of history: 42 batches on hold and 634 pallets in stock, two days of cover ([D11](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d11-opening-state)).
@@ -70,21 +83,29 @@ The Scenarios menu in the top bar starts six faults, alone or together, and Rese
 - Homogenizer pressure loss: an hour at 50 bar leaves the fat globules too large. The batches filled meanwhile fail the sensory check a week later, when their incubation ends.
 - Demand spike or late trucks: twelve extra trucks in an hour run the stock down and queue in the yard; or no truck comes for nearly 7 hours, then four arrive at once.
 
-A banner over the 3D view follows the newest scenario, and its log lists every step with why it happened. The sizes of the faults are fixed sim assumptions ([D15](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d15-phase-5-fault-scenario-defaults)).
+The yogurt line has five more, under their own heading:
+
+- Slow fermentation: a bacteriophage kills a tank's culture and its pH stalls near 5.2. Two hours after it was due the tank is flagged and held; 8 h after it started it goes to the drain, and the next tank feeds P8.
+- Heat treatment under temperature: the steam dips and the holding cell's outlet falls below 85 °C. The mix diverts to the reprocess tank, then the wing cleans the line for 80 min before it runs again.
+- Seal temperature drift: P8's seal heads drift from 200 °C to 160 °C, where every seal leaks. The next seal test fails, every cup since the last one that passed is held and pulled from the pallets, and the batch goes to QA.
+- HEPA overpressure loss: the cabin's fan fails and P8 stops at once. After the 30 min repair the cabin has been open to the hall, so P8 is sterilized again and swabbed before it restarts, 50 min after the failure.
+- Cold-room excursion: the cooling fails for 3 h and the air warms toward 10 °C. After 2 h over 6 °C the pallets inside go on hold; QA destroys them if their cores passed 8 °C, and releases them if not.
+
+A banner over the 3D view follows the newest scenario, and its log lists every step with why it happened. The sizes of the faults are fixed sim assumptions ([D15](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d15-phase-5-fault-scenario-defaults), [D30](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d30-the-yogurt-lines-fault-scenarios)).
 
 ## The guided tour
 
-Tour, at the top of the stage list, flies the camera through the ten stages in order, 18 s at each, about 3 minutes in all, with two lines on what happens there. A click on a stage or the plant, Escape, or Stop ends it.
+Tour, at the top of the stage list, flies the camera through the ten stages in order, 18 s at each, about 3 minutes in all, with two lines on what happens there. Yogurt tour, beside it, does the same for the yogurt line's six stages, 20 s at each, about 2 minutes. A click on a stage or the plant, Escape, or Stop ends either.
 
 ## Accepted simplifications
 
 - Milk moves as plug flow, with no pressure drop, viscosity effects or fouling.
 - Temperatures change in steps with a short lag, not through heat-transfer equations.
-- One product and one pack size.
+- One product and one pack size on the UHT line; on the yogurt line, three products in one cup size.
 - Cleaning runs its steps on a timer: the fluids colour the pipes and set the temperatures, but they are not part of the liquid balance. The chemicals keep their strength as they clean: nothing models soil, the strength falling or the dosing that tops it up, and the circuit is one well-mixed volume.
 - The energy counts the boiler's gas for the injector's steam and the homogenizer's electricity; the other drives, cooling, compressed air and buildings are left out, and the cleaning fluids heat as milk does.
 - Failures follow simple random rates, not real plant data.
-- The fault scenarios are scripted, each with one fixed size and duration.
+- The fault scenarios are scripted, each with one fixed size and duration. On the yogurt line, a held tank or pallet is judged by one rule (an overdue pH, the warmest core), not by a lab.
 - The machines are simplified models made in code, shaded with baked ambient occlusion, not drawings of real equipment.
 - A full CIP runs only after a divert; real plants also clean at the end of each production run.
 - Demand is a truck of 22 pallets at a fixed interval, standing in for random daily orders.

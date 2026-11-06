@@ -43,6 +43,36 @@
       "name": "Late trucks",
       "stage": 10,
       "description": "No truck for almost 7 hours, then four at once: the dock backs up."
+    },
+    {
+      "id": "yogurtSlowFermentation",
+      "name": "Slow fermentation (phage)",
+      "stage": 13,
+      "description": "A bacteriophage stalls a tank at pH 5.2: it is flagged 2 h late, held, then discarded; the next tank feeds P8."
+    },
+    {
+      "id": "yogurtHeatUnderTemp",
+      "name": "Yogurt heat treatment under temperature",
+      "stage": 12,
+      "description": "The holding cell's outlet falls below 85 °C: the mix diverts to the reprocess tank, the wing cleans the line, then it runs again."
+    },
+    {
+      "id": "yogurtSealDrift",
+      "name": "Seal temperature drift",
+      "stage": 15,
+      "description": "P8's seal heads drift below 180 °C: the next seal test fails, the cups since the last pass are held, and the batch goes to QA."
+    },
+    {
+      "id": "yogurtHepaLoss",
+      "name": "HEPA overpressure loss",
+      "stage": 15,
+      "description": "P8's cabin falls below +15 Pa: P8 stops, and after the repair needs a new SIP and ATP swab before it restarts."
+    },
+    {
+      "id": "yogurtColdRoomExcursion",
+      "name": "Cold-room excursion",
+      "stage": 16,
+      "description": "The cold room warms past 6 °C for 2 h: its pallets go on hold, and QA releases or destroys them."
     }
   ]
 }

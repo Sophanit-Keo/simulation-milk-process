@@ -402,6 +402,9 @@ a.link {
 .tour-open {
   margin-left: auto;
 }
+.tour-open + .tour-open {
+  margin-left: 0;
+}
 .tour-open[aria-pressed='true'] {
   text-decoration: underline;
 }
@@ -486,6 +489,14 @@ a.link {
 .menu-sep {
   margin: 4px 6px;
   border-top: 1px solid var(--line);
+}
+/* The menu's line headings (phase 20): the UHT line's six faults, then the yogurt line's five. */
+.menu-group {
+  padding: 6px 9px 2px;
+  color: var(--muted);
+  font: 600 11px/1.2 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .stages {

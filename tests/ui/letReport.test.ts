@@ -1,7 +1,7 @@
 // The link to Let Report's new-report form (src/ui/letReport.ts, D18): what each fault is reported as, the
 // description it carries, and that the address reads back exactly what was put in.
 import { describe, expect, it } from 'vitest';
-import { SCENARIO_IDS, type LogEntry, type ScenarioId, type ScenarioRunSnapshot, type ScenarioVariant } from '../../src/contracts';
+import { SCENARIO_IDS, UHT_SCENARIO_IDS, YOGURT_SCENARIO_IDS, type LogEntry, type ScenarioId, type ScenarioRunSnapshot, type ScenarioVariant } from '../../src/contracts';
 import { LET_REPORT, LET_REPORT_DESC_MAX, LET_REPORT_URL, letReportDesc, letReportHref } from '../../src/ui/letReport';
 
 const DAY_8_0600_S = 7 * 86_400 + 6 * 3_600;
@@ -28,7 +28,7 @@ function fields(href: string | null): Record<string, string> {
 describe('the link to Let Report', () => {
   it('reports each fault with its category, severity and hold (D18), as UHT milk', () => {
     const reported = Object.fromEntries(
-      SCENARIO_IDS.filter((id) => LET_REPORT[id]).map((id) => {
+      UHT_SCENARIO_IDS.filter((id) => LET_REPORT[id]).map((id) => {
         const { cat, sev, hold, title, loc } = fields(letReportHref(run(id)));
         return [id, { cat, sev, hold, title, loc }];
       }),
@@ -41,6 +41,24 @@ describe('the link to Let Report', () => {
       homogenizerPressureLoss: { cat: 'equipment', sev: '1', hold: undefined, title: undefined, loc: undefined },
     });
     for (const id of Object.keys(reported) as ScenarioId[]) expect(fields(letReportHref(run(id))).ptype).toBe('UHT milk');
+  });
+
+  it('reports the yogurt line\'s five as yogurt, from Line P8 or the cold room (phase 20, D30)', () => {
+    const reported = Object.fromEntries(
+      YOGURT_SCENARIO_IDS.map((id) => {
+        const { cat, sev, hold, title, loc, ptype } = fields(letReportHref(run(id)));
+        return [id, { cat, sev, hold, title, loc, ptype }];
+      }),
+    );
+    expect(reported).toEqual({
+      yogurtSlowFermentation: { cat: 'custom', sev: '2', hold: '1', title: 'Slow fermentation: bacteriophage', loc: 'Line P8', ptype: 'Yogurt' },
+      yogurtHeatUnderTemp: { cat: 'temperature', sev: '2', hold: undefined, title: undefined, loc: 'Line P8', ptype: 'Yogurt' },
+      yogurtSealDrift: { cat: 'equipment', sev: '2', hold: '1', title: undefined, loc: 'Line P8', ptype: 'Yogurt' },
+      yogurtHepaLoss: { cat: 'hygiene', sev: '2', hold: undefined, title: undefined, loc: 'Line P8', ptype: 'Yogurt' },
+      yogurtColdRoomExcursion: { cat: 'temperature', sev: '3', hold: '1', title: undefined, loc: 'Cold room', ptype: 'Yogurt' },
+    });
+    expect(letReportDesc(run('yogurtSealDrift'))).toMatch(/^From the milk plant simulation's yogurt line: Seal temperature drift, run 2, started /);
+    expect(SCENARIO_IDS.filter((id) => LET_REPORT[id] === null)).toEqual(['demandSpikeOrLateTruck']);
   });
 
   it('has no link for the demand spike or late trucks: logistics, not food safety', () => {

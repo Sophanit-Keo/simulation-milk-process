@@ -3,7 +3,7 @@
 // reported as (D18). The link only opens the form; a person signs in, signs and sends the report there, so
 // the simulation never writes to Let Report itself. Everything travels in the address's hash, which Let Report
 // reads and clears, and which never reaches a server.
-import type { ScenarioId, ScenarioRunSnapshot } from '../contracts';
+import { isYogurtScenario, type ScenarioId, type ScenarioRunSnapshot } from '../contracts';
 import letReportJson from '../data/letReport.json';
 import { formatSimTime } from './format';
 import { SCENARIO_MENU, scenarioName } from './scenarioMenu';
@@ -26,6 +26,8 @@ export interface LetReportFields {
   title?: string;
   /** One of Let Report's places; without it, Let Report takes its first UHT line. */
   loc?: string;
+  /** The product type, where it is not the UHT line's (the yogurt line's faults, D30). */
+  ptype?: string;
 }
 
 /** What each fault is reported as (D18). The demand spike and late trucks are logistics, not food safety: no report. */
@@ -36,6 +38,12 @@ export const LET_REPORT: Readonly<Record<ScenarioId, LetReportFields | null>> = 
   failedIncubation: { cat: 'custom', sev: 3, hold: true, title: 'Failed incubation: blown pack', loc: 'Packing' },
   homogenizerPressureLoss: { cat: 'equipment', sev: 1, hold: false },
   demandSpikeOrLateTruck: null,
+  // The yogurt line's five (phase 20, D30), on Line P8's product type and place.
+  yogurtSlowFermentation: { cat: 'custom', sev: 2, hold: true, title: 'Slow fermentation: bacteriophage', loc: 'Line P8', ptype: 'Yogurt' },
+  yogurtHeatUnderTemp: { cat: 'temperature', sev: 2, hold: false, loc: 'Line P8', ptype: 'Yogurt' },
+  yogurtSealDrift: { cat: 'equipment', sev: 2, hold: true, loc: 'Line P8', ptype: 'Yogurt' },
+  yogurtHepaLoss: { cat: 'hygiene', sev: 2, hold: false, loc: 'Line P8', ptype: 'Yogurt' },
+  yogurtColdRoomExcursion: { cat: 'temperature', sev: 3, hold: true, loc: 'Cold room', ptype: 'Yogurt' },
 };
 
 /** The product type every report from the plant carries: Let Report's name for it. */
@@ -55,7 +63,7 @@ export function letReportDesc(run: ReportedRun): string {
   const item = SCENARIO_MENU.find((entry) => entry.id === run.id && (entry.variant ?? null) === (run.variant ?? null));
   const happened = run.log.map((entry) => `${formatSimTime(entry.timeS)} ${entry.message}`).join('; ');
   const text = [
-    `From the UHT milk plant simulation: ${scenarioName(run.id, run.variant)}, run ${run.run}, started ${formatSimTime(run.startedS)}.`,
+    `From the ${isYogurtScenario(run.id) ? 'milk plant simulation\'s yogurt line' : 'UHT milk plant simulation'}: ${scenarioName(run.id, run.variant)}, run ${run.run}, started ${formatSimTime(run.startedS)}.`,
     item?.description ?? '',
     happened ? `What happened: ${happened}.` : '',
   ]
@@ -68,7 +76,7 @@ export function letReportDesc(run: ReportedRun): string {
 export function letReportHref(run: ReportedRun): string | null {
   const fields = LET_REPORT[run.id];
   if (!fields) return null;
-  const params = new URLSearchParams({ cat: fields.cat, sev: String(fields.sev), ptype: LET_REPORT_PTYPE });
+  const params = new URLSearchParams({ cat: fields.cat, sev: String(fields.sev), ptype: fields.ptype ?? LET_REPORT_PTYPE });
   if (fields.title) params.set('title', fields.title);
   if (fields.loc) params.set('loc', fields.loc);
   if (fields.hold) params.set('hold', '1');

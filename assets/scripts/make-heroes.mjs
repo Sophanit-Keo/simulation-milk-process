@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Builds the five hero models (assets/hero-specs.md: separator, homogenizer, aseptic filler, palletizer and,
-// since phase 12, the stretch wrapper) as our own low-poly work, and writes them as the GLBs the scene loads
+// Builds the hero models (assets/hero-specs.md: separator, homogenizer, aseptic filler, palletizer, since phase 12
+// the stretch wrapper, and since phase 20 the yogurt wing's Line P8 and fermentation tank) as our own low-poly work, and writes them as the GLBs the scene loads
 // in place of the grey boxes (src/scene/equipment/heroes.ts):
 //
 //   node assets/scripts/make-heroes.mjs [--out public/models/hero]
@@ -93,7 +93,55 @@ export const HERO_SPECS = {
     ],
     nozzlesM: [],
   },
+  // Line P8 (phase 20), round its machine origin (6.5, 0, -47): the grey box of phase 18 (yogurt/p8Machine.ts), from
+  // the hood's -x end to the ramp's foot at the check gates' belt (x +5.8).
+  p8Filler: {
+    file: 'p8-filler.glb',
+    boundsM: { min: [-5.1, 0, -0.8], max: [5.8, 2.6, 0.8] },
+    envelopeM: { min: [-5.2, 0, -0.85], max: [5.9, 2.73, 0.85] },
+    maxHeightM: 3.0,
+    nodes: [
+      { name: 'pistons', parent: null, atM: [0.5, 1.39, 0] },
+      { name: 'foil_pick', parent: null, atM: [1.8, 1.41, 0] },
+      { name: 'seal_heads', parent: null, atM: [2.8, 1.41, 0] },
+      { name: 'hood', parent: null, atM: [0, 0.95, 0] },
+    ],
+    nozzlesM: [[-5.0, 0.7, 0]],
+  },
+  // A fermentation tank (phase 20), round its origin on the axis at the floor; the scene stands it three times. Its
+  // pipes meet it along z (the inlet on the +z face, the outlet under the cone): see the tank's own test.
+  fermentTank: {
+    file: 'ferment-tank.glb',
+    boundsM: { min: [-1.4, 0, -1.4], max: [1.4, 4.7, 1.44] },
+    envelopeM: { min: [-1.47, 0, -1.47], max: [1.47, 4.85, 1.52] },
+    maxHeightM: 5.0,
+    nodes: [
+      { name: 'agitator', parent: null, atM: [0, 4.64, 0] },
+    ],
+    nozzlesM: [],
+  },
 };
+
+/**
+ * Line P8's stations along its carrier, from its machine origin (src/scene/equipment/yogurt/layout.ts, P8_STATIONS
+ * less 6.5), and the carrier: 12 lanes 0.095 m apart, the cups' bases at y 1.03. The scene rides its cups there.
+ */
+export const P8_LAYOUT = {
+  denesterXM: -4.2,
+  ionizerXM: -3.2,
+  uvM: [-2.5, -0.3],
+  fillerXM: 0.5,
+  foilXM: 1.8,
+  sealerXM: 2.8,
+  coderXM: 3.9,
+  lanes: 12,
+  lanePitchM: 0.095,
+  carrierTopM: 1.03,
+  cupTopM: 1.1,
+  rampM: { fromXM: 5, toXM: 5.8, fromYM: 1.03, toYM: 0.76 },
+};
+/** Where the static carrier chain and the UV-C tunnel's shell stand, built round these points and merged into the body. */
+const P8_PARTS = { carrierM: [0, 0.99, 0], uvTunnelM: [-1.4, 1.33, 0] };
 
 /**
  * The stretch wrapper's layout round the turntable's centre (phase-12 card): the turntable flush with the
@@ -767,6 +815,183 @@ export function buildStretchWrapper() {
   return group('stretch_wrapper', [...p.meshes('body'), node(table, 'turntable', [0, tableY, 0]), node(carriage, 'carriage', [carX, carY, carZ])]);
 }
 
+
+/**
+ * Line P8, the cup filler (phase 20): 10 m of cabinet with the carrier chain on top, under a glass HEPA hood with its
+ * filter housing; along the carrier the 12 cup magazines over the de-nester, the ionizer's shroud, the UV-C tunnel, the
+ * piston manifold, the foil magazine, the sealing heads' housing and the coder, then the ramp down to the check gates.
+ * The cups' band over the carrier (y 1.03 to 1.10, |z| < 0.56) stays clear. Moving nodes: `pistons`, `foil_pick` and
+ * `seal_heads` stroke down; `hood` is a node so the scene can tint its glass. The chain and the tunnel are static body.
+ */
+export function buildP8Filler() {
+  const m = makeMaterials('p8_filler');
+  const L = P8_LAYOUT;
+  const laneHalfM = ((L.lanes - 1) * L.lanePitchM) / 2;
+  const laneZ = (lane) => -laneHalfM + lane * L.lanePitchM;
+  const p = new HeroParts();
+  // Cabinet on a recessed plinth, door seams on both long faces, the HMI on the +z side near the out end.
+  p.box(m.matte, C.dark, span(-4.95, 4.95), [0, 0.08], span(-0.55, 0.55));
+  p.box(m.paint, C.panel, span(-5, 5), [0.08, 0.95], span(-0.6, 0.6));
+  for (const xM of [-3.75, -2.5, -1.25, 0, 1.25, 2.5, 3.75]) for (const s of [-1, 1]) p.box(m.matte, C.mid, span(xM - 0.01, xM + 0.01), [0.14, 0.88], side(s, 0.6, 0.605));
+  p.box(m.matte, C.mid, span(3.2, 3.8), [0.45, 0.85], [0.6, 0.62]);
+  p.box(m.matte, C.black, span(3.25, 3.75), [0.6, 0.82], [0.62, 0.625]);
+  // The product in from the buffer, on the -x end.
+  nozzle(p, m, -5.03, 0.7, 0, 0.1);
+  // The hood's frame: corner and mid posts on the cabinet, under the filter housing; the housing and its fan boxes.
+  for (const xM of [-5.07, -2.5, 0, 2.5, 5.07]) for (const s of [-1, 1]) p.box(m.matte, C.dark, span(xM - 0.03, xM + 0.03), [0.95, 2.3], side(s, 0.74, 0.8));
+  p.box(m.paint, C.steel, span(-4.5, 4.5), [2.3, 2.56], span(-0.6, 0.6));
+  for (const xM of [-3, 0, 3]) p.box(m.matte, C.motor, span(xM - 0.4, xM + 0.4), [2.56, 2.6], span(-0.35, 0.35));
+  // The de-nester: a magazine tube over each lane with a stack of cups showing at its foot, the suction bar's rail
+  // and its two uprights outside the lanes.
+  for (let lane = 0; lane < L.lanes; lane++) {
+    p.cylinder(m.paint, C.steel, 'y', [L.denesterXM, 1.65, laneZ(lane)], 0.042, 0.7, 12);
+    p.cylinder(m.paint, C.paper, 'y', [L.denesterXM, 1.28, laneZ(lane)], 0.036, 0.04, 12);
+  }
+  p.box(m.matte, C.dark, span(L.denesterXM - 0.11, L.denesterXM + 0.11), [1.24, 1.3], span(-laneHalfM - 0.08, laneHalfM + 0.08));
+  for (const s of [-1, 1]) p.box(m.matte, C.dark, span(L.denesterXM - 0.05, L.denesterXM + 0.05), [1.03, 2.03], side(s, laneHalfM + 0.09, laneHalfM + 0.15));
+  // The ionizer's shroud and its air hose.
+  p.box(m.paint, C.steel, span(L.ionizerXM - 0.2, L.ionizerXM + 0.2), [1.25, 1.37], span(-laneHalfM - 0.1, laneHalfM + 0.1));
+  p.cylinder(m.matte, C.black, 'y', [L.ionizerXM, 1.6, -0.3], 0.03, 0.46, 10);
+  // The piston manifold and its hopper, the foil magazine, the sealing heads' housing, the coder's head on the -z side.
+  const across = span(-laneHalfM - 0.1, laneHalfM + 0.1);
+  p.box(m.paint, C.steel, span(L.fillerXM - 0.21, L.fillerXM + 0.21), [1.5, 1.8], across);
+  p.cylinder(m.paint, C.steel, 'y', [L.fillerXM, 1.95, 0], 0.18, 0.3, 20);
+  p.box(m.paint, C.steel, span(L.foilXM - 0.16, L.foilXM + 0.16), [1.58, 1.84], across);
+  p.box(m.paint, C.steel, span(L.sealerXM - 0.2, L.sealerXM + 0.2), [1.57, 1.81], across);
+  p.box(m.matte, C.motor, span(L.sealerXM - 0.12, L.sealerXM + 0.12), [1.81, 2.0], span(-0.2, 0.2));
+  p.box(m.matte, C.dark, span(L.coderXM - 0.11, L.coderXM + 0.11), [1.22, 1.44], [-laneHalfM - 0.13, -laneHalfM - 0.03 - 0.0475]);
+  // The ramp to the check gates' belt, a plate between low rails, turned down from the carrier's end.
+  const { fromXM, toXM, fromYM, toYM } = L.rampM;
+  const rampRad = Math.atan2(fromYM - toYM, toXM - fromXM);
+  const rampLengthM = Math.hypot(toXM - fromXM, fromYM - toYM);
+  const ramp = new HeroParts();
+  ramp.box(m.matte, C.dark, [0, rampLengthM], [-0.04, 0], span(-0.21, 0.21));
+  for (const s of [-1, 1]) ramp.box(m.paint, C.steel, [0, rampLengthM], [0, 0.03], side(s, 0.19, 0.21));
+  p.merge(ramp, new THREE.Matrix4().makeTranslation(fromXM, fromYM, 0).multiply(new THREE.Matrix4().makeRotationZ(-rampRad)));
+  // Legs under the ramp's foot.
+  for (const s of [-1, 1]) p.box(m.matte, C.dark, span(5.68, 5.74), [0, 0.74], side(s, 0.16, 0.2));
+
+  // The carrier chain: plates the width of the lanes and the pockets' rims, at 0.10 m pitch.
+  const carrier = new HeroParts();
+  carrier.box(m.paint, C.mid, span(-5, 5), [-0.04, 0.03], span(-0.65, 0.65));
+  // Not cut into cells: in a chain of like slats the shade does not change along a slat.
+  for (let k = 0; k < 100; k++) carrier.add(m.paint, C.dark, new THREE.BoxGeometry(0.012, 0.01, 1.2).translate(-4.955 + 0.1 * k, 0.035, 0));
+
+  // The UV-C tunnel's shell: its roof over the lanes and its two side walls down to the chain.
+  const uv = new HeroParts();
+  const uvHalf = (L.uvM[1] - L.uvM[0]) / 2;
+  uv.box(m.paint, C.steel, span(-uvHalf, uvHalf), [-0.04, 0.04], span(-laneHalfM - 0.12, laneHalfM + 0.12));
+  for (const s of [-1, 1]) uv.box(m.paint, C.steel, span(-uvHalf, uvHalf), [-0.3, -0.04], side(s, laneHalfM + 0.1, laneHalfM + 0.12));
+
+  // The pistons: a crossbar and a nozzle over each lane, its tip 0.11 m under the node.
+  const pistons = new HeroParts();
+  pistons.box(m.paint, C.dark, span(-0.06, 0.06), [0.07, 0.11], span(-laneHalfM - 0.04, laneHalfM + 0.04));
+  for (let lane = 0; lane < L.lanes; lane++) pistons.cylinder(m.paint, C.steel, 'y', [0, -0.02, laneZ(lane)], 0.018, 0.18, 10);
+
+  // The foil pick: a beam with a suction cup over each lane.
+  const pick = new HeroParts();
+  pick.box(m.paint, C.dark, span(-0.06, 0.06), [0, 0.04], span(-laneHalfM - 0.04, laneHalfM + 0.04));
+  for (let lane = 0; lane < L.lanes; lane++) pick.cylinder(m.paint, C.black, 'y', [0, -0.015, laneZ(lane)], 0.03, 0.03, 10);
+
+  // The sealing heads: the heated platen and a head over each lane.
+  const heads = new HeroParts();
+  heads.box(m.paint, C.dark, span(-0.08, 0.08), [-0.04, 0.04], span(-laneHalfM - 0.04, laneHalfM + 0.04));
+  for (let lane = 0; lane < L.lanes; lane++) heads.cylinder(m.paint, C.steel, 'y', [0, -0.055, laneZ(lane)], 0.038, 0.03, 12);
+
+  // The HEPA hood's glass, from the cabinet's top to the filter housing.
+  const hood = new HeroParts();
+  // Glass takes no baked shade, so its faces are not cut.
+  hood.add(m.glass, C.glass, new THREE.BoxGeometry(10.2, 1.35, 1.6).translate(0, 0.675, 0));
+
+  // The chain and the tunnel stand still (the cups index over them), so they join the body: no draw call of their own.
+  p.merge(carrier, new THREE.Matrix4().makeTranslation(...P8_PARTS.carrierM));
+  p.merge(uv, new THREE.Matrix4().makeTranslation(...P8_PARTS.uvTunnelM));
+  const { nodes } = HERO_SPECS.p8Filler;
+  const at = (name) => nodes.find((each) => each.name === name).atM;
+  return group('p8_filler', [
+    ...p.meshes('body'),
+    node(pistons, 'pistons', at('pistons')),
+    node(pick, 'foil_pick', at('foil_pick')),
+    node(heads, 'seal_heads', at('seal_heads')),
+    node(hood, 'hood', at('hood')),
+  ]);
+}
+
+/** The fermentation tank's shell (src/scene/equipment/yogurt/layout.ts, FERMENT_TANK) and where its pipes meet it. */
+export const FERMENT_TANK = {
+  radiusM: 1.4,
+  legsM: 0.7,
+  coneM: 0.5,
+  bodyM: 2.6,
+  domeM: 0.4,
+  driveM: 0.44,
+  inletM: [0, 1.4, 1.4],
+  outletM: [0, 0.6, 0],
+  /** The pH probe's port, on the shell at 45° toward +x and +z; the scene hangs the tank's hold lamp over it. */
+  probeM: [0.99, 1.8, 0.99],
+  /** The scene's level gauge, down the +z face: keep that strip plain. */
+  gaugeM: { zM: 1.42, yM: [1.3, 3.7], halfWidthM: 0.09 },
+};
+
+/**
+ * A fermentation tank (phase 20): an insulated, cone-bottomed tank of 10,000 L on four legs, stainless cladding with
+ * its seams, a manway and a sight glass on the dome, the agitator's drive on top, the inlet on the +z face and the
+ * outlet under the cone. Moving node: `agitator`, the coupling and paddle over the drive, which the scene turns. The pH
+ * probe's port on the +z side is static body; the scene hangs the tank's hold lamp over it.
+ */
+export function buildFermentTank() {
+  const m = makeMaterials('ferment_tank');
+  const T = FERMENT_TANK;
+  const bottomM = T.legsM + T.coneM;
+  const topM = bottomM + T.bodyM;
+  const p = new HeroParts();
+  // Four legs with their pads, on a circle of 1.01 m, the first at 0.4 rad, and braces up to the cone's rim.
+  for (let i = 0; i < 4; i++) {
+    const a = 0.4 + (i * Math.PI) / 2;
+    const [x, z] = [1.01 * Math.cos(a), 1.01 * Math.sin(a)];
+    p.cylinder(m.matte, C.dark, 'y', [x, (bottomM + 0.05) / 2, z], 0.07, bottomM + 0.05, 12);
+    p.cylinder(m.matte, C.dark, 'y', [x, 0.015, z], 0.12, 0.03, 12);
+  }
+  // The cone, the body with its cladding seams and the stiffening bands at both ends, the dome.
+  frustum(p, m.paint, C.steel, [0, 0], [T.legsM, bottomM], 0.31, T.radiusM, 40);
+  p.cylinder(m.paint, C.steel, 'y', [0, bottomM + T.bodyM / 2, 0], T.radiusM, T.bodyM, 48);
+  for (const y of [bottomM + 0.03, topM - 0.03]) p.cylinder(m.matte, C.mid, 'y', [0, y, 0], T.radiusM + 0.005, 0.06, 48);
+  for (const y of [bottomM + T.bodyM / 3, bottomM + (2 * T.bodyM) / 3]) p.cylinder(m.matte, C.casing, 'y', [0, y, 0], T.radiusM + 0.002, 0.012, 48);
+  frustum(p, m.paint, C.steel, [0, 0], [topM, topM + T.domeM * 0.6], T.radiusM, T.radiusM * 0.72, 40);
+  frustum(p, m.paint, C.steel, [0, 0], [topM + T.domeM * 0.6, topM + T.domeM], T.radiusM * 0.72, 0.3, 40);
+  // A manway and a sight glass on the dome, at -x so the gauge strip and the camera's side stay plain.
+  p.cylinder(m.matte, C.dark, 'y', [-0.75, topM + 0.3, -0.2], 0.25, 0.12, 24);
+  p.cylinder(m.paint, C.mid, 'y', [-0.75, topM + 0.38, -0.2], 0.27, 0.04, 24);
+  p.cylinder(m.matte, C.black, 'y', [0.6, topM + 0.31, -0.45], 0.08, 0.1, 16);
+  // The agitator's drive: gearbox and motor on the dome's top.
+  p.box(m.matte, C.motor, span(-0.2, 0.2), [topM + T.domeM, topM + T.domeM + 0.3], span(-0.2, 0.2));
+  p.cylinder(m.matte, C.dark, 'y', [0, topM + T.domeM + 0.37, 0], 0.15, 0.14, 20);
+  // The inlet on the +z face, flanged; the outlet under the cone's tip, with its valve.
+  const [, inletY] = T.inletM;
+  p.cylinder(m.paint, C.steel, 'z', [0, inletY, T.radiusM - 0.05], 0.06, 0.1, 16);
+  p.cylinder(m.matte, C.dark, 'z', [0, inletY, T.radiusM], 0.09, 0.03, 16);
+  p.cylinder(m.paint, C.steel, 'y', [0, T.legsM - 0.04, 0], 0.07, 0.08, 16);
+  p.box(m.matte, C.dark, span(-0.09, 0.09), [T.outletM[1] - 0.04, T.legsM - 0.08], span(-0.09, 0.09));
+  // The gauge's frame strip: the scene draws its level inside it.
+  const g = T.gaugeM;
+  p.box(m.matte, C.dark, span(-g.halfWidthM, g.halfWidthM), g.yM, [T.radiusM, g.zM + 0.02]);
+
+  // The agitator: the shaft's coupling and the paddle across it, as the grey box's, over the drive.
+  const agitator = new HeroParts();
+  agitator.cylinder(m.paint, C.mid, 'y', [0, 0.03, 0], 0.09, 0.06, 16);
+  agitator.box(m.paint, C.dark, span(-0.55, 0.55), [0, 0.06], span(-0.06, 0.06));
+
+  // The pH probe's port and transmitter head, on the shell at 45° toward +x and +z.
+  const probe = new HeroParts();
+  probe.cylinder(m.paint, C.steel, 'y', [0, 0, 0], 0.05, 0.16, 12);
+  probe.box(m.paint, C.mid, span(-0.06, 0.06), [0.08, 0.2], span(-0.06, 0.06));
+
+  p.merge(probe, new THREE.Matrix4().makeTranslation(...FERMENT_TANK.probeM));
+  const { nodes } = HERO_SPECS.fermentTank;
+  const at = (name) => nodes.find((each) => each.name === name).atM;
+  return group('ferment_tank', [...p.meshes('body'), node(agitator, 'agitator', at('agitator'))]);
+}
+
 /** Each model's builder, by its key in HERO_SPECS. */
 export const HERO_BUILDERS = {
   separator: buildSeparator,
@@ -774,9 +999,11 @@ export const HERO_BUILDERS = {
   asepticFiller: buildAsepticFiller,
   palletizer: buildPalletizer,
   stretchWrapper: buildStretchWrapper,
+  p8Filler: buildP8Filler,
+  fermentTank: buildFermentTank,
 };
 
-/** All five as { 'separator.glb': bytes, ... }: built, AO baked, written and compressed. */
+/** All of them as { 'separator.glb': bytes, ... }: built, AO baked, written and compressed. */
 export async function heroGlbs() {
   const out = {};
   for (const [key, build] of Object.entries(HERO_BUILDERS)) out[HERO_SPECS[key].file] = await compress(await toGlb(bakeAo(build())));

@@ -23,6 +23,7 @@ import {
   sToH,
   yogurtProducts,
   type CleaningSnapshot,
+  type ColdRoomExcursion,
   type LogKind,
   type PlantConfig,
   type YogurtChangeoverKind,
@@ -33,10 +34,10 @@ import {
 import type { Setpoints } from '../core';
 import { lagToward, tubeVolumeL } from '../formulas';
 import { boilerGasKw, boilerGasKwh, steamLph } from '../liquid/stageModels';
-import type { LogWriter } from '../log';
+import { formatDayTime, type LogWriter } from '../log';
 import { createRng, type Rng } from '../rng';
-import { ferment, tankView, type TankState } from './ferment';
-import { betaLgDenaturedPct, p8DrawLph } from './formulas';
+import { curveRate, ferment, tankPh, tankView, type TankState } from './ferment';
+import { betaLgDenaturedPct, p8DrawLph, timeToPhS } from './formulas';
 import { createHoldingCell, createWingCip } from './heat';
 import { mixRecipe } from './mix';
 import { createColdChain, type ColdChain } from './coldChain';
@@ -77,6 +78,39 @@ export interface YogurtTotals {
   /** Changeovers between two products on P8, by kind (a CIP before set yogurt counts once, its SIP with it). */
   rinses: number;
   cips: number;
+  /** A tank a phage stalled, discarded (phase 20, D30). */
+  discardedL: number;
+}
+
+/** The yogurt line's five faults (phase 20, D30), as the scenarios start them. */
+export type YogurtFaultKind = 'phage' | 'heat' | 'seal' | 'hepa' | 'coldRoom';
+
+/** Where the faults stand, for the scenarios' summaries. */
+export interface YogurtFaultState {
+  /** The stalled tank (from 0), its pH, and when it is flagged and discarded (null before it ferments). */
+  phage: { tank: number; ph: number; held: boolean; flagS: number | null; discardS: number | null } | null;
+  /** The steam dip, until it ends; the heat treatment's mode and time left in it. */
+  heat: { untilS: number } | null;
+  heatMode: YogurtHeatMode;
+  heatModeLeftS: number;
+  /** The seal heads' temperature while they drift, and P8's next seal test. */
+  seal: { tempC: number; nextTestS: number | null } | null;
+  /** The HEPA cabin's repair, and whether P8 still waits for its SIP and swab. */
+  hepa: { untilS: number } | null;
+  sipWanted: boolean;
+  /** The cold room's cooling, until its repair, and its excursion. */
+  cooling: { untilS: number } | null;
+  excursion: ColdRoomExcursion | null;
+}
+
+export interface YogurtFaults {
+  /** Why the fault cannot start now, or null. */
+  unavailable(kind: YogurtFaultKind, timeS: number): string | null;
+  /** Starts it; for the phage, returns the tank it hits (from 0). */
+  start(kind: YogurtFaultKind, timeS: number): number | null;
+  /** Ends it now, as a repair would; what it caused runs its course. A phage cannot be ended. */
+  reset(kind: YogurtFaultKind, timeS: number, log: LogWriter): void;
+  state(timeS: number, setpoints: Readonly<Setpoints>): YogurtFaultState;
 }
 
 export interface YogurtLine {
@@ -92,6 +126,8 @@ export interface YogurtLine {
   readonly p8: P8;
   /** The cold chain (phase 19), likewise. */
   readonly coldChain: ColdChain;
+  /** The five fault scenarios' hooks (phase 20). */
+  readonly faults: YogurtFaults;
 }
 
 /** P8's seed: plant.json's seed, mixed so its stream never runs in step with the UHT line's or the packs model's. */
@@ -139,6 +175,7 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
     tanksFermented: 0,
     rinses: 0,
     cips: 0,
+    discardedL: 0,
   };
   let siloL = plant.silo.capacityL * plant.silo.startFrac;
   let tankerLeftL = 0;
@@ -187,6 +224,51 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
    * the first tank's yogurt, so the opening view shows it standing ready, not starved.
    */
   let readyToRun = true;
+  // The five faults (phase 20, D30): none at the opening.
+  const faultSpec = plant.faults;
+  /** The phage's stall on the curve's clock: where the curve at the optimum passes the stall pH. */
+  const stallCurveS = timeToPhS(plant.ferment, faultSpec.phage.stallPh, plant.ferment.optC);
+  let phageTank: number | null = null;
+  let heatFaultUntilS: number | null = null;
+  let sealFault: { startS: number; failedBefore: number } | null = null;
+  let hepaFaultUntilS: number | null = null;
+  let coolingUntilS: number | null = null;
+  /** A stalled tank's flag and discard, at the fermentation temperature now. */
+  function phageTimes(tank: TankState, tempC: number): { flagS: number; discardS: number } | null {
+    if (tank.startedS === null || tank.state !== 'fermenting') return null;
+    const rate = curveRate(plant.ferment, tempC);
+    const flagS = rate > 0 ? tank.startedS + plant.ferment.endAtOptS / rate + faultSpec.phage.flagAfterS : Infinity;
+    return { flagS, discardS: Math.max(tank.startedS + faultSpec.phage.discardAfterS, flagS) };
+  }
+  /** The tank a phage would hit now: the one filling, or the youngest fermenting still above the stall pH. */
+  function phageTarget(): number | null {
+    if (filling !== null) return filling;
+    let best: number | null = null;
+    for (const [i, tank] of tanks.entries()) {
+      if (tank.state !== 'fermenting' || tank.phage || tankPh(plant.ferment, tank) <= faultSpec.phage.stallPh) continue;
+      if (best === null || tank.curveS < tanks[best].curveS) best = i;
+    }
+    return best;
+  }
+  function endHeatFault(timeS: number, log: LogWriter): void {
+    heatFaultUntilS = null;
+    log(timeS, 'ok', `Steam to the yogurt heat treatment restored: the outlet heads back to its set point`, { ...tag, event: 'steamBack' });
+  }
+  function endSealFault(timeS: number, log: LogWriter): void {
+    sealFault = null;
+    p8.setFaultReading('seal', null);
+    log(timeS, 'ok', `Line P8's seal heads set back to ${plant.p8.seal.tempC} °C`, { ...tag, event: 'sealReset' });
+  }
+  function endHepaFault(timeS: number, log: LogWriter): void {
+    hepaFaultUntilS = null;
+    p8.setFaultReading('hepaPa', null);
+    p8.requireSip();
+    log(timeS, 'ok', `HEPA cabin's fan repaired: the cabin holds +${plant.p8.hepa.normalPa} Pa again; P8 needs a new SIP and ATP swab`, { ...tag, event: 'hepaRepaired' });
+  }
+  function endCoolingFault(timeS: number, log: LogWriter): void {
+    coolingUntilS = null;
+    coldChain.repairCooling(timeS, log);
+  }
 
   const routeOf = (id: YogurtProductId) => products[id].route;
   const tag = { topic: 'yogurt' as const, line: 'yogurt' as const };
@@ -209,6 +291,12 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
     step(dtS, timeS, setpoints, bayBusy, log) {
       const shift = plan.at(timeS);
 
+      // 0. The faults' ends (phase 20): the timed repairs, and the seal heads set back once a seal test has failed.
+      if (heatFaultUntilS !== null && timeS >= heatFaultUntilS) endHeatFault(timeS, log);
+      if (sealFault && p8.totals().sealTestsFailed > sealFault.failedBefore) endSealFault(timeS, log);
+      if (hepaFaultUntilS !== null && timeS >= hepaFaultUntilS) endHepaFault(timeS, log);
+      if (coolingUntilS !== null && timeS >= coolingUntilS) endCoolingFault(timeS, log);
+
       // 1. The changeover between two products on P8. P8 and the buffer's feed start again from the step after it ends.
       let changedOver = false;
       if (changeover) {
@@ -229,6 +317,12 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
             changedOver = true;
           }
         }
+      }
+      // After the HEPA cabin's repair, P8's SIP and swab before it runs again (D30); the buffer keeps its product.
+      if (!changeover && !changedOver && p8.sipWanted && bufferProduct !== null) {
+        changeover = { kind: 'sip', leftS: plant.p8.sip.holdS, to: bufferProduct };
+        bufferProduct = null;
+        log(timeS, 'info', `Line P8: SIP and ATP swab after the HEPA cabin was open to the hall`, { ...tag, event: 'sipStart' });
       }
       if (!changeover && !changedOver && bufferProduct !== shift.id && buffer.levelL < p8.cycleNeedL) startChangeover(shift.id, timeS, log);
       const feeding = !changeover && !changedOver && bufferProduct === shift.id;
@@ -276,10 +370,12 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
           // it reaches the outlet. A set point still under the limit diverts again at once.
           outletC = setpoints.yogurtHeatC;
           cell.refill(outletC, timeS, plant.heat.holdS);
-          log(timeS, 'ok', 'Yogurt heat treatment clean, ready to run again', tag);
+          log(timeS, 'ok', 'Yogurt heat treatment clean, ready to run again', { ...tag, event: 'heatReady' });
         }
       } else {
-        outletC = lagToward(outletC, setpoints.yogurtHeatC, dtS, plant.heat.lagS);
+        // A steam dip (D30) takes the outlet toward the fault's temperature.
+        const targetC = heatFaultUntilS !== null ? Math.min(setpoints.yogurtHeatC, faultSpec.heat.outletC) : setpoints.yogurtHeatC;
+        outletC = lagToward(outletC, targetC, dtS, plant.heat.lagS);
       }
       let heatL = 0;
       let setL = 0;
@@ -325,7 +421,7 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
           modeLeftS = plant.heat.divertS;
           divertCount += 1;
           const why = out.tempC < plant.heat.divertBelowC ? `${out.tempC.toFixed(1)} °C at the holding cell's outlet, below ${plant.heat.divertBelowC} °C` : `held ${heldS.toFixed(0)} s, under ${plant.heat.minHoldS} s`;
-          log(timeS, 'bad', `Yogurt mix diverted to the reprocess tank: ${why}`, tag);
+          log(timeS, 'bad', `Yogurt mix diverted to the reprocess tank: ${why}`, { ...tag, event: 'heatDivert' });
           // This step's litres go to the reprocess tank too.
           setL = 0;
           tankL = 0;
@@ -343,7 +439,7 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
           mode = 'cleaning';
           modeLeftS = wingCip.totalS;
           cleaningIntoS = 0;
-          log(timeS, 'warn', 'Yogurt heat treatment cleaning after the divert (the wing\'s CIP)', tag);
+          log(timeS, 'warn', 'Yogurt heat treatment cleaning after the divert (the wing\'s CIP)', { ...tag, event: 'heatCleaning' });
         }
       }
       // The steam heats the mix from the homogenizer's temperature to the outlet's (the regeneration does the rest).
@@ -371,9 +467,29 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
 
       // 5. The tanks ferment; a ready one empties through the cooler into the buffer.
       for (const [i, tank] of tanks.entries()) {
-        if (ferment(plant.ferment, tank, dtS, setpoints.fermentTempC, timeS)) {
+        if (ferment(plant.ferment, tank, dtS, setpoints.fermentTempC, timeS, stallCurveS)) {
           totals.tanksFermented += 1;
           log(timeS, 'ok', `Fermentation tank ${i + 1} at pH ${plant.ferment.endPh}: cooled, ready for P8`, tag);
+        }
+        // A stalled tank (D30): flagged and held past its expected end, then discarded; the next tank feeds P8.
+        const stall = tank.phage ? phageTimes(tank, setpoints.fermentTempC) : null;
+        if (stall && !tank.held && timeS >= stall.flagS) {
+          tank.held = true;
+          const ph = tankPh(plant.ferment, tank);
+          log(timeS, 'bad', `Fermentation tank ${i + 1} flagged: pH ${ph.toFixed(2)} ${(sToH(timeS - (tank.startedS ?? timeS))).toFixed(1)} h after it started, on hold`, { ...tag, event: 'tankFlagged', tank: i });
+          const ready = tanks.map((other, j) => ({ other, j })).filter(({ other, j }) => j !== i && !other.phage && (other.state === 'ready' || other.state === 'fermenting' || other.state === 'filling'));
+          const next = ready.find(({ other }) => other.state === 'ready') ?? ready.find(({ other }) => other.state === 'fermenting') ?? ready[0];
+          if (next) {
+            const when = next.other.state === 'ready' ? 'ready now' : next.other.state === 'filling' ? 'filling' : `fermenting, ready ${formatDayTime(tankView(plant.ferment, next.other, setpoints.fermentTempC, timeS).readyAtS ?? timeS)}`;
+            log(timeS, 'info', `Fermentation tank ${next.j + 1} brought forward to feed Line P8: ${when}`, { ...tag, event: 'tankForward', tank: next.j });
+          }
+        }
+        if (stall && timeS >= stall.discardS) {
+          if (!tank.held) tank.held = true;
+          totals.discardedL += tank.levelL;
+          log(timeS, 'bad', `Fermentation tank ${i + 1} discarded: ${Math.round(tank.levelL).toLocaleString('en-US')} L of stalled yogurt to the drain, then cleaned`, { ...tag, event: 'tankDiscarded', tank: i });
+          Object.assign(tank, { levelL: 0, state: 'cleaning', cleanLeftS: plant.ferment.tankCleanS, product: null, startedS: null, readyS: null, curveS: 0, phage: false, held: false });
+          if (phageTank === i) phageTank = null;
         }
         if (tank.state === 'cleaning') {
           tank.cleanLeftS -= dtS;
@@ -533,6 +649,76 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
     totals: () => ({ ...totals }),
     p8,
     coldChain,
+    faults: {
+      unavailable(kind, timeS) {
+        switch (kind) {
+          case 'phage':
+            if (phageTank !== null) return 'A tank\'s culture is stalled already';
+            return phageTarget() === null ? `No tank is filling, or fermenting above pH ${faultSpec.phage.stallPh}` : null;
+          case 'heat':
+            if (heatFaultUntilS !== null) return 'The steam to the heat treatment is dipping already';
+            return mode === 'production' ? null : `The yogurt heat treatment is ${mode === 'idle' ? 'idle' : mode === 'divert' ? 'diverting' : 'cleaning'}; the dip needs it in production`;
+          case 'seal':
+            return sealFault ? 'The seal heads are drifting already' : null;
+          case 'hepa':
+            return hepaFaultUntilS !== null || p8.sipWanted ? 'The HEPA cabin is down already' : null;
+          case 'coldRoom':
+            if (coolingUntilS !== null || coldChain.excursion(timeS)) return 'The cold room is out of its range already';
+            return coldChain.coldRoomPallets === 0 ? 'The cold room holds no pallets' : null;
+        }
+      },
+      start(kind, timeS) {
+        switch (kind) {
+          case 'phage': {
+            const target = phageTarget();
+            if (target === null) return null;
+            phageTank = target;
+            tanks[target].phage = true;
+            return target;
+          }
+          case 'heat':
+            heatFaultUntilS = timeS + faultSpec.heat.durationS;
+            return null;
+          case 'seal': {
+            const startS = timeS;
+            const { driftToC, driftS } = faultSpec.seal;
+            sealFault = { startS, failedBefore: p8.totals().sealTestsFailed };
+            p8.setFaultReading('seal', (atS, usual) => ({ ...usual, tempC: usual.tempC - (usual.tempC - driftToC) * Math.min(1, Math.max(0, atS - startS) / driftS) }));
+            return null;
+          }
+          case 'hepa':
+            hepaFaultUntilS = timeS + faultSpec.hepa.repairS;
+            p8.setFaultReading('hepaPa', () => faultSpec.hepa.cabinPa);
+            return null;
+          case 'coldRoom':
+            coolingUntilS = timeS + faultSpec.coldRoom.repairS;
+            coldChain.failCooling(timeS);
+            return null;
+        }
+      },
+      reset(kind, timeS, log) {
+        if (kind === 'heat' && heatFaultUntilS !== null) endHeatFault(timeS, log);
+        if (kind === 'seal' && sealFault) endSealFault(timeS, log);
+        if (kind === 'hepa' && hepaFaultUntilS !== null) endHepaFault(timeS, log);
+        if (kind === 'coldRoom' && coolingUntilS !== null) endCoolingFault(timeS, log);
+      },
+      state(timeS, setpoints) {
+        const stalled = phageTank === null ? null : tanks[phageTank];
+        const times = stalled ? phageTimes(stalled, setpoints.fermentTempC) : null;
+        const own = p8.view(timeS, setpoints.p8RateCupsPerH);
+        return {
+          phage: stalled && phageTank !== null ? { tank: phageTank, ph: tankPh(plant.ferment, stalled), held: stalled.held === true, flagS: times?.flagS ?? null, discardS: times?.discardS ?? null } : null,
+          heat: heatFaultUntilS === null ? null : { untilS: heatFaultUntilS },
+          heatMode: mode,
+          heatModeLeftS: mode === 'divert' || mode === 'cleaning' ? Math.max(0, modeLeftS) : 0,
+          seal: sealFault ? { tempC: own.seal.tempC, nextTestS: own.nextSealTestS } : null,
+          hepa: hepaFaultUntilS === null ? null : { untilS: hepaFaultUntilS },
+          sipWanted: p8.sipWanted,
+          cooling: coolingUntilS === null ? null : { untilS: coolingUntilS },
+          excursion: coldChain.excursion(timeS),
+        };
+      },
+    },
     inventory: () => ({
       siloL,
       tankerLeftL,

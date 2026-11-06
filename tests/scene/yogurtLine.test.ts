@@ -401,6 +401,33 @@ describe('the cold chain in the 3D view (phase 19)', () => {
     item.dispose();
   });
 
+  it('lights the cold room\'s alarm in an excursion: amber over the limit, red with pallets on hold, which show red (phase 20)', () => {
+    const item = tokens();
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    const base = sim.snapshot();
+    item.update(base, 1 / 60);
+    expect(item.debugState?.()).toMatchObject({ alarm: 'off', held: 0 });
+    const over = structuredClone(base);
+    over.yogurt.coldChain.coldRoom.excursion = { coolingDown: true, overSinceS: base.timeS, limitC: 6, holdS: null, palletsHeld: 0, peakCoreC: 5, decisionS: null, verdict: null };
+    item.update(over, 1 / 60);
+    expect(item.debugState?.()).toMatchObject({ alarm: 'over', held: 0, warmGlow: true, frostGlow: true });
+    const held = structuredClone(over);
+    let marked = 0;
+    for (const pallet of held.yogurt.coldChain.pallets ?? []) {
+      if (pallet.place !== 'coldRoom') continue;
+      pallet.qaHold = true;
+      marked += 1;
+    }
+    held.yogurt.coldChain.coldRoom.excursion = { ...(over.yogurt.coldChain.coldRoom.excursion as object), holdS: base.timeS, palletsHeld: marked } as never;
+    item.update(held, 1 / 60);
+    // Every pallet in the room is held: all 36 places show red.
+    expect(item.debugState?.()).toMatchObject({ alarm: 'held', held: 36, cold: 36 });
+    item.update(base, 1 / 60);
+    expect(item.debugState?.()).toMatchObject({ alarm: 'off', held: 0 });
+    item.dispose();
+  });
+
   it('backs a reefer in over its last 10 minutes of arriving, and stands it at its door while it loads', () => {
     expect(reeferOffsetM('arriving', 1_200, 0)).toBe(REEFER_M.backInM);
     expect(reeferOffsetM('arriving', 300, 0)).toBeCloseTo(REEFER_M.backInM / 2, 9);

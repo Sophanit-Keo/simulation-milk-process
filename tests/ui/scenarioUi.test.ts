@@ -7,7 +7,7 @@ import { investigationText } from '../../src/ui/batchList';
 import { sterileAirText } from '../../src/ui/panelRows';
 import { BANNER_AFTER_S, bannerRun, runTimes } from '../../src/ui/scenarioLog';
 import { parseScenarioMenu, SCENARIO_MENU, scenarioName } from '../../src/ui/scenarioMenu';
-import { TOUR_STOP_S, tourStop } from '../../src/ui/tour';
+import { TOUR_STOP_S, tourStop, YOGURT_TOUR_STOP_S } from '../../src/ui/tour';
 
 const run = (n: number, following: boolean, endedS: number | null = null): ScenarioRunSnapshot => ({
   run: n,
@@ -21,7 +21,7 @@ const run = (n: number, following: boolean, endedS: number | null = null): Scena
 });
 
 describe('the scenario menu (src/data/scenarios.json)', () => {
-  it('lists the six scenarios in the fault table’s order, the spike and late trucks apart, each with a stage', () => {
+  it('lists the UHT line’s six in the fault table’s order, the spike and late trucks apart, then the yogurt line’s five, each with a stage', () => {
     expect(SCENARIO_MENU.map((item) => item.variant ?? item.id)).toEqual([
       'uhtTempDrop',
       'fillerBreakdown',
@@ -30,9 +30,14 @@ describe('the scenario menu (src/data/scenarios.json)', () => {
       'homogenizerPressureLoss',
       'demandSpike',
       'lateTrucks',
+      'yogurtSlowFermentation',
+      'yogurtHeatUnderTemp',
+      'yogurtSealDrift',
+      'yogurtHepaLoss',
+      'yogurtColdRoomExcursion',
     ]);
     expect(new Set(SCENARIO_MENU.map((item) => item.id))).toEqual(new Set(SCENARIO_IDS));
-    expect(SCENARIO_MENU.map((item) => item.stage)).toEqual([4, 7, 6, 9, 3, 10, 10]);
+    expect(SCENARIO_MENU.map((item) => item.stage)).toEqual([4, 7, 6, 9, 3, 10, 10, 13, 12, 15, 15, 16]);
   });
 
   it('refuses a file that misses a scenario, repeats one, or gives a variant to the wrong one', () => {
@@ -81,6 +86,14 @@ describe('the guided tour', () => {
     expect(tourStop(18, 10)).toEqual({ index: 1, done: false });
     expect(tourStop(179.9, 10)).toEqual({ index: 9, done: false });
     expect(tourStop(180, 10)).toEqual({ index: 9, done: true });
+  });
+
+  it('the yogurt tour spends 20 s at each of the 6 yogurt stages, 2 minutes in all (phase 20)', () => {
+    expect(YOGURT_TOUR_STOP_S * 6).toBe(120);
+    expect(tourStop(19.9, 6, YOGURT_TOUR_STOP_S)).toEqual({ index: 0, done: false });
+    expect(tourStop(20, 6, YOGURT_TOUR_STOP_S)).toEqual({ index: 1, done: false });
+    expect(tourStop(119.9, 6, YOGURT_TOUR_STOP_S)).toEqual({ index: 5, done: false });
+    expect(tourStop(120, 6, YOGURT_TOUR_STOP_S)).toEqual({ index: 5, done: true });
   });
 });
 

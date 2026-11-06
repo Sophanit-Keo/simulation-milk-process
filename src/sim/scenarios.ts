@@ -8,7 +8,9 @@
 // triggers give the same log.
 import {
   fracToPct,
+  isYogurtScenario,
   sToMin,
+  SCENARIO_IDS,
   SCENARIO_RUNS_KEPT,
   type LogEntry,
   type LogKind,
@@ -20,6 +22,7 @@ import {
   type Status,
   type UhtMode,
   type UhtStageId,
+  type YogurtScenarioId,
 } from '../contracts';
 import type { Setpoints } from './core';
 import type { QueuedEvent } from './eventQueue';
@@ -28,6 +31,16 @@ import { creamingRiskPct, globuleUm } from './liquid/stageModels';
 import type { LiquidLine } from './liquidLine';
 import { formatDayTime, type LogTag, type LogWriter } from './log';
 import type { PacksLine } from './packsLine';
+import type { YogurtFaultKind, YogurtLine } from './yogurt/yogurtLine';
+
+/** Which of the yogurt line's faults each yogurt scenario starts (phase 20, D30). */
+export const YOGURT_FAULT_OF: Readonly<Record<YogurtScenarioId, YogurtFaultKind>> = {
+  yogurtSlowFermentation: 'phage',
+  yogurtHeatUnderTemp: 'heat',
+  yogurtSealDrift: 'seal',
+  yogurtHepaLoss: 'hepa',
+  yogurtColdRoomExcursion: 'coldRoom',
+};
 
 /** The queued event that ends a timed fault (the filter replaced, the homogenizer repaired). */
 export const SCENARIO_EVENTS = { faultEnds: 'scenarioFaultEnds' } as const;
@@ -44,6 +57,8 @@ export interface ScenarioDeps {
   schedule<P>(timeS: number, type: string, payload: P): QueuedEvent<P>;
   cancel(seq: number): boolean;
   log: LogWriter;
+  /** The yogurt line, for its five faults (phase 20); built after the scenarios, so reached through a getter. */
+  yogurt?: () => YogurtLine | undefined;
 }
 
 export interface Scenarios {
@@ -108,7 +123,8 @@ const listIds = (ids: Iterable<number>): string => {
 const batchWord = (ids: Iterable<number>): string => ([...ids].length === 1 ? 'batch' : 'batches');
 
 export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenarios {
-  const { scenarios: spec, uht, fillers: fillerSpec, warehouse: wh, homogenizer } = config;
+  const { scenarios: spec, uht, fillers: fillerSpec, warehouse: wh, homogenizer, yogurt: wing } = config;
+  const faultSpec = wing.faults;
   const { liquid, packs } = deps;
   const { fillers, quality, warehouse } = packs.parts;
   const tubeL = tubeVolumeL(uht.holdAtCapacityS, uht.capacityLph);
@@ -116,7 +132,7 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
   let nextRun = 1;
 
   const note = (run: Run, timeS: number, kind: LogKind, message: string, why: string): void =>
-    deps.log(timeS, kind, message, { topic: 'scenario', scenario: run.id, run: run.run, why });
+    deps.log(timeS, kind, message, { topic: 'scenario', scenario: run.id, run: run.run, why, ...(isYogurtScenario(run.id) ? { line: 'yogurt' as const } : {}) });
   const fillerName = (index: number): string => fillers.units[index]?.name ?? String(index + 1);
   const acting = (id: ScenarioId): Run | undefined => runs.find((run) => run.id === id && run.endedS === null);
   const stop = (run: Run, nowS: number): void => {
@@ -131,7 +147,11 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
   const trucksDisrupted = (): boolean =>
     warehouse.extraTrucksToCome() > 0 || warehouse.trucksHeld() || warehouse.trucksPresent('extra') > 0 || warehouse.trucksPresent('late') > 0;
 
-  function unavailable(id: ScenarioId): string | null {
+  function unavailable(id: ScenarioId, nowS: number): string | null {
+    if (isYogurtScenario(id)) {
+      const yogurt = deps.yogurt?.();
+      return yogurt ? yogurt.faults.unavailable(YOGURT_FAULT_OF[id], nowS) : 'This sim has no yogurt line';
+    }
     switch (id) {
       case 'uhtTempDrop':
         if (liquid.state.steamFaultSinceS !== null) return 'The steam supply is down already';
@@ -182,6 +202,10 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
   }
 
   function start(run: Run, nowS: number): void {
+    if (isYogurtScenario(run.id)) {
+      startYogurt(run, run.id, nowS);
+      return;
+    }
     switch (run.id) {
       case 'uhtTempDrop': {
         liquid.startSteamFault(nowS);
@@ -282,6 +306,73 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
     }
   }
 
+
+  /** The yogurt line's five (phase 20, D30): the fault starts in the yogurt line, and the run says what and why. */
+  function startYogurt(run: Run, id: YogurtScenarioId, nowS: number): void {
+    const yogurt = deps.yogurt?.() as YogurtLine;
+    const tank = yogurt.faults.start(YOGURT_FAULT_OF[id], nowS);
+    switch (id) {
+      case 'yogurtSlowFermentation': {
+        run.filler = tank ?? -1;
+        run.phase = 'stalled';
+        // A phage cannot be put right: the run stops acting at once and follows the tank to its end.
+        stop(run, nowS);
+        note(
+          run,
+          nowS,
+          'bad',
+          `Bacteriophage in fermentation tank ${run.filler + 1}'s culture: its pH will stall near ${faultSpec.phage.stallPh}`,
+          `A phage is a virus that kills the culture's bacteria, so they stop turning lactose into lactic acid: the pH stops near ${faultSpec.phage.stallPh} instead of falling to ${wing.ferment.endPh}. The tank is flagged ${formatHours(faultSpec.phage.flagAfterS)} after it was due, held, and discarded ${formatHours(faultSpec.phage.discardAfterS)} after it started.`,
+        );
+        return;
+      }
+      case 'yogurtHeatUnderTemp':
+        run.phase = 'falling';
+        note(
+          run,
+          nowS,
+          'warn',
+          `Steam to the yogurt heat treatment dips for ${formatMin(faultSpec.heat.durationS)}: the outlet falls toward ${faultSpec.heat.outletC} °C`,
+          `The mix must hold ${wing.heat.setpointC} °C for ${formatMin(wing.heat.holdS)}, and at least ${wing.heat.divertBelowC} °C, so the whey proteins set and no germ survives. Under ${wing.heat.divertBelowC} °C at the holding cell's outlet, the CCP sends the mix to the reprocess tank, as the UHT divert does.`,
+        );
+        return;
+      case 'yogurtSealDrift': {
+        const { seal } = wing.p8;
+        run.phase = 'drifting';
+        note(
+          run,
+          nowS,
+          'warn',
+          `Line P8's seal heads drift from ${seal.tempC} °C toward ${faultSpec.seal.driftToC} °C over ${formatMin(faultSpec.seal.driftS)}`,
+          `A foil lid bonds to its cup inside ${seal.minTempC}–${seal.maxTempC} °C. Cooler, more seals leak, and at ${faultSpec.seal.driftToC} °C every one does. The next seal test will find it: every cup made since the last test that passed is then held.`,
+        );
+        return;
+      }
+      case 'yogurtHepaLoss':
+        run.phase = 'down';
+        note(
+          run,
+          nowS,
+          'bad',
+          `HEPA cabin's fan fails: the cabin falls to +${faultSpec.hepa.cabinPa} Pa`,
+          `The fan keeps filtered air flowing out of the cabin, so the hall's air never reaches the open cups. Under +${wing.p8.hepa.minPa} Pa the interlock stops P8. The repair takes ${formatMin(faultSpec.hepa.repairS)}, with the cabin open to the hall: P8 is then sterilized (SIP) and swabbed before it fills again.`,
+        );
+        return;
+      case 'yogurtColdRoomExcursion': {
+        const room = faultSpec.coldRoom;
+        run.phase = 'warming';
+        note(
+          run,
+          nowS,
+          'warn',
+          `Cold room's cooling fails: its air warms toward ${room.airC} °C`,
+          `The repair takes ${formatHours(room.repairS)}. Yogurt keeps at ${wing.coldChain.roomMinC}–${wing.coldChain.roomMaxC} °C; if the air stays over ${room.limitC} °C for ${formatHours(room.overS)}, the pallets in the room go on QA hold, and QA judges them by how warm their cores got: within ${room.maxCoreC} °C they are released, over it destroyed.`,
+        );
+        return;
+      }
+    }
+  }
+
   /** The why for a model entry a following run claims, or null if it doesn't claim it. May move the run on. */
   /**
    * A batch's verdict settles it for every run waiting on it, though only one run's log tells it: a batch
@@ -299,6 +390,7 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
   }
 
   function claim(run: Run, tag: LogTag, timeS: number): string | null {
+    if (isYogurtScenario(run.id)) return tag.topic === 'yogurt' && tag.event ? claimYogurt(run, run.id, tag, timeS) : null;
     switch (run.id) {
       case 'uhtTempDrop':
         switch (tag.topic) {
@@ -418,9 +510,128 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
     }
   }
 
+
+  /** A yogurt line entry a yogurt run claims (phase 20). */
+  function claimYogurt(run: Run, id: YogurtScenarioId, tag: LogTag, timeS: number): string | null {
+    const done = (): void => {
+      run.phase = 'done';
+      finish(run, timeS);
+    };
+    switch (id) {
+      case 'yogurtSlowFermentation':
+        if (tag.event === 'tankFlagged' && tag.tank === run.filler && run.phase === 'stalled') {
+          run.phase = 'held';
+          return `It should have reached pH ${wing.ferment.endPh} ${formatHours(faultSpec.phage.flagAfterS)} ago, but its acid stopped forming. It is held: never fed to Line P8, until it is discarded.`;
+        }
+        if (tag.event === 'tankForward' && run.phase === 'held') return 'Line P8\'s stirred yogurt comes from the next tank instead; the mix line refills the tanks as they empty.';
+        if (tag.event === 'tankDiscarded' && tag.tank === run.filler) {
+          done();
+          return 'Yogurt that never set cannot be sold or reworked: the tank goes to the drain and is cleaned before it takes mix again.';
+        }
+        return null;
+      case 'yogurtHeatUnderTemp':
+        switch (tag.event) {
+          case 'heatDivert':
+            if (run.phase !== 'falling') return null;
+            run.phase = 'divert';
+            return `Mix under ${wing.heat.divertBelowC} °C must not reach the tanks or the buffer: the valve sends it to the reprocess tank for ${formatMin(wing.heat.divertS)}.`;
+          case 'heatCleaning':
+            if (run.phase !== 'divert') return null;
+            run.phase = 'cip';
+            return 'The line carried mix that was not heat-treated: the wing cleans it in place before mix may flow again, and the reprocess tank is pumped out to rework.';
+          case 'steamBack':
+            stop(run, timeS);
+            return run.phase === 'falling' ? 'The steam is back, but the cooler mix is already in the holding cell: it still diverts as it reaches the outlet.' : 'The steam is back; the divert and the clean after it run their course.';
+          case 'heatReady':
+            if (run.phase !== 'cip') return null;
+            if (run.endedS === null) {
+              run.phase = 'falling';
+              return 'Clean, but the steam is still short: the mix diverts again.';
+            }
+            done();
+            return `Clean and at its set point, the heat treatment runs again, ${formatHours(timeS - run.startedS)} after the dip.`;
+          default:
+            return null;
+        }
+      case 'yogurtSealDrift':
+        switch (tag.event) {
+          case 'sealTestFailed':
+            if (run.phase !== 'drifting') return null;
+            run.phase = 'held';
+            return 'Too cool, the foils no longer bond: the test cups leak. Every cup made since the last test that passed is held, and its batch goes to QA.';
+          case 'cupsPulled':
+            if (run.phase !== 'held') return null;
+            return 'The held cups are pulled from the trays and pallets, wherever they have got to.';
+          case 'sealReset':
+            if (run.phase === 'held') {
+              done();
+              return `The operator sets the heads back to ${wing.p8.seal.tempC} °C: cups from now on are sealed inside the window.`;
+            }
+            if (run.phase === 'drifting') {
+              done();
+              return 'Put right before a seal test failed: the next test judges the cups made meanwhile.';
+            }
+            return null;
+          default:
+            return null;
+        }
+      case 'yogurtHepaLoss':
+        switch (tag.event) {
+          case 'p8Stopped':
+            if (run.phase !== 'down') return null;
+            return `Under +${wing.p8.hepa.minPa} Pa the cabin no longer keeps the hall's air out: the interlock stops P8.`;
+          case 'hepaRepaired':
+            if (run.phase !== 'down') return null;
+            run.phase = 'sip';
+            stop(run, timeS);
+            return `The cabin was open to the hall's air: before P8 fills again, it is sterilized (SIP, ${wing.p8.sip.tempC} °C for ${formatMin(wing.p8.sip.holdS)}) and an ATP swab must read under ${wing.p8.atpMaxRlu} RLU.`;
+          case 'sipStart':
+            if (run.phase !== 'sip') return null;
+            return 'The buffer keeps its yogurt meanwhile; set mix that waits too long goes to rework.';
+          case 'p8Cleared':
+            if (run.phase !== 'sip') return null;
+            done();
+            return `The SIP held its temperature and the swab passed: P8 fills again, ${formatHours(timeS - run.startedS)} after the fan failed.`;
+          default:
+            return null;
+        }
+      case 'yogurtColdRoomExcursion': {
+        const room = faultSpec.coldRoom;
+        switch (tag.event) {
+          case 'coldRoomOver':
+            return `Over ${room.limitC} °C the yogurt warms toward where it spoils faster; after ${formatHours(room.overS)} over it, the pallets are held.`;
+          case 'coldRoomHold':
+            run.phase = 'held';
+            return 'The yogurt may have warmed too far: the pallets in the room, and any that come in while the air is over the limit, may not ship until QA decides.';
+          case 'coolingRepaired':
+            stop(run, timeS);
+            if (run.phase === 'warming') run.phase = 'cooling';
+            return `The air cools back toward ${wing.coldChain.roomC} °C; the pallets' cores follow more slowly.`;
+          case 'coldRoomBack':
+            if (run.phase !== 'held') {
+              done();
+              return `The air was over ${room.limitC} °C for less than ${formatHours(room.overS)}: no pallet is held.`;
+            }
+            return `QA waits ${formatHours(room.qaDecisionS)}, then judges the held pallets by the warmest their cores got.`;
+          case 'qaReleased':
+            done();
+            run.phase = 'released';
+            return `No core passed ${room.maxCoreC} °C: the yogurt is safe, and the pallets go on to the reefers.`;
+          case 'qaDestroyed':
+            done();
+            run.phase = 'destroyed';
+            return `Yogurt whose core passed ${room.maxCoreC} °C may not be sold: the pallets are destroyed.`;
+          default:
+            return null;
+        }
+      }
+    }
+  }
+
   /** What a run is doing now, in a few words. */
   function summary(run: Run, nowS: number): string {
     const left = (untilS: number) => formatMin(Math.max(0, untilS - nowS));
+    if (isYogurtScenario(run.id)) return yogurtSummary(run, run.id, nowS);
     switch (run.id) {
       case 'uhtTempDrop': {
         const modeLeft = formatMin(liquid.state.modeRemainingS);
@@ -474,6 +685,51 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
     }
   }
 
+
+  function yogurtSummary(run: Run, id: YogurtScenarioId, nowS: number): string {
+    const yogurt = deps.yogurt?.();
+    if (!yogurt) return 'Over';
+    const state = yogurt.faults.state(nowS, deps.setpoints);
+    const left = (untilS: number) => formatHours(Math.max(60, untilS - nowS));
+    switch (id) {
+      case 'yogurtSlowFermentation': {
+        const stalled = state.phage;
+        if (!stalled || run.phase === 'done') return 'Over: the tank discarded and cleaned';
+        const tank = `Tank ${stalled.tank + 1}`;
+        if (stalled.flagS === null) return `${tank} filling with the hit culture`;
+        if (stalled.held && stalled.discardS !== null) return `${tank} held at pH ${stalled.ph.toFixed(2)} · discarded in ${left(stalled.discardS)}`;
+        return `${tank} stalling at pH ${stalled.ph.toFixed(2)} · flagged in ${left(stalled.flagS)}`;
+      }
+      case 'yogurtHeatUnderTemp':
+        if (run.phase === 'falling') return `Outlet falling toward ${faultSpec.heat.outletC} °C`;
+        if (run.phase === 'divert') return `Diverting to the reprocess tank · ${formatMin(state.heatModeLeftS)} left`;
+        if (run.phase === 'cip') return `Cleaning in place · ${formatMin(state.heatModeLeftS)} left`;
+        return 'Over: the heat treatment runs again';
+      case 'yogurtSealDrift':
+        if (run.phase === 'drifting' && state.seal) {
+          return `Seal heads at ${state.seal.tempC.toFixed(0)} °C${state.seal.nextTestS !== null ? ` · next seal test ${formatDayTime(state.seal.nextTestS)}` : ' · P8 not filling'}`;
+        }
+        if (run.phase === 'held') return 'Cups held · the seal heads are being reset';
+        return `Over: seal heads back at ${wing.p8.seal.tempC} °C`;
+      case 'yogurtHepaLoss':
+        if (run.phase === 'down' && state.hepa) return `P8 stopped: cabin at +${faultSpec.hepa.cabinPa} Pa · repaired in ${left(state.hepa.untilS)}`;
+        if (run.phase === 'sip') return 'SIP and ATP swab before P8 fills again';
+        return 'Over: P8 fills again';
+      case 'yogurtColdRoomExcursion': {
+        const excursion = state.excursion;
+        const airC = yogurt.coldChain.view(nowS).coldRoom.tempC;
+        // QA's verdict is the run's, kept after the excursion itself is over.
+        if (run.phase === 'released' || run.phase === 'destroyed') return `Over: QA ${run.phase} the held pallets`;
+        if (run.phase === 'done' || !excursion) return 'Over: the cold room back in its range';
+        if (excursion.palletsHeld > 0) {
+          return `${excursion.palletsHeld} pallets on QA hold · air ${airC.toFixed(1)} °C${excursion.decisionS !== null ? ` · verdict ${formatDayTime(excursion.decisionS)}` : ''}`;
+        }
+        if (state.cooling) return `Cold room air ${airC.toFixed(1)} °C · cooling repaired in ${left(state.cooling.untilS)}`;
+        return `Cold room air ${airC.toFixed(1)} °C, cooling back`;
+      }
+    }
+  }
+
   function newRun(id: ScenarioId, variant: ScenarioVariant | null, nowS: number): Run {
     const run: Run = {
       run: nextRun++,
@@ -505,7 +761,7 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
 
   return {
     trigger(id, variant, nowS) {
-      const why = unavailable(id);
+      const why = unavailable(id, nowS);
       if (why) {
         deps.log(nowS, 'warn', `Scenario not started: ${why}`);
         return;
@@ -555,6 +811,7 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
             }
             break;
           default:
+            if (isYogurtScenario(run.id)) deps.yogurt?.()?.faults.reset(YOGURT_FAULT_OF[run.id], nowS, deps.log);
             stop(run, nowS);
         }
       }
@@ -604,15 +861,8 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
     },
     snapshot(nowS): ScenariosSnapshot {
       const unavailableNow: ScenariosSnapshot['unavailable'] = {};
-      for (const id of [
-        'uhtTempDrop',
-        'fillerBreakdown',
-        'sterileAirFilterFailure',
-        'failedIncubation',
-        'homogenizerPressureLoss',
-        'demandSpikeOrLateTruck',
-      ] as const) {
-        const why = unavailable(id);
+      for (const id of SCENARIO_IDS) {
+        const why = unavailable(id, nowS);
         if (why) unavailableNow[id] = why;
       }
       const runSnapshots: ScenarioRunSnapshot[] = runs.map((run) => ({

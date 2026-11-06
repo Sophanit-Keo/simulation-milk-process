@@ -17,6 +17,12 @@ export interface TankState {
   readyS: number | null;
   /** Time left in a clean. */
   cleanLeftS: number;
+  /**
+   * A bacteriophage hit its culture (phase 20, D30): its curve stalls at the fault's pH; `held` once it is flagged.
+   * Absent for a healthy tank.
+   */
+  phage?: boolean;
+  held?: boolean;
 }
 
 type Ferment = YogurtConfig['ferment'];
@@ -33,11 +39,16 @@ export function tankPh(ferment: Ferment, tank: TankState): number {
 
 /**
  * Advances a fermenting tank by `dtS` at `tempC`; true if it reached its end pH in this step. A tank that reaches it
- * is cooled at once (the stirred route), so its pH holds there.
+ * is cooled at once (the stirred route), so its pH holds there. A tank hit by a phage stops on its curve at
+ * `stallCurveS` (the curve's clock at the stall pH, D30) and never reaches it.
  */
-export function ferment(fermentConfig: Ferment, tank: TankState, dtS: number, tempC: number, nowS: number): boolean {
+export function ferment(fermentConfig: Ferment, tank: TankState, dtS: number, tempC: number, nowS: number, stallCurveS = Infinity): boolean {
   if (tank.state !== 'fermenting') return false;
   const rate = curveRate(fermentConfig, tempC);
+  if (tank.phage) {
+    tank.curveS = Math.min(Math.max(tank.curveS, Math.min(tank.curveS + rate * dtS, stallCurveS)), fermentConfig.endAtOptS - 1);
+    return false;
+  }
   const leftS = fermentConfig.endAtOptS - tank.curveS;
   if (rate * dtS < leftS) {
     tank.curveS += rate * dtS;
@@ -55,7 +66,9 @@ export function tankView(fermentConfig: Ferment, tank: TankState, tempC: number,
   const ph = tankPh(fermentConfig, tank);
   const rate = curveRate(fermentConfig, tempC);
   let readyAtS: number | null = null;
-  if (tank.state === 'fermenting') readyAtS = rate > 0 ? nowS + (fermentConfig.endAtOptS - tank.curveS) / rate : null;
+  // A stalled tank shows when it was due: it never gets there (D30).
+  if (tank.state === 'fermenting' && tank.phage) readyAtS = rate > 0 && tank.startedS !== null ? tank.startedS + fermentConfig.endAtOptS / rate : null;
+  else if (tank.state === 'fermenting') readyAtS = rate > 0 ? nowS + (fermentConfig.endAtOptS - tank.curveS) / rate : null;
   else if (tank.state === 'ready' || tank.state === 'emptying') readyAtS = tank.readyS;
   return {
     levelL: tank.levelL,
@@ -67,5 +80,6 @@ export function tankView(fermentConfig: Ferment, tank: TankState, tempC: number,
     startedS: tank.startedS,
     // A tank that stands at a temperature the culture does not work at has no time to ready: it shows its start.
     readyAtS: readyAtS ?? tank.startedS,
+    ...(tank.held ? { held: true } : {}),
   };
 }

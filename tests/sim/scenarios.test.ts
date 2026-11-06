@@ -352,7 +352,10 @@ describe('H110: resets, and what cannot start', () => {
     expect(fillers.sim.snapshot().scenarios.unavailable.fillerBreakdown).toBe('Every filler is down already');
     const trucks = triggered('demandSpikeOrLateTruck', 'lateTrucks');
     expect(trucks.sim.snapshot().scenarios.unavailable.demandSpikeOrLateTruck).toBe('Trucks are disrupted already');
-    expect(startPacks(copyConfig()).sim.snapshot().scenarios.unavailable).toEqual({});
+    // At the opening every UHT fault can start; of the yogurt line's, only the heat dip waits, for a tank to fill (phase 20).
+    expect(startPacks(copyConfig()).sim.snapshot().scenarios.unavailable).toEqual({
+      yogurtHeatUnderTemp: 'The yogurt heat treatment is idle; the dip needs it in production',
+    });
   });
 });
 

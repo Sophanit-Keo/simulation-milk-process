@@ -109,6 +109,17 @@ export interface P8 {
   afterSip(timeS: number, log: LogWriter): 'ok' | 'sip' | 'cip';
   /** The yogurt a cycle needs in the buffer before it starts, litres. */
   readonly cycleNeedL: number;
+  /**
+   * A fault's reading in place of the usual one (phase 20, D30): the seal heads drifting, the HEPA cabin's fan down.
+   * `fn` gets the time and the usual reading; null puts the usual one back.
+   */
+  setFaultReading<K extends 'seal' | 'hepaPa'>(key: K, fn: ((timeS: number, usual: ReturnType<P8Conditions[K]>) => ReturnType<P8Conditions[K]>) | null): void;
+  /**
+   * The sterile zone was open to the hall (the HEPA cabin's repair, D30): P8 may not start again before a new SIP and
+   * an ATP swab that passes. `sipWanted` until the yogurt line has run them.
+   */
+  requireSip(): void;
+  readonly sipWanted: boolean;
   view(timeS: number, rateCupsPerH: number): P8View;
   totals(): Readonly<P8Totals>;
 }
@@ -154,13 +165,22 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
   const { batchS, firstShiftStartS } = config.quality;
   const lanes = plant.lanes;
   const tag: LogTag = { topic: 'yogurt', line: 'yogurt' };
-  const reading: P8Conditions = {
+  const usual: P8Conditions = {
     hepaPa: (timeS) => plant.hepa.normalPa + plant.hepa.swingPa * Math.sin((2 * Math.PI * (timeS - openS)) / plant.hepa.swingS),
     sipTempC: () => plant.sip.runC,
     // A clean surface reads its typical count, ± 50%.
     atpRlu: () => plant.atpCleanRlu * (0.5 + rng.next()),
     seal: () => ({ tempC: plant.seal.tempC, timeS: plant.seal.timeS, bar: plant.seal.bar }),
     ...conditions,
+  };
+  // A fault's readings, over the usual ones (phase 20).
+  let sealFault: ((timeS: number, usual: { tempC: number; timeS: number; bar: number }) => { tempC: number; timeS: number; bar: number }) | null = null;
+  let hepaFault: ((timeS: number, usual: number) => number) | null = null;
+  let sipWanted = false;
+  const reading: P8Conditions = {
+    ...usual,
+    hepaPa: (timeS) => (hepaFault ? hepaFault(timeS, usual.hepaPa(timeS)) : usual.hepaPa(timeS)),
+    seal: (timeS) => (sealFault ? sealFault(timeS, usual.seal(timeS)) : usual.seal(timeS)),
   };
   const cycleNeedL = lanes * gToKg(plant.fill.targetG + START_SIGMAS * plant.fill.sigmaG);
 
@@ -221,7 +241,7 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
   }
 
   function stop(reason: P8StopReason, timeS: number, why: string, log: LogWriter): void {
-    if (state !== 'stopped' || stopReason !== reason) log(timeS, 'bad', `Line P8 stopped: ${why}`, tag);
+    if (state !== 'stopped' || stopReason !== reason) log(timeS, 'bad', `Line P8 stopped: ${why}`, { ...tag, event: 'p8Stopped' });
     state = 'stopped';
     stopReason = reason;
   }
@@ -262,7 +282,7 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
       timeS,
       'bad',
       `Line P8 seal test failed: ${leaked} of ${cupsTaken} cups leaked; ${held.toLocaleString('en-US')} cups held since the last test that passed (${codes.length > 1 ? 'batches' : 'batch'} ${codes.join(', ') || 'none'})`,
-      tag,
+      { ...tag, event: 'sealTestFailed' },
     );
   }
 
@@ -412,6 +432,17 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
       cipLogged = true;
       cleared = false;
     },
+    setFaultReading(key, fn) {
+      if (key === 'seal') sealFault = fn as typeof sealFault;
+      else hepaFault = fn as typeof hepaFault;
+    },
+    requireSip() {
+      cleared = false;
+      sipWanted = true;
+    },
+    get sipWanted() {
+      return sipWanted;
+    },
     afterSip(timeS, log) {
       totals.sips += 1;
       const heldC = reading.sipTempC(timeS);
@@ -431,7 +462,8 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
         return 'cip';
       }
       cleared = true;
-      log(timeS, 'ok', `Line P8 cleared to start: SIP ${heldC.toFixed(0)} °C for ${Math.round(plant.sip.holdS / 60)} min, ATP swab ${atpRlu.toFixed(1)} RLU`, tag);
+      sipWanted = false;
+      log(timeS, 'ok', `Line P8 cleared to start: SIP ${heldC.toFixed(0)} °C for ${Math.round(plant.sip.holdS / 60)} min, ATP swab ${atpRlu.toFixed(1)} RLU`, { ...tag, event: 'p8Cleared' });
       return 'ok';
     },
     view(timeS, rateCupsPerH) {
