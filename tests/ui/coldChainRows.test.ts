@@ -36,6 +36,17 @@ describe('the stage 16 rows', () => {
     expect(warmRoomText(chainWith((chain) => (chain.warmRoom.pallets = 36))).status).toBe('warn');
     expect(chillerText(chainWith((chain) => (chain.chiller.pallets = 32))).status).toBe('warn');
     expect(coldRoomText(chainWith((chain) => (chain.coldRoom.tempC = 5.2)))).toEqual({ text: '180 of 360 positions · 5.2 °C', status: 'warn' });
+    // An excursion (phase 20): the cooling down, then pallets on QA hold (red), then QA's verdict.
+    const excursion = { coolingDown: true, overSinceS: null, limitC: 6, holdS: null, palletsHeld: 0, peakCoreC: 4, decisionS: null, verdict: null } as const;
+    expect(coldRoomText(chainWith((chain) => Object.assign(chain.coldRoom, { tempC: 5.2, excursion })))).toEqual({ text: '180 of 360 positions · 5.2 °C · cooling down', status: 'warn' });
+    expect(coldRoomText(chainWith((chain) => Object.assign(chain.coldRoom, { tempC: 9.6, excursion: { ...excursion, holdS: 1, palletsHeld: 176 } })))).toEqual({
+      text: '180 of 360 positions · 9.6 °C · 176 pallets on QA hold',
+      status: 'bad',
+    });
+    expect(coldRoomText(chainWith((chain) => Object.assign(chain.coldRoom, { tempC: 3.4, excursion: { ...excursion, coolingDown: false, verdict: 'destroyed' } })))).toEqual({
+      text: '180 of 360 positions · 3.4 °C · QA destroyed the held pallets',
+      status: 'ok',
+    });
     const timeS = hToS(24 * 7 + 8);
     const reefers = chainWith((chain) => {
       chain.reefers = [

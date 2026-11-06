@@ -95,7 +95,7 @@ The Could list, in order:
 - [ ] Week 5: stages 11–14 live (fat and SNF, divert at 85 °C, denaturation, three tanks' pH, cooling, buffer); tests against H122–H125. *Built in [phase 17](agent-plan/phase-17-yogurt-liquid-line.md#status); waits for the developer to watch a stirred and a set batch, and for D25–D27 and Y1.*
 - [ ] Week 7: stage 15 live (cups, seal window, checkweigher, metal and vision rejects, seal tests, HEPA, SIP); tests against H126–H129. *Built in [phase 18](agent-plan/phase-18-p8-cup-filler.md#status); waits for the developer to watch P8 at ×1, and for D25–D28 and Y1.*
 - [ ] Week 9 (gate Y2): stage 16 live (trays, pallets, warm room, blast chiller, cold-room hold, reefer trucks); a 7-day run conserves cups; scope frozen. *Built in [phase 19](agent-plan/phase-19-yogurt-cold-chain.md#status); waits for the developer to sign Y2 and decide the scope freeze, and for D25–D29 and Y1.*
-- [ ] Week 11: P8 and fermentation-tank hero models, five yogurt faults, the yogurt tour, "About this model".
+- [ ] Week 11: P8 and fermentation-tank hero models, five yogurt faults, the yogurt tour, "About this model". *Built in [phase 20](agent-plan/phase-20-yogurt-detail-and-scenarios.md#status), but for the cup, tray and reefer-unit models; waits for the developer to watch each fault and the yogurt tour, and for D25–D30, Y1 and Y2.*
 - [ ] Week 12 (gate Y3): the 60 fps check with both lines; the report, demo script and slides updated.
 
 ---
