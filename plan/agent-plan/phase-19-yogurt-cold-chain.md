@@ -97,7 +97,10 @@ Built on 6 November 2026 in one session, on phase 18 as merged (PR #23). Y1 is n
   - **`tests/sim/yogurt/coldChain.test.ts`:** H130–H133, the routes, a full room's queue, the hold and release, the pull, the reefers and their 42 h part load, a live seal-test failure, and the seven-day run.
   - **`e2e/yogurtColdChain.spec.ts`:** the panel, the batches and the 3D rooms as the line opens; then nearly three days at ×10,000. Reefers back up and load, the opening shift's stirred batch and the night's set batch both leave by reefer, and no pallet holds past 48 h.
   - **The perf baseline** (`tests/perf/baseline.md`): the overview reads **349** draw calls and 324,210 triangles, inside the budget of about 350.
-- **Checks:** `npm run check` passes (1,789 unit tests, 88 asset tests), and so does `npm run build`. The full browser run is under way.
+- **Checks:**
+  - `npm run check` passes (1,789 unit tests, 88 asset tests), and so does `npm run build`.
+  - **The full browser run:** 94 of 95 passed in 43.5 min. The one failure is the pixel-ratio test, which fails in this sandbox's browser on the commit before phase 15 too (phase 15 status).
+  - **The seven days' figures:** 45 reefers carry 341 set and 829 stirred pallets. The longest hold is 34.7 h. The peaks are 30 pallets in the warm room, 31 in the chiller and 203 in the cold room.
 
 **For the scope freeze (Y2), not built and for the developer to cut or keep:**
 - The roadmap's last Could item, **the factory board's yogurt lines**. The other three, fruit dosing, the set route's warm room and the vision station, are built.
