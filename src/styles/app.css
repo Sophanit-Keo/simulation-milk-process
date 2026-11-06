@@ -1257,6 +1257,19 @@ kbd {
   color: var(--muted);
 }
 
+/* Stage 16's yogurt batches (yogurtBatchList.ts): each batch's code and product above where its pallets stand. */
+.yogurt-batch {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px;
+  font-size: 13px;
+}
+.yogurt-batch-head {
+  font: 500 13px/1.3 var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Stage 11's next-product picker (productPicker.ts): the three products as one segmented control, the panel's width. */
 .next-product {
   display: flex;

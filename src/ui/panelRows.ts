@@ -1,5 +1,6 @@
 import type { Snapshot, StageId } from '../contracts';
 import { STATE_ROWS as LIQUID_STATE_ROWS, type StateRow, type StateText } from './liquidRows';
+import { chillerText, coldChainOf, coldRoomText, reefersText, releaseText, traysText, warmRoomText } from './coldChainRows';
 import { dockText, fillerText, lastPalletText, lastSsccText, nextPickText, packerText, palletText } from './packsRows';
 import {
   p8BatchText,
@@ -62,7 +63,8 @@ const TANK_NUMBERS = [1, 2, 3] as const;
  * The yogurt line's (phase 17, yogurtRows.ts): the product and the next shift's (stage 11), the heat treatment's mode,
  * its clean and its steam (12), each fermentation tank (13), and the buffer's product, changeover and set-mix wait (14);
  * and Line P8's (phase 18, p8Rows.ts): what it does, its batch, the last fill, the rejects, the seal, the HEPA cabin,
- * the SIP and swab, the next seal test and the magazines (15).
+ * the SIP and swab, the next seal test and the magazines (15); and the cold chain's (phase 19, coldChainRows.ts): the
+ * trays and the pallet building, the warm room's pH queue, the chiller, the cold room, the next release, the reefers (16).
  */
 export const PANEL_STATE_ROWS: Readonly<Partial<Record<StageId, readonly PanelStateRow[]>>> = {
   4: fromLiquid(LIQUID_STATE_ROWS[4]),
@@ -111,5 +113,13 @@ export const PANEL_STATE_ROWS: Readonly<Partial<Record<StageId, readonly PanelSt
     { key: 'p8Hygiene', label: 'SIP and swab', read: (snapshot) => p8HygieneText(p8Of(snapshot)) },
     { key: 'p8SealTest', label: 'Next seal test', read: (snapshot) => p8SealTestText(p8Of(snapshot), snapshot.timeS) },
     { key: 'p8Magazines', label: 'Magazines', read: (snapshot) => p8MagazinesText(p8Of(snapshot)) },
+  ],
+  16: [
+    { key: 'trays', label: 'Trays and pallet', read: (snapshot) => traysText(coldChainOf(snapshot)) },
+    { key: 'warmRoom', label: 'Warm room', read: (snapshot) => warmRoomText(coldChainOf(snapshot)) },
+    { key: 'chiller', label: 'Blast chiller', read: (snapshot) => chillerText(coldChainOf(snapshot)) },
+    { key: 'coldRoom', label: 'Cold room', read: (snapshot) => coldRoomText(coldChainOf(snapshot)) },
+    { key: 'release', label: 'Next release', read: (snapshot) => releaseText(coldChainOf(snapshot), snapshot.timeS) },
+    { key: 'reefers', label: 'Reefers', read: (snapshot) => reefersText(coldChainOf(snapshot), snapshot.timeS) },
   ],
 };

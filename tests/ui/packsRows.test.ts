@@ -174,7 +174,8 @@ describe('PANEL_STATE_ROWS', () => {
     expect(PANEL_STATE_ROWS[13]?.map((row) => row.key)).toEqual(['tank1', 'tank2', 'tank3']);
     expect(PANEL_STATE_ROWS[14]?.map((row) => row.key)).toEqual(['bufferProduct', 'changeover', 'setWait']);
     expect(PANEL_STATE_ROWS[15]?.map((row) => row.key)).toEqual(['p8State', 'p8Batch', 'p8Fill', 'p8Rejects', 'p8Seal', 'p8Hepa', 'p8Hygiene', 'p8SealTest', 'p8Magazines']);
-    for (const stage of [1, 2, 3, 5, 9, 16] as const) expect(PANEL_STATE_ROWS[stage], `stage ${stage}`).toBeUndefined();
+    expect(PANEL_STATE_ROWS[16]?.map((row) => row.key)).toEqual(['trays', 'warmRoom', 'chiller', 'coldRoom', 'release', 'reefers']);
+    for (const stage of [1, 2, 3, 5, 9] as const) expect(PANEL_STATE_ROWS[stage], `stage ${stage}`).toBeUndefined();
   });
 
   it('reads the live plant as it opens', () => {

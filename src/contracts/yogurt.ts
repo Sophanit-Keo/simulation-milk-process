@@ -115,17 +115,77 @@ export interface P8Snapshot {
   currentBatch?: P8Batch | null;
 }
 
-/** Trays, pallets and the cold chain (stage 16). Phase 19 adds the trays, each pallet, the capacities and the reefers. */
+/** Where a yogurt pallet stands (contracts v11, phase 19, D29): waiting by the wrapper, in a room, or on a reefer. */
+export type YogurtPalletPlace = 'staging' | 'warmRoom' | 'chiller' | 'coldRoom' | 'reefer';
+
+export const YOGURT_PALLET_PLACES: readonly YogurtPalletPlace[] = ['staging', 'warmRoom', 'chiller', 'coldRoom', 'reefer'];
+
+/** One yogurt pallet in the cold chain (contracts v11): one batch's trays (D1). */
+export interface YogurtPallet {
+  id: number;
+  /** P8's batch code, "P8-008-1". */
+  batch: string;
+  product: YogurtProductId;
+  route: YogurtRoute;
+  cups: number;
+  trays: number;
+  place: YogurtPalletPlace;
+  /** Sim time it closed at the palletizer. */
+  closedS: number;
+  /** Its core temperature. */
+  tempC: number;
+  ph: number;
+  /** Sim time its 24 h hold in the cold room ends; null before it comes in. */
+  holdUntilS: number | null;
+  /** Sim time it must have left, the 48 h maximum; null before the cold room. */
+  leaveByS: number | null;
+  /** Its hold is over and every seal test covering it passed: it may leave. */
+  released: boolean;
+}
+
+/** A reefer at the yogurt dock (contracts v11): backing up to its door, or loading its pallets. */
+export type YogurtReeferState = 'arriving' | 'loading';
+
+export const YOGURT_REEFER_STATES: readonly YogurtReeferState[] = ['arriving', 'loading'];
+
+export interface YogurtReefer {
+  id: number;
+  /** The dock door, from 0, in the cold room's north wall. */
+  door: number;
+  state: YogurtReeferState;
+  /** Pallets on board, of its load. */
+  pallets: number;
+  load: number;
+  /** Sim time it docks (arriving) or leaves (loading). */
+  untilS: number;
+}
+
+/**
+ * Trays, pallets and the cold chain (stage 16). Contracts v11 (phase 19, D29) adds every field marked so; each is
+ * absent from an older snapshot.
+ */
 export interface ColdChainSnapshot {
-  /** The 41–43 °C incubation room, where set yogurt sets in the cup. */
-  warmRoom: { tempC: number; pallets: number };
-  /** The blast-chilling tunnel. */
-  chiller: { pallets: number };
-  /** The 2–4 °C cold room, where every pallet holds 24–48 h before release. */
-  coldRoom: { tempC: number; positionsUsed: number };
+  /** The 41–43 °C incubation room, where set yogurt sets in the cup; its positions (v11). */
+  warmRoom: { tempC: number; pallets: number; capacity?: number };
+  /** The blast-chilling tunnel: its positions and its air (v11). */
+  chiller: { pallets: number; capacity?: number; airC?: number };
+  /** The 2–4 °C cold room, where every pallet holds 24–48 h before release: its positions and the next release (v11). */
+  coldRoom: { tempC: number; positionsUsed: number; capacity?: number; nextReleaseS?: number | null };
   /** Since the plant opened. */
   palletsShipped: number;
   reefersShipped: number;
+  /** Trays packed since the plant opened, and the open tray and pallet at the palletizer (v11). */
+  trays?: { made: number; openBatch: string | null; openCups: number; openTrays: number };
+  /**
+   * Every pallet in the cold chain (v11), in the chain's order: on the reefers, in the cold room, the chiller, the warm
+   * room, then staging, each place first in first out.
+   */
+  pallets?: YogurtPallet[];
+  /** The reefers at the dock (v11). */
+  reefers?: YogurtReefer[];
+  /** Cups shipped since the plant opened, and cups a failed seal test pulled from the trays and pallets (v11). */
+  cupsShipped?: number;
+  cupsHeld?: number;
 }
 
 /**

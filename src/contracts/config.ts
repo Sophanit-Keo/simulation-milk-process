@@ -182,6 +182,23 @@ export interface YogurtConfig {
     maxHoldS: number;
     shelfLifeDays: number;
     palletsPerTruck: number;
+    /**
+     * Phase 19 (D29): the warm room's and the blast chiller's pallet positions; the chiller's air, toward which a
+     * pallet's core cools first-order with the time constant chillTauS (H131); the cold room's positions (H132).
+     */
+    warmRoomPallets: number;
+    chillerPallets: number;
+    chillerAirC: number;
+    chillTauS: number;
+    coldRoomPallets: number;
+    /**
+     * The reefer dock (D29, H133): its doors; a reefer is called when a load of released pallets waits, or when the
+     * oldest released one has held reeferLatestS; it backs up reeferArriveS later and loads in reeferLoadS.
+     */
+    dockDoors: number;
+    reeferArriveS: number;
+    reeferLoadS: number;
+    reeferLatestS: number;
   };
   products: YogurtProductConfig[];
   /** The product of each shift of a day, from the first shift (quality.firstShiftStartS: 06:00, 14:00, 22:00). */
@@ -629,6 +646,15 @@ export const YOGURT_NUMBER_KEYS = [
   'coldChain.maxHoldS',
   'coldChain.shelfLifeDays',
   'coldChain.palletsPerTruck',
+  'coldChain.warmRoomPallets',
+  'coldChain.chillerPallets',
+  'coldChain.chillerAirC',
+  'coldChain.chillTauS',
+  'coldChain.coldRoomPallets',
+  'coldChain.dockDoors',
+  'coldChain.reeferArriveS',
+  'coldChain.reeferLoadS',
+  'coldChain.reeferLatestS',
 ] as const;
 
 // The yogurt keys the model divides by or counts with; zero would stall or divide by zero.
@@ -670,6 +696,12 @@ const YOGURT_POSITIVE_KEYS = [
   'coldChain.minHoldS',
   'coldChain.shelfLifeDays',
   'coldChain.palletsPerTruck',
+  'coldChain.warmRoomPallets',
+  'coldChain.chillerPallets',
+  'coldChain.chillTauS',
+  'coldChain.coldRoomPallets',
+  'coldChain.dockDoors',
+  'coldChain.reeferLoadS',
 ] as const;
 
 const YOGURT_INTEGER_KEYS = [
@@ -681,6 +713,10 @@ const YOGURT_INTEGER_KEYS = [
   'coldChain.cupsPerTray',
   'coldChain.traysPerPallet',
   'coldChain.palletsPerTruck',
+  'coldChain.warmRoomPallets',
+  'coldChain.chillerPallets',
+  'coldChain.coldRoomPallets',
+  'coldChain.dockDoors',
 ] as const;
 
 /** A yogurt product with its id and route narrowed: what yogurtProducts() returns. */
@@ -805,6 +841,12 @@ function checkYogurt(config: PlantConfig, fail: (message: string) => void): void
   if (!(coldChain.chillToC < coldChain.warmRoomC)) fail('yogurt.coldChain.chillToC must be below warmRoomC');
   if (!(coldChain.minHoldS < coldChain.maxHoldS)) fail('yogurt.coldChain.minHoldS must be below maxHoldS');
   if (!(coldChain.maxHoldS < dayToS(coldChain.shelfLifeDays))) fail('yogurt.coldChain.maxHoldS must be shorter than the shelf life');
+  if (!(coldChain.chillerAirC < coldChain.chillToC)) fail('yogurt.coldChain.chillerAirC must be below chillToC, or no pallet ever chills');
+  if (!(coldChain.minHoldS < coldChain.reeferLatestS && coldChain.reeferLatestS < coldChain.maxHoldS)) {
+    fail('yogurt.coldChain.reeferLatestS must lie between minHoldS and maxHoldS');
+  }
+  if (!(coldChain.coldRoomPallets >= coldChain.palletsPerTruck)) fail('yogurt.coldChain.coldRoomPallets must hold at least a reefer load (palletsPerTruck)');
+  if (!(coldChain.reeferArriveS >= 0)) fail('yogurt.coldChain.reeferArriveS must not be negative');
 }
 
 /** The products: each known id once, a known route, a name and a fruit flag; and one product a shift for a whole day. */
@@ -853,6 +895,9 @@ export function cleaningSteps(config: PlantConfig, program: 'cip' | 'aic'): Clea
   }));
 }
 
+/** The keys that may be below zero: temperatures under 0 °C (the blast chiller's air, D29). Every other number may not. */
+const MAY_BE_NEGATIVE: ReadonlySet<string> = new Set(['yogurt.coldChain.chillerAirC']);
+
 /** Returns every problem found in a config; an empty list means it is usable. */
 export function checkPlantConfig(config: PlantConfig): string[] {
   const problems: string[] = [];
@@ -861,7 +906,7 @@ export function checkPlantConfig(config: PlantConfig): string[] {
   const walk = (value: unknown, path: string) => {
     if (typeof value === 'number') {
       if (!Number.isFinite(value)) fail(`${path} is not a finite number`);
-      else if (value < 0) fail(`${path} is negative`);
+      else if (value < 0 && !MAY_BE_NEGATIVE.has(path)) fail(`${path} is negative`);
     } else if (value !== null && typeof value === 'object') {
       for (const [key, child] of Object.entries(value)) walk(child, path ? `${path}.${key}` : key);
     }

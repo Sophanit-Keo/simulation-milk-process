@@ -4,6 +4,7 @@ import { YOGURT_STAGE_IDS, type Snapshot } from '../../src/contracts';
 import { EQUIPMENT_FACTORIES, type Equipment, type EquipmentContext, type MaterialName } from '../../src/scene/equipment';
 import { createKit } from '../../src/scene/equipment/liquid/kit';
 import { OUTFEED, P8, P8_STATIONS } from '../../src/scene/equipment/yogurt/layout';
+import { COLD_PLACES, CHILLER_PLACES, REEFER_M, reeferOffsetM, shownPallets, WARM_PLACES } from '../../src/scene/equipment/yogurt/coldChainScene';
 import { createP8Carrier, cupCodeText, FILL_ROW, FOIL_ROW, hepaLamp, p8Cups, p8Filler } from '../../src/scene/equipment/yogurt/p8Machine';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
 import { REEFER_YARD, STAGE_VIEWS, ZONES, type RectM } from '../../src/scene/layout';
@@ -41,7 +42,7 @@ const EXPECTED: Readonly<Record<number, readonly string[]>> = {
   13: ['culture-pump', 'ferment-tank-1', 'ferment-tank-2', 'ferment-tank-3'],
   14: ['smoothing-valve', 'yogurt-cooler', 'fruit-tank', 'p8-buffer'],
   15: ['p8-filler', 'p8-checkweigher', 'p8-metal-detector', 'p8-vision', 'p8-reject-bin', 'p8-cups'],
-  16: ['p8-tray-packer', 'yogurt-palletizer', 'yogurt-wrapper', 'warm-room', 'blast-chiller', 'cold-room'],
+  16: ['p8-tray-packer', 'yogurt-palletizer', 'yogurt-wrapper', 'warm-room', 'blast-chiller', 'cold-room', 'yogurt-pallets'],
 };
 
 /** P8's cups (phase 18) are tokens riding through P8, the gates and the outfeed, not a machine standing in one place. */
@@ -52,11 +53,11 @@ describe('the yogurt wing in grey boxes', () => {
   const everything = yogurtLine(makeContext());
   const machines = everything.filter((item) => !isTokens(item));
 
-  it('has every machine of the phase 16 table, each tagged with its stage, and P8\'s cups (phase 18)', () => {
+  it('has every machine of the phase 16 table, each tagged with its stage, P8\'s cups (phase 18) and the cold chain\'s pallets (phase 19)', () => {
     for (const stage of YOGURT_STAGE_IDS) {
       expect(everything.filter((item) => item.stage === stage).map((item) => item.id), `stage ${stage}`).toEqual(EXPECTED[stage]);
     }
-    expect(everything.filter(isTokens).map((item) => item.id)).toEqual(['p8-cups']);
+    expect(everything.filter(isTokens).map((item) => item.id)).toEqual(['p8-cups', 'yogurt-pallets']);
   });
 
   it('has ids no other machine of the plant uses', () => {
@@ -358,5 +359,58 @@ describe('P8\'s cups take no clicks (phase 18)', () => {
     expect(Number(cups.debugState?.().cups)).toBeGreaterThan(1_000);
     expect(raycaster.intersectObject(cups.object, true)).toEqual([]);
     cups.dispose();
+  });
+});
+
+// Phase 19: the cold chain in 3D. Its pallets and reefers are boxes in one InstancedMesh: the warm room shows each pallet,
+// the chiller and the cold room how full they are; a reefer backs in over its last 10 minutes of arriving.
+describe('the cold chain in the 3D view (phase 19)', () => {
+  stubTheme();
+  const tokens = (): Equipment => {
+    const made = yogurtLine(makeContext()).find((item) => item.id === 'yogurt-pallets');
+    if (!made) expect.fail('no yogurt-pallets');
+    return made;
+  };
+
+  it('shows a room\'s every pallet where it has places for all, and its share where it has fewer', () => {
+    expect(shownPallets(30, 36, WARM_PLACES.length)).toBe(30);
+    expect(WARM_PLACES.length).toBeGreaterThanOrEqual(plantConfig.yogurt.coldChain.warmRoomPallets);
+    expect(shownPallets(180, 360, COLD_PLACES.length)).toBe(36);
+    expect(shownPallets(1, 360, COLD_PLACES.length)).toBe(1);
+    expect(shownPallets(16, 32, CHILLER_PLACES.length)).toBe(4);
+    expect(shownPallets(0, 32, CHILLER_PLACES.length)).toBe(0);
+  });
+
+  it('draws the opening\'s cold chain in its rooms, the warm room and the chiller lit', () => {
+    const item = tokens();
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    const snapshot = sim.snapshot();
+    item.update(snapshot, 1 / 60);
+    // The chiller's 18 of 32 on its 8 places is 4.5, shown as 5.
+    expect(item.debugState?.()).toMatchObject({ warm: 30, chiller: 5, cold: 36, reefers: 0, warmGlow: true, frostGlow: true });
+    // Two draw calls: the boxes and the glows; neither takes a click.
+    const meshes: THREE.InstancedMesh[] = [];
+    item.object.traverse((node) => {
+      if (node instanceof THREE.InstancedMesh) meshes.push(node);
+    });
+    expect(meshes.map((mesh) => mesh.name)).toEqual(['coldChainBoxes', 'roomGlows']);
+    const raycaster = new THREE.Raycaster(new THREE.Vector3(WARM_PLACES[0][0], 10, WARM_PLACES[0][2]), new THREE.Vector3(0, -1, 0));
+    expect(raycaster.intersectObject(item.object, true)).toEqual([]);
+    expect(item.labelText(snapshot)).toBe('0 shipped');
+    item.dispose();
+  });
+
+  it('backs a reefer in over its last 10 minutes of arriving, and stands it at its door while it loads', () => {
+    expect(reeferOffsetM('arriving', 1_200, 0)).toBe(REEFER_M.backInM);
+    expect(reeferOffsetM('arriving', 300, 0)).toBeCloseTo(REEFER_M.backInM / 2, 9);
+    expect(reeferOffsetM('loading', 600, 0)).toBe(0);
+    const item = tokens();
+    const base = createSim(plantConfig).snapshot();
+    const snapshot = { ...base, yogurt: { ...base.yogurt, coldChain: { ...base.yogurt.coldChain, reefers: [{ id: 3, door: 1, state: 'loading' as const, pallets: 10, load: 26, untilS: base.timeS + 300 }] } } };
+    item.update(snapshot, 1 / 60);
+    expect(item.debugState?.()).toMatchObject({ reefers: 1 });
+    expect(item.labelText(snapshot)).toBe('reefer 3 10/26');
+    item.dispose();
   });
 });

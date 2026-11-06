@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 12,
+  "schemaVersion": 13,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -243,7 +243,16 @@
       "minHoldS": 86400,
       "maxHoldS": 172800,
       "shelfLifeDays": 28,
-      "palletsPerTruck": 26
+      "palletsPerTruck": 26,
+      "warmRoomPallets": 36,
+      "chillerPallets": 32,
+      "chillerAirC": -2,
+      "chillTauS": 4320,
+      "coldRoomPallets": 360,
+      "dockDoors": 3,
+      "reeferArriveS": 1800,
+      "reeferLoadS": 1200,
+      "reeferLatestS": 151200
     },
     "products": [
       { "id": "plainStirred", "name": "Plain stirred yogurt", "route": "stirred", "fruit": false },

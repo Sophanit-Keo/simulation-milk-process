@@ -174,11 +174,11 @@ test.describe('the stage rail', () => {
         expect(button.text, `rail-stage-${stage.id} shows its short name`).toContain(stage.shortName);
         // The plant opens running every UHT stage at its set point: every lamp green once the HUD has drawn, but
         // stage 9's, amber while batches are on hold, which they are from the opening on (D11). The yogurt line runs
-        // from the opening (phase 17): green but for the heat treatment, which waits for a tank, and the cold chain,
-        // empty until phase 19, the unlit ring.
+        // from the opening (phase 17): green but for the heat treatment, which waits for a tank, the unlit ring; the
+        // cold chain opens with the last two days' pallets (phase 19).
         const opening = OPENING_STATUS[stage.id];
-        const expected = stage.id === 12 || stage.id === 16 ? 'idle' : stage.id === 9 ? 'warn' : 'ok';
-        expect(opening, `stage ${stage.id} opens green, stage 9 amber, the heat treatment and the cold chain idle`).toBe(expected);
+        const expected = stage.id === 12 ? 'idle' : stage.id === 9 ? 'warn' : 'ok';
+        expect(opening, `stage ${stage.id} opens green, stage 9 amber, the heat treatment idle`).toBe(expected);
         expect(button.lamps, `rail-stage-${stage.id} has one lamp, ${opening}`).toEqual([opening]);
         expect(button.current, `rail-stage-${stage.id} is not current`).toBeNull();
       }

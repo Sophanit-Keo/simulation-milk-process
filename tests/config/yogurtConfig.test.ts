@@ -25,9 +25,9 @@ function withYogurt(path: string, value: unknown): PlantConfig {
 
 const problemsWith = (path: string, value: unknown): string[] => checkPlantConfig(withYogurt(path, value));
 
-describe('plant.json schema 12', () => {
-  it('is at schema 12 (phase 18 added P8\'s keys) and passes checkPlantConfig', () => {
-    expect(plantConfig.schemaVersion).toBe(12);
+describe('plant.json schema 13', () => {
+  it('is at schema 13 (phase 19 added the cold chain\'s keys) and passes checkPlantConfig', () => {
+    expect(plantConfig.schemaVersion).toBe(13);
     expect(checkPlantConfig(plantConfig)).toEqual([]);
   });
 
@@ -51,6 +51,18 @@ describe('plant.json schema 12', () => {
     expect(yogurt.p8.hepa).toEqual({ minPa: 15, normalPa: 25, swingPa: 1.5, swingS: 3_600 });
     expect(yogurt.p8.sip).toEqual({ tempC: 121, holdS: 1_200, runC: 123 });
     expect(yogurt.p8.magazines).toEqual({ cups: 7_200, foils: 12_000, refillBelowFrac: 0.25, refillS: 240 });
+    // D29's (phase 19): the rooms' positions, the chiller, the cold room and the reefer dock.
+    expect(yogurt.coldChain).toMatchObject({
+      warmRoomPallets: 36,
+      chillerPallets: 32,
+      chillerAirC: -2,
+      chillTauS: 4_320,
+      coldRoomPallets: 360,
+      dockDoors: 3,
+      reeferArriveS: 1_800,
+      reeferLoadS: 1_200,
+      reeferLatestS: 151_200,
+    });
     expect(yogurt.p8.rateCupsPerH / yogurt.p8.lanes / 60).toBe(30); // 12 lanes × 30 cycles a minute
     expect(yogurt.coldChain).toMatchObject({ cupsPerTray: 24, traysPerPallet: 120, releasePh: 4.6, roomC: 3, minHoldS: 86_400, maxHoldS: 172_800 });
   });
@@ -121,6 +133,11 @@ describe('checkPlantConfig refuses a yogurt block', () => {
     ['coldChain.roomC', 5, /roomC must lie in roomMinC–roomMaxC/],
     ['coldChain.releasePh', 4.1, /releasePh must lie between/],
     ['coldChain.maxHoldS', 80_000, /minHoldS must be below maxHoldS/],
+    ['coldChain.chillerAirC', 5, /no pallet ever chills/],
+    ['coldChain.reeferLatestS', 200_000, /reeferLatestS must lie between minHoldS and maxHoldS/],
+    ['coldChain.coldRoomPallets', 20, /at least a reefer load/],
+    ['coldChain.dockDoors', 1.5, /coldChain.dockDoors must be a whole number/],
+    ['coldChain.chillTauS', 0, /coldChain.chillTauS must be greater than 0/],
     ['cooling.outletC', 45, /cooling.outletC must be below ferment.tempC/],
     ['heat.holdS', Number.NaN, /heat.holdS must be a finite number/],
   ])('with yogurt.%s at %s', (path, value, message) => {

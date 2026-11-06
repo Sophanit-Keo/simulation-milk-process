@@ -137,7 +137,10 @@ Stages 11–16, Line P8 ([plan 12](12-yogurt-line.md)), from the `yogurt` block 
 | P8 hygiene, run | HEPA +25 Pa ± 1.5 Pa over an hour; SIP run at 123 °C; a clean swab 4 RLU ± 50% | Sim assumptions inside SOP Part 3's limits ([D28](DECISIONS.md#d28-line-p8-live-stage-15)) |
 | P8 magazines | 7,200 cups and 12,000 foils; topped up 4 min after they fall to 25% | Sim assumption ([D28](DECISIONS.md#d28-line-p8-live-stage-15), H126) |
 
-> Since phase 17 stages 11–14 run live ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)), and since phase 18 Line P8 ([D28](DECISIONS.md#d28-line-p8-live-stage-15)); the cold chain stands until phase 19.
+| Warm room and chiller | 36 and 32 pallet positions; the chiller's air at −2 °C, a pallet's core cooling with a 1.2 h time constant | Sim assumptions ([D29](DECISIONS.md#d29-the-yogurt-cold-chain-live-stage-16), H131) |
+| Cold room and dock | 360 positions; 3 dock doors; a reefer called for a load of 26 released pallets (or the oldest at 42 h), backing up in 30 min and loading in 20 | Sim assumptions ([D29](DECISIONS.md#d29-the-yogurt-cold-chain-live-stage-16), H132, H133) |
+
+> Since phase 17 stages 11–14 run live ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)), since phase 18 Line P8 ([D28](DECISIONS.md#d28-line-p8-live-stage-15)), and since phase 19 the cold chain ([D29](DECISIONS.md#d29-the-yogurt-cold-chain-live-stage-16)): the yogurt line runs from silo to reefer.
 
 ## KPIs on screen
 

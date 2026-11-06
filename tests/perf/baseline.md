@@ -289,6 +289,32 @@ How the cups stay in budget. A first build gave each cup a 12-sided cylinder wit
 
 The stops of stages 5 to 7 and 16 look across the cups, so they gain the same 31,000 triangles.
 
+### Phase 19: the yogurt cold chain
+
+Measured on 6 November 2026 the same way as phase 18, at both review sizes. Within the overview budget; no console errors. Phase 19 draws the cold chain's pallets, its reefers and the rooms' lamps in two draw calls: every pallet and reefer is boxes in one InstancedMesh, coloured per box, and the lamps a second. The tray packer's pick head, the palletizer's arm and the wrapper's turntable move as pivots of their machines. The overview reads **349** draw calls and **324,210** triangles: 4 and 1,476 more than phase 18, at the edge of the budget of about 350 and well under the browser tests' ceiling of 400.
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **349** | **324,210** | **349** | **324,402** |
+| 1 Standardization | 159 | 170,808 | 164 | 171,320 |
+| 2 Preheating | 138 | 166,072 | 139 | 166,084 |
+| 3 Homogenization | 138 | 164,712 | 139 | 164,948 |
+| 4 UHT | 149 | 176,716 | 152 | 177,120 |
+| 5 Flash cooling | 148 | 199,572 | 148 | 199,764 |
+| 6 Aseptic tank | 166 | 189,396 | 168 | 189,804 |
+| 7 Filling | 156 | 200,784 | 156 | 200,976 |
+| 8 Packaging | 153 | 181,830 | 155 | 181,854 |
+| 9 Quarantine & QA | 170 | 238,104 | 180 | 247,112 |
+| 10 Warehouse | 166 | 178,696 | 179 | 185,136 |
+| 11 Yogurt mix | 127 | 141,476 | 127 | 141,476 |
+| 12 Heat treatment | 131 | 150,172 | 131 | 150,172 |
+| 13 Fermentation | 131 | 150,424 | 132 | 150,436 |
+| 14 P8 buffer | 127 | 145,704 | 127 | 145,704 |
+| 15 P8 cup filler | 133 | 174,540 | 133 | 174,732 |
+| 16 Cold chain | 139 | 165,092 | 142 | 165,380 |
+
+Software GL gave 2.6 to 2.9 fps at the overview and 3 to 6 at the stops, as in phase 18. The next yogurt phase has 1 draw call of the budget's room left at the overview. Phase 20's hero models replace grey boxes, so they should save calls rather than add them.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.
