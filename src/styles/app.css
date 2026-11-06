@@ -1217,6 +1217,46 @@ kbd {
   color: var(--muted);
 }
 
+/* Stage 15's fill-weight histogram (fillHistogram.ts): the batch's cups in 0.5 g bins in the accent, the checkweigher's
+   limits dashed in red and the target in muted ink, in the trend charts' recessed well. */
+.fill-hist-plot {
+  position: relative;
+  height: 84px;
+}
+.fill-hist-bars {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 100%;
+  border-bottom: 1px solid var(--line);
+}
+.fill-hist-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 0;
+  border-radius: 1px 1px 0 0;
+  background: var(--accent);
+}
+.fill-hist-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed var(--bad);
+  pointer-events: none;
+}
+.fill-hist-mark[data-tone='target'] {
+  border-left: 1px solid var(--muted);
+}
+.fill-hist-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font: 500 11.5px/1.2 var(--font-data);
+  color: var(--muted);
+}
+
 /* Stage 11's next-product picker (productPicker.ts): the three products as one segmented control, the panel's width. */
 .next-product {
   display: flex;

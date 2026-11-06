@@ -25,9 +25,9 @@ function withYogurt(path: string, value: unknown): PlantConfig {
 
 const problemsWith = (path: string, value: unknown): string[] => checkPlantConfig(withYogurt(path, value));
 
-describe('plant.json schema 11', () => {
-  it('is at schema 11 (phase 17 added the live line\'s keys) and passes checkPlantConfig', () => {
-    expect(plantConfig.schemaVersion).toBe(11);
+describe('plant.json schema 12', () => {
+  it('is at schema 12 (phase 18 added P8\'s keys) and passes checkPlantConfig', () => {
+    expect(plantConfig.schemaVersion).toBe(12);
     expect(checkPlantConfig(plantConfig)).toEqual([]);
   });
 
@@ -45,6 +45,12 @@ describe('plant.json schema 11', () => {
     expect(yogurt.heat).toMatchObject({ setpointC: 92, holdS: 300, divertBelowC: 85, minHoldS: 180, denatTargetPct: 85 });
     expect(yogurt.ferment).toMatchObject({ tempC: 43, tanks: 3, tankL: 10_000, startPh: 6.6, endPh: 4.55, endAtOptS: 14_400 });
     expect(yogurt.p8).toMatchObject({ cupG: 125, lanes: 12, rateCupsPerH: 21_600, atpMaxRlu: 10 });
+    // D28's (phase 18): the seal's leak chances, the SIP's run, the clean swab, the check rates and the magazines.
+    expect(yogurt.p8.seal).toMatchObject({ leakInWindowFrac: 0.0001, leakAllBeyondFrac: 0.5 });
+    expect(yogurt.p8).toMatchObject({ atpCleanRlu: 4, metalRejectFrac: 0.000005, visionRejectFrac: 0.00005 });
+    expect(yogurt.p8.hepa).toEqual({ minPa: 15, normalPa: 25, swingPa: 1.5, swingS: 3_600 });
+    expect(yogurt.p8.sip).toEqual({ tempC: 121, holdS: 1_200, runC: 123 });
+    expect(yogurt.p8.magazines).toEqual({ cups: 7_200, foils: 12_000, refillBelowFrac: 0.25, refillS: 240 });
     expect(yogurt.p8.rateCupsPerH / yogurt.p8.lanes / 60).toBe(30); // 12 lanes × 30 cycles a minute
     expect(yogurt.coldChain).toMatchObject({ cupsPerTray: 24, traysPerPallet: 120, releasePh: 4.6, roomC: 3, minHoldS: 86_400, maxHoldS: 172_800 });
   });
@@ -104,6 +110,14 @@ describe('checkPlantConfig refuses a yogurt block', () => {
     ['p8.seal.timeS', 0.5, /seal.timeS must lie in its window/],
     ['p8.seal.bar', 7, /seal.bar must lie in its window/],
     ['p8.hepa.normalPa', 10, /normalPa must be above minPa/],
+    ['p8.hepa.swingPa', 12, /the cabin's swing stops P8/],
+    ['p8.seal.leakInWindowFrac', 1, /leakInWindowFrac must lie in 0–1/],
+    ['p8.visionRejectFrac', -0.1, /visionRejectFrac must lie in 0–1/],
+    ['p8.sip.runC', 120, /every SIP fails/],
+    ['p8.atpCleanRlu', 7, /a clean surface fails its swab/],
+    ['p8.magazines.cups', 10, /at least a cycle's cups and foils/],
+    ['p8.magazines.foils', 100.5, /p8.magazines.foils must be a whole number/],
+    ['p8.magazines.refillBelowFrac', 1, /refillBelowFrac must lie between 0 and 1/],
     ['coldChain.roomC', 5, /roomC must lie in roomMinC–roomMaxC/],
     ['coldChain.releasePh', 4.1, /releasePh must lie between/],
     ['coldChain.maxHoldS', 80_000, /minHoldS must be below maxHoldS/],

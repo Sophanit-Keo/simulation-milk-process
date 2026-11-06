@@ -2,7 +2,9 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { YOGURT_STAGE_IDS, type Snapshot } from '../../src/contracts';
 import { EQUIPMENT_FACTORIES, type Equipment, type EquipmentContext, type MaterialName } from '../../src/scene/equipment';
-import { OUTFEED } from '../../src/scene/equipment/yogurt/layout';
+import { createKit } from '../../src/scene/equipment/liquid/kit';
+import { OUTFEED, P8, P8_STATIONS } from '../../src/scene/equipment/yogurt/layout';
+import { createP8Carrier, cupCodeText, FILL_ROW, FOIL_ROW, hepaLamp, p8Cups, p8Filler } from '../../src/scene/equipment/yogurt/p8Machine';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
 import { REEFER_YARD, STAGE_VIEWS, ZONES, type RectM } from '../../src/scene/layout';
 import { YOGURT_RUNS } from '../../src/scene/yogurtPipes';
@@ -38,18 +40,23 @@ const EXPECTED: Readonly<Record<number, readonly string[]>> = {
   12: ['yogurt-deaerator', 'yogurt-homogenizer', 'yogurt-phe', 'holding-cell', 'yogurt-divert-valve', 'reprocess-tank'],
   13: ['culture-pump', 'ferment-tank-1', 'ferment-tank-2', 'ferment-tank-3'],
   14: ['smoothing-valve', 'yogurt-cooler', 'fruit-tank', 'p8-buffer'],
-  15: ['p8-filler', 'p8-checkweigher', 'p8-metal-detector', 'p8-vision', 'p8-reject-bin'],
+  15: ['p8-filler', 'p8-checkweigher', 'p8-metal-detector', 'p8-vision', 'p8-reject-bin', 'p8-cups'],
   16: ['p8-tray-packer', 'yogurt-palletizer', 'yogurt-wrapper', 'warm-room', 'blast-chiller', 'cold-room'],
 };
 
+/** P8's cups (phase 18) are tokens riding through P8, the gates and the outfeed, not a machine standing in one place. */
+const isTokens = (item: Equipment): boolean => item.object.userData.tokens === true;
+
 describe('the yogurt wing in grey boxes', () => {
   stubTheme();
-  const machines = yogurtLine(makeContext());
+  const everything = yogurtLine(makeContext());
+  const machines = everything.filter((item) => !isTokens(item));
 
-  it('has every machine of the phase 16 table, each tagged with its stage', () => {
+  it('has every machine of the phase 16 table, each tagged with its stage, and P8\'s cups (phase 18)', () => {
     for (const stage of YOGURT_STAGE_IDS) {
-      expect(machines.filter((item) => item.stage === stage).map((item) => item.id), `stage ${stage}`).toEqual(EXPECTED[stage]);
+      expect(everything.filter((item) => item.stage === stage).map((item) => item.id), `stage ${stage}`).toEqual(EXPECTED[stage]);
     }
+    expect(everything.filter(isTokens).map((item) => item.id)).toEqual(['p8-cups']);
   });
 
   it('has ids no other machine of the plant uses', () => {
@@ -235,5 +242,121 @@ describe('the yogurt wing on the live line (phase 17)', () => {
     expect(byId('ferment-tank-3').labelRing?.(snapshot)).toBeCloseTo((startPh - snapshot.yogurt.ferment.tanks[2].ph) / (startPh - endPh), 9);
     // Only the fermentation tanks have a ring.
     expect(machines.filter((item) => item.labelRing).map((item) => item.id)).toEqual(['ferment-tank-1', 'ferment-tank-2', 'ferment-tank-3']);
+  });
+});
+
+// Phase 18: Line P8 moves. One carrier clock at P8's rate indexes the cups and strokes the stations; the cups fill and
+// are lidded as they pass the filler and the foil pick; a reject is kicked into the bin; the HEPA lamp follows the cabin.
+describe('Line P8 in the 3D view (phase 18)', () => {
+  stubTheme();
+  const running = (): Snapshot => {
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    sim.step(0.1);
+    return sim.snapshot();
+  };
+  /** A fresh snapshot object each frame, as the frame loop gives, at ×1 (animation time is real time), with a change on top. */
+  const frames = (base: Snapshot, change: (p8: Snapshot['yogurt']['p8']) => void = () => {}) => {
+    return (): Snapshot => {
+      const snapshot = { ...base, speed: 1 as const, yogurt: { ...base.yogurt, p8: { ...base.yogurt.p8 } } };
+      change(snapshot.yogurt.p8);
+      return snapshot;
+    };
+  };
+
+  it('indexes once every 2 s at 30 cycles a minute on animation time, stands while paused, and empties during a clean', () => {
+    const carrier = createP8Carrier();
+    const next = frames(running());
+    expect(next().yogurt.p8).toMatchObject({ state: 'running', cyclesPerMin: 30 });
+    // 2 s and a frame: one index, a 120th of the next cycle on.
+    for (let frame = 0; frame < 121; frame++) carrier.advance(next(), 1 / 60);
+    expect(carrier.cycles).toBe(1);
+    expect(carrier.phase).toBeCloseTo(1 / 120, 6);
+    // The same snapshot twice in a frame moves it once.
+    const same = next();
+    carrier.advance(same, 0.5);
+    carrier.advance(same, 0.5);
+    expect(carrier.phase).toBeCloseTo(1 / 120 + 0.25, 6);
+    const paused = frames({ ...running(), paused: true });
+    for (let frame = 0; frame < 60; frame++) carrier.advance(paused(), 1 / 60);
+    expect(carrier.phase).toBeCloseTo(1 / 120 + 0.25, 6);
+    const full = carrier.loaded;
+    carrier.advance(frames(running(), (p8) => (p8.state = 'cleaning'))(), 1 / 60);
+    expect(carrier.loaded).toBe(0);
+    // Two cycles (and a frame) after the clean, the line holds two rows again.
+    for (let frame = 0; frame < 241; frame++) carrier.advance(next(), 1 / 60);
+    expect(carrier.loaded).toBe(2);
+    expect(full).toBeGreaterThan(90);
+  });
+
+  it('strokes the pistons and the sealing heads in the dwell, lights the UV tunnel while it runs, and its HEPA lamp follows the cabin', () => {
+    const carrier = createP8Carrier();
+    const filler = p8Filler(createKit(makeContext()), carrier);
+    const next = frames(running());
+    // To the middle of the dwell: 60% of a 2 s cycle.
+    for (let frame = 0; frame < 72; frame++) filler.update(next(), 1 / 60);
+    const state = filler.debugState?.() ?? {};
+    expect(state).toMatchObject({ running: true, uvOn: true, lamp: 'ok' });
+    expect(Number(state.pistonDownM)).toBeGreaterThan(0.1);
+    expect(Number(state.sealDownM)).toBeGreaterThan(0.08);
+    // Under +15 Pa, stopped: the lamp red, the tunnel dark, the heads up.
+    const low = frames(running(), (p8) => Object.assign(p8, { state: 'stopped', stopReason: 'hepa', hepaPa: 12 }));
+    for (let frame = 0; frame < 60; frame++) filler.update(low(), 1 / 60);
+    expect(filler.debugState?.()).toMatchObject({ running: false, uvOn: false, lamp: 'bad', pistonDownM: 0, sealDownM: 0 });
+    expect(hepaLamp(undefined, 15)).toBe('off');
+    filler.dispose();
+  });
+
+  it('fills the line with cups: rows of 12 on the carrier, filled past the filler, lidded past the foil pick, four abreast past P8', () => {
+    const carrier = createP8Carrier();
+    const cups = p8Cups(createKit(makeContext()), carrier);
+    const next = frames(running());
+    for (let frame = 0; frame < 72; frame++) cups.update(next(), 1 / 60);
+    // 1.2 s into a 2 s cycle: 40% through the dwell, the carrier indexed, the foil not yet on the pick's row.
+    const state = cups.debugState?.() ?? {};
+    const carrierRows = Math.round((P8.xMaxM - P8_STATIONS.denesterXM) / 0.1);
+    // Past P8 the belt rows moved three pitches on: the last two have ridden off the outfeed's end to the tray packer.
+    const beltRows = Math.round((OUTFEED.xMaxM - P8.xMaxM) / 0.1) - 2;
+    // In the dwell the de-nester's row drops in too.
+    expect(state.cups).toBe((carrierRows + 1) * 12 + beltRows * 4);
+    expect(Number(state.cups)).toBeGreaterThan(1_400);
+    expect(state.lids).toBe((carrierRows - 1 - FOIL_ROW) * 12 + beltRows * 4);
+    // Filled from the filler's row, which fills in this dwell, to the foil pick's.
+    expect(state.filled).toBe((FOIL_ROW - FILL_ROW + 1) * 12);
+    expect(cups.labelText(next())).toBe('P8-008-1 · best before day 36');
+    expect(cupCodeText(undefined)).toBe('');
+    cups.dispose();
+  });
+
+  it('kicks a rejected cup into the bin, one at a time', () => {
+    const carrier = createP8Carrier();
+    const cups = p8Cups(createKit(makeContext()), carrier);
+    const base = running();
+    cups.update(frames(base)(), 1 / 60);
+    const rejected = frames(base, (p8) => (p8.cupsRejected += 2));
+    cups.update(rejected(), 1 / 60);
+    expect(cups.debugState?.()).toMatchObject({ kicks: 1, kicking: true });
+    for (let frame = 0; frame < 60; frame++) cups.update(rejected(), 1 / 60);
+    expect(cups.debugState?.()).toMatchObject({ kicks: 2, kicking: true });
+    for (let frame = 0; frame < 60; frame++) cups.update(rejected(), 1 / 60);
+    expect(cups.debugState?.()).toMatchObject({ kicks: 2, kicking: false });
+    cups.dispose();
+  });
+});
+
+describe('P8\'s cups take no clicks (phase 18)', () => {
+  stubTheme();
+  it('lets a ray through to the machine under them, so a moving cup never picks stage 15 over the tray packer', () => {
+    const carrier = createP8Carrier();
+    const cups = p8Cups(createKit(makeContext()), carrier);
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    cups.update(sim.snapshot(), 1 / 60);
+    cups.object.updateMatrixWorld(true);
+    // Straight down onto a row of cups on the outfeed, over the tray packer's belt.
+    const raycaster = new THREE.Raycaster(new THREE.Vector3(17, 3, P8.zM), new THREE.Vector3(0, -1, 0));
+    expect(Number(cups.debugState?.().cups)).toBeGreaterThan(1_000);
+    expect(raycaster.intersectObject(cups.object, true)).toEqual([]);
+    cups.dispose();
   });
 });

@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "timeS": 655140,
   "speed": 10,
   "paused": false,
@@ -150,7 +150,7 @@
         "fatPct": 3,
         "snfPct": 11,
         "powderKgPerT": 26.953650057937438,
-        "siloLevelPct": 58.62104416121501,
+        "siloLevelPct": 58.63761909362134,
         "mixTankLevelPct": 99.97222222222221
       }
     },
@@ -187,10 +187,10 @@
       "id": 14,
       "status": "ok",
       "values": {
-        "inflowLph": 8.462714529144932e-7,
-        "outflowLph": 2743.2,
+        "inflowLph": 0,
+        "outflowLph": 5492.473807661804,
         "tempC": 18,
-        "levelPct": 1.142999999994123,
+        "levelPct": 1.1489135887744186,
         "fruitDosePct": 0
       }
     },
@@ -199,8 +199,8 @@
       "status": "ok",
       "values": {
         "cupsPerH": 21600,
-        "cupsMade": 172440,
-        "cupsRejected": 0,
+        "cupsMade": 172416,
+        "cupsRejected": 9,
         "setRateCupsPerH": 21600,
         "cupG": 125,
         "fillTargetG": 127,
@@ -292,19 +292,19 @@
     },
     "yFermentTank": {
       "tempC": 43,
-      "flowLph": 8.462714529144932e-7
+      "flowLph": 0
     },
     "yCooler": {
       "tempC": 18,
-      "flowLph": 8.462714529144932e-7
+      "flowLph": 0
     },
     "p8Buffer": {
       "tempC": 18,
-      "flowLph": 2743.2
+      "flowLph": 5492.473807661804
     },
     "p8Filler": {
       "tempC": 18,
-      "flowLph": 2743.2
+      "flowLph": 5492.473807661804
     }
   },
   "liquid": {
@@ -1200,7 +1200,7 @@
       "powderKgPerT": 26.953650057937438,
       "tanks": {
         "silo": {
-          "levelL": 17586.313248364502,
+          "levelL": 17591.2857280864,
           "capacityL": 30000
         },
         "mixTank": {
@@ -1237,7 +1237,7 @@
           "readyAtS": 657898.5175889863
         },
         {
-          "levelL": 7528.333333333809,
+          "levelL": 7523.333333333808,
           "capacityL": 10000,
           "state": "filling",
           "product": "plainStirred",
@@ -1247,7 +1247,7 @@
           "readyAtS": null
         },
         {
-          "levelL": 8054.399998911722,
+          "levelL": 8055.114961318534,
           "capacityL": 10000,
           "state": "emptying",
           "product": "plainStirred",
@@ -1259,10 +1259,10 @@
       ]
     },
     "buffer": {
-      "levelL": 45.71999999976492,
+      "levelL": 45.95654355097675,
       "capacityL": 4000,
-      "inflowLph": 8.462714529144932e-7,
-      "outflowLph": 2743.2,
+      "inflowLph": 0,
+      "outflowLph": 5492.473807661804,
       "tempC": 18,
       "waitS": null,
       "coolerOutletC": 18,
@@ -1272,9 +1272,85 @@
     },
     "p8": {
       "state": "running",
+      "stopReason": null,
+      "cyclesPerMin": 30,
+      "lastFillG": 127.10902621738566,
+      "fillHistogram": {
+        "fromG": 120,
+        "binG": 0.5,
+        "counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          7,
+          31,
+          188,
+          863,
+          2883,
+          7724,
+          15943,
+          26071,
+          32906,
+          33111,
+          25588,
+          15493,
+          7589,
+          2898,
+          911,
+          197,
+          29,
+          6,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "seal": {
+        "tempC": 200,
+        "timeS": 1,
+        "bar": 5
+      },
+      "hepaPa": 24.843207305098517,
+      "sip": {
+        "lastS": 603600,
+        "ok": true
+      },
+      "atpRlu": 4,
+      "nextSealTestS": 655200,
+      "magazines": {
+        "cupsPct": 75.83333333333333,
+        "foilsPct": 53.4
+      },
+      "currentBatch": {
+        "code": "P8-008-1",
+        "product": "plainStirred",
+        "madeS": 626402,
+        "expiresS": 3045602,
+        "cups": 172416
+      },
       "cupsPerH": 21600,
-      "cupsMade": 172440,
-      "cupsRejected": 0
+      "cupsMade": 172416,
+      "cupsRejected": 9,
+      "rejects": {
+        "underFill": 0,
+        "overFill": 0,
+        "metal": 1,
+        "vision": 8,
+        "sealHold": 0
+      },
+      "sealTests": {
+        "passed": 3,
+        "failed": 0,
+        "cupsTaken": 15
+      }
     },
     "coldChain": {
       "warmRoom": {
@@ -1295,15 +1371,15 @@
       "mixLph": 6000,
       "divertedL": 0,
       "cupsPerH": 21600,
-      "cupsMade": 172440,
+      "cupsMade": 172416,
       "coldRoomPallets": 0,
       "reefersShipped": 0
     },
     "energy": {
       "steamKgPerH": 255.27272727272728,
       "gasKw": 197.84463774265407,
-      "steamKg": 745.750909091038,
-      "gasKwh": 577.9811264277369
+      "steamKg": 745.5381818183106,
+      "gasKwh": 577.8162558962845
     }
   },
   "kpis": {
@@ -1356,7 +1432,7 @@
       "message": "Filler A broke down: repair about 10 min with re-sterilizing"
     },
     {
-      "timeS": 647922.3946951648,
+      "timeS": 647925.3946951648,
       "kind": "info",
       "message": "Fermentation tank 2 empty: cleaning",
       "line": "yogurt"
@@ -1449,6 +1525,12 @@
       "timeS": 632400,
       "kind": "info",
       "message": "Truck 1 docked at door 1: loading 22 pallets, earliest best-before first"
+    },
+    {
+      "timeS": 626402,
+      "kind": "info",
+      "message": "Line P8: batch P8-008-1 started, best before day 36, 06:00",
+      "line": "yogurt"
     },
     {
       "timeS": 626400,

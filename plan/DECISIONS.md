@@ -33,6 +33,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D25](#d25-the-yogurt-line-line-p8) | The yogurt line, Line P8: stages 11–16 in a new wing, set and stirred, the UHT line unchanged | — | Proposed |
 | [D26](#d26-the-yogurt-lines-defaults) | The yogurt line's defaults: mix, heat treatment, fermentation, P8, cold chain (schema 10) | — | Proposed |
 | [D27](#d27-the-yogurt-line-live-stages-1114) | The yogurt line live, stages 11–14: the product day on P8, the routing, the CCP and the wing's CIP (schema 11) | — | Proposed |
+| [D28](#d28-line-p8-live-stage-15) | Line P8 live, stage 15: cycles, fill weights, the in-line checks, seal tests and holds, the interlocks and the magazines (schema 12) | — | Proposed |
 
 ## D1. Batch size
 
@@ -639,6 +640,52 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - contracts v9: `YogurtSnapshot.heat.modeRemainingS` and `cleaning`, `buffer.product` and `changeover`, `energy`, and `LogEntry.line`;
   - `src/sim/yogurt/` (`mix.ts`, `heat.ts`, `ferment.ts`, `routing.ts`, `yogurtLine.ts`);
   - panels 11–14, their sliders and the next-product picker.
+
+## D28. Line P8 live (stage 15)
+
+- **Status:** Proposed
+- **Date:** 2026-11-06
+- **Review note:** none ([phase 18](agent-plan/phase-18-p8-cup-filler.md))
+- **Decision:** Line P8 fills, seals, codes and checks its cups in 12-cup cycles, taking the yogurt from the buffer, in place of phase 17's stub. It runs in the yogurt line's step and queues no events. Its random draws come from a stream of its own, seeded from `plant.json`'s seed, so the UHT line's draws and numbers stay as they were (D25).
+
+| Setting | Default | `plant.json` key (under `yogurt.p8`) | Basis |
+|---|---|---|---|
+| Seal leaks | 1 in 10,000 cups inside the window; outside it the chance rises in step with the distance out, as a share of the window's width, until every cup leaks half a window out | `seal.leakInWindowFrac`, `seal.leakAllBeyondFrac` | Sim assumption (H128) |
+| HEPA cabin | reads +25 Pa, swinging ±1.5 Pa over an hour | `hepa.swingPa`, `hepa.swingS` | Sim assumption: inside the SOP's ≥ +15 Pa with room to spare |
+| SIP | runs at 123 °C, for the 20 min the SOP asks at ≥ 121 °C | `sip.runC` | Sim assumption: 2 °C over the limit |
+| ATP swab | a clean surface reads 4 RLU ± 50% | `atpCleanRlu` | Sim assumption: well under the SOP's 10 RLU |
+| Metal detector, vision | 1 cup in 200,000; 1 in 20,000 | `metalRejectFrac`, `visionRejectFrac` | Sim rates (H129) |
+| Magazines | 7,200 cups (20 min) and 12,000 foils (33 min); an operator is called at 25% and tops up 4 min later | `magazines.cups`, `magazines.foils`, `magazines.refillBelowFrac`, `magazines.refillS` | Sim assumption: at the defaults P8 never runs a magazine dry (H126) |
+
+- **The rules:**
+  - **Cycles.** P8 fills a cycle of `p8.lanes` cups every `3,600 × lanes ÷ rate` seconds of running time: every 2 s at 21,600 cups/h. It runs while the buffer holds a cycle's yogurt, no changeover is under way, and no interlock holds it. The cycles are counted in the yogurt line's step, as many as fall in it, not queued as events, so the core's next-event jump keeps its meaning.
+  - **Each cycle** draws each cup's fill weight, normal around `fill.targetG` with σ `fill.sigmaG` (litres count as kilograms, as in D27), and takes their sum from the buffer.
+    - The checkweigher rejects a cup below `fill.underBelowG` or above `fill.overAboveG`.
+    - Of the cups it passes, the metal detector and the vision check each reject one when their draw falls under the cycle's chance: the lanes times the cup's.
+    - The coder prints the batch code, the date of manufacture, the expiry and "P8" on every cup.
+  - **Seal tests.** Every `sealTest.everyS` of running time, `sealTest.cups` cups of the cycle go to the dye-penetration and vacuum-leak tests; each leaks with the seal's chance.
+    - A test passes when none leaks.
+    - A test that fails holds every cup made since the last test that passed. The held cups are rejected (`sealHold`), and the log names their batches.
+    - The test cups are taken, not rejected.
+  - **Interlocks.**
+    - P8 starts only after a logged CIP, an SIP held at ≥ `sip.tempC` for `sip.holdS`, and an ATP swab under `atpMaxRlu`. The swab is taken once the SIP has passed.
+    - An SIP that falls short runs again; a swab that fails sends P8 back to the wing's CIP.
+    - It stops while the HEPA cabin reads under `hepa.minPa`, and starts again once the cabin is back over it.
+    - It stops when a magazine runs out, until the refill comes.
+    - It waits (`starved`) while the buffer holds less than a cycle.
+  - **Batches.** A batch is one product's run in one shift, as D1's UHT batches. Its code is `P8-ddd-s` (the day of the shift's start, the shift's number from 06:00), its date of manufacture is the batch's first cup, and its expiry is that date plus `coldChain.shelfLifeDays`.
+  - **The changeover's flush.** What is left in the buffer when a product ends, less than a cycle, is pushed out to rework by the rinse or the CIP.
+  - **The opening.** P8 opens as the night left it:
+    - the wing's CIP and P8's SIP passed at 23:40 the day before, with a swab of 4 RLU;
+    - the magazines full;
+    - the first seal test 2 operating hours on;
+    - batch P8-008-1 starting with its first cup.
+- **Why:** P8 is where the SOP's hygiene limits act, and where the line's losses show: the checkweigher's rejects, the rare metal and vision rejects, and a whole stretch of cups held when a seal test fails. Cycles of 12 keep 24 h at 39,750 draws of a cycle, and the run still repeats exactly from the seed. At the defaults P8 never stops outside its changeovers, so the litres of phase 17 (H125e) still hold. The interlocks and the seal window are there for the tests and phase 20's faults.
+- **What it changes:**
+  - the keys above (schema 12) and their rows in [default settings](06-simulation-model.md#yogurt-line);
+  - contracts v10: `P8Snapshot` gains `cyclesPerMin`, `rejects`, `lastFillG`, `fillHistogram`, `seal`, `hepaPa`, `sip`, `atpRlu`, `nextSealTestS`, `sealTests`, `magazines`, `currentBatch` and `stopReason`;
+  - `src/sim/yogurt/p8.ts`, and P8's part of `yogurtLine.ts`;
+  - the stage 15 panel, and P8's cups and moving parts in the 3D view.
 
 ---
 

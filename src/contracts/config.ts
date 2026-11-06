@@ -118,7 +118,11 @@ export interface YogurtConfig {
     rateCupsPerH: number;
     /** Fill weight, normal around targetG; the checkweigher rejects below underBelowG and above overAboveG. */
     fill: { targetG: number; sigmaG: number; underBelowG: number; overAboveG: number };
-    /** The sealing heads' set points and their window (SOP P8 step 5). */
+    /**
+     * The sealing heads' set points and their window (SOP P8 step 5). Inside the window a cup leaks with the chance
+     * leakInWindowFrac; outside it the chance rises in step with the distance out, as a share of the window's width,
+     * until every cup leaks leakAllBeyondFrac out (phase 18, D28, H128).
+     */
     seal: {
       tempC: number;
       timeS: number;
@@ -129,11 +133,25 @@ export interface YogurtConfig {
       maxTimeS: number;
       minBar: number;
       maxBar: number;
+      leakInWindowFrac: number;
+      leakAllBeyondFrac: number;
     };
     sealTest: { cups: number; everyS: number };
-    hepa: { minPa: number; normalPa: number };
-    sip: { tempC: number; holdS: number };
+    /** The HEPA cabin's overpressure: P8 stops below minPa; it reads normalPa, swinging by swingPa over swingS (D28). */
+    hepa: { minPa: number; normalPa: number; swingPa: number; swingS: number };
+    /** The SIP must hold at least tempC for holdS; it runs at runC (D28). */
+    sip: { tempC: number; holdS: number; runC: number };
+    /** The ATP swab after a clean must read under atpMaxRlu; a clean surface reads atpCleanRlu ± 50% (D28). */
     atpMaxRlu: number;
+    atpCleanRlu: number;
+    /** The share of cups the metal detector and the vision check throw out (sim rates, H129). */
+    metalRejectFrac: number;
+    visionRejectFrac: number;
+    /**
+     * The de-nester's cup magazine and the lidder's foil magazine, in cups and foils. An operator is called at
+     * refillBelowFrac and tops the magazine up refillS later; P8 stops if it runs out first (D28).
+     */
+    magazines: { cups: number; foils: number; refillBelowFrac: number; refillS: number };
   };
   /**
    * The wing's CIP, on D23's model at the SOP's strengths: the solutions' conductivities at 20 °C, and its own
@@ -572,13 +590,25 @@ export const YOGURT_NUMBER_KEYS = [
   'p8.seal.maxTimeS',
   'p8.seal.minBar',
   'p8.seal.maxBar',
+  'p8.seal.leakInWindowFrac',
+  'p8.seal.leakAllBeyondFrac',
   'p8.sealTest.cups',
   'p8.sealTest.everyS',
   'p8.hepa.minPa',
   'p8.hepa.normalPa',
+  'p8.hepa.swingPa',
+  'p8.hepa.swingS',
   'p8.sip.tempC',
   'p8.sip.holdS',
+  'p8.sip.runC',
   'p8.atpMaxRlu',
+  'p8.atpCleanRlu',
+  'p8.metalRejectFrac',
+  'p8.visionRejectFrac',
+  'p8.magazines.cups',
+  'p8.magazines.foils',
+  'p8.magazines.refillBelowFrac',
+  'p8.magazines.refillS',
   'cip.lyePct',
   'cip.lyeTempC',
   'cip.acidPct',
@@ -629,6 +659,12 @@ const YOGURT_POSITIVE_KEYS = [
   'p8.sealTest.cups',
   'p8.sealTest.everyS',
   'p8.sip.holdS',
+  'p8.seal.leakAllBeyondFrac',
+  'p8.hepa.swingS',
+  'p8.atpCleanRlu',
+  'p8.magazines.cups',
+  'p8.magazines.foils',
+  'p8.magazines.refillS',
   'coldChain.cupsPerTray',
   'coldChain.traysPerPallet',
   'coldChain.minHoldS',
@@ -640,6 +676,8 @@ const YOGURT_INTEGER_KEYS = [
   'ferment.tanks',
   'p8.lanes',
   'p8.sealTest.cups',
+  'p8.magazines.cups',
+  'p8.magazines.foils',
   'coldChain.cupsPerTray',
   'coldChain.traysPerPallet',
   'coldChain.palletsPerTruck',
@@ -749,6 +787,15 @@ function checkYogurt(config: PlantConfig, fail: (message: string) => void): void
   if (!(seal.minTimeS <= seal.timeS && seal.timeS <= seal.maxTimeS)) fail('yogurt.p8.seal.timeS must lie in its window, minTimeS–maxTimeS');
   if (!(seal.minBar <= seal.bar && seal.bar <= seal.maxBar)) fail('yogurt.p8.seal.bar must lie in its window, minBar–maxBar');
   if (!(hepa.minPa < hepa.normalPa)) fail('yogurt.p8.hepa.normalPa must be above minPa, or P8 never starts');
+  if (!(hepa.normalPa - hepa.swingPa > hepa.minPa)) fail('yogurt.p8.hepa: normalPa less swingPa must stay above minPa, or the cabin\'s swing stops P8');
+  const fracOk = (value: number): boolean => value >= 0 && value < 1;
+  if (!fracOk(seal.leakInWindowFrac)) fail('yogurt.p8.seal.leakInWindowFrac must lie in 0–1');
+  if (!fracOk(p8.metalRejectFrac) || !fracOk(p8.visionRejectFrac)) fail('yogurt.p8.metalRejectFrac and visionRejectFrac must lie in 0–1');
+  if (!(p8.sip.runC >= p8.sip.tempC)) fail('yogurt.p8.sip.runC must be at least sip.tempC, or every SIP fails');
+  if (!(p8.atpCleanRlu * 1.5 < p8.atpMaxRlu)) fail('yogurt.p8.atpCleanRlu × 1.5 must be under atpMaxRlu, or a clean surface fails its swab');
+  const { magazines } = p8;
+  if (!(magazines.cups >= p8.lanes && magazines.foils >= p8.lanes)) fail('yogurt.p8.magazines must hold at least a cycle\'s cups and foils (p8.lanes)');
+  if (!(magazines.refillBelowFrac > 0 && magazines.refillBelowFrac < 1)) fail('yogurt.p8.magazines.refillBelowFrac must lie between 0 and 1');
   if (!(cip.lyeTempC > 0 && cip.acidTempC > 0)) fail('yogurt.cip needs the lye\'s and the acid\'s temperatures');
   const waterMsPerCm = config.cleaning.chemicals?.water?.conductivityMsPerCm ?? 0;
   if (!(cip.lyeConductivityMsPerCm * config.cleaning.changeOverFrac > waterMsPerCm && cip.acidConductivityMsPerCm * config.cleaning.changeOverFrac > waterMsPerCm)) {

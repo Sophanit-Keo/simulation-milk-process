@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "timeS": 648400.7527456576,
   "speed": 10,
   "paused": false,
@@ -187,10 +187,10 @@
       "id": 14,
       "status": "ok",
       "values": {
-        "inflowLph": 2743.2,
-        "outflowLph": 2743.2,
+        "inflowLph": 0,
+        "outflowLph": 5508.897036456256,
         "tempC": 18,
-        "levelPct": 90,
+        "levelPct": 89.98079377058016,
         "fruitDosePct": 0
       }
     },
@@ -199,8 +199,8 @@
       "status": "ok",
       "values": {
         "cupsPerH": 21600,
-        "cupsMade": 132004,
-        "cupsRejected": 0,
+        "cupsMade": 131977,
+        "cupsRejected": 8,
         "setRateCupsPerH": 21600,
         "cupG": 125,
         "fillTargetG": 127,
@@ -292,19 +292,19 @@
     },
     "yFermentTank": {
       "tempC": 43,
-      "flowLph": 2743.2
+      "flowLph": 0
     },
     "yCooler": {
       "tempC": 18,
-      "flowLph": 2743.2
+      "flowLph": 0
     },
     "p8Buffer": {
       "tempC": 18,
-      "flowLph": 2743.2
+      "flowLph": 5508.897036456256
     },
     "p8Filler": {
       "tempC": 18,
-      "flowLph": 2743.2
+      "flowLph": 5508.897036456256
     }
   },
   "liquid": {
@@ -1247,7 +1247,7 @@
           "readyAtS": null
         },
         {
-          "levelL": 9635.426407807729,
+          "levelL": 9637.385656972396,
           "capacityL": 10000,
           "state": "emptying",
           "product": "plainStirred",
@@ -1259,10 +1259,10 @@
       ]
     },
     "buffer": {
-      "levelL": 3600,
+      "levelL": 3599.2317508232068,
       "capacityL": 4000,
-      "inflowLph": 2743.2,
-      "outflowLph": 2743.2,
+      "inflowLph": 0,
+      "outflowLph": 5508.897036456256,
       "tempC": 18,
       "waitS": null,
       "coolerOutletC": 18,
@@ -1272,9 +1272,85 @@
     },
     "p8": {
       "state": "running",
+      "stopReason": null,
+      "cyclesPerMin": 30,
+      "lastFillG": 127.62050008842276,
+      "fillHistogram": {
+        "fromG": 120,
+        "binG": 0.5,
+        "counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          6,
+          19,
+          145,
+          640,
+          2216,
+          5951,
+          12138,
+          19904,
+          25200,
+          25426,
+          19579,
+          11856,
+          5842,
+          2218,
+          689,
+          148,
+          18,
+          3,
+          2,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "seal": {
+        "tempC": 200,
+        "timeS": 1,
+        "bar": 5
+      },
+      "hepaPa": 25.965690213149152,
+      "sip": {
+        "lastS": 603600,
+        "ok": true
+      },
+      "atpRlu": 4,
+      "nextSealTestS": 655200.7527456576,
+      "magazines": {
+        "cupsPct": 68.5,
+        "foilsPct": 42.8
+      },
+      "currentBatch": {
+        "code": "P8-008-1",
+        "product": "plainStirred",
+        "madeS": 626402,
+        "expiresS": 3045602,
+        "cups": 131977
+      },
       "cupsPerH": 21600,
-      "cupsMade": 132004,
-      "cupsRejected": 0
+      "cupsMade": 131977,
+      "cupsRejected": 8,
+      "rejects": {
+        "underFill": 0,
+        "overFill": 0,
+        "metal": 1,
+        "vision": 7,
+        "sealHold": 0
+      },
+      "sealTests": {
+        "passed": 3,
+        "failed": 0,
+        "cupsTaken": 15
+      }
     },
     "coldChain": {
       "warmRoom": {
@@ -1295,7 +1371,7 @@
       "mixLph": 0,
       "divertedL": 0,
       "cupsPerH": 21600,
-      "cupsMade": 132004,
+      "cupsMade": 131977,
       "coldRoomPallets": 0,
       "reefersShipped": 0
     },
@@ -1331,7 +1407,7 @@
       "message": "Filler A broke down: repair about 10 min with re-sterilizing"
     },
     {
-      "timeS": 647922.3946951648,
+      "timeS": 647925.3946951648,
       "kind": "info",
       "message": "Fermentation tank 2 empty: cleaning",
       "line": "yogurt"
@@ -1424,6 +1500,12 @@
       "timeS": 632400,
       "kind": "info",
       "message": "Truck 1 docked at door 1: loading 22 pallets, earliest best-before first"
+    },
+    {
+      "timeS": 626402,
+      "kind": "info",
+      "message": "Line P8: batch P8-008-1 started, best before day 36, 06:00",
+      "line": "yogurt"
     },
     {
       "timeS": 626400,

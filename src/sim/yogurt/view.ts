@@ -72,7 +72,8 @@ export function yogurtStageValues(config: PlantConfig, setpoints: Readonly<Setpo
       setRateCupsPerH: setpoints.p8RateCupsPerH,
       cupG: plant.p8.cupG,
       fillTargetG: plant.p8.fill.targetG,
-      sealTempC: plant.p8.seal.tempC,
+      // The sealing heads as P8 reports them (contracts v10), or their set point.
+      sealTempC: p8.seal?.tempC ?? plant.p8.seal.tempC,
     },
     16: {
       warmRoomPallets: coldChain.warmRoom.pallets,

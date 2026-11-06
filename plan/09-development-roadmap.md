@@ -93,7 +93,7 @@ The Could list, in order:
 - [ ] Week 1: D25 and D26 approved; `plant.json` schema 10; contracts v8; stages 11–16 in `stages.json`; the mock yogurt snapshot drives the UI. *Built in [phase 15](agent-plan/phase-15-yogurt-research-and-contracts.md#status); waits for the developer's approval of D25 and D26.*
 - [ ] Week 3 (gate Y1): the wing's four zones in grey boxes, with pipes, camera stops, the grouped stage rail and panels 11–16. *Built in [phase 16](agent-plan/phase-16-yogurt-grey-box.md#status); waits for the developer's sign-off of Y1.*
 - [ ] Week 5: stages 11–14 live (fat and SNF, divert at 85 °C, denaturation, three tanks' pH, cooling, buffer); tests against H122–H125. *Built in [phase 17](agent-plan/phase-17-yogurt-liquid-line.md#status); waits for the developer to watch a stirred and a set batch, and for D25–D27 and Y1.*
-- [ ] Week 7: stage 15 live (cups, seal window, checkweigher, metal and vision rejects, seal tests, HEPA, SIP); tests against H126–H129.
+- [ ] Week 7: stage 15 live (cups, seal window, checkweigher, metal and vision rejects, seal tests, HEPA, SIP); tests against H126–H129. *Built in [phase 18](agent-plan/phase-18-p8-cup-filler.md#status); waits for the developer to watch P8 at ×1, and for D25–D28 and Y1.*
 - [ ] Week 9 (gate Y2): stage 16 live (trays, pallets, warm room, blast chiller, cold-room hold, reefer trucks); a 7-day run conserves cups; scope frozen.
 - [ ] Week 11: P8 and fermentation-tank hero models, five yogurt faults, the yogurt tour, "About this model".
 - [ ] Week 12 (gate Y3): the 60 fps check with both lines; the report, demo script and slides updated.

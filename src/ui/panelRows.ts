@@ -2,6 +2,18 @@ import type { Snapshot, StageId } from '../contracts';
 import { STATE_ROWS as LIQUID_STATE_ROWS, type StateRow, type StateText } from './liquidRows';
 import { dockText, fillerText, lastPalletText, lastSsccText, nextPickText, packerText, palletText } from './packsRows';
 import {
+  p8BatchText,
+  p8FillText,
+  p8HepaText,
+  p8HygieneText,
+  p8MagazinesText,
+  p8Of,
+  p8RejectsText,
+  p8SealTestText,
+  p8SealText,
+  p8StateText,
+} from './p8Rows';
+import {
   bufferProductText,
   changeoverText,
   heatCleaningText,
@@ -48,7 +60,9 @@ const TANK_NUMBERS = [1, 2, 3] as const;
  * (batchList.ts). The plant has two fillers, A and B; a missing one reads "—".
  *
  * The yogurt line's (phase 17, yogurtRows.ts): the product and the next shift's (stage 11), the heat treatment's mode,
- * its clean and its steam (12), each fermentation tank (13), and the buffer's product, changeover and set-mix wait (14).
+ * its clean and its steam (12), each fermentation tank (13), and the buffer's product, changeover and set-mix wait (14);
+ * and Line P8's (phase 18, p8Rows.ts): what it does, its batch, the last fill, the rejects, the seal, the HEPA cabin,
+ * the SIP and swab, the next seal test and the magazines (15).
  */
 export const PANEL_STATE_ROWS: Readonly<Partial<Record<StageId, readonly PanelStateRow[]>>> = {
   4: fromLiquid(LIQUID_STATE_ROWS[4]),
@@ -86,5 +100,16 @@ export const PANEL_STATE_ROWS: Readonly<Partial<Record<StageId, readonly PanelSt
     { key: 'bufferProduct', label: 'In the buffer', read: (snapshot) => bufferProductText(yogurtOf(snapshot)) },
     { key: 'changeover', label: 'Changeover', read: (snapshot) => changeoverText(yogurtOf(snapshot)) },
     { key: 'setWait', label: 'Set mix waited', read: (snapshot) => setWaitText(yogurtOf(snapshot)) },
+  ],
+  15: [
+    { key: 'p8State', label: 'Line P8', read: (snapshot) => p8StateText(p8Of(snapshot)) },
+    { key: 'p8Batch', label: 'Batch', read: (snapshot) => p8BatchText(p8Of(snapshot)) },
+    { key: 'p8Fill', label: 'Last fill', read: (snapshot) => p8FillText(p8Of(snapshot)) },
+    { key: 'p8Rejects', label: 'Rejects', read: (snapshot) => p8RejectsText(p8Of(snapshot)) },
+    { key: 'p8Seal', label: 'Seal', read: (snapshot) => p8SealText(p8Of(snapshot)) },
+    { key: 'p8Hepa', label: 'HEPA cabin', read: (snapshot) => p8HepaText(p8Of(snapshot)) },
+    { key: 'p8Hygiene', label: 'SIP and swab', read: (snapshot) => p8HygieneText(p8Of(snapshot)) },
+    { key: 'p8SealTest', label: 'Next seal test', read: (snapshot) => p8SealTestText(p8Of(snapshot), snapshot.timeS) },
+    { key: 'p8Magazines', label: 'Magazines', read: (snapshot) => p8MagazinesText(p8Of(snapshot)) },
   ],
 };

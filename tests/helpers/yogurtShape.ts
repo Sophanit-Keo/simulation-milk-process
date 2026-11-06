@@ -1,9 +1,11 @@
-// Every shape rule of contracts v8's Snapshot.yogurt (src/contracts/yogurt.ts) that a consumer may rely on, and the
-// agreement between it, the stage 11–16 values and the yogurt line points (src/sim/yogurt/view.ts).
+// Every shape rule of contracts v8's Snapshot.yogurt (src/contracts/yogurt.ts) that a consumer may rely on, with v9's
+// and v10's fields where a snapshot has them, and the agreement between it, the stage 11–16 values and the yogurt line
+// points (src/sim/yogurt/view.ts).
 import { expect } from 'vitest';
 import {
   FERMENT_TANK_STATES,
   P8_STATES,
+  P8_STOP_REASONS,
   YOGURT_HEAT_MODES,
   YOGURT_LINE_POINT_IDS,
   YOGURT_PRODUCT_IDS,
@@ -80,6 +82,7 @@ export function expectWellFormedYogurt(snap: Snapshot, config: PlantConfig, wher
   }
   expect(Number.isInteger(p8.cupsMade) && Number.isInteger(p8.cupsRejected), `${where}: whole cups`).toBe(true);
   expect(p8.state === 'running' ? true : p8.cupsPerH === 0, `${where}: cups only while P8 runs`).toBe(true);
+  expectWellFormedP8(p8, where);
 
   const counts = [coldChain.warmRoom.pallets, coldChain.chiller.pallets, coldChain.coldRoom.positionsUsed, coldChain.palletsShipped, coldChain.reefersShipped];
   if (!counts.every((count) => Number.isInteger(count) && count >= 0)) expect.fail(`${where}: cold-chain counts ${counts.join(', ')}`);
@@ -103,5 +106,42 @@ export function expectWellFormedYogurt(snap: Snapshot, config: PlantConfig, wher
   for (const id of YOGURT_LINE_POINT_IDS) {
     const point = snap.line[id];
     if (!(point && Number.isFinite(point.tempC) && finiteAtLeast0(point.flowLph))) expect.fail(`${where}: line.${id} is ${JSON.stringify(point)}`);
+  }
+}
+
+/** Contracts v10's P8 fields (phase 18, D28), each where the snapshot has it. */
+function expectWellFormedP8(p8: Snapshot['yogurt']['p8'], where: string): void {
+  if (p8.stopReason !== undefined) {
+    expect(p8.stopReason === null || P8_STOP_REASONS.includes(p8.stopReason), `${where}: p8.stopReason ${p8.stopReason}`).toBe(true);
+    expect(p8.stopReason !== null, `${where}: a stop reason only while stopped`).toBe(p8.state === 'stopped');
+  }
+  if (p8.cyclesPerMin !== undefined) expect(p8.state === 'running' || p8.cyclesPerMin === 0, `${where}: cycles only while P8 runs`).toBe(true);
+  if (p8.rejects) {
+    const { underFill, overFill, metal, vision, sealHold } = p8.rejects;
+    for (const count of [underFill, overFill, metal, vision, sealHold]) expect(Number.isInteger(count) && count >= 0, `${where}: p8 reject counts`).toBe(true);
+    expect(underFill + overFill + metal + vision + sealHold, `${where}: the rejects by cause sum to cupsRejected`).toBe(p8.cupsRejected);
+  }
+  if (p8.fillHistogram) {
+    const { fromG, binG, counts } = p8.fillHistogram;
+    expect(Number.isFinite(fromG) && binG > 0 && counts.length > 0, `${where}: p8.fillHistogram`).toBe(true);
+    expect(counts.every((count) => Number.isInteger(count) && count >= 0), `${where}: whole histogram counts`).toBe(true);
+    if (p8.currentBatch) expect(counts.reduce((sum, count) => sum + count, 0), `${where}: the histogram weighs every cup of the batch at least`).toBeGreaterThanOrEqual(p8.currentBatch.cups);
+  }
+  if (p8.lastFillG !== undefined && p8.lastFillG !== null) expect(p8.lastFillG > 0, `${where}: p8.lastFillG`).toBe(true);
+  if (p8.magazines) {
+    for (const pct of [p8.magazines.cupsPct, p8.magazines.foilsPct]) expect(pct >= 0 && pct <= 100, `${where}: magazine at ${pct}%`).toBe(true);
+  }
+  if (p8.hepaPa !== undefined) expect(Number.isFinite(p8.hepaPa), `${where}: p8.hepaPa`).toBe(true);
+  if (p8.seal) for (const value of Object.values(p8.seal)) expect(value > 0, `${where}: p8.seal`).toBe(true);
+  if (p8.nextSealTestS !== undefined && p8.nextSealTestS !== null) expect(Number.isFinite(p8.nextSealTestS), `${where}: p8.nextSealTestS`).toBe(true);
+  if (p8.sealTests) {
+    const { passed, failed, cupsTaken } = p8.sealTests;
+    expect([passed, failed, cupsTaken].every((count) => Number.isInteger(count) && count >= 0), `${where}: p8.sealTests`).toBe(true);
+  }
+  if (p8.currentBatch) {
+    const batch = p8.currentBatch;
+    expect(batch.code, `${where}: batch code`).toMatch(/^P8-\d{3}-[1-3]$/);
+    expect(YOGURT_PRODUCT_IDS, `${where}: batch product`).toContain(batch.product);
+    expect(batch.expiresS > batch.madeS && Number.isInteger(batch.cups) && batch.cups >= 0, `${where}: batch dates and cups`).toBe(true);
   }
 }

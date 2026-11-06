@@ -3,7 +3,7 @@
 // between them belong to pipes.ts, the holding cell's serpentine among them. Driven by the snapshot's yogurt
 // part (contracts v8): tank levels on their gauges and a key value on each label. Phase 17 adds the agitators of
 // the mix tank, the fermentation tanks and the fruit tank, the divert valve's flag and lamp, and the pH ring on each
-// fermentation tank's label; cups and pallets come in phases 18–19.
+// fermentation tank's label. Phase 18 makes P8 move and fill its cups (yogurt/p8Machine.ts); pallets come in phase 19.
 import * as THREE from 'three';
 import type { Snapshot, StageId } from '../../contracts';
 import { DARK_LAMP_BODY_HEX, createLampPalette, glowInDark } from '../lamps';
@@ -26,11 +26,14 @@ import {
 } from './liquidLine';
 import type { Equipment, EquipmentFactory } from './types';
 import * as at from './yogurt/layout';
+import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
 import { finite, HEAT_MODE_TEXT, heatValveLamp, phRingFrac, tankStirs, yogurtFill, yogurtOf } from './yogurt/readings';
 
 /** The yogurt line, stages 11–16: one Equipment per machine. */
 export const yogurtLine: EquipmentFactory = (ctx) => {
   const kit = createKit(ctx);
+  // P8's machine and its cups follow one carrier clock (phase 18).
+  const carrier = createP8Carrier();
   return [
     yogurtSilo(kit),
     powderStation(kit),
@@ -109,12 +112,13 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
       fill: yogurtFill((y) => y.buffer),
       labelText: (s) => labelValue(stageValue(s, 14, 'levelPct'), 0, '%'),
     }),
-    p8Filler(kit),
+    p8Filler(kit, carrier),
     // The gates stand 1.1 m apart, so their labels stand at three heights, one above the other at the stage's stop.
     checkGate(kit, 'p8-checkweigher', 'Checkweigher', at.CHECK_GATES.checkweigher, 'weigh', 0.9, (s) => labelValue(stageValue(s, 15, 'fillTargetG'), 0, 'g')),
     checkGate(kit, 'p8-metal-detector', 'Metal detector', at.CHECK_GATES.metalDetector, 'arch', 1.7),
     checkGate(kit, 'p8-vision', 'Vision check', at.CHECK_GATES.vision, 'camera', 2.5),
     rejectBin(kit),
+    p8Cups(kit, carrier),
     trayPacker(kit),
     palletizer(kit),
     wrapper(kit),
@@ -469,32 +473,6 @@ function plateCooler(kit: Kit): Equipment {
 }
 
 /* stage 15: Line P8, its check gates and the reject bin */
-
-function p8Filler(kit: Kit): Equipment {
-  const { xMinM, xMaxM, zM, widthM, bodyM, hoodM } = at.P8;
-  const xM = (xMinM + xMaxM) / 2;
-  const lengthM = xMaxM - xMinM;
-  // The machine body, the cup magazines and the foil magazines along its top, all under a clear HEPA hood with
-  // its filter housing on top: one grey box until phase 20's hero model (assets/hero-specs.md).
-  return fixture(
-    kit,
-    'p8-filler',
-    15,
-    'Line P8',
-    [xM, zM],
-    bodyM + hoodM + 0.35,
-    (b) => {
-      body(b, xM, zM, [lengthM, bodyM, widthM - 0.4]);
-      b.part('box', 'steelDark', [xM, bodyM + 0.04, zM], [lengthM, 0.08, widthM - 0.3]); // the carrier chain
-      for (let i = 0; i < 4; i++) b.part('box', 'steel', [xMinM + 0.8 + i * 0.45, bodyM + 0.45, zM], [0.3, 0.8, 0.9]); // cup magazines
-      b.part('box', 'steel', [xMinM + 6.2, bodyM + 0.35, zM], [1.2, 0.6, 0.9]); // piston manifold
-      b.part('box', 'steel', [xMinM + 7.8, bodyM + 0.4, zM], [0.9, 0.7, 0.9]); // foil magazines and sealing heads
-      b.part('box', 'glass', [xM, bodyM + hoodM / 2, zM], [lengthM + 0.2, hoodM, widthM]);
-      b.part('box', 'steel', [xM, bodyM + hoodM + 0.15, zM], [lengthM - 1, 0.3, widthM - 0.4]); // HEPA filter housing
-    },
-    (s) => labelValue(stageValue(s, 15, 'cupsPerH'), 0, 'cups/h'),
-  );
-}
 
 function checkGate(kit: Kit, id: string, label: string, xM: number, kind: 'weigh' | 'arch' | 'camera', labelTopM: number, labelText?: (snapshot: Snapshot) => string): Equipment {
   const zM = at.P8.zM;

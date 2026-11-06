@@ -9,9 +9,10 @@ import type { YogurtSnapshot } from './yogurt';
  * v0 week 1, v1 at G1, v2 at week 6, v3 at G2, v4 in phase 5 (scenarios), v5 in phase 7 (cleaning steps), v6 in
  * phase 8 (steam and energy), v7 in phase 13 (the CIP station's chemicals and returns), v8 in phase 15 (the yogurt
  * line: stages 11–16, their line points and Snapshot.yogurt), v9 in phase 17 (the live yogurt line's heat treatment
- * clean, buffer changeover and steam). From v3 on, fields may only be added.
+ * clean, buffer changeover and steam), v10 in phase 18 (Line P8: its cycles, rejects by cause, seal, hygiene,
+ * magazines and batch). From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 9;
+export const CONTRACT_VERSION = 10;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {

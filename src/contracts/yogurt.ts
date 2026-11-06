@@ -45,12 +45,41 @@ export interface FermentTank extends TankLevel {
   readyAtS: number | null;
 }
 
-/** What Line P8 is doing (stage 15). Phase 18 adds why it stopped. */
+/** What Line P8 is doing (stage 15); `stopReason` says why it stopped (contracts v10). */
 export type P8State = 'idle' | 'cleaning' | 'sterilizing' | 'running' | 'starved' | 'stopped';
 
 export const P8_STATES: readonly P8State[] = ['idle', 'cleaning', 'sterilizing', 'running', 'starved', 'stopped'];
 
-/** Line P8, the cup filler (stage 15). Phase 18 adds the rejects by cause, the seal, HEPA, SIP, ATP and the magazines. */
+/** Why P8 stopped (contracts v10, phase 18, D28): the HEPA cabin under its limit, or the cup or foil magazine run out. */
+export type P8StopReason = 'hepa' | 'cups' | 'foils';
+
+export const P8_STOP_REASONS: readonly P8StopReason[] = ['hepa', 'cups', 'foils'];
+
+/** Cups the in-line checks threw out since the plant opened, by cause (contracts v10). */
+export interface P8Rejects {
+  /** The checkweigher: under `fill.underBelowG`, over `fill.overAboveG`. */
+  underFill: number;
+  overFill: number;
+  metal: number;
+  vision: number;
+  /** Cups held by a seal test that failed: every cup made since the last test that passed. */
+  sealHold: number;
+}
+
+/** The batch P8 fills now (contracts v10): one product's run in one shift (D1, D28), coded on every cup. */
+export interface P8Batch {
+  /** "P8-008-1": Line P8, the day of the shift's start, the shift's number from 06:00. */
+  code: string;
+  product: YogurtProductId;
+  /** Date of manufacture: the batch's first cup. */
+  madeS: number;
+  /** Expiry: madeS plus the shelf life. */
+  expiresS: number;
+  /** Cups of the batch made so far: filled, sealed and passed. */
+  cups: number;
+}
+
+/** Line P8, the cup filler (stage 15). Contracts v10 (phase 18) adds every field after cupsRejected; each is absent from an older snapshot. */
 export interface P8Snapshot {
   state: P8State;
   /** Cups filled per hour now; 0 while it stands. */
@@ -59,6 +88,31 @@ export interface P8Snapshot {
   cupsMade: number;
   /** Cups the checks threw out since the plant opened. */
   cupsRejected: number;
+  /** Why it stopped, while `state` is 'stopped'; null otherwise. */
+  stopReason?: P8StopReason | null;
+  /** Cycles of `p8.lanes` cups a minute now; 0 while it stands. */
+  cyclesPerMin?: number;
+  rejects?: P8Rejects;
+  /** The fill weight of the last cup filled; null before the first. */
+  lastFillG?: number | null;
+  /** The current batch's fill weights: counts[i] cups weighed from fromG + i × binG to fromG + (i + 1) × binG; the end bins take the rest. */
+  fillHistogram?: { fromG: number; binG: number; counts: number[] };
+  /** The sealing heads now. */
+  seal?: { tempC: number; timeS: number; bar: number };
+  /** The HEPA cabin's overpressure against the packaging hall. */
+  hepaPa?: number;
+  /** The last SIP: when it ended, and whether it held its temperature and time; lastS null before any. */
+  sip?: { lastS: number | null; ok: boolean };
+  /** The last ATP swab, RLU; null before any. */
+  atpRlu?: number | null;
+  /** Sim time of the next seal test if P8 keeps running; null while it does not run. */
+  nextSealTestS?: number | null;
+  /** Seal tests since the plant opened, and the cups they took. */
+  sealTests?: { passed: number; failed: number; cupsTaken: number };
+  /** How full the de-nester's cup magazine and the lidder's foil magazine are. */
+  magazines?: { cupsPct: number; foilsPct: number };
+  /** The batch it fills; null before its first cup. */
+  currentBatch?: P8Batch | null;
 }
 
 /** Trays, pallets and the cold chain (stage 16). Phase 19 adds the trays, each pallet, the capacities and the reefers. */
