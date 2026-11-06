@@ -1,9 +1,9 @@
 // The sim the app runs: the clock, the event queue with shift changes and every command (core.ts), stages
 // 1–6 live from the fixed-step liquid-line model (liquidLine.ts), run once per step, and stages 7–10 from the
 // discrete packs model (packsLine.ts), whose fillers draw from the liquid line's aseptic tank and whose
-// breakdowns, batches, incubations and trucks run through the core's event queue. Stages 11–14, the yogurt line's
-// liquid side, run in the same step after them (yogurt/yogurtLine.ts, phase 17), P8's draw stubbed and the cold chain
-// standing until phases 18 and 19.
+// breakdowns, batches, incubations and trucks run through the core's event queue. Stages 11–15, the yogurt line's
+// liquid side (phase 17) and Line P8 (phase 18), run in the same step after them (yogurt/yogurtLine.ts), the cold chain
+// standing until phase 19.
 import type { PlantConfig, Sim } from '../contracts';
 import { createCore } from './core';
 import { createLiquidLine, LIQUID_STAGE_IDS, type LiquidLine, type LiquidLineOptions } from './liquidLine';
@@ -11,7 +11,8 @@ import { createPacksLine, PACKS_STAGE_IDS, type PacksLine } from './packsLine';
 import { createRng, type Rng } from './rng';
 import { createScenarios, type Scenarios } from './scenarios';
 import { linePoints, staticPlant, toStages } from './staticPlant';
-import { createYogurtLine, type YogurtLine } from './yogurt/yogurtLine';
+import type { P8Conditions } from './yogurt/p8';
+import { createYogurtLine, yogurtSeed, type YogurtLine } from './yogurt/yogurtLine';
 
 export interface SimOptions extends Omit<LiquidLineOptions, 'fillers'> {
   /** Every random draw of the liquid line (the display noise); defaults to one seeded from plant.json's seed. */
@@ -28,6 +29,10 @@ export interface SimOptions extends Omit<LiquidLineOptions, 'fillers'> {
   onPacksLine?: (line: PacksLine) => void;
   /** Called once with the yogurt line's model, likewise (phase 17). */
   onYogurtLine?: (line: YogurtLine) => void;
+  /** Line P8's random draws (phase 18); defaults to its own stream from plant.json's seed (D28). */
+  yogurtRng?: Rng;
+  /** P8's readings in place of plant.json's (the HEPA cabin, the SIP, the swab, the seal), for tests (D28). */
+  p8Conditions?: Partial<P8Conditions>;
 }
 
 /** The packs model's seed: plant.json's seed, mixed so its stream never runs in step with the liquid line's. */
@@ -64,9 +69,9 @@ export function createSim(config: PlantConfig, options: SimOptions = {}): Sim {
     log: core.log,
   });
   models.scenarios = scenarios;
-  // Last, and drawing nothing from the seeded streams nor queueing events, so the UHT line's steps, draws and numbers
-  // stay as they were (D25).
-  const yogurt = createYogurtLine(config, core.timeS);
+  // Last, queueing no events, and P8 drawing from a stream of its own, so the UHT line's steps, draws and numbers stay
+  // as they were (D25, D28).
+  const yogurt = createYogurtLine(config, core.timeS, { rng: options.yogurtRng ?? createRng(yogurtSeed(config.seed)), p8Conditions: options.p8Conditions });
   models.yogurt = yogurt;
   options.onLiquidLine?.(liquid);
   options.onPacksLine?.(packs);

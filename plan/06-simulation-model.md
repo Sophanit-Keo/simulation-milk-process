@@ -132,8 +132,12 @@ Stages 11–16, Line P8 ([plan 12](12-yogurt-line.md)), from the `yogurt` block 
 | Routing and buffer | Set mix to the buffer first, the rest of 6,000 L/h into the tanks; a tank emptied at 6,000 L/h, cleaned 45 min; the buffer filled to 90% (stirred) or held at 40% (set, 10 min level control) | Sim assumptions ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114), H125c) |
 | Changeovers on P8 | A 15 min rinse before a stirred product; the wing's CIP (80 min) and P8's SIP (20 min) before set yogurt | Sim assumptions; the CIP and SIP from SOP Part 3 ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)) |
 | Wing CIP circuit | 12,000 L/h through 300 L; lye 84.2 mS/cm, acid 45.0 mS/cm at 20 °C | CRC Handbook, linear (H125b); the circuit a sim assumption ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)) |
+| P8 seal leaks | 1 cup in 10,000 inside the window; outside it rising with the distance out until every cup leaks half a window out | Sim assumption ([D28](DECISIONS.md#d28-line-p8-live-stage-15), H128) |
+| P8 checks | Metal detector 1 cup in 200,000, vision 1 in 20,000 | Sim rates ([D28](DECISIONS.md#d28-line-p8-live-stage-15), H129) |
+| P8 hygiene, run | HEPA +25 Pa ± 1.5 Pa over an hour; SIP run at 123 °C; a clean swab 4 RLU ± 50% | Sim assumptions inside SOP Part 3's limits ([D28](DECISIONS.md#d28-line-p8-live-stage-15)) |
+| P8 magazines | 7,200 cups and 12,000 foils; topped up 4 min after they fall to 25% | Sim assumption ([D28](DECISIONS.md#d28-line-p8-live-stage-15), H126) |
 
-> Since phase 17 stages 11–14 run live ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)); P8's draw is stubbed at its rate until phase 18, and the cold chain stands until phase 19.
+> Since phase 17 stages 11–14 run live ([D27](DECISIONS.md#d27-the-yogurt-line-live-stages-1114)), and since phase 18 Line P8 ([D28](DECISIONS.md#d28-line-p8-live-stage-15)); the cold chain stands until phase 19.
 
 ## KPIs on screen
 

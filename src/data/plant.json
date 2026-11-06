@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 11,
+  "schemaVersion": 12,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -211,11 +211,15 @@
       "lanes": 12,
       "rateCupsPerH": 21600,
       "fill": { "targetG": 127, "sigmaG": 1.0, "underBelowG": 120.5, "overAboveG": 135 },
-      "seal": { "tempC": 200, "timeS": 1.0, "bar": 5.0, "minTempC": 180, "maxTempC": 220, "minTimeS": 0.8, "maxTimeS": 1.2, "minBar": 4.0, "maxBar": 6.0 },
+      "seal": { "tempC": 200, "timeS": 1.0, "bar": 5.0, "minTempC": 180, "maxTempC": 220, "minTimeS": 0.8, "maxTimeS": 1.2, "minBar": 4.0, "maxBar": 6.0, "leakInWindowFrac": 0.0001, "leakAllBeyondFrac": 0.5 },
       "sealTest": { "cups": 5, "everyS": 7200 },
-      "hepa": { "minPa": 15, "normalPa": 25 },
-      "sip": { "tempC": 121, "holdS": 1200 },
-      "atpMaxRlu": 10
+      "hepa": { "minPa": 15, "normalPa": 25, "swingPa": 1.5, "swingS": 3600 },
+      "sip": { "tempC": 121, "holdS": 1200, "runC": 123 },
+      "atpMaxRlu": 10,
+      "atpCleanRlu": 4,
+      "metalRejectFrac": 0.000005,
+      "visionRejectFrac": 0.00005,
+      "magazines": { "cups": 7200, "foils": 12000, "refillBelowFrac": 0.25, "refillS": 240 }
     },
     "cip": {
       "lyePct": 1.8,

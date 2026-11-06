@@ -1,11 +1,12 @@
-// The yogurt line's liquid side, stages 11–14, live (phase 17, D27), with P8's draw stubbed at its rate until phase 18
-// and the cold chain still standing (phase 19). It runs inside the core's step after the UHT line's and draws nothing
-// from the seeded streams and queues no events, so the UHT line's steps, draws and numbers stay as they were (D25).
+// The yogurt line live: its liquid side, stages 11–14 (phase 17, D27), and Line P8, stage 15 (phase 18, D28, p8.ts),
+// with the cold chain still standing (phase 19). It runs inside the core's step after the UHT line's and queues no
+// events; P8's draws come from a stream of its own, so the UHT line's steps, draws and numbers stay as they were (D25).
 //
 // Each step:
 //   1. P8's shift product (the product day) and the buffer's changeover: P8 finishes what the buffer holds, then a
 //      rinse (before a stirred product) or the wing's CIP and P8's SIP (before set yogurt) runs, and the buffer takes
-//      the new product. Near a shift's end before another product the buffer is filled only for the time left.
+//      the new product. Near a shift's end before another product the buffer is filled only for the time left. The
+//      SIP that falls short runs again, and an ATP swab that fails sends P8 back to the CIP (D28).
 //   2. The yogurt silo's tanker, which starts only while the tanker bay's UHT lane is free.
 //   3. The mix line fills the mix tank at its capacity, by H122's recipe.
 //   4. The heat treatment: set mix for the buffer first (a level control), the rest into the tank that is filling;
@@ -13,7 +14,8 @@
 //      is the CCP's: below the divert limit, or held too short, the line diverts to the reprocess tank, then cleans.
 //   5. The tanks ferment on H125's curve; the oldest ready tank empties through the smoothing valve and the cooler
 //      into the buffer, with fruit dosed in when P8's product has it.
-//   6. P8 draws from the buffer; set mix that waits past its limit goes to rework.
+//   6. P8 fills its cycles from the buffer (p8.ts); set mix that waits past its limit goes to rework, and what a
+//      product leaves in the buffer, less than a cycle, is flushed out to rework by the changeover.
 import {
   hToS,
   lpsToLph,
@@ -32,10 +34,12 @@ import type { Setpoints } from '../core';
 import { lagToward, tubeVolumeL } from '../formulas';
 import { boilerGasKw, boilerGasKwh, steamLph } from '../liquid/stageModels';
 import type { LogWriter } from '../log';
+import { createRng, type Rng } from '../rng';
 import { ferment, tankView, type TankState } from './ferment';
 import { betaLgDenaturedPct, p8DrawLph } from './formulas';
 import { createHoldingCell, createWingCip } from './heat';
 import { mixRecipe } from './mix';
+import { createP8, type P8, type P8Conditions } from './p8';
 import { createProductPlan } from './products';
 import { createBuffer } from './routing';
 import { yogurtView, type YogurtView } from './view';
@@ -62,6 +66,10 @@ export interface YogurtTotals {
   toP8L: number;
   /** Set mix that waited in the buffer past its limit. */
   reworkL: number;
+  /** What a product left in the buffer, less than a cycle, flushed out to rework by the changeover (D28). */
+  flushedL: number;
+  /** Cleans run again after an ATP swab failed (D28). */
+  recleans: number;
   steamKg: number;
   /** Tanks that reached their end pH. */
   tanksFermented: number;
@@ -79,10 +87,22 @@ export interface YogurtLine {
   totals(): Readonly<YogurtTotals>;
   /** Levels the mass balance needs: the silo and the tanker, the mix tank, the tanks, the buffer, the reprocess tank. */
   inventory(): { siloL: number; tankerLeftL: number; mixTankL: number; tanksL: number; bufferL: number; reprocessL: number };
+  /** Line P8 (phase 18), for its totals. */
+  readonly p8: P8;
+}
+
+/** P8's seed: plant.json's seed, mixed so its stream never runs in step with the UHT line's or the packs model's. */
+export const yogurtSeed = (seed: number): number => Math.imul(seed ^ 0x50380001, 0x85ebca6b) >>> 0;
+
+export interface YogurtLineOptions {
+  /** P8's random draws; defaults to its own stream from plant.json's seed. */
+  rng?: Rng;
+  /** P8's readings in place of plant.json's (the HEPA cabin, the SIP, the swab, the seal), for tests and faults. */
+  p8Conditions?: Partial<P8Conditions>;
 }
 
 /** The yogurt line live, opening at `openS` as the night left it: two tanks ready, the third half way. */
-export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine {
+export function createYogurtLine(config: PlantConfig, openS: number, options: YogurtLineOptions = {}): YogurtLine {
   const { yogurt: plant } = config;
   const products = yogurtProducts(config);
   const plan = createProductPlan(config);
@@ -108,6 +128,8 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
     setToBufferL: 0,
     toP8L: 0,
     reworkL: 0,
+    flushedL: 0,
+    recleans: 0,
     steamKg: 0,
     tanksFermented: 0,
     rinses: 0,
@@ -150,10 +172,9 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
   let changeover: { kind: YogurtChangeoverKind; leftS: number; to: YogurtProductId } | null = null;
   let bufferInLph = 0;
   let fruitDosePct = 0;
-  // P8's draw, stubbed at its rate (phase 18 builds the filler).
+  // Line P8 (phase 18).
+  const p8 = createP8(config, openS, options.rng ?? createRng(yogurtSeed(config.seed)), options.p8Conditions);
   let p8Lph = 0;
-  let cupsMade = 0;
-  let starvedLogged = false;
   /**
    * The step just ended a changeover: P8 is ready and starts from the next one. The plant opens so too, P8 ready for
    * the first tank's yogurt, so the opening view shows it standing ready, not starved.
@@ -163,7 +184,9 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
   const routeOf = (id: YogurtProductId) => products[id].route;
   const tag = { topic: 'yogurt' as const, line: 'yogurt' as const };
 
+  /** The product in the buffer is done: what is left, less than a cycle, is flushed to rework, and the changeover starts. */
   function startChangeover(to: YogurtProductId, timeS: number, log: LogWriter): void {
+    totals.flushedL += buffer.draw(buffer.levelL);
     const kind: YogurtChangeoverKind = routeOf(to) === 'set' ? 'cip' : 'rinse';
     changeover = { kind, leftS: kind === 'cip' ? wingCip.totalS : config.yogurt.changeover.rinseS, to };
     bufferProduct = null;
@@ -182,8 +205,14 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
       if (changeover) {
         changeover.leftS -= dtS;
         if (changeover.leftS <= EPS) {
-          if (changeover.kind === 'cip') {
+          // After the CIP, P8's SIP; after the SIP, its check and the ATP swab, which may send it back (D28).
+          const after = changeover.kind === 'cip' ? 'sip' : changeover.kind === 'sip' ? p8.afterSip(timeS, log) : 'ok';
+          if (changeover.kind === 'cip') p8.cipDone(timeS);
+          if (after === 'sip') {
             changeover = { kind: 'sip', leftS: plant.p8.sip.holdS + changeover.leftS, to: changeover.to };
+          } else if (after === 'cip') {
+            changeover = { kind: 'cip', leftS: wingCip.totalS + changeover.leftS, to: changeover.to };
+            totals.recleans += 1;
           } else {
             bufferProduct = changeover.to;
             log(timeS, 'ok', `Line P8: ready for ${products[bufferProduct].name.toLowerCase()}`, tag);
@@ -192,7 +221,7 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
           }
         }
       }
-      if (!changeover && !changedOver && bufferProduct !== shift.id && buffer.levelL <= EPS) startChangeover(shift.id, timeS, log);
+      if (!changeover && !changedOver && bufferProduct !== shift.id && buffer.levelL < p8.cycleNeedL) startChangeover(shift.id, timeS, log);
       const feeding = !changeover && !changedOver && bufferProduct === shift.id;
       const drawLph = p8DrawLph(setpoints.p8RateCupsPerH, plant.p8.fill.targetG);
       // Near the end of a shift before another product, the buffer holds only what P8 draws until then.
@@ -387,10 +416,18 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
       fromTankLph = baseL / sToH(dtS);
       bufferInLph = (baseL + fruitL + setL) / sToH(dtS);
 
-      // 6. P8 draws what the buffer holds; set mix that has waited too long goes to rework.
-      const drawnL = changeover || changedOver ? 0 : buffer.draw(drawLph * sToH(dtS));
+      // 6. P8 fills its cycles from the buffer; set mix that has waited too long goes to rework.
+      const drawnL = p8.step({
+        dtS,
+        timeS,
+        rateCupsPerH: setpoints.p8RateCupsPerH,
+        buffer,
+        product: bufferProduct,
+        shiftProduct: shift.id,
+        mayRun: !changeover && !changedOver && bufferProduct !== null,
+        log,
+      });
       totals.toP8L += drawnL;
-      cupsMade += drawnL / (plant.p8.fill.targetG / 1_000);
       p8Lph = drawnL / sToH(dtS);
       if (bufferProduct && routeOf(bufferProduct) === 'set') {
         const lateL = buffer.discardOlderThan(plant.buffer.setMaxWaitS, timeS);
@@ -399,34 +436,25 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
           log(timeS, 'warn', `Set mix waited past ${Math.round(plant.buffer.setMaxWaitS / 60)} min in the P8 buffer: ${Math.round(lateL)} L to rework`, tag);
         }
       }
-      // The buffer ran out of the last shift's product in this step: the changeover starts at once.
-      if (!changeover && bufferProduct !== shift.id && buffer.levelL <= EPS) startChangeover(shift.id, timeS, log);
-      // A production shift with nothing to fill: logged once until P8 runs again.
+      // The buffer ran out of the last shift's product in this step, short of a cycle: the changeover starts at once.
+      if (!changeover && bufferProduct !== shift.id && buffer.levelL < p8.cycleNeedL) startChangeover(shift.id, timeS, log);
       readyToRun = changedOver;
-      const starved = !changeover && !changedOver && drawnL < drawLph * sToH(dtS) - EPS && buffer.levelL <= EPS;
-      if (starved && !starvedLogged) log(timeS, 'warn', 'Line P8 waiting: the buffer is empty', tag);
-      starvedLogged = starved;
     },
     setNextProduct: (product, timeS, log) => plan.setNext(product, timeS, log),
     view(setpoints, timeS) {
       const shift = plan.at(timeS);
-      const drawLph = p8DrawLph(setpoints.p8RateCupsPerH, plant.p8.fill.targetG);
       const out = cell.outlet();
       const heldS = timeS - out.enteredS;
       const flowing = heatLph > EPS;
       const cleaning: CleaningSnapshot | null = mode === 'cleaning' ? wingCip.snapshotAt(cleaningIntoS) : null;
       const bufferTempC = bufferProduct && routeOf(bufferProduct) === 'set' ? setpoints.fermentTempC : plant.cooling.outletC;
       const waitS = bufferProduct && routeOf(bufferProduct) === 'set' ? (buffer.oldestWaitS(timeS) ?? null) : null;
-      const p8State = changeover
-        ? changeover.kind === 'sip'
-          ? 'sterilizing'
-          : 'cleaning'
-        : readyToRun
-          ? 'idle'
-          : p8Lph >= drawLph - EPS && p8Lph > 0
-            ? 'running'
-            : 'starved';
-      const cups = Math.floor(cupsMade + 1e-6);
+      const own = p8.view(timeS, setpoints.p8RateCupsPerH);
+      const p8State = changeover ? (changeover.kind === 'sip' ? 'sterilizing' : 'cleaning') : readyToRun ? 'idle' : own.state;
+      const running = p8State === 'running';
+      const p8Totals = p8.totals();
+      const { rejects } = p8Totals;
+      const cups = p8Totals.cupsMade;
       const yogurt: YogurtSnapshot = {
         product: { ...shift },
         mix: {
@@ -460,7 +488,18 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
           product: bufferProduct,
           changeover: changeover ? { kind: changeover.kind, remainingS: Math.max(0, changeover.leftS) } : null,
         },
-        p8: { state: p8State, cupsPerH: p8State === 'running' ? setpoints.p8RateCupsPerH : 0, cupsMade: cups, cupsRejected: 0 },
+        p8: {
+          ...own,
+          state: p8State,
+          cupsPerH: running ? setpoints.p8RateCupsPerH : 0,
+          cupsMade: cups,
+          cupsRejected: rejects.underFill + rejects.overFill + rejects.metal + rejects.vision + rejects.sealHold,
+          stopReason: p8State === 'stopped' ? own.stopReason : null,
+          cyclesPerMin: running ? own.cyclesPerMin : 0,
+          nextSealTestS: running ? own.nextSealTestS : null,
+          rejects: { ...rejects },
+          sealTests: { passed: p8Totals.sealTestsPassed, failed: p8Totals.sealTestsFailed, cupsTaken: p8Totals.sealTestCups },
+        },
         coldChain: {
           warmRoom: { tempC: plant.coldChain.warmRoomC, pallets: 0 },
           chiller: { pallets: 0 },
@@ -471,7 +510,7 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
         kpis: {
           mixLph: heatLph,
           divertedL: totals.divertedL,
-          cupsPerH: p8State === 'running' ? setpoints.p8RateCupsPerH : 0,
+          cupsPerH: running ? setpoints.p8RateCupsPerH : 0,
           cupsMade: cups,
           coldRoomPallets: 0,
           reefersShipped: 0,
@@ -486,6 +525,7 @@ export function createYogurtLine(config: PlantConfig, openS: number): YogurtLine
       return yogurtView(config, setpoints, yogurt);
     },
     totals: () => ({ ...totals }),
+    p8,
     inventory: () => ({
       siloL,
       tankerLeftL,

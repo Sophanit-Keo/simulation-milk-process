@@ -5,8 +5,11 @@
 // room is part full. The pH, the hold and the denaturation follow the yogurt formulas (H122–H125) at the live set
 // points, and a heat set point under the divert limit diverts; the rest drifts on seeded waves of sim time. The
 // cycle's hold, clean and history numbers are mock numbers, not plant.json. Since contracts v9 it fills the live
-// line's fields too: the steam, as the live line counts it, the buffer's product, and no changeover or clean.
+// line's fields too: the steam, as the live line counts it, the buffer's product, and no changeover or clean; since
+// v10 P8's: its cycles, the rejects by cause, a fill histogram, the seal, the hygiene readings, the magazines (a saw
+// tooth) and the shift's batch.
 import {
+  dayToS,
   hToS,
   sToH,
   type LogKind,
@@ -20,6 +23,7 @@ import type { Setpoints } from './core';
 import { holdTimeS, tubeVolumeL } from './formulas';
 import { boilerGasKw, boilerGasKwh, steamLph } from './liquid/stageModels';
 import { createRng } from './rng';
+import { batchCode, cyclePeriodS, FILL_HISTOGRAM } from './yogurt/p8';
 import { betaLgDenaturedPct, fermentPh, p8DrawLph, powderKgPerT, timeToPhS, titratableAcidityPct } from './yogurt/formulas';
 import { createProductPlan } from './yogurt/products';
 import { yogurtView, type YogurtView } from './yogurt/view';
@@ -34,6 +38,11 @@ const REEFERS_BEFORE_OPENING = 12;
 const REEFER_EVERY_S = hToS(4);
 /** Share of the cups the checks throw out in the mock. */
 const REJECT_FRAC = 0.004;
+/** How the mock splits its rejects among the checks (the live line rejects far fewer, H129). */
+const REJECT_SHARES = { underFill: 0.2, overFill: 0.1, metal: 0.05, vision: 0.65 } as const;
+/** The mock's magazines run down and refill on these cycles (mock numbers). */
+const CUP_MAGAZINE_S = hToS(1 / 3);
+const FOIL_MAGAZINE_S = hToS(5 / 9);
 
 export interface MockYogurt {
   setNextProduct(product: string, timeS: number, log: (timeS: number, kind: LogKind, message: string) => void): void;
@@ -119,6 +128,22 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
     const reefersShipped = REEFERS_BEFORE_OPENING + Math.floor(t / REEFER_EVERY_S);
     const coldRoomPallets = Math.round(170 + 60 * wave(timeS, hToS(24), 4));
     const steamKgPerH = steamAt(heat.outletC);
+    const cupsRejected = Math.floor((cupsMade * REJECT_FRAC) / (1 - REJECT_FRAC));
+    const split = (share: number): number => Math.floor(cupsRejected * share);
+    const rejects = { underFill: split(REJECT_SHARES.underFill), overFill: split(REJECT_SHARES.overFill), metal: split(REJECT_SHARES.metal), vision: 0, sealHold: 0 };
+    rejects.vision = cupsRejected - rejects.underFill - rejects.overFill - rejects.metal;
+    const { batchS, firstShiftStartS } = config.quality;
+    const shiftStartS = firstShiftStartS + Math.floor((timeS - firstShiftStartS) / batchS) * batchS;
+    const p8 = plant.p8;
+    const sawtooth = (periodS: number, index: number): number => 100 * (1 - (((t + phases[index] * periodS) % periodS) + periodS) % periodS / periodS);
+    // The shift's fills so far, a normal around the target, scaled to the shift's cups.
+    const shiftCups = Math.max(0, Math.floor(setpoints.p8RateCupsPerH * sToH(timeS - Math.max(shiftStartS, openS))));
+    const counts = Array.from({ length: FILL_HISTOGRAM.bins }, (_, i) => {
+      const midG = FILL_HISTOGRAM.fromG + (i + 0.5) * FILL_HISTOGRAM.binG;
+      const z = (midG - p8.fill.targetG) / p8.fill.sigmaG;
+      return Math.round((shiftCups * FILL_HISTOGRAM.binG * Math.exp(-0.5 * z * z)) / (p8.fill.sigmaG * Math.sqrt(2 * Math.PI)));
+    });
+    const sealTestsDone = Math.floor((t + hToS(1)) / p8.sealTest.everyS);
     return {
       product,
       mix: {
@@ -158,7 +183,26 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
         state: 'running',
         cupsPerH,
         cupsMade,
-        cupsRejected: Math.floor((cupsMade * REJECT_FRAC) / (1 - REJECT_FRAC)),
+        cupsRejected,
+        stopReason: null,
+        cyclesPerMin: 60 / cyclePeriodS(p8.lanes, cupsPerH),
+        rejects,
+        lastFillG: p8.fill.targetG + p8.fill.sigmaG * wave(timeS, 7, 3),
+        fillHistogram: { fromG: FILL_HISTOGRAM.fromG, binG: FILL_HISTOGRAM.binG, counts },
+        seal: { tempC: p8.seal.tempC + 1.5 * wave(timeS, 120, 4), timeS: p8.seal.timeS, bar: p8.seal.bar + 0.1 * wave(timeS, 90, 5) },
+        hepaPa: p8.hepa.normalPa + p8.hepa.swingPa * wave(timeS, p8.hepa.swingS, 6),
+        sip: { lastS: openS - hToS(6 + 1 / 3), ok: true },
+        atpRlu: p8.atpCleanRlu,
+        nextSealTestS: openS - hToS(1) + (sealTestsDone + 1) * p8.sealTest.everyS,
+        sealTests: { passed: sealTestsDone, failed: 0, cupsTaken: sealTestsDone * p8.sealTest.cups },
+        magazines: { cupsPct: sawtooth(CUP_MAGAZINE_S, 7), foilsPct: sawtooth(FOIL_MAGAZINE_S, 8) },
+        currentBatch: {
+          code: batchCode(shiftStartS, firstShiftStartS, batchS),
+          product: product.id,
+          madeS: shiftStartS,
+          expiresS: shiftStartS + dayToS(plant.coldChain.shelfLifeDays),
+          cups: counts.reduce((sum, count) => sum + count, 0),
+        },
       },
       coldChain: {
         warmRoom: { tempC: plant.coldChain.warmRoomC + 0.3 * wave(timeS, 1_300, 10), pallets: Math.round(8 + 6 * wave(timeS, hToS(8), 11)) },

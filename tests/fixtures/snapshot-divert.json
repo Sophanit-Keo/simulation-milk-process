@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "timeS": 627090,
   "speed": 10,
   "paused": false,
@@ -188,9 +188,9 @@
       "status": "ok",
       "values": {
         "inflowLph": 6000,
-        "outflowLph": 2743.2,
+        "outflowLph": 5474.792223014401,
         "tempC": 18,
-        "levelPct": 15.605500000000161,
+        "levelPct": 15.603355928714482,
         "fruitDosePct": 0
       }
     },
@@ -199,8 +199,8 @@
       "status": "ok",
       "values": {
         "cupsPerH": 21600,
-        "cupsMade": 4140,
-        "cupsRejected": 0,
+        "cupsMade": 4139,
+        "cupsRejected": 1,
         "setRateCupsPerH": 21600,
         "cupG": 125,
         "fillTargetG": 127,
@@ -300,11 +300,11 @@
     },
     "p8Buffer": {
       "tempC": 18,
-      "flowLph": 2743.2
+      "flowLph": 5474.792223014401
     },
     "p8Filler": {
       "tempC": 18,
-      "flowLph": 2743.2
+      "flowLph": 5474.792223014401
     }
   },
   "liquid": {
@@ -1266,10 +1266,10 @@
       ]
     },
     "buffer": {
-      "levelL": 624.2200000000064,
+      "levelL": 624.1342371485792,
       "capacityL": 4000,
       "inflowLph": 6000,
-      "outflowLph": 2743.2,
+      "outflowLph": 5474.792223014401,
       "tempC": 18,
       "waitS": null,
       "coolerOutletC": 18,
@@ -1279,9 +1279,85 @@
     },
     "p8": {
       "state": "running",
+      "stopReason": null,
+      "cyclesPerMin": 30,
+      "lastFillG": 127.57990735320088,
+      "fillHistogram": {
+        "fromG": 120,
+        "binG": 0.5,
+        "counts": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          4,
+          24,
+          83,
+          178,
+          364,
+          591,
+          795,
+          795,
+          625,
+          381,
+          189,
+          80,
+          24,
+          4,
+          1,
+          1,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "seal": {
+        "tempC": 200,
+        "timeS": 1,
+        "bar": 5
+      },
+      "hepaPa": 26.400370639745802,
+      "sip": {
+        "lastS": 603600,
+        "ok": true
+      },
+      "atpRlu": 4,
+      "nextSealTestS": 633600,
+      "magazines": {
+        "cupsPct": 42.5,
+        "foilsPct": 65.5
+      },
+      "currentBatch": {
+        "code": "P8-008-1",
+        "product": "plainStirred",
+        "madeS": 626402,
+        "expiresS": 3045602,
+        "cups": 4139
+      },
       "cupsPerH": 21600,
-      "cupsMade": 4140,
-      "cupsRejected": 0
+      "cupsMade": 4139,
+      "cupsRejected": 1,
+      "rejects": {
+        "underFill": 0,
+        "overFill": 0,
+        "metal": 1,
+        "vision": 0,
+        "sealHold": 0
+      },
+      "sealTests": {
+        "passed": 0,
+        "failed": 0,
+        "cupsTaken": 0
+      }
     },
     "coldChain": {
       "warmRoom": {
@@ -1302,7 +1378,7 @@
       "mixLph": 0,
       "divertedL": 0,
       "cupsPerH": 21600,
-      "cupsMade": 4140,
+      "cupsMade": 4139,
       "coldRoomPallets": 0,
       "reefersShipped": 0
     },
@@ -1341,6 +1417,12 @@
       "timeS": 627000,
       "kind": "info",
       "message": "UHT set point set to 138.9 °C"
+    },
+    {
+      "timeS": 626402,
+      "kind": "info",
+      "message": "Line P8: batch P8-008-1 started, best before day 36, 06:00",
+      "line": "yogurt"
     },
     {
       "timeS": 626400,

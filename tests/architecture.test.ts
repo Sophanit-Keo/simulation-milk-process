@@ -50,7 +50,7 @@ describe('architecture: src/sim and src/contracts stay headless', () => {
     expect(files.some((file) => file.path === join('src', 'contracts', 'index.ts'))).toBe(true);
     expect(simFiles.some((file) => file.path === join('src', 'sim', 'index.ts'))).toBe(true);
     // The yogurt line's model (phase 15, D25) is held to the same rules as the rest of the sim.
-    for (const name of ['formulas.ts', 'mix.ts', 'heat.ts', 'ferment.ts', 'routing.ts', 'yogurtLine.ts', 'products.ts', 'view.ts']) {
+    for (const name of ['formulas.ts', 'mix.ts', 'heat.ts', 'ferment.ts', 'routing.ts', 'p8.ts', 'yogurtLine.ts', 'products.ts', 'view.ts']) {
       expect(simFiles.some((file) => file.path === join('src', 'sim', 'yogurt', name)), `src/sim/yogurt/${name}`).toBe(true);
     }
     expect(files.some((file) => file.path === join('src', 'contracts', 'yogurt.ts'))).toBe(true);
