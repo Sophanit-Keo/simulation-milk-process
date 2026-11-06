@@ -92,5 +92,8 @@ Built on 6 November 2026 in one session, on phase 16 as merged (PR #21). The ent
     - the product day past midnight, where tank 1 empties, is cleaned, fills, ferments with its ring growing and its agitator still, waits ready and empties again, and plain set yogurt goes warm to the buffer after the CIP and SIP, P8 never waiting.
   - The rail, KPI and wing specs expect the running line's lamps: green but for the heat treatment, which waits for a tank, and the cold chain.
   - **A bug the browser test found:** the restart after the clean kept the cold mix of before the divert in the holding cell, so the line diverted again at once, for ever. The clean now refills the cell with water at the set point (D27), and a unit test holds it.
+- **Checks:**
+  - `npm run check` passes (1,696 unit tests, 88 asset tests), and so does `npm run build`.
+  - **The full browser run:** 89 of 90 passed in 36 min. The one failure is the pixel-ratio test, which fails in this sandbox's browser on the commit before phase 15 too (phase 15 status). The product-day test was tightened during the run and passed again on its own.
 
 **For the developer:** please watch a stirred batch ferment and a set batch go to the buffer. At ×1,000 from the opening (H125e), tank 3 is ready at 08:00; tank 1 empties by 08:20, is cleaned by 09:05, fills to 10:45 and ferments to pH 4.55 at 14:45; plain set yogurt goes warm to the buffer from 23:40, after the wing's CIP and P8's SIP. Then sign Y1, approve or amend D25, D26 and D27, and tick the last box.
