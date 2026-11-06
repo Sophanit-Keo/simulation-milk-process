@@ -95,7 +95,7 @@ export const liquidLine: EquipmentFactory = (ctx) => {
   ];
 };
 
-interface MachineSpec {
+export interface MachineSpec {
   id: string;
   stage: StageId;
   label: string;
@@ -111,7 +111,8 @@ interface MachineSpec {
   onBuilt?: (object: THREE.Object3D, isAlive: () => boolean) => void;
 }
 
-function machine(builder: MachineBuilder, spec: MachineSpec): Equipment {
+/** One machine from its builder and its spec; the yogurt line's machines are made the same way (phase 16). */
+export function machine(builder: MachineBuilder, spec: MachineSpec): Equipment {
   const { object, dispose } = builder.build();
   object.userData = { equipmentId: spec.id, stage: spec.stage };
   let alive = true;
@@ -152,7 +153,7 @@ function setMilkLevel(milk: THREE.Mesh, baseM: number, fullM: number, levelFrac:
   milk.position.y = baseM + heightM / 2;
 }
 
-interface TankLevelView {
+export interface TankLevelView {
   /** Follows the tank in the snapshot; `fallbackFrac` stands in when the snapshot lacks the tank. */
   update(snapshot: Snapshot, fallbackFrac?: number): void;
   fillFrac(): number;
@@ -160,14 +161,16 @@ interface TankLevelView {
 
 /**
  * The milk in a tank, or in the level gauge of an opaque one: a unit shape whose height follows the tank's
- * fill (contracts v2, liquid.tanks). A snapshot without the tank leaves the level where it was.
+ * fill (contracts v2, liquid.tanks; or, for a yogurt tank, a reading of its own). A snapshot without the tank
+ * leaves the level where it was.
  */
-function tankLevel(milk: THREE.Mesh, baseM: number, fullM: number, tank: TankId): TankLevelView {
+export function tankLevel(milk: THREE.Mesh, baseM: number, fullM: number, tank: TankId | FillReading): TankLevelView {
   let fillFrac = 0;
   setMilkLevel(milk, baseM, fullM, fillFrac);
+  const read: FillReading = typeof tank === 'function' ? tank : (snapshot) => tankFillFrac(snapshot, tank);
   return {
     update(snapshot, fallbackFrac) {
-      const frac = tankFillFrac(snapshot, tank) ?? fallbackFrac;
+      const frac = read(snapshot) ?? fallbackFrac;
       if (frac === undefined || frac === fillFrac) return;
       fillFrac = frac;
       setMilkLevel(milk, baseM, fullM, fillFrac);
@@ -176,11 +179,14 @@ function tankLevel(milk: THREE.Mesh, baseM: number, fullM: number, tank: TankId)
   };
 }
 
+/** How full a tank is, 0–1, read off the snapshot; undefined while the snapshot lacks it. */
+export type FillReading = (snapshot: Snapshot) => number | undefined;
+
 /**
  * A level gauge down the front (+z, toward the stage cameras) of an opaque tank: a dark track, merged with
  * the machine's dark steel, and a milk-white bar in front of it that rises with the level.
  */
-function levelGauge(b: MachineBuilder, frontM: PointM, bottomM: number, heightM: number, widthM: number, tank: TankId): TankLevelView {
+export function levelGauge(b: MachineBuilder, frontM: PointM, bottomM: number, heightM: number, widthM: number, tank: TankId | FillReading): TankLevelView {
   const [xM, , zM] = frontM;
   b.part('box', 'steelDark', [xM, bottomM + heightM / 2, zM], [widthM + 0.08, heightM + 0.08, 0.04]);
   const milk = b.mesh('milk', 'box', 'milk', [xM, bottomM, zM + 0.03], [widthM, MIN_MILK_M, 0.03]);

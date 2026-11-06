@@ -529,6 +529,7 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
     - the palletizer robot, wrapper, forklifts and truck moves of phases 12 and 14 are reused as new instances;
     - the reefer truck is the articulated truck with a refrigeration unit.
   - **UI:** the stage rail groups the stages under "UHT milk" and "Yogurt P8". The KPI strip gains a yogurt group. The existing 3-minute tour stays, and a second tour covers stages 11–16.
+    - *Phase 16, how:* at 1280 × 720 the rail has room for one line's stages, so its groups fold as an accordion there (the selected stage's group open). The KPI strip's yogurt group shows in place of the milk's eight cards while a yogurt stage is selected, because a second row would shrink the 3D view and the one row has no room for more cards ([phase 16 status](agent-plan/phase-16-yogurt-grey-box.md#status)).
   - **The factory board (phases 9–10)** does not change. Showing Let Report's yogurt lines there is a Could item after phase 21 (it changes [D19](#d19-the-factory-board)'s rule that leaves them out).
 - **Why:**
   - One plant with two products shows what is shared (milk reception, utilities, CIP, logistics) and what differs: a mild heat treatment rather than sterilization, fermentation, a chilled chain rather than ambient storage, and a clean-room cup filler.

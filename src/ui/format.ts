@@ -1,4 +1,4 @@
-import { dayToS, hToS, minToS, sToDay, sToH, sToMin, type FillerSnapshot, type Kpis, type StageValueInfo, type Status } from '../contracts';
+import { dayToS, hToS, minToS, sToDay, sToH, sToMin, type FillerSnapshot, type Kpis, type StageValueInfo, type Status, type YogurtKpis } from '../contracts';
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
@@ -209,5 +209,42 @@ export function kpiSubText(id: KpiSubId, kpis: Kpis): string {
       return `${formatNumber(kpis.daysOfCover, 1)} days of cover`;
     case 'fill':
       return `order fill ${withUnit(formatNumber(kpis.orderFillPct), '%')}`;
+  }
+}
+
+/**
+ * The yogurt group of the KPI strip (phase 16, index.html's [data-line="yogurt"]): the yogurt line's KPIs
+ * (contracts v8, snapshot.yogurt.kpis) in four cards, which the strip shows in place of the milk's eight while a
+ * stage of the yogurt line is selected.
+ */
+export type YogurtKpiId = 'yogurtMix' | 'p8Cups' | 'coldRoom' | 'reefers';
+
+export const YOGURT_KPI_IDS: readonly YogurtKpiId[] = ['yogurtMix', 'p8Cups', 'coldRoom', 'reefers'];
+
+/** One yogurt KPI as the strip shows it, as formatKpi does the milk's. */
+export function formatYogurtKpi(id: YogurtKpiId, kpis: YogurtKpis): KpiText {
+  switch (id) {
+    case 'yogurtMix':
+      return kpiNumber(formatNumber(kpis.mixLph), 'L/h');
+    case 'p8Cups':
+      return kpiNumber(formatNumber(kpis.cupsPerH), '/h');
+    case 'coldRoom':
+      return kpiNumber(formatNumber(kpis.coldRoomPallets));
+    case 'reefers':
+      return kpiNumber(formatNumber(kpis.reefersShipped));
+  }
+}
+
+/** The yogurt cards' secondary values. */
+export type YogurtKpiSubId = 'yogurtDiverted' | 'cupsMade';
+
+export const YOGURT_KPI_SUB_IDS: readonly YogurtKpiSubId[] = ['yogurtDiverted', 'cupsMade'];
+
+export function yogurtKpiSubText(id: YogurtKpiSubId, kpis: YogurtKpis): string {
+  switch (id) {
+    case 'yogurtDiverted':
+      return `${withUnit(formatNumber(kpis.divertedL), 'L')} diverted`;
+    case 'cupsMade':
+      return `${count(kpis.cupsMade, 'cup', 'cups')} made`;
   }
 }

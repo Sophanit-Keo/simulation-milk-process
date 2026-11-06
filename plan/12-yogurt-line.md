@@ -181,7 +181,17 @@ The wing is a new row north of the milk row (z < −26 m), running left to right
 | `p8`: Cup filling room (Line P8) | 15 | The P8 filler under its HEPA hood, check gates |
 | `coldChain`: Incubation & cold store | 16 | Tray packer, palletizer, wrapper, warm room, blast chiller, cold room, reefer dock |
 
-Exact rectangles are settled in phase 16. The overview camera and the floor grow to take in the new row.
+The rectangles, settled in phase 16 (`src/scene/layout.ts`; x along the flow, z from north, −, to south):
+
+| Zone | x (m) | z (m) | Why there |
+|---|---|---|---|
+| `yogurtMix` | −61 to −46 | −56 to −32 | Starts 2 m east of the milk row, so the overview reads its name past the 11 m raw-milk silos |
+| `yogurtProcess` | −43 to −3 | −56 to −38.5 | Its near edge 6.5 m deeper than its neighbours' |
+| `p8` | 0 to 16 | −56 to −38.5 | As the process hall |
+| `coldChain` | 19 to 37 | −56 to −32 | Its name right-aligned, ending at its east end |
+| Reefer yard | 19 to 37 | −76 to −56 | North of the cold store, whose three dock doors face it |
+
+A 9 m aisle (z −32 to −23) runs between the wing and the milk row. The zones' near edges alternate between z −32 and −38.5: at that distance from the overview camera a character of a zone's name covers about 1.4 m of floor, so the four names, about 120 m together, are longer than the 98 m wing is wide, and stand on two lines. The overview's target moved from z 3 to z −4; at the width-fitted distance both rows, the reefer yard and the docked truck show at 1280 × 720 and at 1440 × 900. No tanker lane is drawn on the milk row, so none was extended; the yogurt silo stands at the wing's west end, beside the silo yard.
 
 ## Risks & simplifications
 

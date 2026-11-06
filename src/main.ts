@@ -1,5 +1,5 @@
 import './styles/app.css';
-import { checkPlantConfig, createViewBus, LINE_IDS, msToS, parseStages, type Command, type PlantConfig } from './contracts';
+import { checkPlantConfig, createViewBus, msToS, parseStages, type Command, type PlantConfig } from './contracts';
 import plantJson from './data/plant.json';
 import stagesJson from './data/stages.json';
 import { createWorld } from './scene/world';
@@ -44,8 +44,6 @@ function start(): void {
       p8RateCupsPerH: config.yogurt.p8.rateCupsPerH,
     },
     setpointMax: { fillerRatePacksPerH: config.fillers.maxRatePacksPerH },
-    // ?yogurt adds stages 11–16, the yogurt line, to the rail and the panel until its wing is built (phase 16).
-    lines: params.has('yogurt') ? LINE_IDS : ['uht'],
   });
 
   // ?debug adds the lil-gui panel, loaded on demand so neither it nor lil-gui is in the main bundle.

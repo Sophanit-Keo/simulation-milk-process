@@ -68,7 +68,7 @@
        holds them in a .k-pair, on one line where the strip has room (app.css). The OEE card shows the
        plant's OEE, the mean of the fillers', and each filler's under it (contracts v3). -->
   <section id="kpis" class="kpis" aria-label="Plant KPIs">
-    <dl class="kpi-grid">
+    <dl class="kpi-grid" data-line="uht" data-shown="true" aria-label="UHT milk">
       <div class="kpi card" data-kpi="uht"><dt class="k-l">UHT flow</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="diverted">—</dd></div>
       <div class="kpi card" data-kpi="sterility"><dt class="k-l">Sterility</dt><dd class="k-v" data-kpi-value>—</dd></div>
       <div class="kpi card" data-kpi="tank"><dt class="k-l">Aseptic tank</dt><dd class="k-v" data-kpi-value>—</dd></div>
@@ -77,6 +77,15 @@
       <div class="kpi card" data-kpi="hold"><dt class="k-l">On hold <span class="unit">batches</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s k-pair"><span data-kpi-sub="released">—</span><span data-kpi-sub="blocked">—</span></dd></div>
       <div class="kpi card" data-kpi="stock"><dt class="k-l">Stock <span class="unit">pallets</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="cover">—</dd></div>
       <div class="kpi card" data-kpi="trucks"><dt class="k-l">Trucks <span class="unit">shipped</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="fill">—</dd></div>
+    </dl>
+    <!-- The yogurt line's group (phase 16): in place of the milk's while a stage of the yogurt line is selected. The two
+         share one grid cell and the other is made invisible, so the strip and the 3D view keep their heights
+         (src/ui/kpiStrip.ts, app.css). -->
+    <dl class="kpi-grid kpi-grid-yogurt" data-line="yogurt" data-shown="false" aria-label="Yogurt P8" inert>
+      <div class="kpi card" data-kpi="yogurtMix"><dt class="k-l">Yogurt mix</dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="yogurtDiverted">—</dd></div>
+      <div class="kpi card" data-kpi="p8Cups"><dt class="k-l">Line P8 <span class="unit">cups</span></dt><dd class="k-v" data-kpi-value>—</dd><dd class="k-s" data-kpi-sub="cupsMade">—</dd></div>
+      <div class="kpi card" data-kpi="coldRoom"><dt class="k-l">Cold room <span class="unit">pallets</span></dt><dd class="k-v" data-kpi-value>—</dd></div>
+      <div class="kpi card" data-kpi="reefers"><dt class="k-l">Reefers <span class="unit">shipped</span></dt><dd class="k-v" data-kpi-value>—</dd></div>
     </dl>
   </section>
 </div>

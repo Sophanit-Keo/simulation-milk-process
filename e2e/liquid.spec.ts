@@ -301,7 +301,10 @@ test('the one-screen layout holds with the stage 4 panel and the log, at 1280 ×
       const lowestTop = Math.max(...layout.barParts.map((part) => part.top));
       const highestBottom = Math.min(...layout.barParts.map((part) => part.bottom));
       expect(lowestTop, `the top bar takes one row at ${size}`).toBeLessThan(highestBottom);
-      expect(layout.railOverflowPx, `the rail shows all ten stages without scrolling at ${size}`).toBeLessThanOrEqual(0);
+      // Since phase 16 the rail groups its 16 stages by line, and folds the other group where it has no room for both.
+      expect(layout.railOverflowPx, `the rail shows the UHT line's ten stages without scrolling at ${size}`).toBeLessThanOrEqual(0);
+      await expect(page.locator('#rail [data-line="uht"] .stage')).toHaveCount(10);
+      for (const button of await page.locator('#rail [data-line="uht"] .stage').all()) await expect(button).toBeVisible();
       expect(layout.log.top, `the log sits under the rail at ${size}`).toBeGreaterThanOrEqual(layout.rail.bottom);
       expect(layout.log.bottom, `the log ends with the 3D view at ${size}`).toBeCloseTo(layout.view.bottom, 0);
       expect(layout.log.height, `the log has room for entries at ${size}`).toBeGreaterThanOrEqual(110);

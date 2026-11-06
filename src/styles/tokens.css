@@ -48,6 +48,10 @@
   --zone-pack: #d5d2c8;
   --zone-quar: #e5d4a8;
   --zone-ware: #c8d0d6;
+  /* the yogurt wing (phase 16): its mix room and process hall, the P8 clean room, the warm room and cold store */
+  --zone-yog: #d6cfe3;
+  --zone-clean: #cce3df;
+  --zone-cold: #c6d9ea;
   --apron: #b9c3ca;
 
   /* pipe colour by milk temperature (plan 08): cold blue, through yellow, to UHT red; same in both themes */
@@ -99,6 +103,9 @@
     --zone-pack: #23211b;
     --zone-quar: #33291a;
     --zone-ware: #18222a;
+    --zone-yog: #211b30;
+    --zone-clean: #0f2928;
+    --zone-cold: #0e2134;
     --apron: #0c1317;
     color-scheme: dark;
   }
@@ -131,6 +138,9 @@
   --zone-pack: #23211b;
   --zone-quar: #33291a;
   --zone-ware: #18222a;
+  --zone-yog: #211b30;
+  --zone-clean: #0f2928;
+  --zone-cold: #0e2134;
   --apron: #0c1317;
   color-scheme: dark;
 }

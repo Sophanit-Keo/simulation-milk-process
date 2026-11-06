@@ -497,6 +497,78 @@ a.link {
   gap: 2px;
 }
 
+/* The rail's line groups (phase 16): a header that folds the group's stages, with the group's worst lamp. Grouped,
+   the stage rows are 4 px shorter, so one line's stages and both headers fit at 1280 × 720 and both lines' at
+   1440 × 900 without the rail scrolling (stageRail.ts folds a group where they still don't). */
+.stage-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.stage-group + .stage-group {
+  margin-top: 4px;
+}
+.group-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.stages.grouped .stage {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.group-toggle {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 10px;
+  grid-template-areas: 'chevron name range lamp';
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font: 600 12.5px/1 var(--font-label);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.group-toggle:hover {
+  background: var(--raised);
+}
+.group-toggle .chevron {
+  grid-area: chevron;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: transform 150ms ease;
+}
+.group-toggle[aria-expanded='false'] .chevron {
+  transform: rotate(-45deg);
+}
+.group-toggle .group-name {
+  grid-area: name;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.group-toggle .group-range {
+  grid-area: range;
+  font: 500 12px/1 var(--font-data);
+  letter-spacing: 0;
+}
+.group-toggle .lamp {
+  grid-area: lamp;
+}
+
 /* The lamp comes last in the DOM, so a screen reader reads "1 Standardization, Running";
    the grid draws it first. The selected stage: a cyan edge on the left and a soft accent tint. */
 .stage {
@@ -1373,6 +1445,15 @@ kbd {
 .kpis {
   grid-area: kpis;
   min-width: 0;
+  /* The milk's group and the yogurt line's (phase 16) share one cell: the strip keeps the taller one's height, so
+     switching between them never resizes the 3D view. */
+  display: grid;
+}
+.kpis > .kpi-grid {
+  grid-area: 1 / 1;
+}
+.kpis > .kpi-grid[data-shown='false'] {
+  visibility: hidden;
 }
 .kpi-grid {
   margin: 0;
@@ -1449,6 +1530,10 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The yogurt line's four cards, evenly across the strip. */
+.kpi-grid.kpi-grid-yogurt {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
 @media (min-width: 1260px) {
   /* The packs and hold columns widen for their pairs ("9,999,999 trays made · 99,999 pallets made"). */
   .kpi-grid {
@@ -1511,15 +1596,29 @@ kbd {
     overflow-x: auto;
     padding: 4px 4px 8px;
   }
-  /* Full-width buttons in a row that scrolls: without flex: none the names would shrink to nothing. */
-  .stages > li {
+  /* Full-width buttons in a row that scrolls: without flex: none the names would shrink to nothing. The line
+     groups (phase 16) lie in the same row, each header before its stages. */
+  .stages > li,
+  .group-stages > li {
     flex: none;
+  }
+  .stage-group,
+  .group-stages {
+    flex-direction: row;
+    align-items: center;
+  }
+  .stage-group + .stage-group {
+    margin: 0 0 0 8px;
+  }
+  .group-toggle {
+    width: auto;
   }
   .stage {
     grid-template-columns: 10px auto auto;
     width: auto;
   }
-  .kpi-grid {
+  .kpi-grid,
+  .kpi-grid.kpi-grid-yogurt {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   /* Full width, so B* still shows on a phone; UHT flow too, so no gap opens beside it. */

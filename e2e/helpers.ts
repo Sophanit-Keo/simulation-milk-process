@@ -142,6 +142,17 @@ export async function showTheme(page: Page, theme: ThemePref): Promise<void> {
 }
 
 export const railButton = (page: Page, stage: number): Locator => page.locator(`#rail [data-testid="rail-stage-${stage}"]`);
+
+/**
+ * Opens the rail group that holds `stage` if it is folded, so its button can be clicked: since phase 16 the rail groups
+ * the stages by line, and at 1280 × 720 (the tests' window) it shows one group at a time.
+ */
+export async function showOnRail(page: Page, stage: number): Promise<void> {
+  const button = railButton(page, stage);
+  if (await button.isVisible()) return;
+  await page.getByTestId(stage > 10 ? 'rail-group-yogurt' : 'rail-group-uht').click();
+  await expect(button).toBeVisible();
+}
 export const wholePlantButton = (page: Page): Locator => page.locator('#rail [data-testid="overview"]');
 export const viewport = (page: Page): Locator => page.locator('#viewport');
 

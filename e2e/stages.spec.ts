@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import type { StageInfo } from '../src/contracts';
 import { expect, test } from './fixtures';
 import {
+  ALL_STAGES,
   NO_STAGE_TITLE,
   STAGES,
   STATIC_VALUES,
@@ -160,25 +161,40 @@ function expectSamePoint(
 }
 
 test.describe('the stage rail', () => {
-  test('lists the 10 stages in order as buttons with their short names and a status lamp, none selected yet', async ({ page }) => {
+  test('lists the 16 stages in order, grouped by line, as buttons with their short names and a status lamp, none selected yet', async ({ page }) => {
     await page.goto('/');
     await waitForClock(page);
     await expect(async () => {
       const rail = await railState(page);
-      expect(rail.map((button) => button.testId)).toEqual(STAGES.map((stage) => `rail-stage-${stage.id}`));
-      expect(rail.map((button) => button.stage)).toEqual(STAGES.map((stage) => String(stage.id)));
+      expect(rail.map((button) => button.testId)).toEqual(ALL_STAGES.map((stage) => `rail-stage-${stage.id}`));
+      expect(rail.map((button) => button.stage)).toEqual(ALL_STAGES.map((stage) => String(stage.id)));
       for (const [index, button] of rail.entries()) {
-        const stage = STAGES[index];
+        const stage = ALL_STAGES[index];
         expect(button.tag, `rail-stage-${stage.id} is a <button>`).toBe('BUTTON');
         expect(button.text, `rail-stage-${stage.id} shows its short name`).toContain(stage.shortName);
-        // The plant opens running every stage at its set point: every lamp green once the HUD has drawn, but
-        // stage 9's, amber while batches are on hold, which they are from the opening on (D11).
+        // The plant opens running every UHT stage at its set point: every lamp green once the HUD has drawn, but
+        // stage 9's, amber while batches are on hold, which they are from the opening on (D11). The yogurt line
+        // stands until phase 17: its lamps are the unlit ring.
         const opening = STATIC_VALUES[stage.id].status;
-        expect(opening, `stage ${stage.id} opens green, or stage 9 amber`).toBe(stage.id === 9 ? 'warn' : 'ok');
+        expect(opening, `stage ${stage.id} opens green, stage 9 amber, the yogurt line idle`).toBe(stage.id > 10 ? 'idle' : stage.id === 9 ? 'warn' : 'ok');
         expect(button.lamps, `rail-stage-${stage.id} has one lamp, ${opening}`).toEqual([opening]);
         expect(button.current, `rail-stage-${stage.id} is not current`).toBeNull();
       }
     }).toPass({ timeout: 10_000 });
+    // The two groups' headers (phase 16), each with its worst stage's lamp. At the tests' 1280 × 720 the rail has
+    // room for one line's stages: the milk's is open, the yogurt line's folded.
+    const groups = await page.$$eval('#rail .group-toggle', (toggles) =>
+      toggles.map((toggle) => ({
+        id: toggle.getAttribute('data-testid'),
+        text: (toggle.textContent ?? '').replace(/\s+/g, ' ').trim(),
+        expanded: toggle.getAttribute('aria-expanded'),
+        lamp: toggle.querySelector('[data-status]')?.getAttribute('data-status'),
+      })),
+    );
+    expect(groups).toEqual([
+      { id: 'rail-group-uht', text: 'UHT milk 1–10', expanded: 'true', lamp: 'warn' },
+      { id: 'rail-group-yogurt', text: 'Yogurt P8 11–16', expanded: 'false', lamp: 'idle' },
+    ]);
     const shown = await selectionState(page);
     expect(shown.title).toBe(NO_STAGE_TITLE);
     expect(shown.howToShown, 'the how-to shows before the first selection').toBe(true);
@@ -223,6 +239,7 @@ test.describe('the stage rail', () => {
     const steps: [key: string, stage: number][] = [
       ['ArrowDown', 4],
       ['ArrowRight', 5],
+      // The last stage shown: the yogurt line's group is folded at 1280 × 720.
       ['End', 10],
       ['ArrowUp', 9],
       ['ArrowLeft', 8],
@@ -407,7 +424,7 @@ test.describe('the ?debug scene hook', () => {
     expect(drawCalls, 'draw calls at the overview').toBeGreaterThan(0);
     expect(drawCalls, `draw calls at the overview (budget about 350)`).toBeLessThanOrEqual(OVERVIEW_DRAW_CALL_CEILING);
     expect(triangles, 'triangles at the overview').toBeGreaterThan(0);
-    for (const stage of [0, 11]) expect(await sceneCall(page, 'stageScreenPoint', stage), `stageScreenPoint(${stage})`).toBeNull();
+    for (const stage of [0, 17]) expect(await sceneCall(page, 'stageScreenPoint', stage), `stageScreenPoint(${stage})`).toBeNull();
 
     expect(await sceneCall(page, 'focusStage')).toBeNull();
     await railButton(page, 6).click();

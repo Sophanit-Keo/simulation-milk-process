@@ -232,6 +232,32 @@ Six draw calls more than phase 8 at the overview. The pieces: the palletizer's c
 
 Measured on 4 November 2026 the same way as phase 12 (paused after the opening, 1440 × 900, headless Chromium 153 on SwiftShader). The overview reads **240** draw calls and **257,026** triangles, 12 and 4,080 more than phase 12. Each forklift model has 3 more meshes (its tilting `mast` and two steer wheels; 8 against 5), drawn in both the main and the shadow pass. Every stage stop draws 6 more (stage 8 at 136, stage 10 at 148), as the shadow pass draws the forklifts from any camera. The blue spots draw only while a forklift drives. No console errors.
 
+### Phase 16: the yogurt wing in grey boxes
+
+Measured on 6 November 2026 the same way as phase 12 (a production build served by `vite preview`, paused after the opening, headless Chromium 153.0.8010.12 on SwiftShader), at both review sizes. Within the overview budget; no console errors. The wing adds 30 grey-box machines (64 in the plant), its pipes and the reefer yard: the overview reads **331** draw calls and **290,350** triangles, 91 and 33,324 more than phase 14, against a budget of about 350 and the browser tests' ceiling of 400.
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **331** | **290,350** | **331** | **290,350** |
+| 1 Standardization | 158 | 170,808 | 161 | 170,956 |
+| 2 Preheating | 137 | 166,072 | 138 | 166,084 |
+| 3 Homogenization | 136 | 163,216 | 137 | 163,452 |
+| 4 UHT | 147 | 175,220 | 150 | 175,624 |
+| 5 Flash cooling | 144 | 167,380 | 144 | 167,380 |
+| 6 Aseptic tank | 155 | 155,840 | 158 | 156,068 |
+| 7 Filling | 151 | 168,432 | 151 | 168,432 |
+| 8 Packaging | 151 | 180,078 | 153 | 180,102 |
+| 9 Quarantine & QA | 168 | 236,352 | 178 | 245,360 |
+| 10 Warehouse | 164 | 176,944 | 177 | 183,384 |
+| 11 Yogurt mix | 126 | 141,464 | 126 | 141,464 |
+| 12 Heat treatment | 128 | 149,808 | 128 | 149,808 |
+| 13 Fermentation | 127 | 150,388 | 128 | 150,400 |
+| 14 P8 buffer | 124 | 143,940 | 124 | 143,940 |
+| 15 P8 cup filler | 125 | 141,020 | 125 | 141,020 |
+| 16 Cold chain | 133 | 133,472 | 136 | 133,508 |
+
+How the wing stays in budget: a first build of it drew about 130 more at the overview. Each grey-box machine merges its static parts into one mesh per material, and only the vessels' steel, the rooms' walls and the tallest parts cast shadows (a caster is a draw call more in the shadow pass); the wing's pipes are three runs, one mesh each, that cast no shadow. The milk's stage stops draw 15 to 35 more than in phase 14 because their cameras look north, over the milk row to the wing behind it, and the shadow map's frustum now covers the deeper plant. Software GL gave about 3 fps at the overview and 5 to 8 at the wing's stops: not the 60 fps check, which runs on the target laptop.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.
