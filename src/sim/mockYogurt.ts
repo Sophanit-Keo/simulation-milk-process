@@ -7,7 +7,7 @@
 // cycle's hold, clean and history numbers are mock numbers, not plant.json. Since contracts v9 it fills the live
 // line's fields too: the steam, as the live line counts it, the buffer's product, and no changeover or clean; since
 // v10 P8's: its cycles, the rejects by cause, a fill histogram, the seal, the hygiene readings, the magazines (a saw
-// tooth) and the shift's batch.
+// tooth) and the shift's batch; since v11 the cold chain's: a pallet for each the rooms hold, their trays and a reefer.
 import {
   dayToS,
   hToS,
@@ -16,6 +16,7 @@ import {
   type PlantConfig,
   type TankLevel,
   type FermentTank,
+  type YogurtPallet,
   type YogurtProductId,
   type YogurtSnapshot,
 } from '../contracts';
@@ -110,6 +111,50 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
     });
   }
 
+  /**
+   * The cold chain's pallets, one for each the rooms hold: the warm room's set yogurt on its way to pH 4.60, the
+   * chiller's cores on their way to 4 °C, the cold room's on their hold clocks, the oldest released (mock numbers).
+   */
+  function palletsAt(timeS: number, warm: number, chilling: number, cold: number): YogurtPallet[] {
+    const { coldChain: chain, ferment } = plant;
+    const { batchS, firstShiftStartS } = config.quality;
+    const cups = chain.cupsPerTray * chain.traysPerPallet;
+    let id = 1;
+    const pallet = (place: YogurtPallet['place'], closedS: number, route: 'set' | 'stirred', tempC: number, ph: number, coldS: number | null): YogurtPallet => {
+      const shiftStartS = firstShiftStartS + Math.floor((closedS - firstShiftStartS) / batchS) * batchS;
+      return {
+        id: id++,
+        batch: batchCode(shiftStartS, firstShiftStartS, batchS),
+        product: route === 'set' ? 'plainSet' : 'plainStirred',
+        route,
+        cups,
+        trays: chain.traysPerPallet,
+        place,
+        closedS,
+        tempC,
+        ph,
+        holdUntilS: coldS === null ? null : coldS + chain.minHoldS,
+        leaveByS: coldS === null ? null : coldS + chain.maxHoldS,
+        released: coldS !== null && timeS >= coldS + chain.minHoldS,
+      };
+    };
+    const list: YogurtPallet[] = [];
+    // Oldest first: the cold room's spread over 30 h, then the chiller's, then the warm room's.
+    for (let i = 0; i < cold; i++) {
+      const coldS = timeS - hToS(30) * (1 - i / Math.max(1, cold));
+      list.push(pallet('coldRoom', coldS - hToS(2), 'stirred', chain.roomC, ferment.endPh, coldS));
+    }
+    for (let i = 0; i < chilling; i++) {
+      const frac = (i + 0.5) / Math.max(1, chilling);
+      list.push(pallet('chiller', timeS - hToS(2) * (1 - frac), 'stirred', chain.chillToC + (plant.cooling.outletC - chain.chillToC) * frac, ferment.endPh, null));
+    }
+    for (let i = 0; i < warm; i++) {
+      const sinceS = hToS(3.8) * (1 - (i + 0.5) / Math.max(1, warm));
+      list.push(pallet('warmRoom', timeS - sinceS, 'set', chain.warmRoomC, fermentPh(ferment, sinceS, chain.warmRoomC), null));
+    }
+    return list;
+  }
+
   function snapshotAt(setpoints: Readonly<Setpoints>, timeS: number): YogurtSnapshot {
     const t = timeS - openS;
     const product = plan.at(timeS);
@@ -127,6 +172,8 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
     const cupsMade = Math.floor(CUPS_BEFORE_OPENING + setpoints.p8RateCupsPerH * sToH(t) * (1 - REJECT_FRAC));
     const reefersShipped = REEFERS_BEFORE_OPENING + Math.floor(t / REEFER_EVERY_S);
     const coldRoomPallets = Math.round(170 + 60 * wave(timeS, hToS(24), 4));
+    const warmPallets = Math.round(8 + 6 * wave(timeS, hToS(8), 11));
+    const chillerPallets = Math.round(3 + wave(timeS, hToS(3), 1));
     const steamKgPerH = steamAt(heat.outletC);
     const cupsRejected = Math.floor((cupsMade * REJECT_FRAC) / (1 - REJECT_FRAC));
     const split = (share: number): number => Math.floor(cupsRejected * share);
@@ -205,11 +252,21 @@ export function createMockYogurt(config: PlantConfig): MockYogurt {
         },
       },
       coldChain: {
-        warmRoom: { tempC: plant.coldChain.warmRoomC + 0.3 * wave(timeS, 1_300, 10), pallets: Math.round(8 + 6 * wave(timeS, hToS(8), 11)) },
-        chiller: { pallets: Math.round(3 + wave(timeS, hToS(3), 1)) },
-        coldRoom: { tempC: plant.coldChain.roomC + 0.4 * wave(timeS, hToS(1.5), 2), positionsUsed: coldRoomPallets },
+        warmRoom: { tempC: plant.coldChain.warmRoomC + 0.3 * wave(timeS, 1_300, 10), pallets: warmPallets, capacity: plant.coldChain.warmRoomPallets },
+        chiller: { pallets: chillerPallets, capacity: plant.coldChain.chillerPallets, airC: plant.coldChain.chillerAirC },
+        coldRoom: {
+          tempC: plant.coldChain.roomC + 0.4 * wave(timeS, hToS(1.5), 2),
+          positionsUsed: coldRoomPallets,
+          capacity: plant.coldChain.coldRoomPallets,
+          nextReleaseS: timeS + hToS(0.5 + 0.4 * wave(timeS, hToS(2), 3)),
+        },
         palletsShipped: reefersShipped * plant.coldChain.palletsPerTruck,
         reefersShipped,
+        trays: { made: Math.floor(t / 4), openBatch: null, openCups: 0, openTrays: 0 },
+        pallets: palletsAt(timeS, warmPallets, chillerPallets, coldRoomPallets),
+        reefers: [],
+        cupsShipped: reefersShipped * plant.coldChain.palletsPerTruck * plant.coldChain.cupsPerTray * plant.coldChain.traysPerPallet,
+        cupsHeld: 0,
       },
       kpis: { mixLph: forwardLph, divertedL, cupsPerH, cupsMade, coldRoomPallets, reefersShipped },
       energy: { steamKgPerH, gasKw: boilerGasKw(config, steamKgPerH), steamKg, gasKwh: boilerGasKwh(config, steamKg) },

@@ -88,7 +88,7 @@ const PHASE_4_KEYS: Readonly<Record<7 | 8 | 9 | 10, readonly string[]>> = {
 /** Every shape rule of contracts v4 (src/contracts/snapshot.ts, packs.ts, scenarios.ts) that a consumer may rely on. */
 function expectContracts(snap: Snapshot, where: string): void {
   expect(snap.version, `${where}: version`).toBe(CONTRACT_VERSION);
-  expect(CONTRACT_VERSION).toBe(10);
+  expect(CONTRACT_VERSION).toBe(11);
   expect(Number.isFinite(snap.timeS), `${where}: timeS`).toBe(true);
   expect(isSpeed(snap.speed), `${where}: speed ${snap.speed}`).toBe(true);
   expect(typeof snap.paused, `${where}: paused`).toBe('boolean');
@@ -202,15 +202,17 @@ describe.each(NAMES)('fixture snapshot-%s.json', (name) => {
     expect(uhtFingerprint(stored)).toBe(V7_UHT_FINGERPRINTS[name]);
   });
 
-  it('the yogurt line runs as it opens (phase 17): P8 on plain stirred from the first tank, the cold chain standing', () => {
+  it('the yogurt line runs as it opens (phase 17): P8 on plain stirred from the first tank, the cold chain holding the last two days (phase 19)', () => {
     const { yogurt } = stored;
     // The night left two tanks ready and the third half way (D27); P8 empties the oldest ready one.
     expect(yogurt.product.id).toBe('plainStirred');
     expect(yogurt.buffer.product).toBe('plainStirred');
     expect(yogurt.p8.state).toBe('running');
     expect(stored.stages[15].status).toBe('ok');
-    expect(stored.stages[16].status).toBe('idle');
-    expect(yogurt.coldChain.coldRoom.positionsUsed).toBe(0);
+    // The cold chain opens as the last two days left it (D29) and runs on: the cold room holds about a day's pallets.
+    expect(stored.stages[16].status).toBe('ok');
+    expect(yogurt.coldChain.coldRoom.positionsUsed).toBeGreaterThan(100);
+    expect(yogurt.coldChain.coldRoom.tempC).toBe(plantConfig.yogurt.coldChain.roomC);
     expect(yogurt.heat.divertCount).toBe(0);
     for (const id of ['ySilo', 'yMixTank', 'yHeater', 'yHoldingCell', 'yInoculation', 'yFermentTank', 'yCooler', 'p8Buffer', 'p8Filler'] as const) {
       const { tempC, flowLph } = stored.line[id];

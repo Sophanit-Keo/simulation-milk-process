@@ -106,14 +106,15 @@ describe('createSim: snapshot', () => {
     const sim = createSim(plantConfig);
     sim.step(0.1);
     const snap = sim.snapshot();
-    // Two tanks ready and the third fermenting: no tank to fill, so the heat treatment stands; the cold chain too (phase 19).
+    // Two tanks ready and the third fermenting: no tank to fill, so the heat treatment stands. The cold chain holds the last
+    // two days' pallets (phase 19, D29).
     expect({ 11: snap.stages[11].status, 12: snap.stages[12].status, 13: snap.stages[13].status, 14: snap.stages[14].status, 15: snap.stages[15].status, 16: snap.stages[16].status }).toEqual({
       11: 'ok',
       12: 'idle',
       13: 'ok',
       14: 'ok',
       15: 'ok',
-      16: 'idle',
+      16: 'ok',
     });
     expect(YOGURT_STAGE_IDS).toHaveLength(6);
   });

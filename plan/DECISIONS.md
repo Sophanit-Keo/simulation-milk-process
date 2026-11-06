@@ -34,6 +34,7 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D26](#d26-the-yogurt-lines-defaults) | The yogurt line's defaults: mix, heat treatment, fermentation, P8, cold chain (schema 10) | — | Proposed |
 | [D27](#d27-the-yogurt-line-live-stages-1114) | The yogurt line live, stages 11–14: the product day on P8, the routing, the CCP and the wing's CIP (schema 11) | — | Proposed |
 | [D28](#d28-line-p8-live-stage-15) | Line P8 live, stage 15: cycles, fill weights, the in-line checks, seal tests and holds, the interlocks and the magazines (schema 12) | — | Proposed |
+| [D29](#d29-the-yogurt-cold-chain-live-stage-16) | The yogurt cold chain live, stage 16: trays, one-batch pallets, the warm room, the blast chiller, the cold-room hold and release, reefers (schema 13) | — | Proposed |
 
 ## D1. Batch size
 
@@ -686,6 +687,44 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - contracts v10: `P8Snapshot` gains `cyclesPerMin`, `rejects`, `lastFillG`, `fillHistogram`, `seal`, `hepaPa`, `sip`, `atpRlu`, `nextSealTestS`, `sealTests`, `magazines`, `currentBatch` and `stopReason`;
   - `src/sim/yogurt/p8.ts`, and P8's part of `yogurtLine.ts`;
   - the stage 15 panel, and P8's cups and moving parts in the 3D view.
+
+## D29. The yogurt cold chain live (stage 16)
+
+- **Status:** Proposed
+- **Date:** 2026-11-06
+- **Review note:** none ([phase 19](agent-plan/phase-19-yogurt-cold-chain.md))
+- **Decision:** the cups P8 makes are packed into trays and pallets, and go through the warm room (set yogurt), the blast chiller and the cold room to the reefer trucks. The cold chain runs in the yogurt line's step, after P8. It queues no events and draws nothing at random, so the UHT line stays as it was (D25).
+
+| Setting | Default | `plant.json` key (under `yogurt.coldChain`) | Basis |
+|---|---|---|---|
+| Warm room | 36 pallet positions | `warmRoomPallets` | Sim assumption: a set shift fills 28.8 pallets in the 3.84 h to pH 4.60 (H131) |
+| Blast chiller | 32 positions; air at −2 °C; a pallet's core cools first-order with a 1.2 h time constant | `chillerPallets`, `chillerAirC`, `chillTauS` | Sim assumptions: stirred yogurt chills in 1.44 h, set in 2.42 h; the morning's overlap of the night's set pallets and the first stirred ones peaks at about 30 (H131) |
+| Cold room | 360 positions | `coldRoomPallets` | 48 h of production, 334 pallets, and a reefer load's margin (H132) |
+| Reefer dock | 3 doors; a reefer called when a load of 26 released pallets waits, or when the oldest released pallet has held 42 h; it backs up 30 min later and loads in 20 min | `dockDoors`, `reeferArriveS`, `reeferLatestS`, `reeferLoadS` | Sim assumptions: the dock doors of plan 12; the load time the UHT warehouse's (D22) |
+
+- **The rules:**
+  - **Trays and pallets.** The cups P8 makes are packed 24 to a tray and 120 trays to a pallet. A tray and a pallet carry one batch only (D1). When a batch ends (the changeover starts, or the next batch's cups come), its last tray and pallet close part-full.
+  - **Routes.**
+    - A set yogurt pallet goes to the warm room at 43 °C. Its pH follows H125's curve at the room's temperature from the moment the pallet closes, and it moves on at pH ≤ 4.60.
+    - A stirred pallet goes straight to the chiller, at the cooler's 18 °C, its pH at the end pH of its tank.
+    - A pallet waits, first in first out, in staging by the wrapper while the next room is full.
+  - **The blast chiller.** A pallet's core falls toward the air, first-order: T = air + (T₀ − air) e^(−t/τ). It moves to the cold room once it is at or under 4 °C and the cold room has a position.
+  - **The cold room** is one well-mixed temperature at its set point, 3 °C. A pallet's core settles toward it with the same time constant. Each pallet's hold clock starts as it comes in.
+    - It is released at 24 h, once every seal test covering its cups has passed (D28).
+    - It must leave before 48 h; one that does not is logged.
+  - **A seal test that fails** (D28) pulls the cups it holds from the trays and pallets wherever they are. A pallet left with none goes. So P8's held cups and the cold chain's agree, cup for cup.
+  - **Reefers.**
+    - A reefer is called to a free dock door when a load of released pallets waits that no other reefer has taken, or when the oldest released pallet has held `reeferLatestS`.
+    - It backs up `reeferArriveS` later, takes its pallets oldest first, and loads them one by one over `reeferLoadS`.
+    - Then it leaves, and its pallets and cups count as shipped.
+  - **Conservation:** every cup filled is rejected or held (D28), taken for a seal test, in a tray, a pallet or a reefer, or shipped.
+  - **The opening.** The cold chain opens as the last two days left it: the model runs the 48 h before the opening at P8's rate, on the product day with H125e's changeovers, every seal test passing. The warm room, the chiller and the cold room hold what that leaves, and a reefer may be loading. The shipped totals count from the opening.
+- **Why:** the cold chain is where the two routes part and meet again: set yogurt waits hours in the warm room before it is chilled, and every pallet waits a day in the cold room before it may leave. A day's run then shows what the room sizes and the dock must take. Opening with the last two days in place puts reefers on the dock from the first hour, as the UHT warehouse's opening stock does.
+- **What it changes:**
+  - the keys above (schema 13; `chillerAirC` is the one number in `plant.json` that may be below zero) and their rows in [default settings](06-simulation-model.md#yogurt-line);
+  - contracts v11: `ColdChainSnapshot` gains `trays`, `pallets[]`, the rooms' `capacity`, `chiller.airC`, `coldRoom.nextReleaseS`, `reefers[]`, `cupsShipped` and `cupsHeld`;
+  - `src/sim/yogurt/coldChain.ts`, and P8's output of the cups it makes and its seal tests' results;
+  - the stage 16 panel and a yogurt batch list, and the cold chain in the 3D view.
 
 ---
 

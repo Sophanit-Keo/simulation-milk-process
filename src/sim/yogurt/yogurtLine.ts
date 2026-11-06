@@ -39,6 +39,7 @@ import { ferment, tankView, type TankState } from './ferment';
 import { betaLgDenaturedPct, p8DrawLph } from './formulas';
 import { createHoldingCell, createWingCip } from './heat';
 import { mixRecipe } from './mix';
+import { createColdChain, type ColdChain } from './coldChain';
 import { createP8, type P8, type P8Conditions } from './p8';
 import { createProductPlan } from './products';
 import { createBuffer } from './routing';
@@ -89,6 +90,8 @@ export interface YogurtLine {
   inventory(): { siloL: number; tankerLeftL: number; mixTankL: number; tanksL: number; bufferL: number; reprocessL: number };
   /** Line P8 (phase 18), for its totals. */
   readonly p8: P8;
+  /** The cold chain (phase 19), likewise. */
+  readonly coldChain: ColdChain;
 }
 
 /** P8's seed: plant.json's seed, mixed so its stream never runs in step with the UHT line's or the packs model's. */
@@ -99,6 +102,8 @@ export interface YogurtLineOptions {
   rng?: Rng;
   /** P8's readings in place of plant.json's (the HEPA cabin, the SIP, the swab, the seal), for tests and faults. */
   p8Conditions?: Partial<P8Conditions>;
+  /** Open the cold chain as the last two days left it (the default), or empty, for tests (D29). */
+  coldChainHistory?: boolean;
 }
 
 /** The yogurt line live, opening at `openS` as the night left it: two tanks ready, the third half way. */
@@ -174,6 +179,8 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
   let fruitDosePct = 0;
   // Line P8 (phase 18).
   const p8 = createP8(config, openS, options.rng ?? createRng(yogurtSeed(config.seed)), options.p8Conditions);
+  // The cold chain (phase 19), from P8's cups to the reefers.
+  const coldChain = createColdChain(config, openS, { history: options.coldChainHistory });
   let p8Lph = 0;
   /**
    * The step just ended a changeover: P8 is ready and starts from the next one. The plant opens so too, P8 ready for
@@ -187,6 +194,8 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
   /** The product in the buffer is done: what is left, less than a cycle, is flushed to rework, and the changeover starts. */
   function startChangeover(to: YogurtProductId, timeS: number, log: LogWriter): void {
     totals.flushedL += buffer.draw(buffer.levelL);
+    // The product's last tray and pallet close part-full (D29).
+    coldChain.closeBatch(timeS);
     const kind: YogurtChangeoverKind = routeOf(to) === 'set' ? 'cip' : 'rinse';
     changeover = { kind, leftS: kind === 'cip' ? wingCip.totalS : config.yogurt.changeover.rinseS, to };
     bufferProduct = null;
@@ -429,6 +438,8 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
       });
       totals.toP8L += drawnL;
       p8Lph = drawnL / sToH(dtS);
+      // 7. The cold chain packs what P8 made, and moves its pallets and reefers.
+      coldChain.step(timeS, p8.drain(), log);
       if (bufferProduct && routeOf(bufferProduct) === 'set') {
         const lateL = buffer.discardOlderThan(plant.buffer.setMaxWaitS, timeS);
         if (lateL > EPS) {
@@ -455,6 +466,7 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
       const p8Totals = p8.totals();
       const { rejects } = p8Totals;
       const cups = p8Totals.cupsMade;
+      const chainView = coldChain.view(timeS);
       const yogurt: YogurtSnapshot = {
         product: { ...shift },
         mix: {
@@ -500,20 +512,14 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
           rejects: { ...rejects },
           sealTests: { passed: p8Totals.sealTestsPassed, failed: p8Totals.sealTestsFailed, cupsTaken: p8Totals.sealTestCups },
         },
-        coldChain: {
-          warmRoom: { tempC: plant.coldChain.warmRoomC, pallets: 0 },
-          chiller: { pallets: 0 },
-          coldRoom: { tempC: plant.coldChain.roomC, positionsUsed: 0 },
-          palletsShipped: 0,
-          reefersShipped: 0,
-        },
+        coldChain: chainView,
         kpis: {
           mixLph: heatLph,
           divertedL: totals.divertedL,
           cupsPerH: running ? setpoints.p8RateCupsPerH : 0,
           cupsMade: cups,
-          coldRoomPallets: 0,
-          reefersShipped: 0,
+          coldRoomPallets: chainView.coldRoom.positionsUsed,
+          reefersShipped: chainView.reefersShipped,
         },
         energy: {
           steamKgPerH,
@@ -526,6 +532,7 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
     },
     totals: () => ({ ...totals }),
     p8,
+    coldChain,
     inventory: () => ({
       siloL,
       tankerLeftL,

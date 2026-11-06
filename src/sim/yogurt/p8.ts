@@ -86,9 +86,20 @@ export interface P8View {
   currentBatch: P8Batch | null;
 }
 
+/**
+ * What P8 hands on (phase 19), in the order it happened: the cups it made, by batch and by seal-test window (the cups
+ * between two tests, which a failed test holds together), and each test's result. The cold chain takes them each step
+ * (D29); the order matters, since a tray can hold cups of two windows.
+ */
+export type P8Event =
+  | { kind: 'made'; batch: string; product: YogurtProductId; sealWindow: number; cups: number; atS: number }
+  | { kind: 'test'; sealWindow: number; passed: boolean; atS: number };
+
 export interface P8 {
   /** One step: refills, interlocks, then the cycles that fall in it. Returns the litres it took from the buffer. */
   step(input: P8StepInput): number;
+  /** What P8 made and tested since the last call, in order, which it then forgets. */
+  drain(): P8Event[];
   /** The wing's CIP before set yogurt has run and is logged: P8 may start only after it and an SIP and a swab that pass. */
   cipDone(timeS: number): void;
   /**
@@ -189,6 +200,9 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
   // Cups made since the last seal test that passed, by batch code: what a failed test holds.
   let sincePass = new Map<string, number>();
   let spareNormal: number | null = null;
+  let output: P8Event[] = [];
+  /** The seal-test window the cups now made fall in: the tests done so far. */
+  const openWindow = (): number => totals.sealTestsPassed + totals.sealTestsFailed;
 
   const shiftStartOf = (timeS: number): number => firstShiftStartS + Math.floor((timeS - firstShiftStartS + EPS) / batchS) * batchS;
 
@@ -228,6 +242,7 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
     let leaked = 0;
     for (let i = 0; i < cupsTaken; i++) if (rng.next() < p) leaked += 1;
     totals.sealTestCups += cupsTaken;
+    output.push({ kind: 'test', sealWindow: openWindow(), passed: leaked === 0, atS: timeS });
     if (leaked === 0) {
       totals.sealTestsPassed += 1;
       sincePass = new Map();
@@ -298,6 +313,16 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
     totals.cupsMade += passed;
     current.cups += passed;
     sincePass.set(current.code, (sincePass.get(current.code) ?? 0) + passed);
+    if (passed > 0) {
+      const last = output.at(-1);
+      const open = openWindow();
+      if (last?.kind === 'made' && last.batch === current.code && last.sealWindow === open) {
+        last.cups += passed;
+        last.atS = timeS;
+      } else {
+        output.push({ kind: 'made', batch: current.code, product, sealWindow: open, cups: passed, atS: timeS });
+      }
+    }
     if (testing) {
       sinceTestS -= plant.sealTest.everyS;
       sealTest(timeS, taken, log);
@@ -307,6 +332,11 @@ export function createP8(config: PlantConfig, openS: number, rng: Rng, condition
 
   return {
     cycleNeedL,
+    drain() {
+      const out = output;
+      output = [];
+      return out;
+    },
     step(input) {
       const { dtS, timeS, log } = input;
       // Refills arrive, the operator having been called at refillBelowFrac.

@@ -6,6 +6,8 @@ import {
   FERMENT_TANK_STATES,
   P8_STATES,
   P8_STOP_REASONS,
+  YOGURT_PALLET_PLACES,
+  YOGURT_REEFER_STATES,
   YOGURT_HEAT_MODES,
   YOGURT_LINE_POINT_IDS,
   YOGURT_PRODUCT_IDS,
@@ -83,6 +85,7 @@ export function expectWellFormedYogurt(snap: Snapshot, config: PlantConfig, wher
   expect(Number.isInteger(p8.cupsMade) && Number.isInteger(p8.cupsRejected), `${where}: whole cups`).toBe(true);
   expect(p8.state === 'running' ? true : p8.cupsPerH === 0, `${where}: cups only while P8 runs`).toBe(true);
   expectWellFormedP8(p8, where);
+  expectWellFormedColdChain(coldChain, config, snap.timeS, where);
 
   const counts = [coldChain.warmRoom.pallets, coldChain.chiller.pallets, coldChain.coldRoom.positionsUsed, coldChain.palletsShipped, coldChain.reefersShipped];
   if (!counts.every((count) => Number.isInteger(count) && count >= 0)) expect.fail(`${where}: cold-chain counts ${counts.join(', ')}`);
@@ -143,5 +146,52 @@ function expectWellFormedP8(p8: Snapshot['yogurt']['p8'], where: string): void {
     expect(batch.code, `${where}: batch code`).toMatch(/^P8-\d{3}-[1-3]$/);
     expect(YOGURT_PRODUCT_IDS, `${where}: batch product`).toContain(batch.product);
     expect(batch.expiresS > batch.madeS && Number.isInteger(batch.cups) && batch.cups >= 0, `${where}: batch dates and cups`).toBe(true);
+  }
+}
+
+/** Contracts v11's cold chain fields (phase 19, D29), each where the snapshot has it. */
+function expectWellFormedColdChain(coldChain: Snapshot['yogurt']['coldChain'], config: PlantConfig, timeS: number, where: string): void {
+  const plant = config.yogurt.coldChain;
+  const { warmRoom, chiller, coldRoom } = coldChain;
+  for (const [room, held, capacity] of [
+    ['warm room', warmRoom.pallets, warmRoom.capacity],
+    ['chiller', chiller.pallets, chiller.capacity],
+    ['cold room', coldRoom.positionsUsed, coldRoom.capacity],
+  ] as const) {
+    if (capacity !== undefined) expect(held <= capacity, `${where}: the ${room} holds ${held} of ${capacity}`).toBe(true);
+  }
+  if (coldChain.trays) {
+    const { made, openCups, openTrays } = coldChain.trays;
+    expect(Number.isInteger(made) && made >= 0, `${where}: trays made`).toBe(true);
+    expect(openCups >= 0 && openCups < plant.cupsPerTray && openTrays >= 0 && openTrays < plant.traysPerPallet, `${where}: the open tray and pallet`).toBe(true);
+  }
+  if (coldChain.pallets) {
+    const at = (place: string): number => coldChain.pallets?.filter((pallet) => pallet.place === place).length ?? 0;
+    expect(at('warmRoom'), `${where}: warm-room pallets`).toBe(warmRoom.pallets);
+    expect(at('chiller'), `${where}: chiller pallets`).toBe(chiller.pallets);
+    expect(at('coldRoom'), `${where}: cold-room pallets`).toBe(coldRoom.positionsUsed);
+    // Plain checks, failing only on a violation: a snapshot carries some 200 pallets, and the runs check every frame.
+    const places = new Set<string>(YOGURT_PALLET_PLACES);
+    const products = new Set<string>(YOGURT_PRODUCT_IDS);
+    for (const pallet of coldChain.pallets) {
+      const name = `${where}: pallet ${pallet.id}`;
+      if (!places.has(pallet.place) || !products.has(pallet.product) || !/^P8-\d{3}-[1-3]$/.test(pallet.batch)) expect.fail(`${name}: ${pallet.place}, ${pallet.product}, ${pallet.batch}`);
+      if (!(pallet.cups > 0 && pallet.cups <= pallet.trays * plant.cupsPerTray && pallet.trays <= plant.traysPerPallet)) expect.fail(`${name}: ${pallet.cups} cups on ${pallet.trays} trays`);
+      if (!(Number.isFinite(pallet.tempC) && Number.isFinite(pallet.ph))) expect.fail(`${name}: ${pallet.tempC} °C, pH ${pallet.ph}`);
+      // Stirred yogurt never sees the warm room; a pallet's hold clock starts in the cold room, and it is released once over.
+      if (pallet.route === 'stirred' && pallet.place === 'warmRoom') expect.fail(`${name}: stirred in the warm room`);
+      if ((pallet.place === 'coldRoom' || pallet.place === 'reefer') && (pallet.holdUntilS === null || pallet.leaveByS === null)) expect.fail(`${name}: no hold clock`);
+      if (pallet.released && !(pallet.holdUntilS !== null && pallet.holdUntilS <= timeS)) expect.fail(`${name}: released before its hold is over`);
+      // In the cold room it is at most chillToC; a set pallet leaves the warm room only at its pH.
+      if (pallet.place === 'coldRoom' && pallet.tempC > plant.chillToC + 1e-9) expect.fail(`${name}: ${pallet.tempC} °C in the cold room`);
+      if (pallet.route === 'set' && (pallet.place === 'chiller' || pallet.place === 'coldRoom') && pallet.ph > plant.releasePh + 1e-9) expect.fail(`${name}: pH ${pallet.ph} past the warm room`);
+    }
+  }
+  if (coldChain.reefers) {
+    for (const reefer of coldChain.reefers) {
+      expect(YOGURT_REEFER_STATES, `${where}: reefer ${reefer.id}`).toContain(reefer.state);
+      expect(reefer.pallets >= 0 && reefer.pallets <= reefer.load && reefer.load <= plant.palletsPerTruck, `${where}: reefer ${reefer.id} load`).toBe(true);
+      expect(reefer.door >= 0 && reefer.door < plant.dockDoors, `${where}: reefer ${reefer.id} door`).toBe(true);
+    }
   }
 }
