@@ -7,7 +7,7 @@ import { investigationText } from '../../src/ui/batchList';
 import { sterileAirText } from '../../src/ui/panelRows';
 import { BANNER_AFTER_S, bannerRun, runTimes } from '../../src/ui/scenarioLog';
 import { parseScenarioMenu, SCENARIO_MENU, scenarioName } from '../../src/ui/scenarioMenu';
-import { TOUR_STOP_S, tourStop } from '../../src/ui/tour';
+import { TOUR_STOP_S, tourStop, YOGURT_TOUR_STOP_S } from '../../src/ui/tour';
 
 const run = (n: number, following: boolean, endedS: number | null = null): ScenarioRunSnapshot => ({
   run: n,
@@ -86,6 +86,14 @@ describe('the guided tour', () => {
     expect(tourStop(18, 10)).toEqual({ index: 1, done: false });
     expect(tourStop(179.9, 10)).toEqual({ index: 9, done: false });
     expect(tourStop(180, 10)).toEqual({ index: 9, done: true });
+  });
+
+  it('the yogurt tour spends 20 s at each of the 6 yogurt stages, 2 minutes in all (phase 20)', () => {
+    expect(YOGURT_TOUR_STOP_S * 6).toBe(120);
+    expect(tourStop(19.9, 6, YOGURT_TOUR_STOP_S)).toEqual({ index: 0, done: false });
+    expect(tourStop(20, 6, YOGURT_TOUR_STOP_S)).toEqual({ index: 1, done: false });
+    expect(tourStop(119.9, 6, YOGURT_TOUR_STOP_S)).toEqual({ index: 5, done: false });
+    expect(tourStop(120, 6, YOGURT_TOUR_STOP_S)).toEqual({ index: 5, done: true });
   });
 });
 

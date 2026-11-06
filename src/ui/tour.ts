@@ -1,5 +1,6 @@
 // The guided tour (plan 08: "the camera visits stages 1–10 in order with a two-line caption each, about 3
-// minutes in total"; phase 5). The tour selects each stage in turn through the view bus, as a rail click
+// minutes in total"; phase 5), and since phase 20 the yogurt tour beside it: stages 11–16 in about 2 minutes, the same
+// code with its own stops, stop length and caption. The tour selects each stage in turn through the view bus, as a rail click
 // does, so the camera flies there and the panel follows; a caption over the 3D view shows the stage's two
 // lines from src/data/stages.json. It runs on real time, paused sim or not, and stops on any other
 // selection, on Escape (the overview event), when the viewer takes the camera (the scene's tour-off event),
@@ -10,9 +11,12 @@ import { el, onPress, setAttr, setText } from './dom';
 /** Real seconds at each stage: 10 stops make the plan's 3 minutes. */
 export const TOUR_STOP_S = 18;
 
+/** Real seconds at each of the yogurt tour's 6 stops: about 2 minutes (phase 20). */
+export const YOGURT_TOUR_STOP_S = 20;
+
 /** Where the tour is `elapsedS` in: the stop's index, or `done` once the last stop is over. */
-export function tourStop(elapsedS: number, stops: number): { index: number; done: boolean } {
-  const index = Math.floor(Math.max(0, elapsedS) / TOUR_STOP_S);
+export function tourStop(elapsedS: number, stops: number, stopS: number = TOUR_STOP_S): { index: number; done: boolean } {
+  const index = Math.floor(Math.max(0, elapsedS) / stopS);
   return index >= stops ? { index: stops - 1, done: true } : { index, done: false };
 }
 
@@ -33,12 +37,23 @@ export interface TourOptions {
   /** The button that starts and stops it (the rail head's "Tour"). */
   button: HTMLButtonElement;
   signal: AbortSignal;
+  /** Real seconds at each stop; TOUR_STOP_S by default. */
+  stopS?: number;
+  /** Appended to the caption's and its Stop button's test ids, to tell a second tour's apart ("-yogurt"). */
+  testIdSuffix?: string;
+  /** The caption's first line; "Stage 4 of 10 · UHT Treatment" by default. */
+  stepText?: (stage: StageInfo, index: number, stops: number) => string;
+  /** Called just before it starts, so another tour can stop first. */
+  beforeStart?: () => void;
 }
 
 export function createTour(options: TourOptions): Tour {
   const { bus, stages, view, button, signal } = options;
+  const stopS = options.stopS ?? TOUR_STOP_S;
+  const suffix = options.testIdSuffix ?? '';
+  const stepText = options.stepText ?? ((stage: StageInfo, _index: number, stops: number) => `Stage ${stage.id} of ${stops} · ${stage.name}`);
   const caption = el('section', 'overlay overlay-tour');
-  caption.dataset.testid = 'tour-caption';
+  caption.dataset.testid = `tour-caption${suffix}`;
   caption.setAttribute('role', 'status');
   caption.setAttribute('aria-live', 'polite');
   caption.hidden = true;
@@ -49,7 +64,7 @@ export function createTour(options: TourOptions): Tour {
   progress.append(bar);
   const stopButton = el('button', 'btn tour-stop', 'Stop tour');
   stopButton.type = 'button';
-  stopButton.dataset.testid = 'tour-stop';
+  stopButton.dataset.testid = `tour-stop${suffix}`;
   caption.append(step, ...lines, progress, stopButton);
   view.append(caption);
 
@@ -65,7 +80,7 @@ export function createTour(options: TourOptions): Tour {
     emitting = true;
     bus.emit({ type: 'selectStage', stage: stage.id as StageId });
     emitting = false;
-    setText(step, `Stage ${stage.id} of ${stages.length} · ${stage.name}`);
+    setText(step, stepText(stage, index, stages.length));
     setText(lines[0], stage.tourCaption[0]);
     setText(lines[1], stage.tourCaption[1]);
   }
@@ -88,6 +103,7 @@ export function createTour(options: TourOptions): Tour {
     },
     start() {
       if (startedMs !== null || stages.length === 0) return;
+      options.beforeStart?.();
       startedMs = performance.now();
       caption.hidden = false;
       setAttr(button, 'aria-pressed', 'true');
@@ -101,10 +117,10 @@ export function createTour(options: TourOptions): Tour {
     update(nowMs) {
       if (startedMs === null) return;
       const elapsedS = (nowMs - startedMs) / 1_000;
-      const { index, done } = tourStop(elapsedS, stages.length);
+      const { index, done } = tourStop(elapsedS, stages.length, stopS);
       if (done) return finish(true);
       if (index !== shownIndex) show(index);
-      bar.style.width = `${Math.min(100, (100 * elapsedS) / (TOUR_STOP_S * stages.length)).toFixed(1)}%`;
+      bar.style.width = `${Math.min(100, (100 * elapsedS) / (stopS * stages.length)).toFixed(1)}%`;
     },
     dispose() {
       stopListening();

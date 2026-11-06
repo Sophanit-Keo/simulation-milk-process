@@ -1,9 +1,10 @@
 // The top bar's scenario menu (plan 08: "Scenario: pick a fault, watch the plant react, then read a short log
 // of what happened and why"; phase 5). One entry per fault of plan 06, the demand spike and late trucks
-// apart, with the text `process` keeps in src/data/scenarios.json; an entry that cannot start now says why
-// and is disabled. Below them, a reset puts every running fault right. Picking a fault sends
+// apart, then the yogurt line's five (phase 20), each line under its heading, with the text `process` keeps in
+// src/data/scenarios.json; an entry that cannot start now says why and is disabled. Below them, a reset puts every running fault right. Picking a fault sends
 // triggerScenario and selects its stage, so the camera flies to where the plant reacts.
 import {
+  isYogurtScenario,
   SCENARIO_IDS,
   SCENARIO_VARIANTS,
   STAGE_IDS,
@@ -90,7 +91,17 @@ export function createScenarioMenu(options: ScenarioMenuOptions): ScenarioMenu {
   toggle.setAttribute('aria-controls', menu.id);
   wrap.append(toggle, menu);
 
+  // The faults under their line's heading (phase 20): the UHT line's, then the yogurt line's.
+  let lastLine: string | null = null;
   const rows = SCENARIO_MENU.map((item) => {
+    const line = isYogurtScenario(item.id) ? 'Yogurt line' : 'UHT line';
+    if (line !== lastLine) {
+      lastLine = line;
+      const heading = el('div', 'menu-group', line);
+      heading.setAttribute('role', 'presentation');
+      heading.dataset.testid = `scenario-group-${line === 'UHT line' ? 'uht' : 'yogurt'}`;
+      menu.append(heading);
+    }
     const button = el('button', 'menu-item');
     button.type = 'button';
     button.setAttribute('role', 'menuitem');
