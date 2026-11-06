@@ -315,6 +315,30 @@ Measured on 6 November 2026 the same way as phase 18, at both review sizes. With
 
 Software GL gave 2.6 to 2.9 fps at the overview and 3 to 6 at the stops, as in phase 18. The next yogurt phase has 1 draw call of the budget's room left at the overview. Phase 20's hero models replace grey boxes, so they should save calls rather than add them.
 
+### Phase 20: the yogurt wing's heroes
+
+Measured on 6 November 2026 the same way as phase 19, at 1440 × 900, with `measure.mjs` pointed at the sandbox's installed Chromium (the pinned Playwright's own browser is missing here). Within the overview budget; no console errors. Phase 20 swaps in Line P8's hero and the three fermentation tanks'. As first built, the overview read **370** draw calls and 378,726 triangles; the heroes' static nodes (`carrier`, `uv_tunnel`, `ph_probe`) were merged into their bodies, and their small moving parts and matte bodies cast no shadow, as the grey boxes' dark parts cast none. It now reads **350** draw calls and **366,638** triangles: 1 and 42,428 more than phase 19 (P8's 15,288 and the tanks' 3 × 5,216 triangles, drawn again in the shadow pass).
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 |
+|---|---:|---:|
+| **Overview** | **350** | **366,638** |
+| 1 Standardization | 160 | 187,052 |
+| 2 Preheating | 142 | 188,892 |
+| 3 Homogenization | 140 | 183,148 |
+| 4 UHT | 150 | 192,960 |
+| 5 Flash cooling | 148 | 228,740 |
+| 6 Aseptic tank | 166 | 227,512 |
+| 7 Filling | 156 | 229,952 |
+| 8 Packaging | 154 | 198,074 |
+| 9 Quarantine & QA | 171 | 254,348 |
+| 10 Warehouse | 167 | 194,940 |
+| 11 Yogurt mix | 128 | 157,720 |
+| 12 Heat treatment | 132 | 166,416 |
+| 13 Fermentation | 132 | 178,944 |
+| 14 P8 buffer | 128 | 165,936 |
+| 15 P8 cup filler | 134 | 204,692 |
+| 16 Cold chain | 141 | 185,000 |
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.

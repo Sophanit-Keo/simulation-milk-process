@@ -273,10 +273,16 @@ export function p8Filler(kit: Kit, carrier: P8Carrier, ctx?: EquipmentContext): 
     onBuilt(object, isAlive) {
       if (!ctx) return;
       // The hero (phase 20): the scene keeps its UV glow and its HEPA lamp; the strokes move the hero's stations.
-      const swap = { path: HERO_MODELS.p8Filler, nodes: ['carrier', 'uv_tunnel', 'pistons', 'foil_pick', 'seal_heads', 'hood'] as const, keep: [uv, lampMesh] };
+      const swap = { path: HERO_MODELS.p8Filler, nodes: ['pistons', 'foil_pick', 'seal_heads', 'hood'] as const, keep: [uv, lampMesh] };
       swapInHero(ctx, object, swap, (nodes) => {
         pistonNode = nodes.pistons;
         lidderNodes = [nodes.foil_pick, nodes.seal_heads];
+        // Small and under the hood: their shadows would cost a draw call each and show nothing.
+        for (const node of [...lidderNodes, pistonNode]) node.traverse((each) => (each.castShadow = false));
+        // The matte body (plinth, frame posts, fan boxes) neither: as the grey box's dark parts, it casts none.
+        object.getObjectByName(`${object.name}-hero`)?.traverse((each) => {
+          if (each instanceof THREE.Mesh && /_matte$/.test((each.material as THREE.Material).name)) each.castShadow = false;
+        });
         let hood: THREE.Mesh | null = null;
         nodes.hood.traverse((each) => {
           if (!hood && each instanceof THREE.Mesh) hood = each;

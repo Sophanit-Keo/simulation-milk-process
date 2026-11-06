@@ -615,9 +615,11 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
             return `QA waits ${formatHours(room.qaDecisionS)}, then judges the held pallets by the warmest their cores got.`;
           case 'qaReleased':
             done();
+            run.phase = 'released';
             return `No core passed ${room.maxCoreC} °C: the yogurt is safe, and the pallets go on to the reefers.`;
           case 'qaDestroyed':
             done();
+            run.phase = 'destroyed';
             return `Yogurt whose core passed ${room.maxCoreC} °C may not be sold: the pallets are destroyed.`;
           default:
             return null;
@@ -716,7 +718,9 @@ export function createScenarios(config: PlantConfig, deps: ScenarioDeps): Scenar
       case 'yogurtColdRoomExcursion': {
         const excursion = state.excursion;
         const airC = yogurt.coldChain.view(nowS).coldRoom.tempC;
-        if (run.phase === 'done' || !excursion) return excursion?.verdict ? `Over: QA ${excursion.verdict} the held pallets` : 'Over: the cold room back in its range';
+        // QA's verdict is the run's, kept after the excursion itself is over.
+        if (run.phase === 'released' || run.phase === 'destroyed') return `Over: QA ${run.phase} the held pallets`;
+        if (run.phase === 'done' || !excursion) return 'Over: the cold room back in its range';
         if (excursion.palletsHeld > 0) {
           return `${excursion.palletsHeld} pallets on QA hold · air ${airC.toFixed(1)} °C${excursion.decisionS !== null ? ` · verdict ${formatDayTime(excursion.decisionS)}` : ''}`;
         }

@@ -548,7 +548,7 @@ describe('the yogurt wing\'s heroes (phase 20)', () => {
     assert.equal(seen(model, camera, [0.5, 1.35, 0.5225]), 'pistons');
     assert.equal(seen(model, camera, [1.8, 1.4, 0.5225]), 'foil_pick');
     assert.equal(seen(model, camera, [2.8, 1.36, 0.5225]), 'seal_heads');
-    assert.equal(seen(model, camera, [-1.4, 1.37, 0.3]), 'uv_tunnel');
+    assert.equal(seen(model, camera, [-1.4, 1.37, 0.3]), 'body_paint', 'the UV tunnel, in the body');
   });
 
   it('P8: the hood is the one glass node, round the stations and under the filter housing', () => {
@@ -557,13 +557,13 @@ describe('the yogurt wing\'s heroes (phase 20)', () => {
     assert.ok(hood.material.transparent, 'the hood is glass');
     const box = boxOf(hood);
     assert.deepEqual([box.min.y, box.max.y].map((v) => Math.round(v * 1000) / 1000), [0.95, 2.3]);
-    for (const name of ['pistons', 'foil_pick', 'seal_heads', 'uv_tunnel']) {
+    for (const name of ['pistons', 'foil_pick', 'seal_heads']) {
       const part = boxOf(model.getObjectByName(name));
       assert.ok(box.containsBox(part), `${name} under the hood`);
     }
   });
 
-  it('fermentation tank: the agitator turns on the tank\'s axis over its drive, and the pH probe sits on the +z side', () => {
+  it('fermentation tank: the agitator turns on the tank\'s axis over its drive, and the pH probe sits on the +x, +z side', () => {
     const model = build('fermentTank');
     const agitator = model.getObjectByName('agitator');
     const rest = boxOf(agitator);
@@ -576,12 +576,12 @@ describe('the yogurt wing\'s heroes (phase 20)', () => {
     }
     agitator.rotation.y = 0;
     model.updateMatrixWorld(true);
-    const probe = boxOf(model.getObjectByName('ph_probe'));
-    assert.ok(probe.min.z > 0.85 && probe.min.x > 0.85, 'on the +x, +z side of the shell');
+    const [px, , pz] = FERMENT_TANK.probeM;
+    assert.ok(px > 0.85 && pz > 0.85, 'the probe on the +x, +z side of the shell');
     // Stage 13's camera, (-21, 2, -48) + (1, 10, 15), from tank 2's origin (-20, 0, -48.5).
     const camera = new THREE.Vector3(0, 12, 15.5);
     assert.equal(seen(model, camera, [0.3, 4.67, 0]), 'agitator');
-    assert.equal(seen(model, camera, [1.0, 1.95, 1.0]), 'ph_probe');
+    assert.match(seen(model, camera, [1.0, 1.95, 1.0]), /^body_/, 'the probe, in the body');
   });
 
   it('fermentation tank: the inlet flange meets its pipe along z, the outlet is under the cone, the gauge strip is plain', () => {

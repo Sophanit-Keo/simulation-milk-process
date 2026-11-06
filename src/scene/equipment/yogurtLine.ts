@@ -242,9 +242,15 @@ function vessel(kit: Kit, spec: VesselSpec): Equipment {
       ? (object, isAlive) => {
           // The scene keeps the gauge's level and the hold lamp; the model brings the rest, the agitator its own.
           const keep = [milk, heldLamp].filter((each): each is THREE.Object3D => each !== undefined);
-          swapInHero(hero.ctx, object, { path: hero.path, nodes: ['agitator', 'ph_probe'], keep }, (nodes) => {
+          swapInHero(hero.ctx, object, { path: hero.path, nodes: ['agitator'], keep }, (nodes) => {
             if (agitator) nodes.agitator.rotation.y = agitator.rotation.y;
             agitator = nodes.agitator;
+            // A thin paddle on top: its shadow would cost a draw call a tank and show nothing.
+            agitator.traverse((each) => (each.castShadow = false));
+            // The matte body (legs, bands, drive) neither, as the grey vessel's dark steel casts none.
+            object.getObjectByName(`${object.name}-hero`)?.traverse((each) => {
+              if (each instanceof THREE.Mesh && /_matte$/.test((each.material as THREE.Material).name)) each.castShadow = false;
+            });
           }, isAlive);
         }
       : undefined,

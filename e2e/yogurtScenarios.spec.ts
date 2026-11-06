@@ -93,7 +93,7 @@ test('a cold-room excursion puts the room\'s pallets on QA hold: the panel, the 
 });
 
 test('a slow fermentation holds the stalled tank, lights its lamp, and discards it; the seal drift holds the cups since the last pass', async ({ page }) => {
-  test.setTimeout(360_000);
+  test.setTimeout(480_000);
   await page.goto('/?debug');
   await waitForClock(page);
   await waitForScene(page);
@@ -108,12 +108,17 @@ test('a slow fermentation holds the stalled tank, lights its lamp, and discards 
   await railButton(page, 13).click();
   await expect.poll(() => sceneCall(page, 'equipmentState', 'ferment-tank-3'), { timeout: 120_000 }).toMatchObject({ held: true });
   await expect(railButton(page, 13).locator('[data-status]')).toHaveAttribute('data-status', 'bad');
-  await expect(banner(page)).toContainText(/Tank 3 held at pH 5\.20|Over: the tank discarded/, { timeout: 60_000 });
-  await expect(banner(page)).toContainText('Over: the tank discarded and cleaned', { timeout: 120_000 });
+  // The banner follows the newest run, the seal drift; the phage's run is read in the log once its tank is gone, 8 h after
+  // it started: at ×10,000, so software GL's slow frames get there.
+  await page.getByTestId('speed-10000').click();
+  await expect.poll(() => sceneCall(page, 'equipmentState', 'ferment-tank-3'), { timeout: 180_000 }).toMatchObject({ held: false });
   await page.getByTestId('speed-1').click();
-  await page.getByTestId('scenario-log-open').click();
+  // Both runs are over, so the banner may have gone: the menu opens the log.
+  await menuButton(page).click();
+  await page.getByTestId('scenario-log-menu').click();
   const runs = page.getByTestId('scenario-log').locator('.sc-run');
   const phage = runs.filter({ has: page.locator('h3', { hasText: 'Slow fermentation (phage)' }) });
+  await expect(phage.locator('.sc-meta')).toContainText('Over: the tank discarded and cleaned');
   await expect(phage.locator('.sc-entries')).toContainText('Fermentation tank 3 discarded');
   const seal = runs.filter({ has: page.locator('h3', { hasText: 'Seal temperature drift' }) });
   await expect(seal.locator('.sc-entries')).toContainText(/Line P8 seal test failed: 5 of 5 cups leaked/);

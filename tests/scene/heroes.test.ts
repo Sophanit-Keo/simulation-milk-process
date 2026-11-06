@@ -22,8 +22,8 @@ const MODEL_NODES: Record<string, readonly string[]> = {
   [HERO_MODELS.palletizer]: ['arm', 'arm_trolley', 'arm_lift', 'arm_wrist', 'arm_clamp_1', 'arm_clamp_2'],
   [HERO_MODELS.stretchWrapper]: ['turntable', 'carriage'],
   // The yogurt wing's (phase 20).
-  [HERO_MODELS.p8Filler]: ['carrier', 'uv_tunnel', 'pistons', 'foil_pick', 'seal_heads', 'hood'],
-  [HERO_MODELS.fermentTank]: ['agitator', 'ph_probe'],
+  [HERO_MODELS.p8Filler]: ['pistons', 'foil_pick', 'seal_heads', 'hood'],
+  [HERO_MODELS.fermentTank]: ['agitator'],
 };
 
 /** A stand-in model: a static body, each moving node with a mesh in it, and glass on the filler. */
@@ -31,6 +31,7 @@ function fakeModel(path: string, without: readonly string[] = []): THREE.Object3
   const scene = new THREE.Group();
   const box = new THREE.BoxGeometry(1, 1, 1);
   scene.add(new THREE.Mesh(box, new THREE.MeshStandardMaterial({ name: 'paint' })));
+  scene.add(new THREE.Mesh(box, new THREE.MeshStandardMaterial({ name: 'body_matte' })));
   if (path === HERO_MODELS.filler) scene.add(new THREE.Mesh(box, new THREE.MeshStandardMaterial({ name: 'glass', transparent: true })));
   for (const name of MODEL_NODES[path] ?? []) {
     if (without.includes(name)) continue;
@@ -113,7 +114,13 @@ describe('hero models (off with ?greybox)', () => {
     for (const id of HERO_IDS) {
       heroOf(machines.get(id) as Equipment)?.traverse((object) => {
         if (!(object instanceof THREE.Mesh) || RIDERS.has(object.name)) return;
-        expect(object.castShadow, `${id} ${object.material.name}`).toBe(!object.material.transparent);
+        // The yogurt wing's small moving parts cast none (phase 20): a draw call each for no shadow worth seeing.
+        let quiet: THREE.Object3D | null = object;
+        while (quiet && !['pistons', 'foil_pick', 'seal_heads', 'agitator'].includes(quiet.name)) quiet = quiet.parent;
+        // Nor do their matte bodies, as the grey boxes' dark parts cast none.
+        const wing = id === 'p8-filler' || id.startsWith('ferment-tank');
+        const wingPart = wing && (quiet !== null || /_matte$/.test(object.material.name));
+        expect(object.castShadow, `${id} ${object.material.name}`).toBe(!object.material.transparent && !wingPart);
         expect(object.receiveShadow).toBe(true);
       });
     }

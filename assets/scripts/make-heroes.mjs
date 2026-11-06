@@ -101,8 +101,6 @@ export const HERO_SPECS = {
     envelopeM: { min: [-5.2, 0, -0.85], max: [5.9, 2.73, 0.85] },
     maxHeightM: 3.0,
     nodes: [
-      { name: 'carrier', parent: null, atM: [0, 0.99, 0] },
-      { name: 'uv_tunnel', parent: null, atM: [-1.4, 1.33, 0] },
       { name: 'pistons', parent: null, atM: [0.5, 1.39, 0] },
       { name: 'foil_pick', parent: null, atM: [1.8, 1.41, 0] },
       { name: 'seal_heads', parent: null, atM: [2.8, 1.41, 0] },
@@ -119,7 +117,6 @@ export const HERO_SPECS = {
     maxHeightM: 5.0,
     nodes: [
       { name: 'agitator', parent: null, atM: [0, 4.64, 0] },
-      { name: 'ph_probe', parent: null, atM: [0.99, 1.8, 0.99] },
     ],
     nozzlesM: [],
   },
@@ -143,6 +140,8 @@ export const P8_LAYOUT = {
   cupTopM: 1.1,
   rampM: { fromXM: 5, toXM: 5.8, fromYM: 1.03, toYM: 0.76 },
 };
+/** Where the static carrier chain and the UV-C tunnel's shell stand, built round these points and merged into the body. */
+const P8_PARTS = { carrierM: [0, 0.99, 0], uvTunnelM: [-1.4, 1.33, 0] };
 
 /**
  * The stretch wrapper's layout round the turntable's centre (phase-12 card): the turntable flush with the
@@ -822,7 +821,7 @@ export function buildStretchWrapper() {
  * filter housing; along the carrier the 12 cup magazines over the de-nester, the ionizer's shroud, the UV-C tunnel, the
  * piston manifold, the foil magazine, the sealing heads' housing and the coder, then the ramp down to the check gates.
  * The cups' band over the carrier (y 1.03 to 1.10, |z| < 0.56) stays clear. Moving nodes: `pistons`, `foil_pick` and
- * `seal_heads` stroke down; `carrier`, `uv_tunnel` and `hood` are nodes so the scene can find and tint them.
+ * `seal_heads` stroke down; `hood` is a node so the scene can tint its glass. The chain and the tunnel are static body.
  */
 export function buildP8Filler() {
   const m = makeMaterials('p8_filler');
@@ -904,12 +903,13 @@ export function buildP8Filler() {
   // Glass takes no baked shade, so its faces are not cut.
   hood.add(m.glass, C.glass, new THREE.BoxGeometry(10.2, 1.35, 1.6).translate(0, 0.675, 0));
 
+  // The chain and the tunnel stand still (the cups index over them), so they join the body: no draw call of their own.
+  p.merge(carrier, new THREE.Matrix4().makeTranslation(...P8_PARTS.carrierM));
+  p.merge(uv, new THREE.Matrix4().makeTranslation(...P8_PARTS.uvTunnelM));
   const { nodes } = HERO_SPECS.p8Filler;
   const at = (name) => nodes.find((each) => each.name === name).atM;
   return group('p8_filler', [
     ...p.meshes('body'),
-    node(carrier, 'carrier', at('carrier')),
-    node(uv, 'uv_tunnel', at('uv_tunnel')),
     node(pistons, 'pistons', at('pistons')),
     node(pick, 'foil_pick', at('foil_pick')),
     node(heads, 'seal_heads', at('seal_heads')),
@@ -927,6 +927,8 @@ export const FERMENT_TANK = {
   driveM: 0.44,
   inletM: [0, 1.4, 1.4],
   outletM: [0, 0.6, 0],
+  /** The pH probe's port, on the shell at 45° toward +x and +z; the scene hangs the tank's hold lamp over it. */
+  probeM: [0.99, 1.8, 0.99],
   /** The scene's level gauge, down the +z face: keep that strip plain. */
   gaugeM: { zM: 1.42, yM: [1.3, 3.7], halfWidthM: 0.09 },
 };
@@ -934,8 +936,8 @@ export const FERMENT_TANK = {
 /**
  * A fermentation tank (phase 20): an insulated, cone-bottomed tank of 10,000 L on four legs, stainless cladding with
  * its seams, a manway and a sight glass on the dome, the agitator's drive on top, the inlet on the +z face and the
- * outlet under the cone. Moving node: `agitator`, the coupling and paddle over the drive, which the scene turns;
- * `ph_probe`, the probe port on the +z side, is a node so the scene can hang the tank's hold lamp on it.
+ * outlet under the cone. Moving node: `agitator`, the coupling and paddle over the drive, which the scene turns. The pH
+ * probe's port on the +z side is static body; the scene hangs the tank's hold lamp over it.
  */
 export function buildFermentTank() {
   const m = makeMaterials('ferment_tank');
@@ -984,9 +986,10 @@ export function buildFermentTank() {
   probe.cylinder(m.paint, C.steel, 'y', [0, 0, 0], 0.05, 0.16, 12);
   probe.box(m.paint, C.mid, span(-0.06, 0.06), [0.08, 0.2], span(-0.06, 0.06));
 
+  p.merge(probe, new THREE.Matrix4().makeTranslation(...FERMENT_TANK.probeM));
   const { nodes } = HERO_SPECS.fermentTank;
   const at = (name) => nodes.find((each) => each.name === name).atM;
-  return group('ferment_tank', [...p.meshes('body'), node(agitator, 'agitator', at('agitator')), node(probe, 'ph_probe', at('ph_probe'))]);
+  return group('ferment_tank', [...p.meshes('body'), node(agitator, 'agitator', at('agitator'))]);
 }
 
 /** Each model's builder, by its key in HERO_SPECS. */

@@ -210,6 +210,10 @@ describe('H138: the cold-room excursion', () => {
     expect(h.line.coldChain.totals().cupsDestroyed).toBeGreaterThan(0);
     expect(done).toMatchObject({ following: false, summary: 'Over: QA destroyed the held pallets' });
     expect(end.yogurt.coldChain.coldRoom.tempC).toBeLessThan(wing.coldChain.roomMaxC);
+    // Once the air is back at its set point the excursion is over, and the run still says what QA decided.
+    const later = h.run(hToS(1));
+    expect(later.yogurt.coldChain.coldRoom.excursion).toBeNull();
+    expect(runOf(later, 'yogurtColdRoomExcursion').summary).toBe('Over: QA destroyed the held pallets');
   });
 
   it('releases the pallets when the air only reaches 8 °C: held, but their cores stay under 8 °C', () => {
