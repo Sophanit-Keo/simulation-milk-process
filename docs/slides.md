@@ -2,7 +2,7 @@
 
 # Presentation slides
 
-Twelve slides, about 15 minutes with the live demo (slide 8). One slide per heading; the lines under it are what goes on the slide, and *Say* is the speaker note. Figures come from the [report](report.md).
+Thirteen slides, about 20 minutes with the live demos (slide 8, and the yogurt demo after slide 8b). One slide per heading; the lines under it are what goes on the slide, and *Say* is the speaker note. Figures come from the [report](report.md).
 
 ## 1. UHT milk plant simulation
 
@@ -58,16 +58,25 @@ Twelve slides, about 15 minutes with the live demo (slide 8). One slide per head
 
 - The [demo script](demo-script.md): about 10 minutes
 
+## 8b. The yogurt line, Line P8
+
+- Stages 11–16 in a wing beside the UHT plant: mix, 92 °C for 5 min, three fermentation tanks at 43 °C, Line P8 at 21,600 cups/h, a cold chain to reefer trucks
+- Set and stirred yogurt; the UHT line's numbers unchanged
+- Five faults of its own: a phage, the heat dip, a seal drift, a HEPA loss, a cold-room excursion
+- The [yogurt demo](demo-script.md#the-yogurt-demo): about 8 minutes
+
+*Say:* Run the yogurt demo; end on the scenario log, where the cold room's verdict explains why only one reefer left.
+
 ## 9. How it was checked
 
-- Every expected number worked by hand first, with its source (H1–H119)
-- About 1,150 unit tests: formulas, acceptance runs, a 60-day run, every scenario, the cleaning and energy, the demo itself
+- Every expected number worked by hand first, with its source (H1–H138)
+- About 1,800 unit tests: formulas, acceptance runs, a 60-day run, every scenario of both lines, the cleaning and energy, both demos
 - Browser tests in Chromium; asset checks on every model
 - The same seed gives the same run, every time
 
 ## 10. Performance
 
-- 222 draw calls and about 244,000 triangles at the overview (budget 350 and 300,000)
+- 350 draw calls and about 367,000 triangles at the overview with both lines (budget about 350 draw calls)
 - Instanced packs and pallets; one shadow-casting light; baked ambient occlusion
 - 60 fps check on the target laptop: a fixed 60 s camera path at ×1 and ×10,000
 

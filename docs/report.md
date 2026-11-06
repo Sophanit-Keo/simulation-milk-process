@@ -2,7 +2,7 @@
 
 # UHT milk plant simulation: report
 
-A browser-based 3D simulation of one UHT milk plant, from the raw-milk silo to the truck, built over twelve weeks in six phases ([roadmap](../plan/09-development-roadmap.md)). This report gathers what was built, how it works, how it was checked and what it leaves out. Its technical chapter is `process`'s ([phase 6](../plan/agent-plan/phase-6-polish-and-present.md)); `lead` assembled the rest.
+A browser-based 3D simulation of one UHT milk plant, from the raw-milk silo to the truck, built over twelve weeks in six phases ([roadmap](../plan/09-development-roadmap.md)), and since then a yogurt wing beside it, Line P8, built in phases 15–21 ([chapter 2.6](#26-the-yogurt-line-line-p8)). This report gathers what was built, how it works, how it was checked and what it leaves out. Its technical chapter is `process`'s ([phase 6](../plan/agent-plan/phase-6-polish-and-present.md)); `lead` assembled the rest.
 
 ## 1. Goal and scope
 
@@ -71,6 +71,7 @@ Every expected value is worked by hand first, then tested. `process` writes the 
 | Cleaning programmes | The CIP's six steps and the AIC's three: their order, times and temperatures, and the circulation speed (H111–H114) | `tests/sim/cleaning.test.ts` |
 | Steam and energy | The boiler's figures, the steam, gas and electricity in production, cleaning and re-sterilizing, a divert's cost and a day's energy per tonne (H115–H119), and the totals at four step sizes | `tests/sim/energy.test.ts` |
 | Demo script | The live demo's sequence replayed, every number the presenter quotes | `tests/sim/demoScript.test.ts` |
+| The yogurt line | Its formulas and runs (H122–H133), the 7-day run's cup conservation, its five faults (H134–H138), the yogurt demo replayed, and the UHT line's fingerprint unchanged | `tests/sim/yogurt/*.test.ts`, `tests/sim/yogurtDemoScript.test.ts` |
 | Assets | Every model's size, nodes, budget, licence, and the committed files byte for byte | `assets/scripts/*.test.mjs` |
 | Browser | The app in Chromium: stages and camera, controls, KPIs, the liquid line and divert, the cleaning steps, the steam and energy, silo to truck, scenarios, tour, About, loading and error states, no console errors | `e2e/*.spec.ts` |
 
@@ -93,15 +94,36 @@ The final number check (phase 6) compared what the screen shows with the review'
 
 ### 2.4 Performance
 
-The budget is 60 fps on a mid-range laptop with one shadow-casting light. The plant draws 222 draw calls and 244,266 triangles at the overview with the hero models, the CIP station and the boiler's plume (budget 350 draw calls, about 300,000 triangles), and 99 to 163 at the stage stops ([perf baseline](../tests/perf/baseline.md)). Packs, trays and pallets are instanced meshes, and the 3D view moves a sample of them, not every pack. Static parts are merged into one mesh per material, and the hero models carry their ambient occlusion in their vertex colours. The gate G3 check drives a fixed camera path for 60 s at ×1 and ×10,000 and records the average and the 1% low (`node tests/perf/measure.mjs --path 60 --headed --channel chrome`). It needs the target laptop's GPU: the build machines only have software rendering, at about 4 fps.
+The budget is 60 fps on a mid-range laptop with one shadow-casting light. At G3 the plant drew 222 draw calls and 244,266 triangles at the overview; with the yogurt wing, its heroes and its cold chain it draws 350 draw calls and about 367,000 triangles (budget about 350 draw calls), and 128 to 171 at the stage stops ([perf baseline](../tests/perf/baseline.md)). Packs, trays and pallets are instanced meshes, and the 3D view moves a sample of them, not every pack. Static parts are merged into one mesh per material, and the hero models carry their ambient occlusion in their vertex colours. The gate G3 check drives a fixed camera path for 60 s at ×1 and ×10,000 and records the average and the 1% low (`node tests/perf/measure.mjs --path 60 --headed --channel chrome`). It needs the target laptop's GPU: the build machines only have software rendering, at about 4 fps.
 
 ### 2.5 3D assets
 
 The machines are the project's own models, built in code (`assets/scripts/make-heroes.mjs`, `make-vehicles.mjs`) so they rebuild to the same bytes and pass the same checks every time: size against the layout, named moving nodes on their joints, polygon budget, and a render in the app's three.js. The four hero models (separator, homogenizer, aseptic filler, palletizer) have 2,048 to 6,252 triangles, baked ambient occlusion and meshopt-compressed geometry, 43 to 97 KB each. The conveyors are Kenney's Factory Kit (CC0). Every asset has a licence row in [LICENSES.md](../assets/LICENSES.md), and no brand appears on any of them.
 
+### 2.6 The yogurt line (Line P8)
+
+Phases 15–21 add a yogurt wing beside the UHT plant: stages 11–16, from its own raw-milk silo to reefer trucks, set and stirred, from the developer's P8 SOP ([plan 12](../plan/12-yogurt-line.md), [D25](../plan/DECISIONS.md#d25-the-yogurt-line-line-p8)–[D30](../plan/DECISIONS.md#d30-the-yogurt-lines-fault-scenarios)). It runs in the same step after the UHT line, queues no events and draws from a stream of its own, so the UHT line's numbers are unchanged: a fingerprint of its part of every snapshot is checked against the one before the wing existed.
+
+- **Mix and heat (11–12):** milk standardized to 3.0% fat and fortified with skim-milk powder to 11% SNF, 6,000 L/h; homogenized at 180 bar, held at 92 °C for 5 min, which denatures most of the β-lactoglobulin for a firm gel (H122–H123). Under 85 °C at the holding cell's outlet, or held under 3 min, the CCP diverts to a reprocess tank and the wing cleans in place.
+- **Fermentation (13):** three 10,000 L tanks at 43 °C; the pH falls from 6.6 to 4.55 in 4 h on a logistic curve whose clock runs at the cardinal factor of the temperature (H124–H125).
+- **Buffer and P8 (14–15):** stirred yogurt is smoothed, cooled to 18 °C and dosed with fruit; set yogurt goes to the buffer warm. P8 fills 12 cups a cycle, 21,600 cups of 125 g an hour; the checkweigher, the metal detector and the vision check reject what they find; every 2 h a seal test takes 5 cups, and one that fails holds every cup since the last pass. The HEPA cabin, the SIP and the ATP swab are interlocks (H126–H129, D28).
+- **Cold chain (16):** 24 cups a tray, 120 trays a pallet, one batch a pallet. Set yogurt sets in a 43 °C warm room to pH 4.60; every pallet is blast-chilled to 4 °C, holds 24 h in the cold room, is released once its seal tests have passed, and leaves on a reefer of 26 (H130–H133, D29). Seven days ship 45 reefers, every cup accounted for.
+
+Its five faults ([D30](../plan/DECISIONS.md#d30-the-yogurt-lines-fault-scenarios), [H134–H138](../plan/hand-calculations.md#phase-20-the-yogurt-lines-fault-scenarios)):
+
+| Scenario | What the model does | What follows |
+|---|---|---|
+| Slow fermentation (bacteriophage) | A tank's pH stalls at 5.2 | Flagged and held 2 h after it was due, never fed to P8, discarded 8 h after it started; the next tank feeds P8 |
+| Heat treatment under temperature | The outlet heads for 82 °C for 10 min | The cool mix leaves the holding cell 336 s later under 85 °C and diverts; the wing cleans for 80 min |
+| Seal temperature drift | The seal heads fall to 160 °C in 15 min | The next seal test fails; the cups since the last pass are held and pulled from the pallets |
+| HEPA overpressure loss | The cabin reads +5 Pa until its 30 min repair | P8 stops at once; after the repair, an SIP and a swab: 50 min, 18,000 cups not made |
+| Cold-room excursion | The cooling fails for 3 h; the air heads for 10 °C | After 2 h over 6 °C the room's pallets are held; QA destroys them, as their cores passed 8 °C |
+
+The wing has its own hero models, Line P8 (15,288 triangles) and the fermentation tank (5,216), and its own guided tour of stages 11–16. The cup, tray and reefer-unit models of the phase-16 specs are left out: the 1,400-odd cups are instanced at 16 triangles, and the wing's reefers are boxes ([hero specs](../assets/hero-specs.md#phase-20-the-yogurt-wings-models-as-built)).
+
 ## 3. Limitations
 
-The [About panel](../src/data/about.md) lists the accepted simplifications. The main ones: plug flow with no pressure drop or fouling; temperatures that step with a short lag rather than follow heat-transfer equations; one product and pack size; cleaning as timed steps whose fluids are not part of the balance; energy counted for the injector's steam and the homogenizer only; failures at simple random rates; trucks at a fixed interval rather than random orders; scripted faults with one fixed size each. The model also mixes plant types: a direct UHT plant with the homogenizer before it, and the 50% throttle of indirect plants ([R5](../plan/REVIEW.md#r5-plant-type-mix)).
+The [About panel](../src/data/about.md) lists the accepted simplifications. The main ones: plug flow with no pressure drop or fouling (on the yogurt line too); temperatures that step with a short lag rather than follow heat-transfer equations; one product and pack size; cleaning as timed steps whose fluids are not part of the balance; energy counted for the injector's steam and the homogenizer only; failures at simple random rates; trucks at a fixed interval rather than random orders; scripted faults with one fixed size each. The model also mixes plant types: a direct UHT plant with the homogenizer before it, and the 50% throttle of indirect plants ([R5](../plan/REVIEW.md#r5-plant-type-mix)).
 
 ## 4. How to run and test
 

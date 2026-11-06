@@ -2,7 +2,7 @@
 
 # Demo video script
 
-About 9 minutes, recorded by the developer from the deployed build ([phase 6](../plan/agent-plan/phase-6-polish-and-present.md)). It follows the [demo script](demo-script.md), whose numbers `tests/sim/demoScript.test.ts` checks, with the narration to read and what the screen shows. Record at 1440 × 900 or 1920 × 1080 in Chrome, at 100% zoom, with the system cursor visible.
+About 11½ minutes, recorded by the developer from the deployed build ([phase 6](../plan/agent-plan/phase-6-polish-and-present.md)). It follows the [demo script](demo-script.md), whose numbers `tests/sim/demoScript.test.ts` and `tests/sim/yogurtDemoScript.test.ts` check, with the narration to read and what the screen shows. Record at 1440 × 900 or 1920 × 1080 in Chrome, at 100% zoom, with the system cursor visible.
 
 | Time | Screen | Narration |
 |---|---|---|
@@ -14,7 +14,10 @@ About 9 minutes, recorded by the developer from the deployed build ([phase 6](..
 | 5:15–6:15 | **Homogenizer pressure loss**, then **Sterile-air filter failure**, then **Failed incubation**; stages 3, 6 and 9 | "Three quality faults. The homogenizer loses pressure: at 50 bar the fat globules stay too big, a creaming risk of 84%, and nothing shows yet. The sterile-air filter fails: the batches filling now are held for investigation. And the oldest batch on hold fails its incubation check: all 59 pallets are blocked." |
 | 6:15–7:15 | **Demand spike** at ×100; stage 10 | "A large order brings 12 extra trucks, one every five minutes. With three dock doors, trucks queue in the yard, and the stock falls to about one day of cover." |
 | 7:15–8:15 | ×10,000 to day 15, 14:00; stage 9 | "A week at ×10,000 takes about a minute. Every day at 14:00 a batch leaves quarantine. On day 15 the two suspect batches finish incubating: one has a spoiled sample, the other a cream layer. Both are blocked, days after the faults that caused them." |
-| 8:15–9:00 | Scenario log; About; back to the whole plant | "The scenario log keeps the story of each fault. About explains what the model is and isn't, and lists its sources. The code, the tests and the decision log behind every number are on GitHub." |
+| 8:15–8:30 | Back to the whole plant, then the yogurt wing behind it | "Behind the UHT plant, a second line: a yogurt wing, Line P8, from its own silo to refrigerated trucks." |
+| 8:30–9:30 | **Yogurt tour**, stages 11 to 14 (cut in editing) | "The mix is fortified with milk powder and held at 92 °C for five minutes. Three tanks ferment it at 43 °C until the pH falls to 4.55; stirred yogurt is cooled and dosed with fruit, set yogurt goes on warm." |
+| 9:30–10:45 | Reload; Scenarios → **HEPA overpressure loss**, then **Cold-room excursion** at ×100; stages 15 and 16 (the [yogurt demo](demo-script.md#the-yogurt-demo), steps 4 and 6) | "Line P8 fills under a clean-air hood. When its fan fails, the hood glows red and P8 stops; after the repair it must be sterilized and swabbed: 50 minutes, 18,000 cups. And when the cold room's cooling fails, two hours over 6 °C put every pallet in it on hold. Their cores passed 8 °C, so QA destroys them, and the reefers wait for the next day's yogurt." |
+| 10:45–11:30 | Scenario log; About; back to the whole plant | "The scenario log keeps the story of each fault. About explains what the model is and isn't, and lists its sources. The code, the tests and the decision log behind every number are on GitHub." |
 
 ## Recording notes
 
