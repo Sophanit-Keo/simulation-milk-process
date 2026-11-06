@@ -253,7 +253,7 @@ async function runPath(page, stages, pathS, speedKey) {
     requestAnimationFrame(tick);
   });
   for (const { stage } of stages) {
-    await page.click(`#rail [data-testid="rail-stage-${stage}"]`);
+    await clickStage(page, stage);
     await sleep((pathS * 1_000) / stages.length);
   }
   const times = await page.evaluate(() => {
@@ -262,6 +262,16 @@ async function runPath(page, stages, pathS, speedKey) {
     return noted;
   });
   return frameStats(times);
+}
+
+/**
+ * Clicks a stage on the rail. Since phase 16 the rail groups the stages by line, and at 1280 × 720 it shows one group
+ * at a time: a folded group's header is clicked open first, as the browser tests' showOnRail does.
+ */
+async function clickStage(page, stage) {
+  const button = page.locator(`#rail [data-testid="rail-stage-${stage}"]`);
+  if (!(await button.isVisible())) await page.click(`#rail [data-testid="${stage > 10 ? 'rail-group-yogurt' : 'rail-group-uht'}"]`);
+  await button.click();
 }
 
 async function measure(appUrl, options) {
@@ -308,7 +318,7 @@ async function measure(appUrl, options) {
 
     const stops = [];
     for (const { stage, name } of stages) {
-      await page.click(`#rail [data-testid="rail-stage-${stage}"]`);
+      await clickStage(page, stage);
       await page.waitForSelector(`#viewport[data-focus-stage="${stage}"]`, { timeout: LAND_TIMEOUT_MS });
       stops.push({ stage, name, ...(await settledCounts(page, STOP_HOLD_S)), ...(await readFps(page, options.samples)) });
     }

@@ -258,6 +258,37 @@ Measured on 6 November 2026 the same way as phase 12 (a production build served 
 
 How the wing stays in budget: a first build of it drew about 130 more at the overview. Each grey-box machine merges its static parts into one mesh per material, and only the vessels' steel, the rooms' walls and the tallest parts cast shadows (a caster is a draw call more in the shadow pass); the wing's pipes are three runs, one mesh each, that cast no shadow. The milk's stage stops draw 15 to 35 more than in phase 14 because their cameras look north, over the milk row to the wing behind it, and the shadow map's frustum now covers the deeper plant. Software GL gave about 3 fps at the overview and 5 to 8 at the wing's stops: not the 60 fps check, which runs on the target laptop.
 
+### Phase 18: Line P8's moving parts and its cups
+
+Measured on 6 November 2026 the same way as phase 16, at both review sizes; `measure.mjs` now opens a folded rail group before it clicks one of its stages, since at 1280 × 720 the rail shows one line's group at a time (phase 16's accordion). Within the overview budget; no console errors. Phase 17 added the wing's agitators, the divert valve's flag and lamp and its lit route; phase 18 P8's stations, its UV-C glow and HEPA lamp, and its cups: about 1,450 instances in two draw calls, the cup bodies and their tops, culled with a sphere round the line. The overview reads **345** draw calls and **322,734** triangles, 14 and 32,384 more than phase 16.
+
+| Camera | Draw calls, 1440 × 900 | Triangles, 1440 × 900 | Draw calls, 1280 × 720 | Triangles, 1280 × 720 |
+|---|---:|---:|---:|---:|
+| **Overview** | **345** | **322,734** | **345** | **322,734** |
+| 1 Standardization | 159 | 170,808 | 164 | 171,320 |
+| 2 Preheating | 138 | 166,072 | 139 | 166,084 |
+| 3 Homogenization | 136 | 162,960 | 137 | 163,196 |
+| 4 UHT | 147 | 174,964 | 150 | 175,368 |
+| 5 Flash cooling | 146 | 198,012 | 146 | 198,012 |
+| 6 Aseptic tank | 163 | 187,824 | 165 | 188,040 |
+| 7 Filling | 154 | 199,332 | 154 | 199,332 |
+| 8 Packaging | 151 | 180,078 | 153 | 180,102 |
+| 9 Quarantine & QA | 168 | 236,352 | 178 | 245,360 |
+| 10 Warehouse | 164 | 176,944 | 177 | 183,384 |
+| 11 Yogurt mix | 127 | 141,476 | 127 | 141,476 |
+| 12 Heat treatment | 131 | 150,172 | 131 | 150,172 |
+| 13 Fermentation | 131 | 150,424 | 132 | 150,436 |
+| 14 P8 buffer | 125 | 143,952 | 125 | 143,952 |
+| 15 P8 cup filler | 131 | 172,980 | 131 | 172,980 |
+| 16 Cold chain | 135 | 163,616 | 138 | 163,712 |
+
+How the cups stay in budget. A first build gave each cup a 12-sided cylinder with its ends, and each top a 12-sided disc, and never culled them. The overview then read 348 draw calls and **403,950** triangles, and its frame rate on software GL fell from about 3 to 1.4 fps. The milk's long browser tests then ran out of time (the energy test waits through a CIP at ×1,000). Three changes brought it back to 2.6 fps at the overview and 3 to 5 at the stops:
+- **Triangles:** each cup became an open 8-sided cylinder, drawn on both sides, 16 triangles, and each top an 8-triangle disc.
+- **Culling:** both meshes take a bounding sphere round the line, so the milk's stops that look away from the wing skip them.
+- **Draw calls:** the foil pick and the sealing heads share one moving beam, the ramp merged into the machine's dark steel, and the reject flap is drawn only while it kicks.
+
+The stops of stages 5 to 7 and 16 look across the cups, so they gain the same 31,000 triangles.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.

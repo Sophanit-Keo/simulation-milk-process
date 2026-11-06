@@ -168,7 +168,7 @@ export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
   const rampToXM = at.P8_GATE_BELT.rampToXM;
   const rampRad = Math.atan2(topM - at.P8_GATE_BELT.topM, rampToXM - rampFromXM);
   const rampLengthM = Math.hypot(rampToXM - rampFromXM, topM - at.P8_GATE_BELT.topM);
-  b.part('box', 'rubber', [(rampFromXM + rampToXM) / 2, (topM + at.P8_GATE_BELT.topM) / 2 - 0.02, zM], [rampLengthM, 0.04, 0.42], {
+  b.part('box', 'steelDark', [(rampFromXM + rampToXM) / 2, (topM + at.P8_GATE_BELT.topM) / 2 - 0.02, zM], [rampLengthM, 0.04, 0.42], {
     rotationRad: [0, 0, -rampRad],
   });
 
@@ -177,13 +177,13 @@ export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
   for (let lane = 0; lane < LANES; lane++) {
     b.part('cylLo', 'steelDark', [0, 0, -laneSpanM / 2 + lane * at.P8_CARRIER.lanePitchM], [0.018, 0.22, 0.018], { parent: pistons });
   }
-  const pick = b.pivot('foilPick', [st.foilXM, topM + 0.4, zM]);
-  b.part('box', 'steelDark', [0, 0, 0], [0.12, 0.04, laneSpanM + 0.08], { parent: pick });
-  const heads = b.pivot('sealHeads', [st.sealerXM, topM + 0.38, zM]);
-  b.part('box', 'steelDark', [0, 0, 0], [0.16, 0.08, laneSpanM + 0.08], { parent: heads });
+  // The lidder: the foil pick and the sealing heads on one beam, one stroke a cycle (one draw call, not two).
+  const lidder = b.pivot('lidder', [st.sealerXM, topM + 0.38, zM]);
+  b.part('box', 'steelDark', [st.foilXM - st.sealerXM, 0.02, 0], [0.12, 0.04, laneSpanM + 0.08], { parent: lidder });
+  b.part('box', 'steelDark', [0, 0, 0], [0.16, 0.08, laneSpanM + 0.08], { parent: lidder });
+  b.part('box', 'steelDark', [(st.foilXM - st.sealerXM) / 2, 0.06, 0], [st.sealerXM - st.foilXM, 0.03, 0.1], { parent: lidder });
   const pistonRestY = pistons.position.y;
-  const pickRestY = pick.position.y;
-  const headsRestY = heads.position.y;
+  const lidderRestY = lidder.position.y;
 
   // The UV-C lamps' glow under the tunnel's roof, and the HEPA lamp on its housing: materials of their own.
   const uvMaterial = new THREE.MeshStandardMaterial({ color: 0x1b1530, emissive: UV_HEX, emissiveIntensity: 0, roughness: 0.4 });
@@ -233,8 +233,7 @@ export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
       // The stations stroke during the dwell, and stand up while P8 does.
       const dwell = carrier.running ? carrier.dwellFrac() : 0;
       pistons.position.y = pistonRestY - PISTON_STROKE_M * stroke(dwell, 0.1, 0.75);
-      pick.position.y = pickRestY - PISTON_STROKE_M * stroke(dwell, 0.15, 0.6);
-      heads.position.y = headsRestY - SEAL_STROKE_M * stroke(dwell, 0.25, 0.8);
+      lidder.position.y = lidderRestY - SEAL_STROKE_M * stroke(dwell, 0.25, 0.8);
       const wantUv = carrier.running ? 1.4 : 0;
       uvMaterial.emissiveIntensity = ease(uvMaterial.emissiveIntensity, wantUv, 6, realDtS);
       uvOn = uvMaterial.emissiveIntensity > 0.05;
@@ -244,7 +243,7 @@ export function p8Filler(kit: Kit, carrier: P8Carrier): Equipment {
       cycles: carrier.cycles,
       phase: carrier.phase,
       pistonDownM: pistonRestY - pistons.position.y,
-      sealDownM: headsRestY - heads.position.y,
+      sealDownM: lidderRestY - lidder.position.y,
       uvOn,
       lamp: lamp ?? 'off',
     }),
@@ -279,11 +278,29 @@ export function cupCodeText(p8: P8Snapshot | undefined): string {
   return `${batch.code} · best before day ${Math.floor(sToDay(batch.expiresS)) + 1}`;
 }
 
-/** A cup body, its base on y = 0: tapered, as a yogurt cup is, with enough sides to read as round up close. */
+/**
+ * A cup body, its base on y = 0: tapered, as a yogurt cup is. Eight sides and no ends, 16 triangles, since 1,400-odd of
+ * them stand in the overview (software GL counts every triangle); its top is drawn apart.
+ */
 function cupGeometry(): THREE.BufferGeometry {
-  const geometry = new THREE.CylinderGeometry(at.CUP_M.rimRadiusM, at.CUP_M.baseRadiusM, at.CUP_M.heightM, 12);
+  const geometry = new THREE.CylinderGeometry(at.CUP_M.rimRadiusM, at.CUP_M.baseRadiusM, at.CUP_M.heightM, 8, 1, true);
   geometry.translate(0, at.CUP_M.heightM / 2, 0);
   return geometry;
+}
+
+/** A cup's top, the foil or the yogurt's surface: a disc of 8 triangles facing up. */
+function topGeometry(): THREE.BufferGeometry {
+  const geometry = new THREE.CircleGeometry(at.CUP_M.rimRadiusM * 0.98, 8);
+  geometry.rotateX(-Math.PI / 2);
+  return geometry;
+}
+
+/** A sphere round every place a cup can stand, from the de-nester to the outfeed's end, so the cups are culled with it. */
+function lineSphere(): THREE.Sphere {
+  const fromXM = at.P8_STATIONS.denesterXM;
+  const toXM = at.OUTFEED.xMaxM;
+  const centre = new THREE.Vector3((fromXM + toXM) / 2, at.P8_CARRIER.topM, at.P8.zM);
+  return new THREE.Sphere(centre, (toXM - fromXM) / 2 + 1);
 }
 
 const FILL_HEX = 0xf1ead8;
@@ -296,15 +313,17 @@ export function p8Cups(kit: Kit, carrier: P8Carrier): Equipment {
   root.userData = { equipmentId: 'p8-cups', stage: 15, tokens: true };
   const capacity = (CARRIER_ROWS + 1) * LANES + BELT_ROWS * at.P8_GATE_BELT.lanes;
   const bodyGeometry = cupGeometry();
-  const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xf6f4ee, roughness: 0.55 });
+  // Both sides, so an empty cup shows its inside from above, not the carrier through it.
+  const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xf6f4ee, roughness: 0.55, side: THREE.DoubleSide });
   const bodies = new THREE.InstancedMesh(bodyGeometry, bodyMaterial, capacity);
   bodies.name = 'cups';
-  bodies.frustumCulled = false; // the instances move; their bounds are the whole line's
-  const topGeometry = new THREE.CylinderGeometry(at.CUP_M.rimRadiusM * 0.98, at.CUP_M.rimRadiusM * 0.98, 0.004, 12);
+  // The instances move about the line; its sphere bounds them all, so the cups are culled when the camera looks away.
+  bodies.boundingSphere = lineSphere();
+  const capGeometry = topGeometry();
   const topMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0.2 });
-  const tops = new THREE.InstancedMesh(topGeometry, topMaterial, capacity);
+  const tops = new THREE.InstancedMesh(capGeometry, topMaterial, capacity);
   tops.name = 'cupTops';
-  tops.frustumCulled = false;
+  tops.boundingSphere = lineSphere();
   const fillColor = new THREE.Color(FILL_HEX);
   const foilColor = new THREE.Color(FOIL_HEX);
   for (let i = 0; i < capacity; i++) tops.setColorAt(i, foilColor);
@@ -319,6 +338,8 @@ export function p8Cups(kit: Kit, carrier: P8Carrier): Equipment {
   flap.scale.set(0.16, 0.06, 0.02);
   flap.position.set(0, 0, 0);
   flapPivot.add(flap);
+  // Drawn only while it kicks: a draw call less the rest of the time.
+  flapPivot.visible = false;
   root.add(bodies, tops, kicked, flapPivot);
   // The flap uses the kit's shared box and paint, so the cups hold the kit as the machines do.
   const release = kit.hold();
@@ -425,6 +446,7 @@ export function p8Cups(kit: Kit, carrier: P8Carrier): Equipment {
       );
       kicked.rotation.z = 3 * t;
       kicked.visible = t < 1;
+      flapPivot.visible = t < 1;
       flapPivot.rotation.y = -1.1 * Math.sin(Math.PI * Math.min(1, t * 3));
       if (t >= 1) {
         kickS = -1;
@@ -449,7 +471,7 @@ export function p8Cups(kit: Kit, carrier: P8Carrier): Equipment {
     dispose() {
       root.removeFromParent();
       bodyGeometry.dispose();
-      topGeometry.dispose();
+      capGeometry.dispose();
       bodyMaterial.dispose();
       topMaterial.dispose();
       bodies.dispose();
