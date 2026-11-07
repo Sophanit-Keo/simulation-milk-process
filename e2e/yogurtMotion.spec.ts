@@ -34,6 +34,7 @@ test('the mixer\'s rotor and the cold room\'s fans turn, stand still while pause
 // Phase 25 in the browser: the process hall's valve matrix opens the emptying tank's outlet, the buffer's outlet valve
 // stands open while P8 runs, and once the heat treatment runs the homogenizer's gauge reads its 180 bar, the steam
 // valve's stem lifts and the CCP recorder's pen writes 92 °C. The panel reads the hot-water set and the valve matrix.
+// Phase 26: a fermenting tank's jacket valve opens to warm water, and the homogenizer's screen lights once it runs.
 type State = Record<string, number | string | boolean> | null;
 const stateOf = (page: Parameters<typeof sceneCall>[0], id: string) => sceneCall(page, 'equipmentState', id) as Promise<State>;
 
@@ -45,6 +46,9 @@ test('the valve matrix, the gauges, the steam valve and the CCP recorder follow 
   // At the opening tank 1 empties to the buffer through its open outlet valve, and P8 draws on the buffer.
   await expect.poll(() => stateOf(page, 'ferment-tank-1')).toMatchObject({ outletValveLift: 1, outletValveColor: '#34c759', inletValveLift: 0 });
   await expect.poll(() => stateOf(page, 'p8-buffer')).toMatchObject({ outletValveLift: 1, outletValveColor: '#34c759' });
+  // Phase 26: tank 3 ferments, so its jacket takes warm water; the heat treatment stands, so the homogenizer's screen is dark.
+  await expect.poll(() => stateOf(page, 'ferment-tank-3')).toMatchObject({ jacketValveLift: 1, jacketValveColor: '#ea8027' });
+  expect((await stateOf(page, 'yogurt-homogenizer'))?.screenColor).toBe('#1d2328');
   await showOnRail(page, 13);
   await railButton(page, 13).click();
   const flow = page.getByTestId('process-flow');
@@ -58,6 +62,7 @@ test('the valve matrix, the gauges, the steam valve and the CCP recorder follow 
   await expect.poll(async () => Number((await stateOf(page, 'yogurt-phe'))?.steamValveLift), { timeout: 30_000 }).toBeGreaterThan(0.4);
   await expect.poll(async () => (await stateOf(page, 'holding-cell'))?.recorderPenReading).toBe(92);
   expect((await stateOf(page, 'holding-cell'))?.recorderPenColor).toBe('#2b5fa8');
+  expect(await stateOf(page, 'yogurt-homogenizer')).toMatchObject({ screenColor: '#4aa3ff', runLampColor: '#34c759' });
   await showOnRail(page, 12);
   await railButton(page, 12).click();
   await expect(flow.locator('.flow-step[data-step="hotWater"] .flow-reading')).toHaveText(/^\d+ kg\/h of steam into the circuit$/);
