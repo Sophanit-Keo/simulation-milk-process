@@ -27,19 +27,39 @@ export const HOMOGENIZER: Footprint = { xM: -38.5, zM: LINE_Z_M };
 /** Phase 25: the vacuum gauge's dial on the deaerator's pump, on its face to the aisle. */
 export const DEAERATOR_GAUGE = { xM: DEAERATOR.xM + 0.75, yM: 0.38, zM: DEAERATOR.zM + 0.2 } as const;
 /**
- * Phase 25: the homogenizer's liquid end in front of its crank case, where the pistons stroke in: its middle. Its top
- * stands under the pistons' line of sight from the stage's camera, so they stay in view.
+ * The homogenizer, as the UHT line's model lays one out (assets' homogenizer), in offsets from its middle: the crankcase
+ * with its gauges on the top cover; the pistons in the open gap in front of it, between tie rods over a drip tray; the
+ * liquid end beyond them, low enough that the stage's camera sees the pistons over it; the main motor behind on its
+ * feet, and the belt guard on its east side. The milk comes in at its west side and leaves at its east, at pipe height.
  */
-export const HOMOGENIZER_END = { zM: HOMOGENIZER.zM + 0.9, yM: 1.0, heightM: 0.5 } as const;
-/** Phase 25: the gauges on the liquid end's face, the first stage's and the second's, from the homogenizer's middle. */
+export const HOMOGENIZER_FRAME = {
+  crankHalfXM: 0.7,
+  crankBackM: -0.45,
+  crankFrontM: 0.45,
+  crankTopM: 1.05,
+  pistonXsM: [-0.4, 0, 0.4],
+  pistonYM: 0.62,
+  pistonSideM: 0.11,
+  pistonLengthM: 0.5,
+  /** The pistons' middle at rest, and their stroke either side of it: their ends stay in the crankcase and the liquid end. */
+  pistonZM: 0.625,
+  strokeM: 0.06,
+  endBackM: 0.8,
+  endFrontM: 1.05,
+  endTopM: 0.72,
+  motor: { yM: 0.42, zM: -0.85, radiusM: 0.3, lengthM: 0.8 },
+  guard: { xM: 0.78, widthM: 0.12, yMinM: 0.2, yMaxM: 1.0, zMinM: -1.05, zMaxM: -0.2 },
+  gaugeYM: 1.11,
+} as const;
+/** The gauges on the top cover, facing up: the first stage's and the second's, from the homogenizer's middle. */
 export const HOMOGENIZER_GAUGES = [
-  { name: 'stage1Gauge', dxM: -0.35, yM: 1.1 },
-  { name: 'stage2Gauge', dxM: -0.1, yM: 1.1 },
+  { name: 'stage1Gauge', dxM: -0.3, dzM: 0.15 },
+  { name: 'stage2Gauge', dxM: 0.15, dzM: 0.15 },
 ] as const;
 /** Phase 26: the homogenizer's control cabinet, standing east of it with its face (+z) to the aisle. */
 export const HOMOGENIZER_PANEL = { xM: HOMOGENIZER.xM + 1.0, zM: HOMOGENIZER.zM + 0.4, widthM: 0.36, heightM: 1.4, depthM: 0.25 } as const;
-/** Phase 26: its lube-oil unit, behind its east end. */
-export const HOMOGENIZER_LUBE = { xM: HOMOGENIZER.xM + 0.88, zM: HOMOGENIZER.zM - 0.55 } as const;
+/** Phase 26: its lube-oil unit, behind its west end, clear of the belt guard (phase 27). */
+export const HOMOGENIZER_LUBE = { xM: HOMOGENIZER.xM - 0.9, zM: HOMOGENIZER.zM - 0.6 } as const;
 /** The plate pack, 2.6 m long: regeneration, heating and cooling sections from west to east. */
 export const PHE = { xM: -35, zM: LINE_Z_M, lengthM: 2.6, depthM: 0.6, heightM: 1.6 } as const;
 /**

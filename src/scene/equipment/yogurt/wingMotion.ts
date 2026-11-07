@@ -8,7 +8,8 @@
 // - Stage 12: the deaerator's vacuum pump turns; the homogenizer's three pistons stroke, a third of a turn apart; the
 //   plate heat exchanger's three packs show their temperatures on a strip each (regeneration, heating, cooling).
 //   Phase 25: the deaerator's gauge reads its vacuum; the homogenizer's flywheel turns with its pistons and its two
-//   gauges read the first and second stages; the hot-water pump turns and the steam valve's stem lifts with the steam;
+//   gauges read the first and second stages (phase 27: on its top cover, its pistons in the open gap with their collars,
+//   the crank spinning up and down); the hot-water pump turns and the steam valve's stem lifts with the steam;
 //   the CCP recorder's chart runs and its pen follows the holding cell's outlet, red under the divert limit; the
 //   reprocess pump turns while it empties the tank in the clean.
 // - Stage 13: the culture pump's plunger strokes as it doses; each fermentation tank's sight glass shows what is inside
@@ -29,7 +30,7 @@ import plantJson from '../../../data/plant.json';
 import { motionDtS } from '../../motion';
 import { hallDetailParts } from './hallDetail';
 import * as at from './layout';
-import { blade, clamp01, contentColor, fixed, flashColor, gauge, heating, HEX, p8Running, plate, plunger, rotor, still, TURN, valveStem, wingTempColor, type Part, type PartState, type Pose } from './motionParts';
+import { blade, clamp01, contentColor, fixed, flashColor, gauge, heating, HEX, p8Running, plate, plunger, rotor, still, topGauge, TURN, valveStem, wingTempColor, type Part, type PartState, type Pose } from './motionParts';
 import { yogurtOf } from './readings';
 
 export { contentColor, wingTempColor } from './motionParts';
@@ -61,6 +62,9 @@ const DEAERATOR_VACUUM_BAR = 0.8;
 /** The homogenizer's gauges' full scale, and its second stage as a share of its first, as the UHT's (plant.json). */
 const HOMOGENIZER_FULL_SCALE_BAR = 250;
 const SECOND_STAGE_FRAC = plantJson.homogenizer.stage2Bar / plantJson.homogenizer.stage1Bar;
+/** Phase 27: the homogenizer's crank turns as the UHT homogenizer's (liquidLine.ts, 7 rad/s), and takes 0.8 s to spin up. */
+const CRANK_TURNS_PER_S = 7 / TURN;
+const CRANK_EASE_S = 0.8;
 /** The steam the heat treatment takes at full flow, to the setpoint from the homogenizer's temperature (steamLph). */
 const STEAM_FULL_KG_PER_H = (Y.mix.capacityLph * plantJson.product.cpKjPerKgK * (Y.heat.setpointC - Y.homogenizer.tempC)) / plantJson.uht.steamLatentKjPerKg;
 /** The CCP recorder's chart spans these temperatures. */
@@ -130,14 +134,23 @@ function wingParts(): Part[] {
     out.rotation.set(phase * TURN, 0, 0);
     out.size.set(0.03, 0.42, 0.06);
   }, speed: heating, color: (_y, _p, out) => out.setHex(HEX.blade) });
+  // Phase 27: the pistons run in the open gap between the crankcase and the liquid end (HOMOGENIZER_FRAME), each with
+  // a collar that shows its stroke, a third of a turn apart, at the UHT homogenizer's crank speed (7 rad/s). The crank
+  // spins up and runs down with the flow.
   const homogenizer = at.HOMOGENIZER;
-  [-0.35, 0, 0.35].forEach((dx, i) => {
-    parts.push({ machine: 'yogurt-homogenizer', name: `piston${i + 1}`, ratePerS: 2.5, pose: (phase, _y, out) => {
-      // Phase 25: a little further forward, so they reach into the liquid end's back as they stroke.
-      out.position.set(homogenizer.xM + dx, 1.15, homogenizer.zM + 0.55 + 0.07 * Math.sin((phase + i / 3) * TURN));
+  const frame = at.HOMOGENIZER_FRAME;
+  frame.pistonXsM.forEach((dx, i) => {
+    const zAt = (phase: number): number => homogenizer.zM + frame.pistonZM + frame.strokeM * Math.sin((phase + i / 3) * TURN);
+    parts.push({ machine: 'yogurt-homogenizer', name: `piston${i + 1}`, ratePerS: CRANK_TURNS_PER_S, easeS: CRANK_EASE_S, pose: (phase, _y, out) => {
+      out.position.set(homogenizer.xM + dx, frame.pistonYM, zAt(phase));
       out.rotation.set(0, 0, 0);
-      out.size.set(0.1, 0.1, 0.24);
-    }, speed: heating, color: (_y, _p, out) => out.setHex(HEX.blade) });
+      out.size.set(frame.pistonSideM, frame.pistonSideM, frame.pistonLengthM);
+    }, speed: heating, color: fixed(HEX.blade) });
+    parts.push({ machine: 'yogurt-homogenizer', name: `collar${i + 1}`, ratePerS: CRANK_TURNS_PER_S, easeS: CRANK_EASE_S, pose: (phase, _y, out) => {
+      out.position.set(homogenizer.xM + dx, frame.pistonYM, zAt(phase) - 0.08);
+      out.rotation.set(0, 0, 0);
+      out.size.set(frame.pistonSideM + 0.04, frame.pistonSideM + 0.04, 0.04);
+    }, speed: heating, color: fixed(HEX.metal) });
   });
   const phe = at.PHE;
   const packM = (phe.lengthM - 0.3) / 3;
@@ -161,11 +174,17 @@ function wingParts(): Part[] {
   // Phase 25, stage 12: the deaerator's vacuum gauge (0 to -1 bar, read as its depth), the homogenizer's flywheel on its
   // belt guard, turning with the pistons' crank, and its two gauges (0–250 bar).
   parts.push(...gauge('yogurt-deaerator', 'vacuumGauge', [at.DEAERATOR_GAUGE.xM, at.DEAERATOR_GAUGE.yM, at.DEAERATOR_GAUGE.zM], (y) => (heating(y) > 0 ? DEAERATOR_VACUUM_BAR : 0), 1));
-  parts.push({ machine: 'yogurt-homogenizer', name: 'flywheel', ratePerS: 2.5, pose: rotor(homogenizer.xM - 0.85, 0.78, homogenizer.zM - 0.5, 0.34, true), speed: heating, color: fixed(HEX.blade) });
+  // Phase 27: the flywheel's two spokes on the belt guard's east face, turning with the crank.
+  const guard = frame.guard;
+  const wheel: [number, number, number] = [homogenizer.xM + guard.xM + guard.widthM / 2 + 0.012, (guard.yMinM + guard.yMaxM) / 2, homogenizer.zM + (guard.zMinM + guard.zMaxM) / 2];
+  const spokeM = Math.min(guard.yMaxM - guard.yMinM, guard.zMaxM - guard.zMinM) - 0.12;
+  parts.push({ machine: 'yogurt-homogenizer', name: 'flywheel', ratePerS: CRANK_TURNS_PER_S, easeS: CRANK_EASE_S, pose: rotor(...wheel, spokeM, true), speed: heating, color: fixed(HEX.blade) });
+  parts.push({ machine: 'yogurt-homogenizer', name: 'flywheelSpoke', ratePerS: CRANK_TURNS_PER_S, easeS: CRANK_EASE_S, pose: (phase, y, out) => rotor(...wheel, spokeM, true)(phase + 0.25, y, out), speed: heating, color: fixed(HEX.blade) });
+  // Its two gauges on the top cover, facing up, where the stage's camera reads them.
   const stage1Bar = (y: YogurtSnapshot): number => (y.heat.flowLph > 0 ? Y.homogenizer.bar : 0);
   const stages = [stage1Bar, (y: YogurtSnapshot) => stage1Bar(y) * SECOND_STAGE_FRAC];
   at.HOMOGENIZER_GAUGES.forEach((spec, i) => {
-    parts.push(...gauge('yogurt-homogenizer', spec.name, [homogenizer.xM + spec.dxM, spec.yM, at.HOMOGENIZER_END.zM + 0.14], stages[i] ?? stage1Bar, HOMOGENIZER_FULL_SCALE_BAR));
+    parts.push(...topGauge('yogurt-homogenizer', spec.name, [homogenizer.xM + spec.dxM, frame.gaugeYM, homogenizer.zM + spec.dzM], stages[i] ?? stage1Bar, HOMOGENIZER_FULL_SCALE_BAR));
   });
   // The hot-water set: its pump turns while it heats; its steam valve's stem lifts with the steam it lets in.
   const hot = at.HOT_WATER_SET;
@@ -313,6 +332,8 @@ export function createWingMotion(): WingMotion {
   let mesh: THREE.InstancedMesh | null = null;
   let offset = 0;
   const phases = parts.map(() => 0);
+  /** The share of its rate each easing part turns at now (phase 27). */
+  const speeds = parts.map(() => 0);
   const states: PartState[] = parts.map(() => ({ value: 0, moving: false, color: HEX.metal, reading: null }));
   const pose: Pose = { position: new THREE.Vector3(), rotation: new THREE.Euler(), size: new THREE.Vector3() };
   const matrix = new THREE.Matrix4();
@@ -366,7 +387,15 @@ export function createWingMotion(): WingMotion {
             phases[i] = now + Math.max(-maxStep, Math.min(maxStep, goal - now));
             moving = Math.abs((phases[i] ?? 0) - now) > 1e-9;
           } else {
-            const speed = Math.max(0, part.speed(yogurt));
+            const wanted = Math.max(0, part.speed(yogurt));
+            let speed = wanted;
+            if (part.easeS) {
+              // Spinning up or running down: the share of its rate eases to the wanted one over easeS of animation time.
+              const was = speeds[i] ?? 0;
+              const maxStep = dtS / part.easeS;
+              speed = was + Math.max(-maxStep, Math.min(maxStep, wanted - was));
+              speeds[i] = speed;
+            }
             // The phase counts turns (it is not wrapped), so a test can see how far a part has turned.
             phases[i] = now + Math.min(MAX_PHASE_PER_FRAME, part.ratePerS * speed * dtS);
             moving = part.ratePerS > 0 && speed > 0;

@@ -7,11 +7,12 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Sim, Snapshot } from '../../src/contracts';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment';
-import { DOCK_DOORS_X_M } from '../../src/scene/equipment/yogurt/layout';
+import { DOCK_DOORS_X_M, HOMOGENIZER_FRAME } from '../../src/scene/equipment/yogurt/layout';
 import { wingSphere } from '../../src/scene/equipment/yogurt/coldChainScene';
 import { jacketWater } from '../../src/scene/equipment/yogurt/hallDetail';
 import { contentColor, evaporatorXs, wingTempColor } from '../../src/scene/equipment/yogurt/wingMotion';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
+import { STAGE_VIEWS } from '../../src/scene/layout';
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
 import { stubTheme } from './browserStubs';
@@ -342,5 +343,55 @@ describe('the process hall\'s fittings in colour (phase 26)', () => {
     runUntil(w, (each) => each.yogurt.heat.mode === 'cleaning');
     w.frames(2);
     expect(w.state('yogurt-homogenizer')).toMatchObject({ screenColor: '#ffd84a', runLampColor: OFF, cleanLampColor: '#ffd84a' });
+  });
+});
+
+describe('the homogenizer, laid out as the UHT line\'s (phase 27)', () => {
+  const f = HOMOGENIZER_FRAME;
+
+  it('keeps each piston\'s back end in the crankcase and its front end in the liquid end all stroke, its collar in the gap', () => {
+    for (const sin of [-1, 0, 1]) {
+      const middleM = f.pistonZM + f.strokeM * sin;
+      expect(middleM - f.pistonLengthM / 2).toBeLessThan(f.crankFrontM);
+      expect(middleM + f.pistonLengthM / 2).toBeGreaterThan(f.endBackM);
+      expect(middleM - 0.08 - 0.02).toBeGreaterThan(f.crankFrontM);
+      expect(middleM - 0.08 + 0.02).toBeLessThan(f.endBackM);
+    }
+  });
+
+  it('keeps the liquid end low enough that the stage\'s camera sees the pistons over it', () => {
+    const [, upM, backM] = STAGE_VIEWS[12].cameraOffsetM;
+    const slope = upM / backM;
+    // The camera's line over the liquid end's top back edge, at the crankcase's front: under the pistons' top.
+    const pistonTopM = f.pistonYM + f.pistonSideM / 2;
+    expect(f.endTopM - (f.endBackM - f.crankFrontM) * slope).toBeLessThan(pistonTopM);
+    // Over most of the gap: from the crankcase to where the line meets the pistons' top.
+    const seenM = f.endBackM - (f.endTopM - pistonTopM) / slope - f.crankFrontM;
+    expect(seenM / (f.endBackM - f.crankFrontM)).toBeGreaterThan(0.7);
+  });
+
+  it('spins its crank up as the mix flows and runs it down once it stops, pistons, collars and flywheel together', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.heat.mode === 'production' && each.yogurt.heat.flowLph > 0);
+    w.frames(2, 0.1);
+    // 0.2 s into its 0.8 s spin-up: well under the 0.22 turns it would make at full speed.
+    const early = Number(w.state('yogurt-homogenizer').piston1Turns);
+    expect(early).toBeGreaterThan(0);
+    expect(early).toBeLessThan((7 / (2 * Math.PI)) * 0.2 * 0.5);
+    w.frames(20, 0.1);
+    const state = w.state('yogurt-homogenizer');
+    expect(state).toMatchObject({ piston1Moving: true, collar1Moving: true, flywheelMoving: true, flywheelSpokeMoving: true });
+    expect(state.collar2Turns).toBe(state.piston2Turns);
+    expect(state.flywheelTurns).toBe(state.piston1Turns);
+    // The divert's clean stops the flow: the crank runs down over 0.8 s, then stands.
+    w.sim.dispatch({ type: 'triggerScenario', id: 'yogurtHeatUnderTemp' });
+    runUntil(w, (each) => each.yogurt.heat.mode === 'cleaning');
+    w.frames(2, 0.1);
+    expect(w.state('yogurt-homogenizer').piston1Moving).toBe(true);
+    w.frames(10, 0.1);
+    const stopped = w.state('yogurt-homogenizer');
+    expect(stopped.piston1Moving).toBe(false);
+    w.frames(5, 0.1);
+    expect(w.state('yogurt-homogenizer').piston1Turns).toBe(stopped.piston1Turns);
   });
 });
