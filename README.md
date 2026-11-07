@@ -1,6 +1,6 @@
 # UHT Milk Plant Simulation
 
-A browser-based 3D simulation of a UHT milk plant in three.js, from standardization to ambient distribution: ten stages running live, six fault scenarios, and a guided tour. The research, design and schedule are in [plan/](plan/README.md); the build is split into phases and agents in [plan/agent-plan/](plan/agent-plan/README.md).
+A browser-based 3D simulation of a UHT milk plant in three.js, from standardization to ambient distribution: ten stages running live, six fault scenarios, and a guided tour. Beside it, a yogurt wing (Line P8, stages 11–16) runs from its own silo to reefer trucks, with five faults of its own and a yogurt tour. The research, design and schedule are in [plan/](plan/README.md); the build is split into phases and agents in [plan/agent-plan/](plan/agent-plan/README.md).
 
 **Live:** <https://sophanit-keo.github.io/simulation-milk-process/>, deployed to GitHub Pages from `master` each time CI passes there. It needs a browser with WebGL 2; it is checked in Chrome and Edge.
 
@@ -8,10 +8,11 @@ A browser-based 3D simulation of a UHT milk plant in three.js, from standardizat
 
 - **Pick a stage** in the list on the left, or click a machine in the 3D view: the panel on the right explains it and shows its live values. Drag to orbit, scroll to zoom, Esc for the whole plant.
 - **The end of the line** (stages 8 and 10, best at ×1 or ×10): the palletizer robot picks each tray off the belt and stacks it layer by layer, the stretch wrapper winds film round each pallet, one forklift puts released pallets away into the racks and the other loads the docked truck (an electric counterbalance truck with its operator: the mast tilts back with the load, the rear wheels steer, each round its own circle and set before it moves off, a blue spot leads it, and its label says what it does; [D24](plan/DECISIONS.md#d24-the-forklifts-in-detail)), and trucks back up to the dock articulated, open their doors, fill and drive off ([D22](plan/DECISIONS.md#d22-lifelike-motion-at-the-end-of-the-line), [phase 12](plan/agent-plan/phase-12-lifelike-motion.md)).
+- **The yogurt line** (stages 11–16, the second group in the stage list): mix, heat treatment at 92 °C, three fermentation tanks, the P8 buffer, Line P8 filling 21,600 cups an hour under its HEPA hood, then trays, pallets, the warm room for set yogurt, the blast chiller, the cold room and the reefer dock. The day runs plain stirred, strawberry stirred and plain set yogurt, a shift each; the stage 11 panel picks the next shift's product ([D25](plan/DECISIONS.md#d25-the-yogurt-line-line-p8)–[D30](plan/DECISIONS.md#d30-the-yogurt-lines-fault-scenarios), [plan 12](plan/12-yogurt-line.md)).
 - **Time:** pause and the speeds ×1 to ×10,000 in the top bar (Space and the keys 1–5); "Next event" jumps to the next thing that happens.
-- **Scenarios** (top bar): start any of the six faults, reset them, or read the scenario log, which tells what happened and why.
+- **Scenarios** (top bar): start any of the UHT line's six faults or the yogurt line's five (a stalled fermentation, the heat treatment under temperature, a seal drift, a HEPA loss, a cold-room excursion), reset them, or read the scenario log, which tells what happened and why.
 - **Report in Let Report** (on a fault's banner and in the scenario log): opens [Let Report](https://let-report.vercel.app), the QC/QA trouble-report app, in a new tab, with its new-report form filled in for that fault: category, severity, product and what happened ([D18](plan/DECISIONS.md#d18-reporting-a-fault-in-let-report)). You sign in, sign and send it there; the simulation writes nothing to Let Report itself.
-- **Tour** (top of the stage list): the ten stages in about 3 minutes.
+- **Tour** (top of the stage list): the ten stages in about 3 minutes. **Tour** on the yogurt group's header: stages 11–16 in about 2 minutes.
 - **About** (next to the title): what the model is and isn't, and its sources.
 - **Factory** (next to About): the factory board, `factory.html`. Sign in with a Let Report account to see the real factory live: UHT 1, 2 and 3, the lines each one feeds, and each line's status, product, lot, CIP and open troubles, as Let Report holds them. A change in Let Report shows within a second ([D19](plan/DECISIONS.md#d19-the-factory-board), [phase 9](plan/agent-plan/phase-9-factory-board.md)). Which UHT feeds a line, its filler, speed and pack size are edited in Let Report.
   - **3D** (on the board, next to Board): the same factory on a floor in 3D: each UHT plant with its aseptic tank and its lines' fillers, packs riding the running lines' belts and milk flowing in their pipes, with the board's lamps and words. Click a machine or its label to fly to it and mark its card, or "Show in 3D" on a card; Esc for the whole floor. `factory.html#3d` opens it ([D20](plan/DECISIONS.md#d20-the-factory-floor-in-3d), [phase 10](plan/agent-plan/phase-10-factory-floor.md)).
@@ -33,7 +34,7 @@ npm run preview    # serves dist/
 
 ```sh
 npm run check      # typecheck, lint, unit tests (Vitest) and asset tests: what CI runs first
-npm test           # unit tests only: formulas, acceptance runs, the 60-day run, scenarios, the demo script
+npm test           # unit tests only: formulas, acceptance runs, the 60-day run, scenarios, both demo scripts
 npm run test:assets  # the 3D models and textures against their specs and budgets
 npm run e2e        # browser tests (Playwright, Chromium); `npx playwright install chromium` once
 ```

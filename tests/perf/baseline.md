@@ -339,6 +339,32 @@ Measured on 6 November 2026 the same way as phase 19, at 1440 × 900, with `meas
 | 15 P8 cup filler | 134 | 204,692 |
 | 16 Cold chain | 141 | 185,000 |
 
+### Phase 21: both lines, every stage, and the camera path
+
+Measured on 6 November 2026 at 1440 × 900 with `node tests/perf/measure.mjs 5505 --path 60`, pointed at the sandbox's installed Chromium, on software GL (SwiftShader). Within the overview budget; no console errors. Phase 21 adds nothing to the scene: the yogurt tour's button moved into the yogurt group's header, so the rail head keeps one row. Every stop of both lines is well under the overview:
+
+| Camera | Draw calls | Triangles | fps (software GL) |
+|---|---:|---:|---:|
+| **Overview** | **350** | **366,638** | 2.4 |
+| 1 Standardization | 160 | 187,052 | 4.5 |
+| 2 Preheating | 142 | 188,892 | 4.8 |
+| 3 Homogenization | 140 | 183,148 | 4.4 |
+| 4 UHT | 150 | 192,960 | 4.3 |
+| 5 Flash cooling | 148 | 228,740 | 3.8 |
+| 6 Aseptic tank | 166 | 227,512 | 3.3 |
+| 7 Filling | 156 | 229,952 | 3.7 |
+| 8 Packaging | 154 | 198,074 | 3.9 |
+| 9 Quarantine & QA | 171 | 254,348 | 2.9 |
+| 10 Warehouse | 167 | 194,940 | 4 |
+| 11 Yogurt mix | 128 | 157,720 | 5.4 |
+| 12 Heat treatment | 132 | 166,416 | 5.1 |
+| 13 Fermentation | 132 | 178,944 | 4 |
+| 14 P8 buffer | 128 | 165,936 | 5.1 |
+| 15 P8 cup filler | 134 | 204,692 | 3.4 |
+| 16 Cold chain | 141 | 185,000 | 4.1 |
+
+**The camera path, 60 s over both rows, every stage 1–16 in rail order:** at ×1 411 frames, an average of 3.8 fps, a 1% low of 2 fps and a slowest frame of 516.7 ms; at ×10,000 346 frames, 3.6 fps, 1.9 fps and 550 ms. On software GL that says only that both speeds run the path without a stall: **the 60 fps check of gate Y3 is open**, as G3's was, until the developer runs `node tests/perf/measure.mjs --path 60 --headed --channel chrome` on the target laptop.
+
 ### Frame rate: software GL only, not representative
 
 > **These numbers come from SwiftShader, Chromium's software renderer, running on the CPU of a VM with no GPU. They say nothing about the 60 fps target.** WebGL renderer: `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)`.

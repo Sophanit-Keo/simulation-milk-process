@@ -2,7 +2,7 @@
 
 # Demo script
 
-The live demo, about 12 minutes: the plant as it opens, the guided tour, all six fault scenarios in an order where each one shows its effect, a week at ×10,000, and where the numbers come from. Owned by `process` ([phase 6](../plan/agent-plan/phase-6-polish-and-present.md)); every number below is checked by `tests/sim/demoScript.test.ts`, which replays this exact sequence on the shipped config and seed.
+Two demos: the UHT line (about 12 minutes, below) and [the yogurt line](#the-yogurt-demo) (about 8 minutes, phase 21). The UHT demo, about 12 minutes: the plant as it opens, the guided tour, all six fault scenarios in an order where each one shows its effect, a week at ×10,000, and where the numbers come from. Owned by `process` ([phase 6](../plan/agent-plan/phase-6-polish-and-present.md)); every number below is checked by `tests/sim/demoScript.test.ts`, which replays this exact sequence on the shipped config and seed.
 
 ## Before you start
 
@@ -37,3 +37,20 @@ The live demo, about 12 minutes: the plant as it opens, the guided tour, all six
 ## Why these scenarios in this order
 
 The filler breakdown comes first, while the tank is half full, so it rises to 90% and the throttle shows; after the temperature drop the tank is nearly empty and it would not. The temperature drop follows, with the tank at about 60%, so the fillers keep running for 48 min of the 113 the plant is out, then stop. The homogenizer and filter faults land on the same two batches, 54 and 55, so the week at ×10,000 ends with a verdict for each: one from the spoiled sample, one from the cream layer. The failed incubation is instant and the demand spike is best at ×100, so they go last before the week.
+
+## The yogurt demo
+
+About 8 minutes on the yogurt wing (stages 11–16): the wing as it opens, the yogurt tour, then all five yogurt faults, one after another, and the morning after at ×10,000. Owned by `process` ([phase 21](../plan/agent-plan/phase-21-yogurt-polish.md)); every number below is checked by `tests/sim/yogurtDemoScript.test.ts`, which replays this sequence on the shipped config and seed. Reload first: it starts from the opening, as the UHT demo does, and runs on its own.
+
+| # | Clock (day 8) | Speed | Do | What to show and say | Expect |
+|---|---|---|---|---|---|
+| 1 | 06:00 | ×10 | Open the **Yogurt line** group in the stage list | The wing behind the UHT plant: its own silo, the mix, the heat treatment, three fermentation tanks, the P8 buffer, Line P8 under its HEPA hood, the trays, the rooms and the reefer dock. It opens as the night left it. | Tanks 1 and 2 ready at pH 4.55, tank 3 at pH 5.58, ready at 08:00; the heat treatment idle (no tank is empty); warm room 30 of 36 pallets, chiller 18 of 32, cold room 180 of 360 at 3.0 °C; P8 starts on plain stirred yogurt at 21,600 cups/h |
+| 2 | 06:00–06:20 | ×10 | **Tour** on the **Yogurt line** group's header in the stage list | Stages 11–16, 20 s each, two lines on each. | 6 stops, 2 minutes |
+| 3 | 06:20 | ×10 | **Scenarios → Slow fermentation (phage)** | Stage 13: a phage kills tank 3's culture. Its pH (on the tank's label ring) stops falling. Nothing else shows yet: the tank was due at 08:00. | Tank 3 at pH 5.36 now, stalls at 5.20; flagged and held at 10:00, its lamp red; discarded at 12:00, 10,000 L |
+| 4 | 06:21 | ×10 | **Scenarios → HEPA overpressure loss** | Stage 15: the cabin falls to +5 Pa. P8 stops at once; its HEPA lamp and its hood glow red. After the fan's repair the cabin has been open to the hall, so P8 is sterilized and swabbed before it fills again. | P8 stopped at 06:21; fan repaired 06:51; SIP 20 min; cleared 07:11: 50 min, 18,000 cups not made |
+| 5 | 06:22 | ×10 | **Scenarios → Seal temperature drift** | Stage 15: the seal heads drift from 200 °C to 160 °C in 15 min; stage 15 turns amber. Nothing on P8 measures a seal, so it fills on until the next seal test. | The test, 2 h of running after the opening and so 50 min late for the HEPA stop, fails at 08:50: 5 of 5 cups leak; 43,192 cups held and pulled from the trays and pallets, 14 pallets emptied; the heads set back |
+| 6 | 06:23 | **×100** | **Scenarios → Cold-room excursion** | Stage 16: the cooling fails and the air climbs toward 10 °C. The panel's cold room row counts it; the alarm strip on the room lights amber, then red when the pallets go on hold, and their loads show red. | Over 6 °C at 06:39; 176 pallets on QA hold at 08:39; cooling repaired 09:23; back under 6 °C 09:48; at 11:48 QA destroys the held pallets (182, 517,680 cups): their cores reached 9.1 °C, over 8 °C |
+| 7 | about 09:55 | ×10 | **Scenarios → Yogurt heat treatment under temperature**, as soon as it turns on | It waits for the heat treatment to run: tank 1 has emptied into P8 and been cleaned, and the mix line fills it. Stage 12: the outlet falls toward 82 °C; the mix in the holding cell reaches its outlet 5 min later under 85 °C and diverts; the wing cleans the line. | Diverted at 10:00 to the reprocess tank; the wing's CIP 10:03–11:23 |
+| 8 | 12:00 → day 9, 06:00 | **×10,000** | Nothing; then **Scenarios → Scenario log** | The five stories, each step with its why. The cold room lost its released stock to QA, so the reefers wait for the next day's pallets. | Every run over; 1 reefer left by day 9 06:00; P8 made about 360,000 cups |
+
+**Why this order.** The phage first, while tank 3 is still above pH 5.2 (it passes it at 06:35). The HEPA loss before the seal drift, so the seal test comes 50 min late and the stop shows in the seal's numbers too. The cold room at ×100, so its 2 h over the limit pass in about a minute. The heat dip last, because the heat treatment stands idle until a tank is empty.

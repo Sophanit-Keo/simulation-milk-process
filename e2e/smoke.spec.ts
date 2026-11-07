@@ -36,7 +36,7 @@ test('the mock snapshot (/?mock) loads with no errors and no third-party request
   expect(pageProblems).toEqual([]);
 });
 
-test('the five hero models load in place of their grey boxes with no errors; with ?greybox none loads', async ({ page, pageProblems }) => {
+test('the hero models load in place of their grey boxes with no errors; with ?greybox none loads', async ({ page, pageProblems }) => {
   const heroFiles = (urls: string[]) => [...new Set(urls.filter((url) => url.includes('/models/hero/')).map((url) => url.split('/').pop()))].sort();
   const loaded: string[] = [];
   page.on('response', (response) => {
@@ -50,7 +50,15 @@ test('the five hero models load in place of their grey boxes with no errors; wit
   loaded.length = 0;
   await page.goto('/');
   await waitForClock(page);
-  await expect.poll(() => heroFiles(loaded)).toEqual(['aseptic-filler.glb', 'homogenizer.glb', 'palletizer.glb', 'separator.glb', 'stretch-wrapper.glb']);
+  await expect.poll(() => heroFiles(loaded)).toEqual([
+    'aseptic-filler.glb',
+    'ferment-tank.glb',
+    'homogenizer.glb',
+    'p8-filler.glb',
+    'palletizer.glb',
+    'separator.glb',
+    'stretch-wrapper.glb',
+  ]);
   // Each machine swaps its model in, meshopt-decoded.
   await page.goto('/?debug');
   await waitForClock(page);

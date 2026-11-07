@@ -248,10 +248,13 @@ for (const path of ['/', '/?mock']) {
       const faults = page.locator('#scenario-menu-list [role="menuitem"][data-scenario]');
       await menu.click();
       await expect(menu).toHaveAttribute('aria-expanded', 'true');
-      await expect(faults).toHaveCount(7);
-      // The live model can start every fault as it opens; the mock snapshot plays none (e2e/scenarios.spec.ts).
+      // The UHT line's seven entries and the yogurt line's five (phase 20).
+      await expect(faults).toHaveCount(12);
+      // The live model can start every fault as it opens but the yogurt heat dip, which waits for the heat treatment to
+      // run; the mock snapshot plays none (e2e/scenarios.spec.ts).
       const disabled = await faults.evaluateAll((items) => items.map((item) => item.getAttribute('aria-disabled') === 'true'));
-      expect(disabled).toEqual(Array(7).fill(path === '/?mock'));
+      const live = Array(12).fill(false).map((_, i) => i === 8);
+      expect(disabled).toEqual(path === '/?mock' ? Array(12).fill(true) : live);
       await page.keyboard.press('Escape');
       await expect(menu).toHaveAttribute('aria-expanded', 'false');
       await expect(faults.first()).toBeHidden();

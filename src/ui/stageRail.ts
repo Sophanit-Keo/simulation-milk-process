@@ -13,6 +13,11 @@ export interface StageRail {
    * clock (hud.ts), as after a click in the top bar, rather than pressing the stage again.
    */
   clickFocused(target: Element | null): boolean;
+  /**
+   * The header row of a line's group, where a control of that line can sit beside the fold button (phase 21: the
+   * yogurt tour); null when the rail shows one line, ungrouped.
+   */
+  groupHead(line: LineId): HTMLElement | null;
   dispose(): void;
 }
 
@@ -68,7 +73,7 @@ export function createStageRail(
 
   // One group per line the stages come from; a single line keeps the flat list of phases 2–15.
   const lineIds = LINE_IDS.filter((line) => stages.some((info) => lineOfStage(info.id) === line));
-  const groups = new Map<LineId, { item: HTMLLIElement; toggle: HTMLButtonElement; body: HTMLOListElement; lamp: HTMLSpanElement; stages: StageId[] }>();
+  const groups = new Map<LineId, { item: HTMLLIElement; head: HTMLDivElement; toggle: HTMLButtonElement; body: HTMLOListElement; lamp: HTMLSpanElement; stages: StageId[] }>();
   if (lineIds.length > 1) {
     list.replaceChildren(
       ...lineIds.map((line) => {
@@ -89,8 +94,11 @@ export function createStageRail(
         const body = el('ol', 'group-stages');
         body.id = bodyId;
         body.append(...own.map(makeItem));
-        item.append(toggle, body);
-        groups.set(line, { item, toggle, body, lamp, stages: own.map((info) => info.id) });
+        // The fold button fills the header row; a line's own control can follow it there (groupHead).
+        const head = el('div', 'group-head');
+        head.append(toggle);
+        item.append(head, body);
+        groups.set(line, { item, head, toggle, body, lamp, stages: own.map((info) => info.id) });
         return item;
       }),
     );
@@ -235,6 +243,7 @@ export function createStageRail(
     clickFocused(target) {
       return target !== null && target === clicked;
     },
+    groupHead: (line) => groups.get(line)?.head ?? null,
     dispose() {
       resize?.disconnect();
       list.replaceChildren(...original);

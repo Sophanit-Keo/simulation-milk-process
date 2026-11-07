@@ -95,7 +95,7 @@ A banner over the 3D view follows the newest scenario, and its log lists every s
 
 ## The guided tour
 
-Tour, at the top of the stage list, flies the camera through the ten stages in order, 18 s at each, about 3 minutes in all, with two lines on what happens there. Yogurt tour, beside it, does the same for the yogurt line's six stages, 20 s at each, about 2 minutes. A click on a stage or the plant, Escape, or Stop ends either.
+Tour, at the top of the stage list, flies the camera through the ten stages in order, 18 s at each, about 3 minutes in all, with two lines on what happens there. Tour on the yogurt line's group header does the same for its six stages, 20 s at each, about 2 minutes. A click on a stage or the plant, Escape, or Stop ends either.
 
 ## Accepted simplifications
 
