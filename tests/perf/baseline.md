@@ -403,6 +403,16 @@ Measured on 7 November 2026 the same way as phase 23, with no console errors.
 
 The overview reads **350** draw calls and **380,462** triangles, within the budget. The yogurt stages' stops read 127 (11), 131 (12), 131 (13), 127 (14), 132 (15) and 141 (16) draw calls.
 
+### Phase 25: the yogurt process hall in detail
+
+Measured on 7 November 2026 the same way as phase 24, with no console errors.
+
+- **The overview:** **350** draw calls and **384,214** triangles, within the budget. The new parts join meshes their machines already have, and the 37 new moving parts are instances in the shared box mesh.
+- **The stops:** 161 (1), 144 (2), 143 (3), 149 (4), 148 (5), 164 (6), 153 (7), 153 (8), 170 (9), 166 (10), 129 (11), 133 (12), 133 (13), 127 (14), 132 (15) and 141 (16) draw calls.
+- **Two more at stops 1, 2, 11, 12 and 13:** the shared box mesh and the rooms' lamps now have a bounding sphere round the whole wing.
+  - Phase 23's sphere was the cold chain's alone, so the camera culled every moving part of stages 11–14 there; at stage 12 it drew none, and the counts above phase 24's are those parts showing.
+  - At the UHT's first two stops, the wing stands at the view's edge and its sphere now reaches into it.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

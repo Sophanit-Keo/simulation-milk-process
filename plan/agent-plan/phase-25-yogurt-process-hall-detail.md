@@ -69,4 +69,8 @@ Built on 7 November 2026, on phase 24 as merged (PR #28). Lane by lane:
     - a pause: every needle stands half way.
   - `tests/ui/processFlow.test.ts` checks the two new steps.
   - `e2e/yogurtMotion.spec.ts` checks the valves, the gauges, the steam valve, the recorder and both panel readings in the browser.
-
+- **Checks:**
+  - `npm run check`: 1,852 of 1,854 unit tests pass, and the 114 asset tests. The two that fail are `warehouseMotion.test.ts`'s forklift and truck runs, which time out under the parallel run here (as in phase 24) and pass alone, 29 of 29.
+  - `npm run build` passes.
+  - The browser tests `yogurtMotion` and `yogurtFlow` pass.
+  - **Draw calls:** the overview reads **350** draw calls and 384,214 triangles (the [baseline](../../tests/perf/baseline.md#phase-25-the-yogurt-process-hall-in-detail)). The stops at stages 11–13 read two more than in phase 24, because their moving parts now draw instead of being culled.
