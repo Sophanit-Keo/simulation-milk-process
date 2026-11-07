@@ -389,6 +389,20 @@ Software GL draws every pixel on the CPU, so the frame rate follows the pixel co
 
 Measured on 7 November 2026 the same way as phase 21. The wing's 33 moving parts first had a mesh of their own, and the overview read 351 draw calls; drawn in the cold chain's box mesh instead, it reads **350** draw calls and **367,034** triangles, within the budget, with no console errors. The yogurt stages' stops read 128 (11), 132 (12), 132 (13), 128 (14), 134 (15) and 141 (16) draw calls.
 
+### Phase 24: the yogurt palletizer and stretch wrapper
+
+Measured on 7 November 2026 the same way as phase 23, with no console errors.
+
+- **As first built:** 355 draw calls at the overview, from the gantry's model (4 meshes against the grey palletizer's 3) and the wing's wrapper (the UHT model's two body meshes, its turntable and carriage, and its rollers in two materials, against the grey wrapper's 3).
+- **What brought it back to 350:**
+  - the rollers in one material;
+  - no shadow from the wing's wrapper model;
+  - the tray packer's legs in its belt's material;
+  - the blast chiller's unit and the cold room's door heads in their walls' steel.
+- **Not counted:** the trays, pallets and stacks on the line are instances in the cold chain's box mesh. The film web and shell show only while a pallet is wrapped and ridden on.
+
+The overview reads **350** draw calls and **380,462** triangles, within the budget. The yogurt stages' stops read 127 (11), 131 (12), 131 (13), 127 (14), 132 (15) and 141 (16) draw calls.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

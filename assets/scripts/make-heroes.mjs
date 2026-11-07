@@ -120,6 +120,45 @@ export const HERO_SPECS = {
     ],
     nozzlesM: [],
   },
+  // The yogurt wing's gantry palletizer (phase 24), round the centre of its pallet place on the floor, world
+  // (24.8, 0, -47): the frame over the place, the tray infeed reaching back to the packer, the dispenser behind.
+  yogurtPalletizer: {
+    file: 'yogurt-palletizer.glb',
+    boundsM: { min: [-2.8, 0, -2.4], max: [0.8, 3.4, 1.0] },
+    envelopeM: { min: [-2.9, 0, -2.5], max: [0.9, 3.55, 1.05] },
+    maxHeightM: 3.8,
+    nodes: [
+      { name: 'bridge', parent: null, atM: [-0.6, 2.1, 0] },
+      { name: 'trolley', parent: 'bridge', atM: [0, 0, 0] },
+      { name: 'lift', parent: 'trolley', atM: [0, -0.55, 0] },
+    ],
+    nozzlesM: [],
+  },
+};
+
+/**
+ * The yogurt gantry palletizer's layout (phase 24), from the centre of its pallet place on the floor; the scene's
+ * motion (src/scene/equipment/yogurt/palletLine.ts) moves the nodes within it. The bridge runs along x on the beams,
+ * the trolley along z on the bridge, and the lift's origin is the vacuum head's underside.
+ */
+export const GANTRY = {
+  postsXM: [-2.15, 0.75],
+  postsZM: 0.9,
+  beamTopM: 2.05,
+  bridgeYM: 2.1,
+  /** The lift's origin under the trolley at rest: the head's underside at 1.55 m, over a full stack and a tray. */
+  liftRestM: -0.55,
+  mastM: 1.85,
+  head: { xM: 0.32, zM: 0.47, padsM: 0.02, plateM: 0.07 },
+  bridgeTravelM: [-1.7, 0.45],
+  trolleyTravelM: [-0.25, 0.25],
+  /** The lowest the head's underside goes: on a first-layer tray, 0.444 m. */
+  lowestM: 0.444,
+  pickXM: -1.7,
+  infeed: { xM: [-2.8, -1.5], topM: 0.76, widthM: 0.5 },
+  rollerTopM: 0.25,
+  place: { xM: [-0.75, 0.75], widthM: 1.1 },
+  dispenser: { zM: -1.8, guideXM: 0.66, guideZM: 0.56, heightM: 1.3 },
 };
 
 /**
@@ -992,6 +1031,85 @@ export function buildFermentTank() {
   return group('ferment_tank', [...p.meshes('body'), node(agitator, 'agitator', at('agitator'))]);
 }
 
+
+/**
+ * The yogurt wing's gantry palletizer (phase 24): four posts and two beams over the pallet place, the tray infeed
+ * belt reaching back toward the tray packer, the place's roller deck, and the dispenser's four corner guides behind it,
+ * all one painted mesh. Moving nodes: `bridge` runs along x on the beams, `trolley` along z on the bridge, and `lift`
+ * up and down through the trolley with the vacuum head at its foot (its origin is the head's underside).
+ */
+export function buildYogurtPalletizer() {
+  const m = makeMaterials('yogurt_palletizer');
+  const G = GANTRY;
+  const p = new HeroParts();
+  // The frame: posts on feet, the two beams along x, and a cross beam over each end.
+  for (const xM of G.postsXM) {
+    for (const s of [-1, 1]) {
+      p.box(m.paint, C.dark, span(xM - 0.09, xM + 0.09), [0, 0.03], side(s, G.postsZM - 0.09, G.postsZM + 0.09));
+      p.box(m.paint, C.casing, span(xM - 0.05, xM + 0.05), [0.03, G.beamTopM], side(s, G.postsZM - 0.05, G.postsZM + 0.05));
+    }
+    p.box(m.paint, C.casing, span(xM - 0.05, xM + 0.05), [G.beamTopM - 0.1, G.beamTopM], span(-G.postsZM, G.postsZM));
+  }
+  for (const s of [-1, 1]) {
+    p.box(m.paint, C.mid, span(G.postsXM[0] - 0.05, G.postsXM[1] + 0.05), [G.beamTopM - 0.1, G.beamTopM], side(s, G.postsZM - 0.06, G.postsZM + 0.06));
+    // The rail the bridge's wheels run on, on top of each beam.
+    p.box(m.paint, C.steel, span(G.postsXM[0], G.postsXM[1]), [G.beamTopM, G.beamTopM + 0.02], side(s, G.postsZM - 0.02, G.postsZM + 0.02));
+  }
+  // The control cabinet on the front post at +x, with its screen.
+  p.box(m.paint, C.panel, span(G.postsXM[1] - 0.04, G.postsXM[1] + 0.04), [0.9, 1.5], [G.postsZM + 0.05, G.postsZM + 0.09]);
+  // The tray infeed: legs, side frames, the belt on top, and an end stop at the pick point.
+  const [inFrom, inTo] = G.infeed.xM;
+  const halfIn = G.infeed.widthM / 2;
+  for (const xM of [inFrom + 0.1, inTo - 0.1]) for (const s of [-1, 1]) p.box(m.paint, C.dark, span(xM - 0.03, xM + 0.03), [0, G.infeed.topM - 0.05], side(s, halfIn - 0.06, halfIn));
+  for (const s of [-1, 1]) p.box(m.paint, C.mid, span(inFrom, inTo), [G.infeed.topM - 0.09, G.infeed.topM + 0.02], side(s, halfIn, halfIn + 0.03));
+  p.box(m.paint, C.black, span(inFrom, inTo), [G.infeed.topM - 0.04, G.infeed.topM], span(-halfIn, halfIn));
+  p.box(m.paint, C.dark, span(inTo, inTo + 0.03), [G.infeed.topM, G.infeed.topM + 0.08], span(-halfIn, halfIn));
+  // The place's roller deck: side frames on legs and rollers across the line (not cut: like rollers shade alike).
+  const [placeFrom, placeTo] = G.place.xM;
+  const halfPlace = G.place.widthM / 2;
+  for (const s of [-1, 1]) {
+    p.box(m.paint, C.dark, span(placeFrom, placeTo), [G.rollerTopM - 0.1, G.rollerTopM - 0.02], side(s, halfPlace, halfPlace + 0.05));
+    for (const xM of [placeFrom + 0.05, placeTo - 0.05]) p.box(m.paint, C.dark, span(xM - 0.03, xM + 0.03), [0, G.rollerTopM - 0.1], side(s, halfPlace, halfPlace + 0.05));
+  }
+  for (let xM = placeFrom + 0.06; xM <= placeTo - 0.05; xM += 0.125) {
+    p.add(m.paint, C.steel, new THREE.CylinderGeometry(0.04, 0.04, G.place.widthM, 10).rotateX(Math.PI / 2).translate(xM, G.rollerTopM - 0.04, 0));
+  }
+  // The dispenser behind the place: a base frame and four corner guides round its stack of empty pallets.
+  const dz = G.dispenser.zM;
+  p.box(m.paint, C.dark, span(-0.7, 0.7), [0, 0.06], [dz - 0.6, dz + 0.6]);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const [gx, gz] = [sx * G.dispenser.guideXM, dz + sz * G.dispenser.guideZM];
+      p.box(m.paint, C.casing, span(gx - 0.04, gx + 0.04), [0, G.dispenser.heightM], span(gz - 0.04, gz + 0.04));
+    }
+    p.box(m.paint, C.mid, span(sx * G.dispenser.guideXM - 0.04, sx * G.dispenser.guideXM + 0.04), [G.dispenser.heightM - 0.08, G.dispenser.heightM], [dz - G.dispenser.guideZM, dz + G.dispenser.guideZM]);
+  }
+
+  // The bridge: a beam across, z ±1.0, riding on wheels on the rails, with its drive motor.
+  const bridge = new HeroParts();
+  bridge.box(m.paint, C.mid, span(-0.09, 0.09), [-0.05, 0.05], span(-1.0, 1.0));
+  for (const s of [-1, 1]) bridge.box(m.paint, C.dark, span(-0.12, 0.12), [-0.05, 0.02], side(s, G.postsZM - 0.07, G.postsZM + 0.07));
+  bridge.box(m.paint, C.motor, span(0.09, 0.25), [-0.03, 0.12], [G.postsZM - 0.2, G.postsZM - 0.02]);
+  // The trolley: a carriage round the bridge, its lift's guide bush through it.
+  const trolley = new HeroParts();
+  trolley.box(m.paint, C.motor, span(-0.18, 0.18), [-0.13, 0.13], span(-0.17, 0.17));
+  trolley.box(m.paint, C.dark, span(-0.07, 0.07), [-0.2, -0.13], span(-0.07, 0.07));
+  // The lift: the mast up through the trolley, and the vacuum head at its foot, its pads underneath.
+  const lift = new HeroParts();
+  const { head } = G;
+  lift.box(m.paint, C.steel, span(-0.04, 0.04), [head.padsM + head.plateM, G.mastM], span(-0.04, 0.04));
+  lift.box(m.paint, C.dark, span(-head.xM / 2, head.xM / 2), [head.padsM, head.padsM + head.plateM], span(-head.zM / 2, head.zM / 2));
+  for (const px of [-0.09, 0.09]) for (const pz of [-0.15, 0, 0.15]) lift.cylinder(m.paint, C.black, 'y', [px, head.padsM / 2, pz], 0.035, head.padsM, 10);
+
+  const { nodes } = HERO_SPECS.yogurtPalletizer;
+  const at = (name) => nodes.find((each) => each.name === name).atM;
+  const bridgeNode = node(bridge, 'bridge', at('bridge'));
+  const trolleyNode = node(trolley, 'trolley', at('trolley'));
+  bridgeNode.add(trolleyNode);
+  trolleyNode.add(node(lift, 'lift', at('lift')));
+  return group('yogurt_palletizer', [...p.meshes('body'), bridgeNode]);
+}
+
 /** Each model's builder, by its key in HERO_SPECS. */
 export const HERO_BUILDERS = {
   separator: buildSeparator,
@@ -1001,6 +1119,7 @@ export const HERO_BUILDERS = {
   stretchWrapper: buildStretchWrapper,
   p8Filler: buildP8Filler,
   fermentTank: buildFermentTank,
+  yogurtPalletizer: buildYogurtPalletizer,
 };
 
 /** All of them as { 'separator.glb': bytes, ... }: built, AO baked, written and compressed. */

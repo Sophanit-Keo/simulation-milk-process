@@ -7,7 +7,8 @@
 //
 // The warm room shows each of its pallets, two high; the chiller and the cold room show how full they are, one box for
 // each share of their positions, since the tunnel and the racks hold fewer visible places than the sim's positions.
-// The pallet building at the palletizer grows with its trays; pallets waiting by the wrapper stand in a row. A reefer
+// Pallets waiting past the wrapper stand in a row on its outfeed rollers; since phase 24 the pallet the palletizer builds,
+// and the one riding through the wrapper, are the pallet line's (palletLine.ts), drawn in this mesh too. A reefer
 // backs the last metres to its door in its last 10 minutes of arriving, and stands there while it loads.
 import * as THREE from 'three';
 import type { ColdChainSnapshot, Snapshot } from '../../../contracts';
@@ -60,9 +61,11 @@ export const COLD_PLACES: [number, number, number][] = (() => {
   return places;
 })();
 /** Pallets waiting by the wrapper, in a row along the line toward the rooms. */
-const STAGING_PLACES: [number, number, number][] = Array.from({ length: 6 }, (_, i) => [at.WRAPPER.xM + 2 + i * 1.4, 0, at.LINE_Z_M]);
-/** The pallet the palletizer builds, on its pallet place. */
-const FORMING_AT: [number, number, number] = [at.PALLETIZER.xM, 0.3, at.PALLETIZER.zM + 0.9];
+/**
+ * Pallets waiting past the wrapper, on the outfeed rollers along the line toward the rooms (phase 24): six, 1.3 m
+ * apart, from where the line's pallet leaves its rollers (palletLine.ts LEAVE_X_M).
+ */
+export const STAGING_PLACES: [number, number, number][] = Array.from({ length: 6 }, (_, i) => [at.PALLET_LINE.outfeed.xMinM + 0.75 + i * 1.3, at.PALLET_LINE.rollerTopM, at.LINE_Z_M]);
 
 /** A docked reefer: its trailer's tail at the dock leveller, the trailer and its tractor reaching north. */
 export const REEFER_M = { trailerM: 13.6, widthM: 2.5, heightM: 2.6, tractorM: 3.6, unitM: 0.9, tailZM: at.COLD_ROOM.zMinM - 1.2, backInM: 8 } as const;
@@ -92,14 +95,14 @@ export interface SharedBoxes {
   bind(mesh: THREE.InstancedMesh, offset: number): void;
 }
 
-export function coldChainTokens(kit: Kit, shared?: SharedBoxes): Equipment {
+export function coldChainTokens(kit: Kit, shared: readonly SharedBoxes[] = []): Equipment {
   const root = new THREE.Group();
   root.name = 'yogurt-pallets';
   // Tokens, not a machine: they stand in the rooms and on the yard (tests skip them as a machine).
   root.userData = { equipmentId: 'yogurt-pallets', stage: 16, tokens: true };
-  const palletSlots = WARM_PLACES.length + CHILLER_PLACES.length + COLD_PLACES.length + STAGING_PLACES.length + 1;
+  const palletSlots = WARM_PLACES.length + CHILLER_PLACES.length + COLD_PLACES.length + STAGING_PLACES.length;
   const reeferSlots = plantJson.yogurt.coldChain.dockDoors;
-  const sharedCount = shared?.count ?? 0;
+  const sharedCount = shared.reduce((total, each) => total + each.count, 0);
   const capacity = sharedCount + palletSlots * 2 + reeferSlots * 3;
   const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75 });
   const boxes = new THREE.InstancedMesh(kit.shape('box'), boxMaterial, capacity);
@@ -116,8 +119,11 @@ export function coldChainTokens(kit: Kit, shared?: SharedBoxes): Equipment {
   boxes.raycast = noPick;
   glows.raycast = noPick;
   root.add(boxes, glows);
-  // The shared instances first: their indices stay put while the pallets' count changes.
-  shared?.bind(boxes, 0);
+  // The shared instances first, one sharer after another: their indices stay put while the pallets' count changes.
+  shared.reduce((first, each) => {
+    each.bind(boxes, first);
+    return first + each.count;
+  }, 0);
   boxes.count = sharedCount;
   const release = kit.hold();
 
@@ -136,7 +142,7 @@ export function coldChainTokens(kit: Kit, shared?: SharedBoxes): Equipment {
   ] as const;
 
   let shownKey = '';
-  const state = { warm: 0, chiller: 0, cold: 0, held: 0, staging: 0, forming: 0, reefers: 0, warmGlow: false, frostGlow: false, alarm: 'off' as 'off' | 'over' | 'held' };
+  const state = { warm: 0, chiller: 0, cold: 0, held: 0, staging: 0, reefers: 0, warmGlow: false, frostGlow: false, alarm: 'off' as 'off' | 'over' | 'held' };
 
   function place(snapshot: Snapshot): void {
     const chain = coldChainOf(snapshot);
@@ -146,14 +152,13 @@ export function coldChainTokens(kit: Kit, shared?: SharedBoxes): Equipment {
     const chilling = chain ? shownPallets(chain.chiller.pallets, chain.chiller.capacity, CHILLER_PLACES.length) : 0;
     const cold = chain ? shownPallets(chain.coldRoom.positionsUsed, chain.coldRoom.capacity, COLD_PLACES.length) : 0;
     const staging = Math.min(count('staging'), STAGING_PLACES.length);
-    const formingFrac = chain?.trays ? chain.trays.openTrays / plantJson.yogurt.coldChain.traysPerPallet : 0;
     const reefers = (chain?.reefers ?? []).map((reefer) => ({ door: reefer.door, offsetM: reeferOffsetM(reefer.state, reefer.untilS, snapshot.timeS) }));
     // The cold room's excursion (phase 20): its share of held pallets shows red, and the alarm strip lights.
     const excursion = chain?.coldRoom.excursion ?? null;
     const heldCount = count('coldRoom') > 0 ? pallets.reduce((n, each) => n + (each.place === 'coldRoom' && each.qaHold ? 1 : 0), 0) : 0;
     const held = chain && heldCount > 0 ? Math.min(cold, Math.max(1, Math.round((cold * heldCount) / Math.max(1, chain.coldRoom.positionsUsed)))) : 0;
     const alarm: 'off' | 'over' | 'held' = (excursion?.palletsHeld ?? 0) > 0 ? 'held' : excursion && (excursion.overSinceS !== null || excursion.coolingDown) ? 'over' : 'off';
-    const key = `${warm}|${chilling}|${cold}|${held}|${alarm}|${staging}|${formingFrac.toFixed(3)}|${reefers.map((r) => `${r.door}:${r.offsetM.toFixed(2)}`).join(',')}`;
+    const key = `${warm}|${chilling}|${cold}|${held}|${alarm}|${staging}|${reefers.map((r) => `${r.door}:${r.offsetM.toFixed(2)}`).join(',')}`;
     if (key === shownKey) return;
     shownKey = key;
     let n = sharedCount;
@@ -172,7 +177,6 @@ export function coldChainTokens(kit: Kit, shared?: SharedBoxes): Equipment {
     CHILLER_PLACES.slice(0, chilling).forEach((at_) => pallet(at_, colorOf.frost));
     COLD_PLACES.slice(0, cold).forEach((at_, i) => pallet(at_, i < held ? colorOf.held : colorOf.load));
     STAGING_PLACES.slice(0, staging).forEach((at_) => pallet(at_, colorOf.load));
-    if (formingFrac > 0) pallet(FORMING_AT, colorOf.load, formingFrac);
     for (const reefer of reefers) {
       const doorXM = at.DOCK_DOORS_X_M[reefer.door] ?? at.DOCK_DOORS_X_M[0];
       const tailZM = REEFER_M.tailZM - reefer.offsetM;
@@ -198,7 +202,7 @@ export function coldChainTokens(kit: Kit, shared?: SharedBoxes): Equipment {
     glows.count = g;
     glows.instanceMatrix.needsUpdate = true;
     if (glows.instanceColor) glows.instanceColor.needsUpdate = true;
-    Object.assign(state, { warm, chiller: chilling, cold, held, staging, forming: formingFrac, reefers: reefers.length, warmGlow: lit[0], frostGlow: lit[1], alarm });
+    Object.assign(state, { warm, chiller: chilling, cold, held, staging, reefers: reefers.length, warmGlow: lit[0], frostGlow: lit[1], alarm });
   }
 
   return {

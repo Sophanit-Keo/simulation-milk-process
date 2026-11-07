@@ -29,6 +29,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 21. Yogurt polish & docs | yogurt week 12 | qa, lead | **Y3** · 60 fps with both lines, docs updated | [Phase 21](phase-21-yogurt-polish.md) |
 | 22. Yogurt process flow | after Y3 | process, ui | Each yogurt stage's process flow, step by step, live, in its panel | [Phase 22](phase-22-yogurt-process-flow.md) |
 | 23. Yogurt machines in motion | after Y3 | scene | The yogurt machines show what happens inside them | [Phase 23](phase-23-yogurt-machines-in-motion.md) |
+| 24. Yogurt palletizer & wrapper | after Y3 | assets, scene | The wing's gantry palletizer and stretch wrapper, in detail and in motion | [Phase 24](phase-24-yogurt-palletizer-wrapper.md) |
 
 ## The agents
 
