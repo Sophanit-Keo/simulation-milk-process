@@ -25,6 +25,7 @@ import {
   compress,
   HERO_BUILDERS,
   FERMENT_TANK,
+  GANTRY,
   HERO_SPECS,
   heroGlbs,
   P8_LAYOUT,
@@ -603,6 +604,67 @@ describe('the yogurt wing\'s heroes (phase 20)', () => {
       raycaster.set(new THREE.Vector3(0, y, 3), new THREE.Vector3(0, 0, -1));
       const [hit] = raycaster.intersectObject(model, true);
       assert.ok(hit && Math.abs(hit.point.z - (gaugeM.zM + 0.02)) < MM, `the gauge's frame at y ${y}`);
+    }
+  });
+});
+
+
+describe('the yogurt gantry palletizer (phase 24)', () => {
+  /** The places of a layer the scene stacks on (palletLine.ts): 4 along x, 2 across. */
+  const PLACES = [-0.45, -0.15, 0.15, 0.45].flatMap((xM) => [-0.25, 0.25].map((zM) => [xM, zM]));
+  const posed = (bridgeX, trolleyZ, liftUndersideM) => {
+    const model = build('yogurtPalletizer');
+    model.getObjectByName('bridge').position.x = bridgeX;
+    model.getObjectByName('trolley').position.z = trolleyZ;
+    model.getObjectByName('lift').position.y = liftUndersideM - GANTRY.bridgeYM;
+    model.updateMatrixWorld(true);
+    return model;
+  };
+
+  it('reaches the pick point and every place of a layer within its travel, the head between the posts', () => {
+    const [xMin, xMax] = GANTRY.bridgeTravelM;
+    const [zMin, zMax] = GANTRY.trolleyTravelM;
+    assert.ok(GANTRY.pickXM >= xMin && GANTRY.pickXM <= xMax, 'the pick point');
+    for (const [xM, zM] of PLACES) assert.ok(xM >= xMin - MM && xM <= xMax + MM && zM >= zMin - MM && zM <= zMax + MM, `the place (${xM}, ${zM})`);
+    for (const xM of [xMin, xMax]) {
+      for (const zM of [zMin, zMax]) {
+        const head = boxOf(posed(xM, zM, GANTRY.lowestM).getObjectByName('lift'));
+        assert.ok(head.min.x > GANTRY.postsXM[0] + 0.05 && head.max.x < GANTRY.postsXM[1] - 0.05, `head inside the posts at x ${xM}`);
+        assert.ok(head.min.z > -GANTRY.postsZM + 0.06 && head.max.z < GANTRY.postsZM - 0.06, `head inside the beams at z ${zM}`);
+      }
+    }
+  });
+
+  it('keeps the mast in the trolley at the bottom of its travel, and the head clear of a full stack and the rails at the top', () => {
+    const low = posed(0.45, 0.25, GANTRY.lowestM);
+    const mast = boxOf(low.getObjectByName('lift'));
+    const trolley = ownBox(low.getObjectByName('trolley')).applyMatrix4(low.getObjectByName('trolley').matrixWorld);
+    assert.ok(mast.max.y >= trolley.min.y + 0.05, `the mast's top ${mast.max.y.toFixed(3)} still in the trolley (${trolley.min.y.toFixed(3)})`);
+    // At rest the head's underside clears a full load (0.39 + 0.85 m) with a tray in the head.
+    const rest = posed(0.45, 0.25, GANTRY.bridgeYM + GANTRY.liftRestM);
+    const head = boxOf(rest.getObjectByName('lift'));
+    assert.ok(head.min.y > 0.39 + 0.85 + 0.054 + 0.1, `head at rest ${head.min.y.toFixed(3)} over a full stack`);
+    assert.ok(head.max.y <= HERO_SPECS.yogurtPalletizer.maxHeightM, 'under the label');
+  });
+
+  it('leaves the pallet\'s path clear: from the dispenser onto the place, and on along the line between the posts', () => {
+    const model = build('yogurtPalletizer');
+    const body = model.getObjectByName('body');
+    const halfW = 0.6 + 0.02;
+    const halfD = 0.5 + 0.02;
+    // A pallet and its load, 0.25 to 1.24 m up: sliding from the dispenser to the place, then riding out along +x.
+    const paths = [
+      new THREE.Box3(new THREE.Vector3(-halfW, 0.26, GANTRY.dispenser.zM + 0.62), new THREE.Vector3(halfW, 1.24, halfD)),
+      new THREE.Box3(new THREE.Vector3(-halfW, 0.26, -halfD), new THREE.Vector3(GANTRY.postsXM[1] + 0.3, 1.24, halfD)),
+    ];
+    for (const triangle of trianglesOf(body)) {
+      const box = new THREE.Box3().setFromPoints([triangle.a, triangle.b, triangle.c]);
+      for (const path of paths) {
+        const inside = box.clone().intersect(path);
+        if (inside.isEmpty()) continue;
+        const size = inside.getSize(new THREE.Vector3());
+        assert.ok(Math.min(size.x, size.y, size.z) < 1e-6, `the frame in the pallet's path at ${triangle.getMidpoint(new THREE.Vector3()).toArray().map((v) => v.toFixed(2))}`);
+      }
     }
   });
 });

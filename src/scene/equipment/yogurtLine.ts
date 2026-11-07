@@ -30,6 +30,8 @@ import * as at from './yogurt/layout';
 import { coldChainTokens } from './yogurt/coldChainScene';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
 import { createWingMotion, type WingMotion } from './yogurt/wingMotion';
+import { createPalletLine, FILM_TOP_M, filmHeightM, GANTRY, PALLET, STACK_CAPACITY, type PalletLine } from './yogurt/palletLine';
+import { CARRIAGE_AT_M, createFilmMaterial, createFilmWeb, FILM_BOTTOM_M, MAST_AT_M, MAST_HEIGHT_M, TURNTABLE_AT_M, WRAP_TURNS } from './packs/stretchWrap';
 import { finite, HEAT_MODE_TEXT, heatValveLamp, phRingFrac, tankStirs, yogurtFill, yogurtOf } from './yogurt/readings';
 
 /** A held tank's lamp (phase 20, D30): red, over its pH probe, at about the probe's height plus a little. */
@@ -62,6 +64,8 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
   // The wing's moving parts (phase 23), in world metres, drawn in the cold chain's box mesh, whose root stands at the
   // world's origin and spans the wing, and which takes no clicks: no draw call of their own.
   const motion = createWingMotion();
+  // The palletizer, the wrapper and the pallets between them (phase 24), likewise drawn in the cold chain's box mesh.
+  const palletLine = createPalletLine();
   const items = [
     yogurtSilo(kit),
     powderStation(kit),
@@ -150,12 +154,12 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
     rejectBin(kit),
     p8Cups(kit, carrier),
     trayPacker(kit),
-    palletizer(kit),
-    wrapper(kit),
+    palletizer(kit, ctx, palletLine),
+    wrapper(kit, ctx, palletLine),
     warmRoom(kit),
     blastChiller(kit),
     coldRoom(kit),
-    coldChainTokens(kit, motion),
+    coldChainTokens(kit, [motion, palletLine]),
   ];
   return items.map((item) => withMotion(item, motion, item.id === 'yogurt-pallets'));
 };
@@ -592,7 +596,8 @@ function trayPacker(kit: Kit): Equipment {
   const { xMinM, xMaxM } = at.OUTFEED;
   const b = new MachineBuilder(kit, 'p8-tray-packer', [xM, 0, zM]);
   b.part('box', 'rubber', [(xMinM + xMaxM) / 2, 0.72, zM], [xMaxM - xMinM, 0.06, 0.45]); // the outfeed from P8
-  for (const px of [xMinM + 0.2, xMaxM - 0.2]) b.part('box', 'steelDark', [px, 0.35, zM], [0.08, 0.7, 0.4]);
+  // The belt's legs in its own material: one mesh with it (phase 24, draw calls).
+  for (const px of [xMinM + 0.2, xMaxM - 0.2]) b.part('box', 'rubber', [px, 0.35, zM], [0.08, 0.7, 0.4]);
   body(b, xM + 0.1, zM, [1.8, 1.0, 1.4]);
   b.part('box', 'glass', [xM + 0.1, 1.35, zM], [1.8, 0.7, 1.4]); // the pick-and-place cell
   // The pick-and-place head: it shuttles a row of cups from the outfeed into the tray while P8 fills (phase 19).
@@ -612,60 +617,172 @@ function trayPacker(kit: Kit): Equipment {
   });
 }
 
-function palletizer(kit: Kit): Equipment {
+/**
+ * The gantry palletizer (phase 24, palletLine.ts): four posts and two beams over the pallet place, the tray infeed from
+ * the packer, the place's rollers and the empty-pallet dispenser behind it. The bridge runs along the line, the trolley
+ * across it, and the lift lowers the vacuum head onto each tray. With the hero model these are its nodes; in grey
+ * boxes, pivots of the same names at the same rest transforms.
+ */
+function palletizer(kit: Kit, ctx: EquipmentContext, line: PalletLine): Equipment {
   const { xM, zM } = at.PALLETIZER;
+  const L = at.PALLET_LINE;
   const b = new MachineBuilder(kit, 'yogurt-palletizer', [xM, 0, zM]);
-  b.part('box', 'steelDark', [xM, 0.15, zM + 0.9], [1.3, 0.3, 1.1]); // the pallet place
-  b.part('cyl', 'paint', [xM, 0.3, zM - 0.6], [0.45, 0.6, 0.45]); // the robot's base
-  b.part('box', 'paint', [xM, 1.5, zM - 0.6], [0.35, 1.8, 0.35]); // its column
-  // Its arm swings from the infeed to the pallet while P8 fills (phase 19); the pallet it builds is a cold-chain token.
-  const arm = b.pivot('arm', [xM, 2.45, zM - 0.6]);
-  b.part('box', 'paint', [0, 0, 0.5], [0.3, 0.3, 1.3], { parent: arm });
-  let phaseRad = 0;
+  for (const dx of [-2.15, 0.75]) {
+    for (const dz of [-0.9, 0.9]) b.part('box', 'paint', [xM + dx, 1.025, zM + dz], [0.1, 2.05, 0.1]);
+    b.part('box', 'paint', [xM + dx, 2.0, zM], [0.1, 0.1, 1.9]);
+  }
+  for (const dz of [-0.9, 0.9]) b.part('box', 'paint', [xM - 0.7, 2.0, zM + dz], [3.0, 0.1, 0.12]);
+  const inMidM = (L.infeed.xMinM + L.infeed.xMaxM) / 2;
+  const inLenM = L.infeed.xMaxM - L.infeed.xMinM;
+  b.part('box', 'rubber', [inMidM, L.infeed.topM - 0.02, zM], [inLenM, 0.04, L.infeed.widthM]);
+  b.part('box', 'steelDark', [inMidM, (L.infeed.topM - 0.04) / 2, zM], [inLenM - 0.1, L.infeed.topM - 0.04, L.infeed.widthM - 0.1]);
+  b.part('box', 'steelDark', [xM, L.rollerTopM / 2, zM], [1.5, L.rollerTopM, L.widthM]);
+  for (const dx of [-0.66, 0.66]) for (const dz of [-0.56, 0.56]) b.part('box', 'steelDark', [xM + dx, 0.65, L.dispenserZM + dz], [0.08, 1.3, 0.08]);
+  // The moving parts, nested as the model's nodes: bridge > trolley > lift (the lift's origin is the head's underside).
+  let bridge: THREE.Object3D = b.pivot('bridge', [xM + GANTRY.bridgeRestXM, GANTRY.bridgeYM, zM]);
+  b.part('box', 'paint', [0, 0, 0], [0.18, 0.1, 2.0], { parent: bridge as THREE.Group });
+  const greyTrolley = b.pivot('trolley', [xM, GANTRY.bridgeYM, zM]);
+  bridge.add(greyTrolley);
+  greyTrolley.position.set(0, 0, 0);
+  b.part('box', 'steelDark', [0, 0, 0], [0.36, 0.26, 0.34], { parent: greyTrolley });
+  const greyLift = b.pivot('lift', [xM, GANTRY.restM, zM]);
+  greyTrolley.add(greyLift);
+  greyLift.position.set(0, GANTRY.restM - GANTRY.bridgeYM, 0);
+  b.part('box', 'steelDark', [0, 0.055, 0], [0.32, 0.07, 0.47], { parent: greyLift });
+  b.part('box', 'steel', [0, 0.97, 0], [0.08, 1.76, 0.08], { parent: greyLift });
+  let trolley: THREE.Object3D = greyTrolley;
+  let lift: THREE.Object3D = greyLift;
+  let hero = false;
+  const apply = (): void => {
+    const pose = line.gantry;
+    bridge.position.x = pose.bridgeXM;
+    trolley.position.z = pose.trolleyZM;
+    lift.position.y = pose.liftM - GANTRY.bridgeYM;
+  };
   return machine(b, {
     id: 'yogurt-palletizer',
     stage: 16,
     label: 'Palletizer',
-    labelAnchorM: [xM, 3.25, zM],
+    labelAnchorM: [xM - 0.7, 3.85, zM],
+    labelText: () => `${line.stacked} of ${STACK_CAPACITY} trays`,
     update(s, realDtS) {
-      if (p8Running(s)) phaseRad = (phaseRad + 1.6 * motionDtS(s, realDtS)) % FULL_TURN_RAD;
-      arm.rotation.y = 0.9 * Math.sin(phaseRad);
+      line.advance(s, realDtS);
+      apply();
     },
-    debugState: () => ({ armRad: arm.rotation.y }),
+    debugState: () => ({
+      step: line.gantry.step,
+      bridgeXM: bridge.position.x,
+      trolleyZM: trolley.position.z,
+      liftM: lift.position.y + GANTRY.bridgeYM,
+      carrying: line.gantry.carrying,
+      stacked: line.stacked,
+      laid: line.laid,
+      closed: line.closed,
+      sliding: line.place.slideFrac < 1,
+      hero,
+    }),
+    onBuilt(object, isAlive) {
+      swapInHero(ctx, object, { path: HERO_MODELS.yogurtPalletizer, nodes: ['bridge', 'trolley', 'lift'] }, (nodes) => {
+        ({ bridge, trolley, lift } = nodes);
+        hero = true;
+        // A frame of thin parts: its shadows would cost draw calls and show little (the wing's small machines cast none).
+        object.getObjectByName(`${object.name}-hero`)?.traverse((each) => (each.castShadow = false));
+        apply();
+      }, isAlive);
+    },
   });
 }
 
-/** The wrapper turns a closed pallet this long, in animation seconds. */
-const WRAP_S = 6;
-
-function wrapper(kit: Kit): Equipment {
+/**
+ * The stretch wrapper (phase 24): the UHT line's model (phase 12) and its wrap cycle (packs/stretchWrap.ts), here with
+ * the wing's rollers to and from its turntable, the film web from the roll to the load, and the film shell that grows
+ * up the load and stays on it to the staging row. The pallet on the turntable turns with it (palletLine.ts).
+ */
+function wrapper(kit: Kit, ctx: EquipmentContext, line: PalletLine): Equipment {
   const { xM, zM } = at.WRAPPER;
+  const L = at.PALLET_LINE;
   const b = new MachineBuilder(kit, 'yogurt-wrapper', [xM, 0, zM]);
-  b.part('box', 'paint', [xM + 1.2, 1.25, zM], [0.25, 2.5, 0.35], { castShadow: true }); // mast
-  // The turntable turns each pallet the palletizer closes (phase 19), the newest pallet's id telling one has.
-  const table = b.pivot('turntable', [xM, 0.1, zM]);
-  b.part('cyl8', 'steelDark', [0, 0, 0], [0.95, 0.2, 0.95], { parent: table });
-  let newest: number | null = null;
-  let wrapLeftS = 0;
+  const [mastX, , mastZ] = MAST_AT_M;
+  b.part('box', 'paint', [xM + mastX, MAST_HEIGHT_M / 2, zM + mastZ], [0.22, MAST_HEIGHT_M, 0.22]);
+  let turntable: THREE.Object3D = b.pivot('turntable', [xM + TURNTABLE_AT_M[0], TURNTABLE_AT_M[1], zM + TURNTABLE_AT_M[2]]);
+  b.part('cyl', 'steelDark', [0, 0, 0], [1.0, 0.25, 1.0], { parent: turntable as THREE.Group });
+  let carriage: THREE.Object3D = b.pivot('carriage', [xM + CARRIAGE_AT_M[0], CARRIAGE_AT_M[1], zM + CARRIAGE_AT_M[2]]);
+  b.part('box', 'paint', [0.1, 0.3, 0.05], [0.3, 0.6, 0.3], { parent: carriage as THREE.Group });
+  // The rollers to the turntable and from it to the staging row's end: the wing's, kept with the model.
+  const rollers = b.pivot('rollers', [xM, 0, zM]);
+  for (const run of [L.toWrapper, L.outfeed]) {
+    const lengthM = run.xMaxM - run.xMinM;
+    // One material for the whole run, frames and legs too: a mesh, a draw call.
+    for (const side of [-1, 1]) b.part('box', 'steel', [(run.xMinM + run.xMaxM) / 2 - xM, L.rollerTopM - 0.06, side * (L.widthM / 2 + 0.03)], [lengthM, 0.08, 0.05], { parent: rollers });
+    for (let rx = run.xMinM + 0.06; rx <= run.xMaxM - 0.05; rx += 0.125) b.part('cylLo', 'steel', [rx - xM, L.rollerTopM - 0.04, 0], [0.04, L.widthM, 0.04], { parent: rollers, rotationRad: [Math.PI / 2, 0, 0] });
+    for (let lx = run.xMinM + 0.1; lx < run.xMaxM; lx += 1.5) for (const side of [-1, 1]) b.part('box', 'steel', [lx - xM, (L.rollerTopM - 0.1) / 2, side * (L.widthM / 2 + 0.03)], [0.05, L.rollerTopM - 0.1, 0.05], { parent: rollers });
+  }
+  // The film: the web from the roll to the load, and the shell round the load, both clear film.
+  const web = createFilmWeb(FILM_TOP_M);
+  const shellMaterial = createFilmMaterial('shell');
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(PALLET.widthM + 0.02, 1, PALLET.depthM + 0.02).translate(0, 0.5, 0), shellMaterial);
+  shell.name = 'film-shell';
+  shell.visible = false;
+  shell.castShadow = false;
+  const extras = new THREE.Group();
+  extras.name = 'film';
+  extras.add(web.mesh, shell);
+  let hero = false;
+  const apply = (): void => {
+    const pose = line.wrap;
+    turntable.rotation.y = pose.turnRad;
+    carriage.position.y = CARRIAGE_AT_M[1] + pose.carriageM;
+    web.update(pose);
+    const rider = line.rider;
+    const heightM = rider && rider.phase !== 'toWrapper' ? filmHeightM(pose.filmFrac) : 0;
+    shell.visible = heightM > 0.005;
+    if (rider && shell.visible) {
+      shell.position.set(rider.xM - xM, L.rollerTopM + FILM_BOTTOM_M, 0);
+      shell.rotation.y = rider.phase === 'wrapping' ? pose.turnRad : 0;
+      shell.scale.y = heightM;
+    }
+  };
   return machine(b, {
     id: 'yogurt-wrapper',
     stage: 16,
     label: 'Stretch wrapper',
-    labelAnchorM: [xM, 2.95, zM],
-    update(s, realDtS) {
-      const pallets = yogurtOf(s)?.coldChain.pallets;
-      if (pallets && pallets.length > 0) {
-        const id = pallets.reduce((most, pallet) => Math.max(most, pallet.id), 0);
-        if (newest !== null && id > newest) wrapLeftS = WRAP_S;
-        newest = id;
-      }
-      const dtS = motionDtS(s, realDtS);
-      if (wrapLeftS > 0) {
-        wrapLeftS = Math.max(0, wrapLeftS - dtS);
-        table.rotation.y = (table.rotation.y + 2.2 * dtS) % FULL_TURN_RAD;
-      }
+    labelAnchorM: [xM - 0.6, 3.1, zM - 0.5],
+    labelText: () => {
+      const rider = line.rider;
+      if (rider?.phase === 'wrapping') return `wrapping · ${Math.min(WRAP_TURNS, Math.floor(line.wrap.turnRad / FULL_TURN_RAD) + 1)} of ${WRAP_TURNS} turns`;
+      return rider ? 'pallet on the rollers' : 'waiting';
     },
-    debugState: () => ({ wrapping: wrapLeftS > 0, tableRad: table.rotation.y }),
+    update(s, realDtS) {
+      line.advance(s, realDtS);
+      apply();
+    },
+    debugState: () => ({
+      wrapping: line.rider?.phase === 'wrapping',
+      riderPhase: line.rider?.phase ?? 'none',
+      riderXM: line.rider?.xM ?? 0,
+      phase: line.wrap.phase,
+      turnRad: turntable.rotation.y,
+      carriageM: carriage.position.y - CARRIAGE_AT_M[1],
+      filmFrac: line.wrap.filmFrac,
+      web: web.mesh.visible,
+      shell: shell.visible,
+      hero,
+    }),
+    dispose() {
+      web.dispose();
+      shell.geometry.dispose();
+      shellMaterial.dispose();
+    },
+    onBuilt(object, isAlive) {
+      object.add(extras);
+      swapInHero(ctx, object, { path: HERO_MODELS.stretchWrapper, nodes: ['turntable', 'carriage'], keep: [rollers, extras] }, (nodes) => {
+        ({ turntable, carriage } = nodes);
+        hero = true;
+        // No shadows, as the wing's other small machines: each would cost a draw call (the overview stands at its budget).
+        object.getObjectByName(`${object.name}-hero`)?.traverse((each) => (each.castShadow = false));
+        apply();
+      }, isAlive);
+    },
   });
 }
 
@@ -732,7 +849,7 @@ function blastChiller(kit: Kit): Equipment {
       b.part('box', 'steel', [xM, r.heightM - 0.1, zM], [lengthM, 0.2, depthM], { castShadow: true });
       for (const dz of [-depthM / 2, depthM / 2]) b.part('box', 'steel', [xM, r.heightM / 2, zM + dz], [lengthM, r.heightM, 0.15], { castShadow: true });
       b.part('box', 'steelDark', [xM, 0.2, zM], [lengthM, 0.4, 1.3]); // the roller track
-      b.part('box', 'paint', [xM, r.heightM + 0.3, zM], [1.6, 0.4, 1.2]); // the refrigeration unit on top
+      b.part('box', 'steel', [xM, r.heightM + 0.3, zM], [1.6, 0.4, 1.2], { castShadow: true }); // the refrigeration unit on top, in the tunnel's steel (one mesh)
     },
     (s) => {
       const pallets = finite(yogurtOf(s)?.coldChain.chiller.pallets);
@@ -756,7 +873,7 @@ function coldRoom(kit: Kit): Equipment {
       // The dock doors in the north wall, facing the reefer yard, and a doorway from the chiller in the south one.
       walls(b, r, r.wallM, [...at.DOCK_DOORS_X_M.map((atM) => ({ side: 'north' as const, atM, widthM: 2.8 })), { side: 'south', atM: 33.2, widthM: 2.4 }]);
       for (const doorXM of at.DOCK_DOORS_X_M) {
-        b.part('box', 'steelDark', [doorXM, r.wallM - 0.15, r.zMinM], [3.0, 0.3, 0.25]); // door head
+        b.part('box', 'steel', [doorXM, r.wallM - 0.15, r.zMinM], [3.0, 0.3, 0.25], { castShadow: true }); // door head, in the walls' steel (one mesh)
         b.part('box', 'concrete', [doorXM, 0.6, r.zMinM - 0.6], [3.0, 1.2, 1.2]); // dock leveller
       }
       // Two rows of racks along the room, three levels, for the pallets of phase 19.

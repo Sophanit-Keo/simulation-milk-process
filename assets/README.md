@@ -6,7 +6,7 @@ How 3D models and textures get into the plant: where files go, the rules every m
 
 | Path | What | In git |
 |---|---|---|
-| `public/models/hero/` | The hero models, `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb`, (phase 12) `stretch-wrapper.glb` and (phase 20) the yogurt wing's `p8-filler.glb` and `ferment-tank.glb`, made by `assets/scripts/make-heroes.mjs`: block-outs in phase 3, final since phase 5 (faces cut for the AO, AO baked into the vertex colours, meshopt-compressed) | Yes, from phase 3 |
+| `public/models/hero/` | The hero models, `separator.glb`, `homogenizer.glb`, `aseptic-filler.glb`, `palletizer.glb`, (phase 12) `stretch-wrapper.glb` and (phase 20) the yogurt wing's `p8-filler.glb` and `ferment-tank.glb`, and (phase 24) its `yogurt-palletizer.glb`, made by `assets/scripts/make-heroes.mjs`: block-outs in phase 3, final since phase 5 (faces cut for the AO, AO baked into the vertex colours, meshopt-compressed) | Yes, from phase 3 |
 | `public/models/kenney/` | Kit pieces, unmodified, plus the `Textures/colormap.png` they point to and the kit's `License.txt` | Yes, from phase 2 |
 | `public/models/vehicles/` | `truck.glb`, `forklift.glb`: our own, made by `assets/scripts/make-vehicles.mjs` | Yes, from phase 2 |
 | `public/textures/` | Textures that code applies: `carton.png`, `tray.png`, `pallet.png`, made by `assets/scripts/make-textures.mjs` | Yes, from phase 2 |

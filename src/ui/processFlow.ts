@@ -21,6 +21,8 @@ import { tankText } from './yogurtRows';
 
 const PLANT: PlantConfig = plantJson;
 const Y = PLANT.yogurt;
+/** The palletizer's layers a pallet (phase 24, scene palletLine.ts): 8 trays a layer, 15 layers. */
+const PALLET_LAYERS = 15;
 
 export type FlowState = 'flow' | 'hold' | 'warn' | 'bad' | 'idle' | 'skip';
 
@@ -223,7 +225,20 @@ const READERS: Readonly<Record<YogurtStageId, Readers>> = {
   },
   16: {
     trayPacker: (y) => station(y, `${formatNumber(y.coldChain.trays?.openCups ?? 0)} of ${Y.coldChain.cupsPerTray} cups in the open tray`),
-    palletizer: (y) => station(y, `${formatNumber(y.coldChain.trays?.openTrays ?? 0)} of ${Y.coldChain.traysPerPallet} trays on the pallet`),
+    palletizer: (y) => {
+      const trays = y.coldChain.trays?.openTrays ?? 0;
+      const layer = Math.min(PALLET_LAYERS, Math.floor(trays / (Y.coldChain.traysPerPallet / PALLET_LAYERS)) + 1);
+      return station(y, `layer ${layer} of ${PALLET_LAYERS} · ${formatNumber(trays)} of ${Y.coldChain.traysPerPallet} trays`);
+    },
+    wrapper: (y, s) => {
+      // The newest pallet closed is the last the wrapper took: what is on it, and when it closed (the sim keeps no wrap time).
+      const newest = (y.coldChain.pallets ?? []).reduce<NonNullable<YogurtSnapshot['coldChain']['pallets']>[number] | null>((most, pallet) => (!most || pallet.id > most.id ? pallet : most), null);
+      if (!newest) return { text: 'No pallet yet', state: 'idle' };
+      const agoS = Math.max(0, s.timeS - newest.closedS);
+      const text = `last: pallet ${newest.id} of ${newest.batch}, ${formatNumber(newest.trays)} trays · closed ${formatDuration(agoS)} ago`;
+      // Busy while pallets come: one closes about every 8 min at P8's rate.
+      return { text, state: y.p8.state === 'running' ? 'flow' : 'idle' };
+    },
     warmRoom: (y) => {
       const { pallets, capacity } = y.coldChain.warmRoom;
       if (pallets === 0) return { text: y.product.route === 'set' ? 'Empty' : 'Empty: stirred yogurt skips it', state: y.product.route === 'set' ? 'idle' : 'skip' };

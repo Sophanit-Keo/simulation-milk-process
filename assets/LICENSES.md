@@ -49,6 +49,7 @@ Copied unmodified from the Factory Kit 3.0 zip's `Models/GLB format/` folder (SH
 | `public/models/hero/stretch-wrapper.glb` (turntable stretch wrapper, 2.80 × 2.70 × 2.38 m, 3,108 triangles, 82 KB, baked AO and meshopt) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-11-01 | The `stretch-wrapper`, stage 8 (swapped in by phase 12, lane A) |
 | `public/models/hero/p8-filler.glb` (Line P8 cup filler under its HEPA hood, 10.91 × 2.60 × 1.60 m, 15,288 triangles, 241 KB, baked AO and meshopt) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-11-06 | The `p8-filler`, stage 15 (phase 20) |
 | `public/models/hero/ferment-tank.glb` (10,000 L insulated fermentation tank, 2.81 × 4.70 × 2.85 m, 5,216 triangles, 94 KB, baked AO and meshopt) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-11-06 | `ferment-tank-1` to `-3`, stage 13 (phase 20) |
+| `public/models/hero/yogurt-palletizer.glb` (the yogurt wing's gantry palletizer with its tray infeed, pallet place and dispenser, 3.64 × 3.40 × 3.40 m, 3,292 triangles, 73 KB, baked AO and meshopt) | `assets/scripts/make-heroes.mjs` | Own work; no third-party content | 2026-11-07 | `yogurt-palletizer`, stage 16 (phase 24) |
 
 ## Fonts and libraries in the bundle
 

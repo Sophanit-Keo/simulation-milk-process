@@ -17,6 +17,8 @@ export const HERO_MODELS = {
   // The yogurt wing's (phase 20): Line P8, and the fermentation tank, loaded once for the three.
   p8Filler: 'hero/p8-filler.glb',
   fermentTank: 'hero/ferment-tank.glb',
+  // The wing's gantry palletizer (phase 24); its stretch wrapper loads the UHT line's model.
+  yogurtPalletizer: 'hero/yogurt-palletizer.glb',
 } as const;
 
 export interface HeroSwap<Node extends string> {

@@ -81,7 +81,25 @@ export const REJECT_KICK_XM = 14.45;
 export const TRAY_PACKER: Footprint = { xM: 21, zM: LINE_Z_M };
 /** The belt from P8's last gate to the tray packer. */
 export const OUTFEED = { xMinM: 15.7, xMaxM: 20 } as const;
-export const PALLETIZER: Footprint = { xM: 24.5, zM: LINE_Z_M };
+/** The gantry palletizer (phase 24): the centre of its pallet place, under the gantry, on the line. */
+export const PALLETIZER: Footprint = { xM: 24.8, zM: LINE_Z_M };
+/**
+ * Stage 16's pallet line (phase 24): the tray infeed belt from the packer to the gantry's pick point, the pallet
+ * place's rollers, the empty-pallet dispenser behind it, and the rollers through the stretch wrapper to the end of the
+ * staging row. Pallets stand on the rollers' top, as the UHT line's do (packs/layout.ts PALLET_ROLLER_TOP_M).
+ */
+export const PALLET_LINE = {
+  rollerTopM: 0.25,
+  widthM: 1.1,
+  infeed: { xMinM: 22.0, xMaxM: 23.3, topM: 0.76, widthM: 0.5 },
+  /** Where the gantry picks a tray: the infeed's end, a tray's length short of its last roller. */
+  pickXM: 23.1,
+  /** The dispenser's stack of empty pallets, behind the place, from which a fresh pallet slides on. */
+  dispenserZM: LINE_Z_M - 1.8,
+  /** The rollers from the gantry to the wrapper's turntable, and from the turntable to the staging row's end. */
+  toWrapper: { xMinM: 25.65, xMaxM: 26.95 },
+  outfeed: { xMinM: 29.05, xMaxM: 36.9 },
+} as const;
 export const WRAPPER: Footprint = { xM: 28, zM: LINE_Z_M };
 /** Behind the second line of zone names (z −38.5), so its walls hide none of them from the overview. */
 export const WARM_ROOM = { xMinM: 19.6, xMaxM: 26.4, zMinM: -45, zMaxM: -39, wallM: 3 } as const;

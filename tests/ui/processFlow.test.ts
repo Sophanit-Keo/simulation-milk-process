@@ -75,6 +75,15 @@ describe('the process flow on the live sim', () => {
     expect(dotPeriodS(p8?.rateFrac ?? 0)).toBe(1.6);
   });
 
+  it('reads the palletizer\'s layer and trays and the wrapper\'s last pallet (phase 24)', () => {
+    const sim = createSim(plantConfig);
+    const snap = run(sim, 600, (each) => each.yogurt.p8.state === 'running' && (each.yogurt.coldChain.trays?.openTrays ?? 0) > 8);
+    const trays = snap.yogurt.coldChain.trays?.openTrays ?? 0;
+    expect(textOf(16, snap, 'palletizer')).toBe(`layer ${Math.floor(trays / 8) + 1} of 15 · ${trays} of 120 trays`);
+    expect(textOf(16, snap, 'wrapper')).toMatch(/^last: pallet \d+ of P8-00\d-\d, \d+ trays · closed .+ ago$/);
+    expect(states(16, snap)).toMatchObject({ palletizer: 'flow', wrapper: 'flow' });
+  });
+
   it('on the set route skips the smoothing and the cooler, sends the mix straight to the buffer, and fills the warm room', () => {
     const sim = createSim(plantConfig);
     // Plain set yogurt from 22:00; the wing's CIP and P8's SIP first.

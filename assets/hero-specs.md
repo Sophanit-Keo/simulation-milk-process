@@ -437,3 +437,28 @@ The refrigeration unit on the front wall of the articulated truck's trailer (`pu
 **The extra checks:** P8 leaves the cups' band over the carrier clear (x −4.2 to 5.0, y 1.035 to 1.10, |z| < 0.56) with every station at the bottom of its stroke; its pistons, foil pick, sealing heads and UV tunnel show from the stage-15 camera through the hood; the hood holds every station. The tank's agitator turns on its axis over the drive; the agitator and the pH probe show from the stage-13 camera; the inlet's flange meets its pipe along z, the outlet valve is under the cone, and only the gauge's frame stands proud in the gauge's strip.
 
 **Not built in phase 20, and cut in phase 21:** the 125 g cup and the 24-cup tray (the scene's 1,400-odd instanced cups draw 16 triangles each; at the spec's 80 they would add some 90,000 triangles to the overview), and the reefer unit (the wing's reefers are boxes in one instanced mesh, phase 19; the unit needs the truck model at the wing's dock first).
+
+## Phase 24: the yogurt wing's gantry palletizer
+
+`make-heroes.mjs` builds `yogurt-palletizer.glb` ([phase 24](../plan/agent-plan/phase-24-yogurt-palletizer-wrapper.md)), round the centre of its pallet place on the floor, world (24.8, 0, −47). It replaces phase 19's grey column and arm with a gantry:
+
+- **The frame:** four posts and two beams, 2.05 m up, over the place.
+- **The tray infeed belt:** from the tray packer to the pick point.
+- **The pallet place:** a roller deck, its top at 0.25 m as the UHT line's.
+- **The empty-pallet dispenser:** four corner guides, behind the place.
+
+It is all one painted mesh. The layout is `GANTRY` in the script; the scene's motion (`src/scene/equipment/yogurt/palletLine.ts`) keeps to it, and a test checks the two agree.
+
+| Node | Parent | Rest position (m) | Motion | Driven by |
+|---|---|---|---|---|
+| `bridge` | scene | (−0.60, 2.10, 0) | Along x on the beams, −1.70 (the pick point) to +0.45 | `palletLine.ts` gantry cycle |
+| `trolley` | `bridge` | (0, 0, 0) | Along z on the bridge, ±0.25 (the layer's two rows) | Likewise |
+| `lift` | `trolley` | (0, −0.55, 0), the vacuum head's underside at 1.55 m | Down to a tray on the belt (0.82 m) or its place on the stack (0.44 to 1.24 m), the mast sliding through the trolley | Likewise |
+
+- **Budget:** 3,292 triangles in 4 meshes, 73 KB.
+- **No shadows:** the scene casts none from it, nor from the wing's stretch wrapper, which loads the UHT line's `stretch-wrapper.glb` with the wing's own rollers and film. Each shadow would cost a draw call, and the overview stands at its budget.
+- **`make-heroes.test.mjs` checks:**
+  - the head reaches the pick point and all 8 places of a layer within its travel, between the posts;
+  - the mast stays in the trolley at the bottom of its travel;
+  - the head clears a full stack, with a tray in it, at rest;
+  - the frame leaves the pallet's path clear, from the dispenser onto the place and out along the line.

@@ -24,6 +24,7 @@ const MODEL_NODES: Record<string, readonly string[]> = {
   // The yogurt wing's (phase 20).
   [HERO_MODELS.p8Filler]: ['pistons', 'foil_pick', 'seal_heads', 'hood'],
   [HERO_MODELS.fermentTank]: ['agitator'],
+  [HERO_MODELS.yogurtPalletizer]: ['bridge', 'trolley', 'lift'],
 };
 
 /** A stand-in model: a static body, each moving node with a mesh in it, and glass on the filler. */
@@ -57,7 +58,7 @@ function makeContext(heroModels: boolean, without: readonly string[] = []): Equi
   };
 }
 
-const HERO_IDS = ['separator', 'homogenizer', 'filler-a', 'filler-b', 'palletizer', 'stretch-wrapper', 'p8-filler', 'ferment-tank-1', 'ferment-tank-2', 'ferment-tank-3'] as const;
+const HERO_IDS = ['separator', 'homogenizer', 'filler-a', 'filler-b', 'palletizer', 'stretch-wrapper', 'p8-filler', 'ferment-tank-1', 'ferment-tank-2', 'ferment-tank-3', 'yogurt-palletizer', 'yogurt-wrapper'] as const;
 
 /** What the scene hangs on a model's nodes: the palletizer's lift rod and the tray in its gripper (packsLine.ts). */
 const RIDERS = new Set(['lift-rod', 'carried-tray']);
@@ -95,6 +96,8 @@ describe('hero models (off with ?greybox)', () => {
       'ferment-tank-1': ['milk', 'heldLamp'],
       'ferment-tank-2': ['milk', 'heldLamp'],
       'ferment-tank-3': ['milk', 'heldLamp'],
+      // The wing's wrapper keeps its rollers and its film (phase 24); the gantry's model brings everything.
+      'yogurt-wrapper': ['rollers', 'film'],
     };
     for (const id of HERO_IDS) {
       const item = machines.get(id) as Equipment;
@@ -120,7 +123,9 @@ describe('hero models (off with ?greybox)', () => {
         // Nor do their matte bodies, as the grey boxes' dark parts cast none.
         const wing = id === 'p8-filler' || id.startsWith('ferment-tank');
         const wingPart = wing && (quiet !== null || /_matte$/.test(object.material.name));
-        expect(object.castShadow, `${id} ${object.material.name}`).toBe(!object.material.transparent && !wingPart);
+        // The wing's gantry and its wrapper cast none (phase 24): draw calls.
+        if (id === 'yogurt-palletizer' || id === 'yogurt-wrapper') expect(object.castShadow, `${id} ${object.material.name}`).toBe(false);
+        else expect(object.castShadow, `${id} ${object.material.name}`).toBe(!object.material.transparent && !wingPart);
         expect(object.receiveShadow).toBe(true);
       });
     }

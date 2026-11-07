@@ -108,9 +108,10 @@ const bandTopM = (carriageM: number): number => CARRIAGE_AT_M[1] + carriageM + R
 
 /**
  * The wrap `wrapS` motion seconds after the pallet stopped on the turntable, into `out`; a negative time is no
- * pallet (the turntable at rest), a time past the cycle a pallet wrapped.
+ * pallet (the turntable at rest), a time past the cycle a pallet wrapped. `filmTopM` is the film's top on this load,
+ * from the pallet's underside: the UHT line's by default, the yogurt wing's lower load since phase 24.
  */
-export function wrapPoseAt(wrapS: number, out: WrapPose): WrapPose {
+export function wrapPoseAt(wrapS: number, out: WrapPose, filmTopM: number = FILM_TOP_M): WrapPose {
   if (wrapS < 0) {
     out.phase = 'idle';
     out.turnRad = 0;
@@ -125,9 +126,9 @@ export function wrapPoseAt(wrapS: number, out: WrapPose): WrapPose {
   out.carriageM = carriageAt(t);
   out.web = t < CUT_AT_S;
   // The film reaches as high as the roll's band has been: the base band first, then up with the carriage.
-  const highestM = Math.min(FILM_TOP_M, bandTopM(t < TOP_FROM_S ? out.carriageM : CARRIAGE_TOP_M));
+  const highestM = Math.min(filmTopM, bandTopM(t < TOP_FROM_S ? out.carriageM : CARRIAGE_TOP_M));
   const topM = t < FIRST_TURN_S ? FILM_BOTTOM_M + (highestM - FILM_BOTTOM_M) * ease(t / FIRST_TURN_S) : highestM;
-  out.filmFrac = (topM - FILM_BOTTOM_M) / (FILM_TOP_M - FILM_BOTTOM_M);
+  out.filmFrac = (topM - FILM_BOTTOM_M) / (filmTopM - FILM_BOTTOM_M);
   return out;
 }
 
@@ -176,7 +177,7 @@ const CORNERS: readonly (readonly [number, number])[] = [
  * surface moves as (z, -x) per radian), so the film winds on at the outline corner on the side where that motion
  * pulls film off the roll: of the corners seen from the roll, the one furthest round on that side.
  */
-export function createFilmWeb(): FilmWeb {
+export function createFilmWeb(filmTopM: number = FILM_TOP_M): FilmWeb {
   const positions = new Float32Array(12);
   const normals = new Float32Array(12);
   const geometry = new THREE.BufferGeometry();
@@ -224,7 +225,7 @@ export function createFilmWeb(): FilmWeb {
       const rollBottomM = CARRIAGE_AT_M[1] + pose.carriageM + ROLL_AT_M[1] - ROLL_HEIGHT_M / 2;
       const rollTopM = rollBottomM + ROLL_HEIGHT_M;
       const loadBottomM = Math.max(rollBottomM, PALLET_BOTTOM_M + FILM_BOTTOM_M);
-      const loadTopM = Math.max(loadBottomM, Math.min(rollTopM, PALLET_BOTTOM_M + FILM_TOP_M));
+      const loadTopM = Math.max(loadBottomM, Math.min(rollTopM, PALLET_BOTTOM_M + filmTopM));
       write(0, WEB_X_M, rollBottomM, WEB_Z_M);
       write(1, bestX, loadBottomM, bestZ);
       write(2, bestX, loadTopM, bestZ);
