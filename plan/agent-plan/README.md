@@ -30,6 +30,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 22. Yogurt process flow | after Y3 | process, ui | Each yogurt stage's process flow, step by step, live, in its panel | [Phase 22](phase-22-yogurt-process-flow.md) |
 | 23. Yogurt machines in motion | after Y3 | scene | The yogurt machines show what happens inside them | [Phase 23](phase-23-yogurt-machines-in-motion.md) |
 | 24. Yogurt palletizer & wrapper | after Y3 | assets, scene | The wing's gantry palletizer and stretch wrapper, in detail and in motion | [Phase 24](phase-24-yogurt-palletizer-wrapper.md) |
+| 25. Yogurt process hall in detail | after Y3 | scene | Stages 12–14's machines with their missing parts, and more of them moving | [Phase 25](phase-25-yogurt-process-hall-detail.md) |
 
 ## The agents
 

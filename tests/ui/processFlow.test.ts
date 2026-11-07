@@ -55,13 +55,25 @@ describe('the process flow on the live sim', () => {
     const sim = createSim(plantConfig);
     sim.step(0.1);
     const snap = sim.snapshot();
-    expect(states(13, snap)).toMatchObject({ inoculation: 'idle', setRoute: 'skip', tank1: 'flow', tank2: 'hold', tank3: 'hold' });
+    expect(states(13, snap)).toMatchObject({ inoculation: 'idle', valveMatrix: 'flow', setRoute: 'skip', tank1: 'flow', tank2: 'hold', tank3: 'hold' });
+    expect(textOf(13, snap, 'valveMatrix')).toBe('tank 1 emptying');
+    expect(textOf(12, snap, 'hotWater')).toBe('Standing: no steam');
     expect(Object.values(states(12, snap)).every((state) => state === 'idle' || state === 'skip')).toBe(true);
     expect(states(12, snap).reprocess).toBe('skip');
     expect(states(14, snap)).toMatchObject({ smoothing: 'flow', cooler: 'flow', fruit: 'skip', buffer: 'flow' });
     expect(textOf(14, snap, 'cooler')).toBe('out at 18 °C');
     expect(states(16, snap)).toMatchObject({ warmRoom: 'hold', chiller: 'hold', coldRoom: 'hold' });
     expect(textOf(16, snap, 'coldRoom')).toBe('180 of 360 positions · 3.0 °C');
+  });
+
+  it('reads the hot-water set\'s steam and the valve matrix\'s open valves in production (phase 25)', () => {
+    const sim = createSim(plantConfig);
+    const snap = run(sim, hToS(8), (each) => each.yogurt.heat.mode === 'production' && each.yogurt.heat.flowLph > 0 && each.yogurt.ferment.tanks.some((tank) => tank.state === 'filling'));
+    expect(states(12, snap)).toMatchObject({ heating: 'flow', hotWater: 'flow' });
+    expect(textOf(12, snap, 'hotWater')).toBe(`${Math.round(snap.yogurt.energy?.steamKgPerH ?? 0)} kg/h of steam into the circuit`);
+    const filling = snap.yogurt.ferment.tanks.findIndex((tank) => tank.state === 'filling');
+    expect(states(13, snap).valveMatrix).toBe('flow');
+    expect(textOf(13, snap, 'valveMatrix')).toContain(`tank ${filling + 1} filling`);
   });
 
   it('runs P8\'s stations once it fills, with a reading at each, and a flow rate for the dots', () => {
@@ -102,7 +114,7 @@ describe('the process flow on the live sim', () => {
     expect(states(12, divert)).toMatchObject({ divertValve: 'bad', reprocess: 'bad', cooling: 'idle', holdingCell: 'bad' });
     expect(textOf(12, divert, 'divertValve')).toBe('Diverting: the mix under 85 °C or held too short');
     const cleaning = run(sim, 1_800, (each) => each.yogurt.heat.mode === 'cleaning');
-    expect(states(12, cleaning)).toMatchObject({ divertValve: 'warn', deaerator: 'warn' });
+    expect(states(12, cleaning)).toMatchObject({ divertValve: 'warn', deaerator: 'warn', hotWater: 'warn' });
     expect(textOf(12, cleaning, 'divertValve')).toMatch(/^Cleaning after a divert · \d+ (min|h)/);
   });
 

@@ -24,14 +24,35 @@ export const MIX_TANK = { xM: -48.5, zM: -46, radiusM: 1.05, legsM: 0.6, bodyM: 
 /** Stage 12: deaerator, homogenizer, plate heat exchanger, the holding cell, the divert valve and the reprocess tank. */
 export const DEAERATOR: Footprint = { xM: -41, zM: LINE_Z_M };
 export const HOMOGENIZER: Footprint = { xM: -38.5, zM: LINE_Z_M };
+/** Phase 25: the vacuum gauge's dial on the deaerator's pump, on its face to the aisle. */
+export const DEAERATOR_GAUGE = { xM: DEAERATOR.xM + 0.75, yM: 0.38, zM: DEAERATOR.zM + 0.2 } as const;
+/**
+ * Phase 25: the homogenizer's liquid end in front of its crank case, where the pistons stroke in: its middle. Its top
+ * stands under the pistons' line of sight from the stage's camera, so they stay in view.
+ */
+export const HOMOGENIZER_END = { zM: HOMOGENIZER.zM + 0.9, yM: 1.0, heightM: 0.5 } as const;
+/** Phase 25: the gauges on the liquid end's face, the first stage's and the second's, from the homogenizer's middle. */
+export const HOMOGENIZER_GAUGES = [
+  { name: 'stage1Gauge', dxM: -0.35, yM: 1.1 },
+  { name: 'stage2Gauge', dxM: -0.1, yM: 1.1 },
+] as const;
 /** The plate pack, 2.6 m long: regeneration, heating and cooling sections from west to east. */
 export const PHE = { xM: -35, zM: LINE_Z_M, lengthM: 2.6, depthM: 0.6, heightM: 1.6 } as const;
+/**
+ * Phase 25: the heat exchanger's hot-water set, on the floor east of it before the holding cell's outlet: the tank of
+ * the closed hot-water circuit, its steam valve on top, its pump in front, whose rotor turns on its face to the aisle.
+ */
+export const HOT_WATER_SET = { xM: PHE.xM + PHE.lengthM / 2 + 0.8, tankZM: LINE_Z_M - 0.15, pumpZM: LINE_Z_M + 0.55, valveYM: 1.2 } as const;
 /** The holding cell's frame, round a serpentine of 500 L (H123) drawn by pipes.ts. */
 export const HOLDING_CELL = { xMinM: -37, xMaxM: -33, zMinM: -53.4, zMaxM: -50, heightM: 1.5 } as const;
 /** The serpentine's passes, west to east and back, from its inlet at the north-west to its outlet. */
 export const HOLDING_CELL_PASSES_Z_M = [-50.5, -51.1, -51.7, -52.3, -52.9] as const;
+/** Phase 25: the CCP's temperature recorder, on a post at the holding cell's outlet corner, its chart facing the aisle. */
+export const CCP_RECORDER = { xM: -33.6, yM: 1.25, zM: -49.75, widthM: 0.3, heightM: 0.35 } as const;
 export const DIVERT_VALVE: Footprint = { xM: -31, zM: LINE_Z_M };
 export const REPROCESS_TANK = { xM: -31, zM: -51.8, radiusM: 0.75, legsM: 0.4, bodyM: 1.3 } as const;
+/** Phase 25: the reprocess tank's pump at its foot, east of it; its rotor turns on its east face. */
+export const REPROCESS_PUMP = { xM: REPROCESS_TANK.xM + REPROCESS_TANK.radiusM + 0.55 } as const;
 
 /** Stage 13: the culture dosing pump and the three insulated fermentation tanks. */
 export const CULTURE_PUMP: Footprint = { xM: -27.5, zM: -43 };
@@ -40,12 +61,21 @@ export const FERMENT_TANK = { xsM: [-24, -20, -16], zM: -48.5, radiusM: 1.4, leg
 export const FERMENT_INLET_Z_M = -45.2;
 export const FERMENT_INLET_Y_M = 1.4;
 export const FERMENT_OUTLET_Z_M = -50.6;
+/** Phase 25: the valve matrix: each tank's inlet valve on its branch from the header, its outlet valve under its cone. */
+export const FERMENT_INLET_VALVE_Z_M = -46.15;
+export const FERMENT_OUTLET_VALVE_Z_M = -48.95;
 
 /** Stage 14: the smoothing valve, the plate cooler, the fruit tank and its pump, and the P8 buffer. */
 export const SMOOTHING_VALVE: Footprint = { xM: -11.5, zM: LINE_Z_M };
 export const COOLER = { xM: -9, zM: LINE_Z_M, lengthM: 1.2, depthM: 0.5, heightM: 1.3 } as const;
+/** Phase 25: the cooler's ice-water pump, at its east end in front of the line; its rotor turns on its face to the aisle. */
+export const ICE_WATER_PUMP = { xM: COOLER.xM + COOLER.lengthM / 2 + 0.55, zM: LINE_Z_M + 0.15 } as const;
 export const FRUIT_TANK = { xM: -9, zM: -52, radiusM: 0.7, legsM: 0.4, bodyM: 1.4 } as const;
+/** Phase 25: the fruit preparation's IBC, west of its tank. */
+export const FRUIT_IBC = { xM: FRUIT_TANK.xM - FRUIT_TANK.radiusM - 0.75, zM: FRUIT_TANK.zM } as const;
 export const BUFFER = { xM: -5.5, zM: LINE_Z_M, radiusM: 0.95, legsM: 0.5, bodyM: 1.6 } as const;
+/** Phase 25: the buffer's outlet valve on the feed to P8, just past the buffer; its stem lifts while P8 runs. */
+export const BUFFER_OUTLET_VALVE = { xM: BUFFER.xM + BUFFER.radiusM + 0.3, yM: 0.7, zM: LINE_Z_M } as const;
 
 /** Stage 15: Line P8 under its HEPA hood, its three check gates and the reject bin. */
 export const P8 = { xMinM: 1.5, xMaxM: 11.5, zM: LINE_Z_M, widthM: 1.6, bodyM: 0.95, hoodM: 1.35 } as const;

@@ -1,12 +1,14 @@
 // The yogurt machines in motion (phase 23, src/scene/equipment/yogurt/wingMotion.ts): every part belongs to a machine
 // of the wing, all are one InstancedMesh that casts no shadow and takes no clicks, and each moves, stands or changes
 // colour with the live sim: the mix line's rotors while it mixes, the homogenizer's pistons in production, the tanks'
-// sight glasses with their pH, P8's flashes while it fills, the cold room's fans until its cooling fails.
+// sight glasses with their pH, P8's flashes while it fills, the cold room's fans until its cooling fails. Phase 25 adds
+// the process hall's gauges, valves, pumps and the CCP recorder (stages 12–14).
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Sim, Snapshot } from '../../src/contracts';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment';
 import { DOCK_DOORS_X_M } from '../../src/scene/equipment/yogurt/layout';
+import { wingSphere } from '../../src/scene/equipment/yogurt/coldChainScene';
 import { contentColor, evaporatorXs, wingTempColor } from '../../src/scene/equipment/yogurt/wingMotion';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
 import { createSim } from '../../src/sim';
@@ -87,9 +89,33 @@ describe('the wing\'s moving parts (phase 23)', () => {
     expect(new THREE.Raycaster(new THREE.Vector3(-52, 10, -46), new THREE.Vector3(0, -1, 0)).intersectObject(boxes as THREE.Object3D)).toEqual([]);
     expect(opening.yogurt).toBeDefined();
     // Every machine with parts reports them.
-    for (const id of ['powder-station', 'high-shear-mixer', 'stabilizer-skid', 'yogurt-deaerator', 'yogurt-homogenizer', 'yogurt-phe', 'culture-pump', 'ferment-tank-1', 'smoothing-valve', 'yogurt-cooler', 'fruit-tank', 'p8-filler', 'p8-vision', 'blast-chiller', 'cold-room']) {
+    for (const id of ['powder-station', 'high-shear-mixer', 'stabilizer-skid', 'yogurt-deaerator', 'yogurt-homogenizer', 'yogurt-phe', 'holding-cell', 'reprocess-tank', 'culture-pump', 'ferment-tank-1', 'smoothing-valve', 'yogurt-cooler', 'fruit-tank', 'p8-buffer', 'p8-filler', 'p8-vision', 'blast-chiller', 'cold-room']) {
       expect(Object.keys(w.state(id)).some((key) => key.endsWith('Turns')), id).toBe(true);
     }
+  });
+
+  it('stand inside the mesh\'s bounding sphere, every one, so the camera never culls them at a stage\'s stop (phase 25)', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.heat.mode === 'production' && each.yogurt.heat.flowLph > 0);
+    w.frames(5);
+    const boxes = w.items.get('yogurt-pallets')?.object.getObjectByName('coldChainBoxes') as THREE.InstancedMesh;
+    const sphere = boxes.boundingSphere ?? expect.fail('no bounding sphere');
+    expect(sphere).toEqual(wingSphere());
+    const matrix = new THREE.Matrix4();
+    const at = new THREE.Vector3();
+    let shown = 0;
+    for (let i = 0; i < boxes.count; i++) {
+      boxes.getMatrixAt(i, matrix);
+      // A part not in use now (a pallet line's empty slot) is put away at no size.
+      if (Math.abs(matrix.determinant()) < 1e-15) continue;
+      at.setFromMatrixPosition(matrix);
+      shown++;
+      expect(sphere.distanceToPoint(at), `instance ${i} at ${at.toArray().map((n) => n.toFixed(1)).join(', ')}`).toBeLessThan(-1);
+    }
+    expect(shown).toBeGreaterThan(80);
+    // The silo's corner and the far reefer's tractor too.
+    expect(sphere.containsPoint(new THREE.Vector3(-58, 4, -46))).toBe(true);
+    expect(sphere.containsPoint(new THREE.Vector3(32.5, 3, -82))).toBe(true);
   });
 
   it('as the plant opens: the mixer\'s rotors spin, the chiller\'s and the cold room\'s fans turn, the homogenizer stands; nothing moves while paused', () => {
@@ -162,5 +188,85 @@ describe('the wing\'s moving parts (phase 23)', () => {
     w.sim.dispatch({ type: 'resetScenarios' });
     w.frames(3);
     expect(w.state('cold-room')).toMatchObject({ fan1Moving: true });
+  });
+});
+
+describe('the process hall\'s gauges, valves and pumps (phase 25)', () => {
+  const OPEN = '#34c759';
+  const CLEAN = '#ffd84a';
+  const SHUT = '#30363c';
+  const num = (w: Wing, id: string, key: string): number => Number(w.state(id)[key]);
+
+  it('as the plant opens: tank 1 empties through its open outlet valve, the buffer\'s valve opens while P8 runs, the heat treatment\'s gauges rest', () => {
+    const w = wing();
+    const snap = w.frames(20);
+    expect(snap.yogurt.ferment.tanks.map((tank) => tank.state)).toEqual(['emptying', 'ready', 'fermenting']);
+    expect(w.state('ferment-tank-1')).toMatchObject({ outletValveLift: 1, outletValveColor: OPEN, inletValveLift: 0, inletValveColor: SHUT });
+    for (const id of ['ferment-tank-2', 'ferment-tank-3']) expect(w.state(id), id).toMatchObject({ outletValveLift: 0, inletValveLift: 0, outletValveColor: SHUT });
+    expect(w.state('p8-buffer')).toMatchObject({ outletValveLift: 1, outletValveColor: OPEN });
+    // Nothing is heated yet: no vacuum, no pressure, no steam.
+    expect(w.state('yogurt-deaerator')).toMatchObject({ vacuumGaugeReading: 0, vacuumGaugeLift: 0 });
+    expect(w.state('yogurt-homogenizer')).toMatchObject({ stage1GaugeReading: 0, flywheelMoving: false });
+    expect(w.state('yogurt-phe')).toMatchObject({ hotWaterPumpMoving: false, steamValveLift: 0, steamValveReading: 0 });
+    // The cooler cools what tank 1 sends to the buffer.
+    expect(w.state('yogurt-cooler')).toMatchObject({ iceWaterPumpMoving: true });
+    // Once tank 1 is emptied its clean opens both its valves, amber.
+    runUntil(w, (each) => each.yogurt.ferment.tanks[0]?.state === 'cleaning');
+    w.frames(20);
+    expect(w.state('ferment-tank-1')).toMatchObject({ outletValveLift: 1, inletValveLift: 1, outletValveColor: CLEAN, inletValveColor: CLEAN });
+  });
+
+  it('in production: the gauges read the vacuum and both stages, the flywheel turns with the pistons, steam lifts its valve, the pen writes 92 °C', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.heat.mode === 'production' && each.yogurt.heat.flowLph > 0 && each.yogurt.ferment.tanks.some((tank) => tank.state === 'filling'));
+    const snap = w.frames(30);
+    expect(w.state('yogurt-deaerator')).toMatchObject({ vacuumGaugeReading: 0.8, vacuumGaugeLift: 0.8, vacuumGaugeMoving: false, vacuumGaugeColor: '#c8352a' });
+    // 180 bar on a 250 bar scale; the second stage at the UHT's share of the first (30 of 200 bar).
+    expect(w.state('yogurt-homogenizer')).toMatchObject({ stage1GaugeReading: 180, stage1GaugeLift: 0.72, stage2GaugeReading: 27, stage2GaugeLift: 0.108 });
+    expect(w.state('yogurt-homogenizer')).toMatchObject({ flywheelMoving: true });
+    expect(num(w, 'yogurt-homogenizer', 'flywheelTurns')).toBe(num(w, 'yogurt-homogenizer', 'piston1Turns'));
+    const steamKgPerH = snap.yogurt.energy?.steamKgPerH ?? 0;
+    expect(steamKgPerH).toBeGreaterThan(200);
+    expect(w.state('yogurt-phe')).toMatchObject({ hotWaterPumpMoving: true, steamValveColor: CLEAN });
+    expect(num(w, 'yogurt-phe', 'steamValveReading')).toBeCloseTo(steamKgPerH, 0);
+    // About 255 kg/h lifts the stem all the way: 6,000 L/h from 68 to 92 °C.
+    expect(num(w, 'yogurt-phe', 'steamValveLift')).toBeCloseTo(steamKgPerH / 255.3, 2);
+    // The chart spans 80–95 °C: 92 °C writes four fifths across, in blue.
+    expect(w.state('holding-cell')).toMatchObject({ recorderPenReading: 92, recorderPenLift: 0.8, recorderPenColor: '#2b5fa8', chartLine1Moving: true });
+    // The tank that fills has its inlet valve open.
+    const filling = snap.yogurt.ferment.tanks.findIndex((tank) => tank.state === 'filling');
+    expect(w.state(`ferment-tank-${filling + 1}`)).toMatchObject({ inletValveLift: 1, inletValveColor: OPEN, outletValveLift: 0 });
+  });
+
+  it('in an under-temperature divert the pen falls under the limit, in red; the clean then pumps the reprocess tank out', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.heat.mode === 'production' && each.yogurt.heat.flowLph > 0);
+    w.sim.dispatch({ type: 'triggerScenario', id: 'yogurtHeatUnderTemp' });
+    runUntil(w, (each) => each.yogurt.heat.mode === 'divert' && each.yogurt.heat.outletC < 84);
+    const snap = w.frames(20);
+    expect(w.state('holding-cell').recorderPenColor).toBe('#d63b26');
+    expect(num(w, 'holding-cell', 'recorderPenReading')).toBeCloseTo(snap.yogurt.heat.outletC, 1);
+    expect(num(w, 'holding-cell', 'recorderPenLift')).toBeLessThan((85 - 80) / 15);
+    expect(w.state('reprocess-tank')).toMatchObject({ reprocessPumpMoving: false });
+    runUntil(w, (each) => each.yogurt.heat.mode === 'cleaning' && each.yogurt.heat.reprocessTank.levelL > 0);
+    w.frames(5);
+    expect(w.state('reprocess-tank')).toMatchObject({ reprocessPumpMoving: true });
+    expect(num(w, 'reprocess-tank', 'reprocessPumpTurns')).toBeGreaterThan(0);
+  });
+
+  it('stands every needle, stem and pen where it is while paused, half way if it was moving', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.heat.mode === 'production' && each.yogurt.heat.flowLph > 0);
+    w.frames(3);
+    const lift = num(w, 'yogurt-homogenizer', 'stage1GaugeLift');
+    expect(lift).toBeGreaterThan(0);
+    expect(lift).toBeLessThan(0.72);
+    w.sim.dispatch({ type: 'pause', paused: true });
+    w.frames(10);
+    expect(num(w, 'yogurt-homogenizer', 'stage1GaugeLift')).toBe(lift);
+    expect(w.state('yogurt-homogenizer')).toMatchObject({ stage1GaugeMoving: false });
+    w.sim.dispatch({ type: 'pause', paused: false });
+    w.frames(30);
+    expect(num(w, 'yogurt-homogenizer', 'stage1GaugeLift')).toBe(0.72);
   });
 });

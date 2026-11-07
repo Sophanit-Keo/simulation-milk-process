@@ -142,6 +142,12 @@ const READERS: Readonly<Record<YogurtStageId, Readers>> = {
     deaerator: (y) => heatStep(y, lph(y.heat.flowLph)),
     homogenizer: (y, s) => heatStep(y, withUnit(formatNumber(s.stages[12].values.homogenizerBar ?? Y.homogenizer.bar), 'bar')),
     heating: (y) => heatStep(y, `out at ${degC(y.heat.outletC)}`),
+    // Phase 25: the steam the hot-water set takes, which the 3D view's steam valve opens to.
+    hotWater: (y) => {
+      const steamKgPerH = y.energy?.steamKgPerH ?? 0;
+      if (steamKgPerH > 0) return { text: `${withUnit(formatNumber(steamKgPerH), 'kg/h')} of steam into the circuit`, state: 'flow' };
+      return y.heat.mode === 'cleaning' ? { text: 'Cleaning in place (the wing\'s CIP)', state: 'warn' } : { text: 'Standing: no steam', state: 'idle' };
+    },
     holdingCell: (y) => heatStep(y, `${formatDuration(y.heat.holdS)} · ${pct(y.heat.denatPct)} of the whey protein denatured`),
     divertValve: (y) => {
       switch (y.heat.mode) {
@@ -171,6 +177,13 @@ const READERS: Readonly<Record<YogurtStageId, Readers>> = {
       y.heat.mode === 'production' && y.heat.flowLph > 0
         ? { text: `${lph(y.heat.flowLph)} at ${degC(y.ferment.tempC, 0)}`, state: 'flow' }
         : { text: 'No mix to inoculate', state: 'idle' },
+    // Phase 25: the valves the 3D view opens, the tank that fills, the one that empties and any that cleans.
+    valveMatrix: (y) => {
+      const open = y.ferment.tanks.flatMap((tank, i) => (tank.state === 'filling' || tank.state === 'emptying' || tank.state === 'cleaning' ? [`tank ${i + 1} ${tank.state}`] : []));
+      if (open.length === 0) return y.product.route === 'set' ? { text: 'All shut: set yogurt passes the tanks by', state: 'skip' } : { text: 'All shut', state: 'idle' };
+      const moving = y.ferment.tanks.some((tank) => tank.state === 'filling' || tank.state === 'emptying');
+      return { text: open.join(' · '), state: moving ? 'flow' : 'warn' };
+    },
     setRoute: (y) => {
       if (y.product.route !== 'set') return { text: 'Not this shift: its yogurt is stirred', state: 'skip' };
       return y.heat.mode === 'production' ? { text: 'Set mix to the buffer, warm', state: 'flow' } : { text: 'Set yogurt this shift; no mix flows', state: 'idle' };

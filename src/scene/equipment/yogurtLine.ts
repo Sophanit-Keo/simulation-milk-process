@@ -96,6 +96,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
       domeM: 0.2,
       fill: yogurtFill((y) => y.heat.reprocessTank),
       labelText: (s) => labelValue(stageValue(s, 12, 'reprocessLevelL'), 0, 'L'),
+      detail: reprocessPump,
     }),
     culturePump(kit),
     ...at.FERMENT_TANK.xsM.map((xM, i) =>
@@ -132,6 +133,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
       domeM: 0.25,
       drive: true,
       stir: (s) => (yogurtOf(s)?.buffer.fruitDosePct ?? 0) > 0,
+      detail: fruitIbc,
       labelText: (s) => {
         const pct = labelValue(stageValue(s, 14, 'fruitDosePct'), 0, '%');
         return pct && `${pct} dosed`;
@@ -145,6 +147,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
       domeM: 0.3,
       fill: yogurtFill((y) => y.buffer),
       labelText: (s) => labelValue(stageValue(s, 14, 'levelPct'), 0, '%'),
+      detail: bufferFittings,
     }),
     p8Filler(kit, carrier, ctx),
     // The gates stand 1.1 m apart, so their labels stand at three heights, one above the other at the stage's stop.
@@ -189,6 +192,11 @@ interface VesselSpec {
   held?: (snapshot: Snapshot) => boolean;
   labelText?: MachineSpec['labelText'];
   labelRing?: MachineSpec['labelRing'];
+  /**
+   * The vessel's own fittings (phase 25): a pump, a filter, a container beside it. Drawn in the vessel's materials, its
+   * dark steel unshadowed or its steel shadowed, so they join its meshes and cost no draw call.
+   */
+  detail?: (b: MachineBuilder) => void;
 }
 
 /**
@@ -213,6 +221,7 @@ function vessel(kit: Kit, spec: VesselSpec): Equipment {
   }
   let agitator: THREE.Object3D | undefined = spec.drive && spec.stir ? b.mesh('agitator', 'box', 'steelDark', [xM, topM + 0.03, zM], [Math.min(1.1, radiusM), 0.06, 0.12]) : undefined;
   if (agitator) topM += 0.06;
+  spec.detail?.(b);
   const level = spec.fill && levelGauge(b, [xM, 0, zM + radiusM + 0.02], bodyBottomM + 0.1, bodyM - 0.2, 0.1, spec.fill);
   // The hold lamp (phase 20): over the pH probe on the +x, +z side, shown only while the tank is held.
   const heldSpec = spec.held;
@@ -374,6 +383,15 @@ function deaerator(kit: Kit): Equipment {
     b.part('cyl', 'steel', [xM, 1.55, zM], [0.5, 1.5, 0.5], { castShadow: true });
     b.part('dome', 'steel', [xM, 2.3, zM], [0.5, 0.25, 0.5], { castShadow: true });
     b.part('box', 'steelDark', [xM + 0.75, 0.3, zM], [0.5, 0.6, 0.4]); // vacuum pump
+    // Phase 25: the vapour condenser on the dome, the vacuum line behind the product pipe down to the pump, the pump's
+    // motor, the tangential inlet on the camera's side, a level transmitter, and the vacuum gauge's dial on the pump.
+    b.part('cylLo', 'steel', [xM, 2.68, zM], [0.14, 0.36, 0.14], { castShadow: true });
+    b.part('cylLo', 'steelDark', [xM + 0.38, 2.6, zM - 0.15], [0.03, 0.76, 0.03], { rotationRad: [0, 0, Math.PI / 2] });
+    b.part('cylLo', 'steelDark', [xM + 0.75, 1.6, zM - 0.15], [0.03, 2.0, 0.03]);
+    b.part('cylLo', 'steelDark', [xM + 0.75, 0.28, zM - 0.33], [0.13, 0.26, 0.13], { rotationRad: [Math.PI / 2, 0, 0] });
+    b.part('cylLo', 'steelDark', [xM, 1.95, zM + 0.58], [0.06, 0.18, 0.06], { rotationRad: [Math.PI / 2, 0, 0] });
+    b.part('box', 'steelDark', [xM - 0.53, 1.3, zM + 0.1], [0.06, 0.55, 0.06]);
+    b.part('cylLo', 'steelDark', [at.DEAERATOR_GAUGE.xM, at.DEAERATOR_GAUGE.yM, at.DEAERATOR_GAUGE.zM - 0.02], [0.08, 0.04, 0.08], { rotationRad: [Math.PI / 2, 0, 0] });
   });
 }
 
@@ -389,6 +407,20 @@ function homogenizer(kit: Kit): Equipment {
     (b) => {
       body(b, xM, zM, [1.4, 1.0, 0.9]);
       b.part('box', 'steelDark', [xM, 1.15, zM], [1.2, 0.3, 0.6]); // the crank case and pistons
+      // Phase 25: the motor and belt guard behind, the liquid end the pistons stroke into (its front at the camera),
+      // the two-stage homogenizing valve with its hydraulic actuators, the gauges' dials, a drip tray, the control box.
+      b.part('box', 'paint', [xM, 0.32, zM - 0.68], [0.9, 0.64, 0.42]);
+      b.part('box', 'paint', [xM - 0.78, 0.78, zM - 0.5], [0.12, 0.7, 0.38]);
+      const end = at.HOMOGENIZER_END;
+      b.part('box', 'steelDark', [xM, end.yM, end.zM], [1.0, end.heightM, 0.2]);
+      b.part('box', 'steelDark', [xM, 0.8, (zM + 0.45 + end.zM - 0.1) / 2], [0.9, 0.1, end.zM - 0.1 - zM - 0.45]);
+      b.part('box', 'steelDark', [xM + 0.38, end.yM + end.heightM / 2 + 0.11, end.zM], [0.28, 0.22, 0.2]);
+      for (const dx of [0.3, 0.46]) b.part('cylLo', 'steelDark', [xM + dx, end.yM + end.heightM / 2 + 0.35, end.zM], [0.05, 0.26, 0.05]);
+      for (const gauge of at.HOMOGENIZER_GAUGES) b.part('cylLo', 'steelDark', [xM + gauge.dxM, gauge.yM, end.zM + 0.12], [0.08, 0.04, 0.08], { rotationRad: [Math.PI / 2, 0, 0] });
+      b.part('box', 'steelDark', [xM, 0.04, end.zM - 0.15], [1.3, 0.08, 0.3]);
+      const underM = end.yM - end.heightM / 2 - 0.08;
+      for (const dx of [-0.42, 0.42]) b.part('box', 'steelDark', [xM + dx, 0.08 + underM / 2, end.zM], [0.06, underM, 0.06]);
+      b.part('box', 'paint', [xM + 0.75, 0.75, zM + 0.3], [0.1, 0.5, 0.35]);
     },
     (s) => labelValue(stageValue(s, 12, 'homogenizerBar'), 0, 'bar'),
   );
@@ -411,7 +443,28 @@ function plateHeatExchanger(kit: Kit): Equipment {
       for (let i = 0; i < 3; i++) {
         const cxM = xM - lengthM / 2 + 0.05 + packM / 2 + i * (packM + 0.1);
         b.part('box', 'steel', [cxM, heightM / 2 + 0.05, zM], [packM, heightM - 0.3, depthM]);
+        // Phase 25: the plates' edges down the pack's front, every 6 cm.
+        for (let px = cxM - packM / 2 + 0.04; px < cxM + packM / 2 - 0.02; px += 0.06) b.part('box', 'steelDark', [px, 0.78, zM + depthM / 2 + 0.005], [0.012, 0.95, 0.01]);
+        // The connector plate after the pack, between it and the next section.
+        if (i < 2) b.part('box', 'steelDark', [cxM + packM / 2 + 0.05, heightM / 2, zM], [0.06, heightM - 0.1, depthM + 0.04]);
       }
+      // The bottom guide bar, the four tie bolts along the frame, the ports on the fixed head (west).
+      b.part('box', 'steelDark', [xM, 0.12, zM], [lengthM + 0.2, 0.08, 0.1]);
+      for (const yM of [0.35, 1.35]) for (const dz of [-0.38, 0.38]) b.part('cylLo', 'steelDark', [xM, yM, zM + dz], [0.025, lengthM + 0.3, 0.025], { rotationRad: [0, 0, Math.PI / 2] });
+      for (const yM of [0.45, 1.25]) for (const dz of [-0.15, 0.15]) b.part('cylLo', 'steelDark', [xM - lengthM / 2 - 0.18, yM, zM + dz], [0.05, 0.16, 0.05], { rotationRad: [0, 0, Math.PI / 2] });
+      // The hot-water set east of it: the circuit's tank, piped into the movable head, the steam valve on the tank with
+      // its actuator and the steam line from behind, and the circulation pump in front.
+      const hot = at.HOT_WATER_SET;
+      const headXM = xM + lengthM / 2 + 0.05;
+      b.part('cyl', 'steel', [hot.xM, 0.55, hot.tankZM], [0.25, 1.1, 0.25]);
+      b.part('cylLo', 'steelDark', [(headXM + hot.xM - 0.25) / 2, 0.45, hot.tankZM], [0.035, hot.xM - 0.25 - headXM, 0.035], { rotationRad: [0, 0, Math.PI / 2] });
+      b.part('cylLo', 'steelDark', [(headXM + hot.xM - 0.25) / 2, 1.0, hot.tankZM], [0.035, hot.xM - 0.25 - headXM, 0.035], { rotationRad: [0, 0, Math.PI / 2] });
+      b.part('box', 'steelDark', [hot.xM, hot.valveYM, hot.tankZM], [0.18, 0.18, 0.18]);
+      b.part('cylLo', 'steelDark', [hot.xM, hot.valveYM + 0.19, hot.tankZM], [0.08, 0.2, 0.08]);
+      b.part('cylLo', 'steelDark', [hot.xM, hot.valveYM, hot.tankZM - 0.45], [0.035, 0.72, 0.035], { rotationRad: [Math.PI / 2, 0, 0] });
+      b.part('cylLo', 'steelDark', [hot.xM, hot.valveYM + 0.6, hot.tankZM - 0.8], [0.035, 1.2, 0.035]);
+      b.part('box', 'paint', [hot.xM, 0.18, hot.pumpZM], [0.34, 0.36, 0.3]);
+      b.part('cylLo', 'steelDark', [hot.xM, 0.2, (hot.tankZM + 0.25 + hot.pumpZM - 0.15) / 2], [0.035, hot.pumpZM - 0.15 - hot.tankZM - 0.25, 0.035], { rotationRad: [Math.PI / 2, 0, 0] });
     },
     (s) => labelValue(stageValue(s, 12, 'tempC'), 1, '°C'),
   );
@@ -435,6 +488,9 @@ function holdingCell(kit: Kit): Equipment {
         b.part('box', 'steelDark', [px, heightM, zM], [0.08, 0.08, zMaxM - zMinM]);
       }
       for (const pz of [zMinM, zMaxM]) b.part('box', 'steelDark', [xM, heightM, pz], [xMaxM - xMinM, 0.08, 0.08]);
+      // Phase 25: the CCP's temperature recorder at the outlet, on its post, its chart facing the aisle.
+      b.part('box', 'steelDark', [at.CCP_RECORDER.xM, at.CCP_RECORDER.yM / 2, at.CCP_RECORDER.zM - 0.08], [0.06, at.CCP_RECORDER.yM, 0.06]);
+      b.part('box', 'steelDark', [at.CCP_RECORDER.xM, at.CCP_RECORDER.yM, at.CCP_RECORDER.zM - 0.04], [at.CCP_RECORDER.widthM + 0.06, at.CCP_RECORDER.heightM + 0.06, 0.08]);
     },
     (s) => labelValue(stageValue(s, 12, 'holdS'), 0, 's'),
   );
@@ -507,12 +563,42 @@ function divertValve(kit: Kit): Equipment {
 
 /* stage 13: the culture dosing pump (the tanks are vessels) */
 
+/** Phase 25: the reprocess tank's pump at its foot, east of it, which sends the diverted mix to rework in the clean. */
+function reprocessPump(b: MachineBuilder): void {
+  const { xM, zM, radiusM } = at.REPROCESS_TANK;
+  b.part('cylLo', 'steelDark', [xM + radiusM + 0.1, 0.22, zM], [0.04, 0.5, 0.04], { rotationRad: [0, 0, Math.PI / 2] });
+  b.part('box', 'steelDark', [at.REPROCESS_PUMP.xM, 0.2, zM], [0.4, 0.34, 0.3]);
+}
+
+/** Phase 25: the fruit preparation's IBC on its pallet, west of the tank, which the tank is filled from. */
+function fruitIbc(b: MachineBuilder): void {
+  const { xM, zM } = at.FRUIT_IBC;
+  b.part('box', 'steelDark', [xM, 0.07, zM], [1.0, 0.14, 1.0]);
+  b.part('box', 'steel', [xM, 0.6, zM], [0.92, 0.92, 0.92], { castShadow: true });
+  for (const yM of [0.36, 0.7, 1.06]) b.part('box', 'steelDark', [xM, yM, zM + 0.47], [0.98, 0.03, 0.02]);
+  b.part('cylLo', 'steelDark', [xM, 1.1, zM], [0.12, 0.08, 0.12]);
+  b.part('cylLo', 'steelDark', [xM + 0.3, 0.24, zM + 0.5], [0.05, 0.1, 0.05], { rotationRad: [Math.PI / 2, 0, 0] });
+}
+
+/** Phase 25: the buffer's sterile-air filter and its pressure transmitter on the dome (P8 draws under pressure). */
+function bufferFittings(b: MachineBuilder): void {
+  const { xM, zM, legsM, bodyM } = at.BUFFER;
+  const topM = legsM + bodyM;
+  b.part('cylLo', 'steelDark', [xM - 0.35, topM + 0.45, zM - 0.3], [0.08, 0.4, 0.08]);
+  b.part('cylLo', 'steelDark', [xM - 0.35, topM + 0.68, zM - 0.3], [0.05, 0.06, 0.05]);
+  b.part('box', 'steelDark', [xM + 0.3, topM + 0.33, zM + 0.25], [0.08, 0.16, 0.08]);
+}
+
 function culturePump(kit: Kit): Equipment {
   const { xM, zM } = at.CULTURE_PUMP;
   return fixture(kit, 'culture-pump', 13, 'Culture dosing', [xM, zM], 1.4, (b) => {
     b.part('box', 'steelDark', [xM, 0.08, zM], [1.2, 0.16, 0.8]);
     b.part('cylLo', 'steel', [xM - 0.25, 0.65, zM], [0.28, 0.9, 0.28]); // the culture vessel
     b.part('box', 'steelDark', [xM + 0.35, 0.35, zM], [0.4, 0.38, 0.35]); // the dosing pump
+    // Phase 25: the freezer chest of frozen culture beside it, its lid and handle.
+    b.part('box', 'steel', [xM - 1.15, 0.4, zM], [0.8, 0.8, 0.55]);
+    b.part('box', 'steelDark', [xM - 1.15, 0.82, zM], [0.82, 0.04, 0.57]);
+    b.part('box', 'steelDark', [xM - 1.15, 0.7, zM + 0.29], [0.4, 0.04, 0.03]);
   });
 }
 
@@ -524,6 +610,9 @@ function smoothingValve(kit: Kit): Equipment {
     b.part('cylLo', 'steel', [xM, at.PIPE_Y_M, zM], [0.22, 0.9, 0.22], { rotationRad: [0, 0, Math.PI / 2] });
     b.part('box', 'steelDark', [xM, 1.15, zM], [0.25, 0.25, 0.25]);
     b.part('cylLo', 'steelDark', [xM, at.PIPE_Y_M / 2, zM], [0.05, at.PIPE_Y_M, 0.05]);
+    // Phase 25: the strainer before it, a basket housing under the line with its drain.
+    b.part('cylLo', 'steel', [xM - 0.67, at.PIPE_Y_M - 0.22, zM], [0.1, 0.34, 0.1]);
+    b.part('cylLo', 'steelDark', [xM - 0.67, at.PIPE_Y_M - 0.45, zM], [0.03, 0.12, 0.03]);
   });
 }
 
@@ -540,6 +629,13 @@ function plateCooler(kit: Kit): Equipment {
       for (const dx of [-lengthM / 2, lengthM / 2]) b.part('box', 'paint', [xM + dx, heightM / 2, zM], [0.1, heightM, depthM + 0.1]);
       b.part('box', 'steel', [xM, heightM / 2 + 0.05, zM], [lengthM - 0.1, heightM - 0.2, depthM]);
       b.part('box', 'steelDark', [xM, heightM + 0.05, zM], [lengthM + 0.1, 0.1, depthM + 0.1]);
+      // Phase 25: the plates' edges, the tie bolts, the ice-water ports on the back, and the ice-water pump behind it.
+      for (let px = xM - lengthM / 2 + 0.1; px < xM + lengthM / 2 - 0.06; px += 0.06) b.part('box', 'steelDark', [px, heightM / 2 - 0.05, zM + depthM / 2 + 0.005], [0.012, heightM - 0.45, 0.01]);
+      for (const yM of [0.3, heightM - 0.2]) for (const dz of [-0.33, 0.33]) b.part('cylLo', 'steelDark', [xM, yM, zM + dz], [0.022, lengthM + 0.2, 0.022], { rotationRad: [0, 0, Math.PI / 2] });
+      for (const yM of [0.35, heightM - 0.35]) b.part('cylLo', 'steelDark', [xM + lengthM / 2 - 0.25, yM, zM - depthM / 2 - 0.08], [0.05, 0.16, 0.05], { rotationRad: [Math.PI / 2, 0, 0] });
+      const pump = at.ICE_WATER_PUMP;
+      b.part('box', 'paint', [pump.xM, 0.18, pump.zM], [0.3, 0.36, 0.28]);
+      b.part('cylLo', 'steelDark', [(xM + lengthM / 2 + 0.05 + pump.xM - 0.15) / 2, 0.22, pump.zM], [0.03, pump.xM - 0.15 - xM - lengthM / 2 - 0.05, 0.03], { rotationRad: [0, 0, Math.PI / 2] });
     },
     (s) => {
       const tempC = finite(yogurtOf(s)?.buffer.coolerOutletC);
