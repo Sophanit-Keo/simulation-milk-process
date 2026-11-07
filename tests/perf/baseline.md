@@ -424,6 +424,14 @@ Measured on 7 November 2026 the same way as phase 25, with no console errors.
   - The yogurt stops read as in phase 25.
   - Stops 2 and 3 read 2 and 1 more. No machine has more meshes, so these are likely meshes whose bounds, grown with their fittings, now reach the edge of those views. This was not checked mesh by mesh.
 
+### Phase 27: the yogurt homogenizer, rebuilt
+
+Measured on 7 November 2026 the same way as phase 26, with no console errors.
+
+- **The overview:** **350** draw calls and **389,490** triangles, within the budget. The homogenizer is still two meshes, and its pistons, collars, flywheel and needles are instances in the shared box mesh.
+- **The stops:** 161 (1), 146 (2), 145 (3), 149 (4), 148 (5), 164 (6), 153 (7), 153 (8), 170 (9), 166 (10), 129 (11), 133 (12), 133 (13), 127 (14), 132 (15) and 141 (16) draw calls.
+  - These read as in phase 26 but for stop 3, one more. That is likely the rebuilt homogenizer's meshes, which now reach further, at the edge of that view. This was not checked mesh by mesh.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

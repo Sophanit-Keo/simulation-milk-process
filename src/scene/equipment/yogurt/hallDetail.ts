@@ -76,7 +76,7 @@ function stage12(): Part[] {
   parts.push(face('yogurt-homogenizer', 'stopPlate', panel.xM + 0.09, 0.9, faceZM, 0.08, 0.08, fixed(HEX.flash)));
   parts.push({ machine: 'yogurt-homogenizer', name: 'stopButton', ratePerS: 0, pose: plate(panel.xM + 0.09, 0.9, faceZM + 0.015, 0.045, 0.045, 0.03), speed: still, color: fixed(HEX.bad) });
   const lube = at.HOMOGENIZER_LUBE;
-  parts.push({ machine: 'yogurt-homogenizer', name: 'oilGlass', ratePerS: 0, pose: plate(lube.xM + 0.128, 0.35, lube.zM, 0.006, 0.09, 0.05), speed: still, color: fixed(HEX.oil) });
+  parts.push({ machine: 'yogurt-homogenizer', name: 'oilGlass', ratePerS: 0, pose: plate(lube.xM, 0.35, lube.zM + 0.154, 0.05, 0.09, 0.006), speed: still, color: fixed(HEX.oil) });
   // The heat exchanger's nameplate on its movable head; the hot-water controller's display, in the heating's colour.
   const phe = at.PHE;
   parts.push({ machine: 'yogurt-phe', name: 'nameplate', ratePerS: 0, pose: plate(phe.xM + phe.lengthM / 2 + 0.103, 1.25, phe.zM, 0.006, 0.12, 0.22), speed: still, color: fixed(HEX.nameplate) });

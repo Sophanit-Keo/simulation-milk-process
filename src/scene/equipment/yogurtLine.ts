@@ -409,8 +409,14 @@ function deaerator(kit: Kit): Equipment {
   });
 }
 
+/**
+ * The homogenizer, laid out as the UHT line's model (phase 27, HOMOGENIZER_FRAME): its pistons, collars, flywheel,
+ * gauge needles, screen and lamps are the motion's (wingMotion.ts, hallDetail.ts). Its grey parts are two meshes, its
+ * paint and its dark steel, as before.
+ */
 function homogenizer(kit: Kit): Equipment {
   const { xM, zM } = at.HOMOGENIZER;
+  const f = at.HOMOGENIZER_FRAME;
   return fixture(
     kit,
     'yogurt-homogenizer',
@@ -419,32 +425,52 @@ function homogenizer(kit: Kit): Equipment {
     [xM, zM],
     1.35,
     (b) => {
-      body(b, xM, zM, [1.4, 1.0, 0.9]);
-      b.part('box', 'steelDark', [xM, 1.15, zM], [1.2, 0.3, 0.6]); // the crank case and pistons
-      // Phase 25: the motor and belt guard behind, the liquid end the pistons stroke into (its front at the camera),
-      // the two-stage homogenizing valve with its hydraulic actuators, the gauges' dials, a drip tray, the control box.
-      b.part('box', 'paint', [xM, 0.32, zM - 0.68], [0.9, 0.64, 0.42]);
-      b.part('box', 'paint', [xM - 0.78, 0.78, zM - 0.5], [0.12, 0.7, 0.38]);
-      const end = at.HOMOGENIZER_END;
-      b.part('box', 'steelDark', [xM, end.yM, end.zM], [1.0, end.heightM, 0.2]);
-      b.part('box', 'steelDark', [xM, 0.8, (zM + 0.45 + end.zM - 0.1) / 2], [0.9, 0.1, end.zM - 0.1 - zM - 0.45]);
-      b.part('box', 'steelDark', [xM + 0.38, end.yM + end.heightM / 2 + 0.11, end.zM], [0.28, 0.22, 0.2]);
-      for (const dx of [0.3, 0.46]) b.part('cylLo', 'steelDark', [xM + dx, end.yM + end.heightM / 2 + 0.35, end.zM], [0.05, 0.26, 0.05]);
-      for (const gauge of at.HOMOGENIZER_GAUGES) b.part('cylLo', 'steelDark', [xM + gauge.dxM, gauge.yM, end.zM + 0.12], [0.08, 0.04, 0.08], { rotationRad: [Math.PI / 2, 0, 0] });
-      b.part('box', 'steelDark', [xM, 0.04, end.zM - 0.15], [1.3, 0.08, 0.3]);
-      const underM = end.yM - end.heightM / 2 - 0.08;
-      for (const dx of [-0.42, 0.42]) b.part('box', 'steelDark', [xM + dx, 0.08 + underM / 2, end.zM], [0.06, underM, 0.06]);
-      // Phase 26: the control cabinet east of it (its screen, lamps and stop are the motion's), louvres on its east end,
-      // the lube-oil unit behind that end with its cooler, and the motor's cooling fins and terminal box.
+      const p = (dx: number, yM: number, dz: number): [number, number, number] => [xM + dx, yM, zM + dz];
+      const along = (from: number, to: number): [number, number] => [(from + to) / 2, to - from];
+      // The base frame under the crankcase and the liquid end, and the crankcase on it with its top cover.
+      const [baseZ, baseD] = along(f.crankBackM - 0.1, f.endFrontM);
+      b.part('box', 'steelDark', p(0, 0.06, baseZ), [f.crankHalfXM * 2 + 0.2, 0.12, baseD]);
+      const [crankZ, crankD] = along(f.crankBackM, f.crankFrontM);
+      b.part('box', 'paint', p(0, (0.12 + f.crankTopM) / 2, crankZ), [f.crankHalfXM * 2, f.crankTopM - 0.12, crankD]);
+      b.part('box', 'steelDark', p(0, f.crankTopM + 0.015, crankZ), [f.crankHalfXM * 2 - 0.2, 0.03, crankD - 0.14]);
+      // The inspection cover over the gap, and a seal cover where each piston leaves the crankcase.
+      b.part('box', 'steelDark', p(0, 0.88, f.crankFrontM + 0.01), [1.0, 0.2, 0.02]);
+      for (const px of f.pistonXsM) b.part('cylLo', 'steelDark', p(px, f.pistonYM, f.crankFrontM + 0.01), [0.11, 0.02, 0.11], { rotationRad: [Math.PI / 2, 0, 0] });
+      // The gap: four tie rods from the crankcase to the liquid end, and the drip tray under the pistons.
+      const [gapZ, gapD] = along(f.crankFrontM, f.endBackM);
+      for (const tx of [-0.6, 0.6]) for (const ty of [0.48, 0.68]) b.part('cylLo', 'steelDark', p(tx, ty, gapZ), [0.025, gapD, 0.025], { rotationRad: [Math.PI / 2, 0, 0] });
+      b.part('box', 'steelDark', p(0, 0.4, gapZ), [1.1, 0.04, gapD]);
+      // The liquid end on its pedestal, a valve cover over each piston, and the two-stage homogenizing valve at its
+      // east end with its two hydraulic actuators.
+      const [endZ, endD] = along(f.endBackM, f.endFrontM);
+      b.part('box', 'steelDark', p(0, 0.26, endZ), [0.9, 0.28, endD - 0.04]);
+      b.part('box', 'paint', p(0, (0.4 + f.endTopM) / 2, endZ), [1.2, f.endTopM - 0.4, endD]);
+      for (const px of f.pistonXsM) b.part('cylLo', 'steelDark', p(px, f.endTopM + 0.02, endZ), [0.07, 0.04, 0.07]);
+      b.part('box', 'steelDark', p(0.69, 0.6, endZ), [0.18, 0.3, endD - 0.04]);
+      for (const dz of [-0.055, 0.055]) b.part('cylLo', 'steelDark', p(0.69, 0.86, endZ + dz), [0.045, 0.22, 0.045]);
+      // The milk's nozzles on both sides, at the pipes' height.
+      for (const side of [-1, 1]) b.part('cylLo', 'steelDark', p(side * (f.crankHalfXM + 0.04), at.PIPE_Y_M, 0), [0.07, 0.08, 0.07], { rotationRad: [0, 0, Math.PI / 2] });
+      // The gauges' bezels on the top cover; their faces and needles are the motion's.
+      for (const gauge of at.HOMOGENIZER_GAUGES) b.part('cylLo', 'steelDark', p(gauge.dxM, f.gaugeYM - 0.015, gauge.dzM), [0.1, 0.03, 0.1]);
+      // The main motor behind, along x, with its fan cowl, end shield, feet and terminal box, and the belt guard from
+      // its shaft to the crankshaft on the east side, where the flywheel turns.
+      const motor = f.motor;
+      b.part('cyl', 'paint', p(0, motor.yM, motor.zM), [motor.radiusM, motor.lengthM, motor.radiusM], { rotationRad: [0, 0, Math.PI / 2] });
+      b.part('cylLo', 'steelDark', p(-motor.lengthM / 2 - 0.04, motor.yM, motor.zM), [motor.radiusM - 0.02, 0.08, motor.radiusM - 0.02], { rotationRad: [0, 0, Math.PI / 2] });
+      b.part('cylLo', 'steelDark', p(motor.lengthM / 2 + 0.025, motor.yM, motor.zM), [motor.radiusM - 0.03, 0.05, motor.radiusM - 0.03], { rotationRad: [0, 0, Math.PI / 2] });
+      b.part('box', 'steelDark', p(0, 0.06, motor.zM), [motor.lengthM - 0.1, 0.12, 0.5]);
+      b.part('box', 'steelDark', p(0.1, motor.yM + motor.radiusM + 0.05, motor.zM), [0.18, 0.1, 0.18]);
+      const guard = f.guard;
+      const [guardZ, guardD] = along(guard.zMinM, guard.zMaxM);
+      b.part('box', 'paint', p(guard.xM, (guard.yMinM + guard.yMaxM) / 2, guardZ), [guard.widthM, guard.yMaxM - guard.yMinM, guardD]);
+      // Phase 26: the control cabinet east of it (its screen, lamps and stop are the motion's), and the lube-oil unit
+      // behind its west end with its cooler (its oil sight glass is the motion's).
       const panel = at.HOMOGENIZER_PANEL;
       b.part('box', 'paint', [panel.xM, panel.heightM / 2, panel.zM], [panel.widthM, panel.heightM, panel.depthM]);
       b.part('box', 'steelDark', [panel.xM, panel.heightM + 0.02, panel.zM], [panel.widthM + 0.04, 0.04, panel.depthM + 0.04]);
-      for (let yM = 0.2; yM < 0.75; yM += 0.1) b.part('box', 'steelDark', [xM + 0.71, yM, zM - 0.05], [0.02, 0.025, 0.42]);
       const lube = at.HOMOGENIZER_LUBE;
       b.part('box', 'paint', [lube.xM, 0.3, lube.zM], [0.25, 0.6, 0.3]);
       b.part('cylLo', 'steelDark', [lube.xM, 0.68, lube.zM], [0.05, 0.26, 0.05], { rotationRad: [Math.PI / 2, 0, 0] });
-      for (const dz of [-0.16, -0.05, 0.05, 0.16]) b.part('box', 'steelDark', [xM + 0.1, 0.655, zM - 0.68 + dz], [0.6, 0.03, 0.02]);
-      b.part('box', 'steelDark', [xM - 0.35, 0.71, zM - 0.68], [0.16, 0.14, 0.14]);
     },
     (s) => labelValue(stageValue(s, 12, 'homogenizerBar'), 0, 'bar'),
   );

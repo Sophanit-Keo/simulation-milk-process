@@ -82,6 +82,11 @@ export interface Part {
   /** Its share of its full rate now: 0 stands it still. */
   speed(yogurt: YogurtSnapshot): number;
   /**
+   * Phase 27: seconds of animation time it takes to come up to speed from standing, and to run down again; it starts
+   * and stops at once if left out. A machine's crank and flywheel take it, so they spin up and down together.
+   */
+  easeS?: number;
+  /**
    * Phase 25: a part that travels to a place instead of turning, a valve's stem or a gauge's needle. Its phase eases to
    * this, 0–1, at ratePerS a second on animation time; `speed` is not used.
    */
@@ -152,6 +157,34 @@ export function gauge(machine: string, name: string, [xM, yM, zM]: readonly [num
         out.position.set(xM - Math.sin(angle) * (needleM / 2), yM + Math.cos(angle) * (needleM / 2), zM + 0.006);
         out.rotation.set(0, 0, angle);
         out.size.set(0.01, needleM, 0.005);
+      },
+      speed: still,
+      target: (y) => read(y) / fullScale,
+      reading: read,
+      color: fixed(HEX.needle),
+    },
+  ];
+}
+
+/**
+ * A gauge on a top cover at (x, y, z), its face up (phase 27): its white face, and its needle, which sweeps 270° as its
+ * phase eases to the reading: 0 at seven-thirty and full scale at four-thirty, seen from the aisle (+z) above.
+ */
+export function topGauge(machine: string, name: string, [xM, yM, zM]: readonly [number, number, number], read: (y: YogurtSnapshot) => number, fullScale: number): Part[] {
+  const needleM = 0.055;
+  return [
+    { machine, name: `${name}Face`, ratePerS: 0, pose: plate(xM, yM, zM, 0.13, 0.004, 0.13), speed: still, color: fixed(HEX.dial) },
+    {
+      machine,
+      name,
+      ratePerS: 1.5,
+      pose(phase, _y, out) {
+        // The clock's angle from twelve (−z, away from the aisle), clockwise seen from above.
+        const clockRad = (-0.75 + 1.5 * phase) * Math.PI;
+        out.position.set(xM + Math.sin(clockRad) * (needleM / 2), yM + 0.004, zM - Math.cos(clockRad) * (needleM / 2));
+        // The needle's length lies along its own x: turned about y, x points along the clock's hand.
+        out.rotation.set(0, Math.PI / 2 - clockRad, 0);
+        out.size.set(needleM, 0.004, 0.01);
       },
       speed: still,
       target: (y) => read(y) / fullScale,
