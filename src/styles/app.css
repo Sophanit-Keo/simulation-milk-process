@@ -1868,3 +1868,127 @@ kbd {
     scroll-behavior: auto !important;
   }
 }
+
+/* The yogurt stages' process flow (src/ui/processFlow.ts, phase 22): each step a node on a track, its dots running at
+   the live flow where the product moves; amber or red where a step warns or diverts, faded where the route skips it. */
+.p-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.flow-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.flow-step {
+  --track: var(--line);
+  --node: var(--line);
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: 8px;
+  padding-bottom: 10px;
+}
+.flow-step:last-child {
+  padding-bottom: 0;
+}
+/* The track down to the next step's node. */
+.flow-step::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 15px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--track);
+}
+.flow-step:last-child::before {
+  display: none;
+}
+.flow-node {
+  position: relative;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  margin: 3px 4px 0;
+  border-radius: 50%;
+  border: 2px solid var(--node);
+  background: var(--node);
+  box-sizing: border-box;
+}
+.flow-body {
+  min-width: 0;
+}
+.flow-name {
+  font: 600 13.5px/1.25 var(--font-ui);
+  color: var(--ink);
+}
+.flow-reading {
+  display: block;
+  margin-top: 1px;
+  font: 500 12px/1.3 var(--font-data);
+  color: var(--ink);
+}
+.flow-does {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.flow-branch {
+  margin-left: 14px;
+}
+.flow-step[data-state='flow'] {
+  --node: var(--accent);
+}
+.flow-step[data-state='flow']::before {
+  background: repeating-linear-gradient(to bottom, var(--accent) 0 4px, transparent 4px 10px);
+  background-size: 2px 10px;
+  animation: flow-dots var(--flow-s, 1.6s) linear infinite;
+}
+.flow-step[data-state='hold'] {
+  --node: var(--accent);
+  --track: var(--accent-soft);
+}
+.flow-step[data-state='hold'] .flow-node {
+  background: var(--surface);
+}
+.flow-step[data-state='warn'] {
+  --node: var(--warn);
+  --track: var(--warn);
+}
+.flow-step[data-state='bad'] {
+  --node: var(--bad);
+  --track: var(--bad);
+}
+.flow-step[data-state='bad'] .flow-reading {
+  color: var(--bad);
+}
+.flow-step[data-state='skip'] {
+  opacity: 0.55;
+}
+.flow-step[data-state='skip'] .flow-node {
+  background: transparent;
+  border-style: dashed;
+}
+.flow-step[data-state='skip']::before {
+  background: repeating-linear-gradient(to bottom, var(--line) 0 2px, transparent 2px 5px);
+}
+.p-flow[data-paused='true'] .flow-step::before {
+  animation-play-state: paused;
+}
+@keyframes flow-dots {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flow-step[data-state='flow']::before {
+    animation: none;
+  }
+}
