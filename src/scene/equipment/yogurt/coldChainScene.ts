@@ -95,6 +95,16 @@ export interface SharedBoxes {
   bind(mesh: THREE.InstancedMesh, offset: number): void;
 }
 
+/** A sphere round the whole yogurt wing and its reefer yard, from the silo to the cold room and the reefers' tractors. */
+export function wingSphere(): THREE.Sphere {
+  const xMinM = at.SILO.xM - at.SILO.radiusM - 1;
+  const xMaxM = at.COLD_ROOM.xMaxM + 1;
+  const zMinM = REEFER_M.tailZM - REEFER_M.backInM - REEFER_M.trailerM - REEFER_M.tractorM - 1;
+  const zMaxM = at.WARM_ROOM.zMaxM + 1;
+  const centre = new THREE.Vector3((xMinM + xMaxM) / 2, 2, (zMinM + zMaxM) / 2);
+  return new THREE.Sphere(centre, Math.hypot((xMaxM - xMinM) / 2, (zMaxM - zMinM) / 2, 4));
+}
+
 export function coldChainTokens(kit: Kit, shared: readonly SharedBoxes[] = []): Equipment {
   const root = new THREE.Group();
   root.name = 'yogurt-pallets';
@@ -107,14 +117,15 @@ export function coldChainTokens(kit: Kit, shared: readonly SharedBoxes[] = []): 
   const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75 });
   const boxes = new THREE.InstancedMesh(kit.shape('box'), boxMaterial, capacity);
   boxes.name = 'coldChainBoxes';
-  // The instances stand all over the wing and its yard; a sphere round both bounds them.
-  const centre = new THREE.Vector3((at.TRAY_PACKER.xM + at.COLD_ROOM.xMaxM) / 2, 2, (at.LINE_Z_M + at.COLD_ROOM.zMinM - 20) / 2);
-  boxes.boundingSphere = new THREE.Sphere(centre, 32);
+  // The instances stand all over the wing and its yard: the machines' moving parts from the silo (phase 23) to the cold
+  // room, and the reefers backing in. A sphere round all of it bounds them; one round the cold chain alone (as before
+  // phase 25) let the camera cull every moving part of stages 11–14 once it looked closely at them.
+  boxes.boundingSphere = wingSphere();
   // The rooms' lamps: unlit, so they read as light in both themes.
   const glowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 });
   const glows = new THREE.InstancedMesh(kit.shape('box'), glowMaterial, 3);
   glows.name = 'roomGlows';
-  glows.boundingSphere = new THREE.Sphere(centre, 32);
+  glows.boundingSphere = wingSphere();
   const noPick = (): void => {};
   boxes.raycast = noPick;
   glows.raycast = noPick;

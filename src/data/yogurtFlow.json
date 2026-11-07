@@ -49,6 +49,12 @@
           "does": "Hot water lifts the mix to 92 °C; the regeneration section recovers most of the heat from the mix coming back."
         },
         {
+          "id": "hotWater",
+          "name": "Hot-water set",
+          "does": "Steam heats a closed hot-water circuit, and the hot water heats the mix through the plates, so the mix never meets steam or burns onto them.",
+          "branch": true
+        },
+        {
           "id": "holdingCell",
           "name": "Holding cell",
           "does": "A serpentine tube holds the mix at 92 °C for 5 min: the whey proteins denature and will build into the gel."
@@ -78,6 +84,11 @@
           "id": "inoculation",
           "name": "Culture dosing",
           "does": "Starter culture, L. bulgaricus and S. thermophilus, is injected into the 43 °C mix in step with the flow."
+        },
+        {
+          "id": "valveMatrix",
+          "name": "Valve matrix",
+          "does": "Double-seat valves send the mix into the one tank that fills and draw yogurt from the one that empties; the rest stay shut, so mix, yogurt and cleaning fluid never meet."
         },
         {
           "id": "setRoute",
