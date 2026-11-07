@@ -82,14 +82,25 @@ export function reeferOffsetM(state: 'arriving' | 'loading', untilS: number, tim
 
 const coldChainOf = (snapshot: Snapshot): ColdChainSnapshot | undefined => yogurtOf(snapshot)?.coldChain;
 
-export function coldChainTokens(kit: Kit): Equipment {
+/**
+ * Instances another part of the wing draws in the cold chain's box mesh, ahead of the pallets, so they cost no draw
+ * call of their own: the wing's moving parts (phase 23, wingMotion.ts).
+ */
+export interface SharedBoxes {
+  readonly count: number;
+  /** Hands over the mesh and the first index of the instances it may write. */
+  bind(mesh: THREE.InstancedMesh, offset: number): void;
+}
+
+export function coldChainTokens(kit: Kit, shared?: SharedBoxes): Equipment {
   const root = new THREE.Group();
   root.name = 'yogurt-pallets';
   // Tokens, not a machine: they stand in the rooms and on the yard (tests skip them as a machine).
   root.userData = { equipmentId: 'yogurt-pallets', stage: 16, tokens: true };
   const palletSlots = WARM_PLACES.length + CHILLER_PLACES.length + COLD_PLACES.length + STAGING_PLACES.length + 1;
   const reeferSlots = plantJson.yogurt.coldChain.dockDoors;
-  const capacity = palletSlots * 2 + reeferSlots * 3;
+  const sharedCount = shared?.count ?? 0;
+  const capacity = sharedCount + palletSlots * 2 + reeferSlots * 3;
   const boxMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75 });
   const boxes = new THREE.InstancedMesh(kit.shape('box'), boxMaterial, capacity);
   boxes.name = 'coldChainBoxes';
@@ -105,6 +116,9 @@ export function coldChainTokens(kit: Kit): Equipment {
   boxes.raycast = noPick;
   glows.raycast = noPick;
   root.add(boxes, glows);
+  // The shared instances first: their indices stay put while the pallets' count changes.
+  shared?.bind(boxes, 0);
+  boxes.count = sharedCount;
   const release = kit.hold();
 
   const matrix = new THREE.Matrix4();
@@ -142,7 +156,7 @@ export function coldChainTokens(kit: Kit): Equipment {
     const key = `${warm}|${chilling}|${cold}|${held}|${alarm}|${staging}|${formingFrac.toFixed(3)}|${reefers.map((r) => `${r.door}:${r.offsetM.toFixed(2)}`).join(',')}`;
     if (key === shownKey) return;
     shownKey = key;
-    let n = 0;
+    let n = sharedCount;
     const put = (xM: number, yM: number, zM: number, sx: number, sy: number, sz: number, tint: THREE.Color): void => {
       matrix.compose(position.set(xM, yM + sy / 2, zM), quaternion, scale.set(sx, sy, sz));
       boxes.setMatrixAt(n, matrix);
