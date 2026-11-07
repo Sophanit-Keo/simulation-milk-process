@@ -91,6 +91,36 @@ describe('the yogurt wing in grey boxes', () => {
     }
   });
 
+  it('draws each machine of stages 12–14 in as many meshes as before phase 26, so its fittings cost no draw call', () => {
+    // A mesh is a draw call: a fitting joins a mesh its machine already has (its material, shadow and parent).
+    const meshes: Readonly<Record<string, number>> = {
+      'yogurt-deaerator': 2,
+      'yogurt-homogenizer': 2,
+      'yogurt-phe': 3,
+      'holding-cell': 1,
+      'yogurt-divert-valve': 4,
+      'reprocess-tank': 3,
+      'culture-pump': 2,
+      'ferment-tank-1': 5,
+      'ferment-tank-2': 5,
+      'ferment-tank-3': 5,
+      'smoothing-valve': 2,
+      'yogurt-cooler': 3,
+      'fruit-tank': 3,
+      'p8-buffer': 3,
+    };
+    const counted = Object.fromEntries(
+      machines
+        .filter((item) => item.stage >= 12 && item.stage <= 14)
+        .map((item) => {
+          let n = 0;
+          item.object.traverse((node) => node instanceof THREE.Mesh && n++);
+          return [item.id, n];
+        }),
+    );
+    expect(counted).toEqual(meshes);
+  });
+
   it('runs the pipes on the wing\'s floor, between its zones', () => {
     const wing = { xMinM: -61, xMaxM: 16, zMinM: -56, zMaxM: -32 };
     for (const run of YOGURT_RUNS) {

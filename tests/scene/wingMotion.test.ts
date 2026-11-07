@@ -2,13 +2,14 @@
 // of the wing, all are one InstancedMesh that casts no shadow and takes no clicks, and each moves, stands or changes
 // colour with the live sim: the mix line's rotors while it mixes, the homogenizer's pistons in production, the tanks'
 // sight glasses with their pH, P8's flashes while it fills, the cold room's fans until its cooling fails. Phase 25 adds
-// the process hall's gauges, valves, pumps and the CCP recorder (stages 12–14).
+// the process hall's gauges, valves, pumps and the CCP recorder (stages 12–14); phase 26 its fittings in colour.
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Sim, Snapshot } from '../../src/contracts';
 import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/equipment';
 import { DOCK_DOORS_X_M } from '../../src/scene/equipment/yogurt/layout';
 import { wingSphere } from '../../src/scene/equipment/yogurt/coldChainScene';
+import { jacketWater } from '../../src/scene/equipment/yogurt/hallDetail';
 import { contentColor, evaporatorXs, wingTempColor } from '../../src/scene/equipment/yogurt/wingMotion';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
 import { createSim } from '../../src/sim';
@@ -268,5 +269,78 @@ describe('the process hall\'s gauges, valves and pumps (phase 25)', () => {
     w.sim.dispatch({ type: 'pause', paused: false });
     w.frames(30);
     expect(num(w, 'yogurt-homogenizer', 'stage1GaugeLift')).toBe(0.72);
+  });
+});
+
+describe('the process hall\'s fittings in colour (phase 26)', () => {
+  const DARK = '#1d2328';
+  const OFF = '#30363c';
+  const WARM = '#ea8027';
+  const CHILLED = '#2b7bd0';
+
+  it('gives each machine of stages 12–14 its fittings', () => {
+    const w = wing();
+    w.frames(1);
+    const expected: Readonly<Record<string, readonly string[]>> = {
+      'yogurt-deaerator': ['sightGlass'],
+      'yogurt-homogenizer': ['screen', 'runLamp', 'cleanLamp', 'stopPlate', 'stopButton', 'oilGlass'],
+      'yogurt-phe': ['nameplate', 'hotWaterDisplay'],
+      'culture-pump': ['display', 'freezerDisplay'],
+      'ferment-tank-1': ['jacketSupply', 'jacketReturn', 'jacketValve', 'cipDrop', 'sampleHandle', 'cipPost'],
+      'ferment-tank-2': ['jacketValve', 'cipHeader'],
+      'ferment-tank-3': ['jacketValve', 'cipPost'],
+      'smoothing-valve': ['gaugeFace'],
+      'yogurt-cooler': ['nameplate', 'iceValve'],
+      'p8-buffer': ['sampleHandle'],
+    };
+    for (const [id, names] of Object.entries(expected)) {
+      const state = w.state(id);
+      for (const name of names) expect(`${name}Color` in state, `${id} ${name}`).toBe(true);
+    }
+    expect(w.state('yogurt-homogenizer')).toMatchObject({ stopButtonColor: '#d63b26', stopPlateColor: '#ffd84a', oilGlassColor: '#d9a441' });
+    expect(w.state('p8-buffer').sampleHandleColor).toBe('#c8352a');
+  });
+
+  it('puts warm water in a fermenting tank\'s jacket and chilled in a ready or emptying one, and none in an empty one', () => {
+    expect(jacketWater('fermenting')).toBe('warm');
+    expect(jacketWater('ready')).toBe('chilled');
+    expect(jacketWater('emptying')).toBe('chilled');
+    for (const state of ['empty', 'filling', 'cleaning', undefined]) expect(jacketWater(state)).toBeNull();
+  });
+
+  it('as the plant opens: the jackets chill tanks 1 and 2 and warm tank 3, the ice water cools, the heat treatment\'s screens are dark', () => {
+    const w = wing();
+    w.frames(20);
+    expect(w.state('ferment-tank-1')).toMatchObject({ jacketValveColor: CHILLED, jacketValveLift: 1 });
+    expect(w.state('ferment-tank-2')).toMatchObject({ jacketValveColor: CHILLED, jacketValveLift: 1 });
+    expect(w.state('ferment-tank-3')).toMatchObject({ jacketValveColor: WARM, jacketValveLift: 1 });
+    expect(w.state('yogurt-cooler')).toMatchObject({ iceValveColor: CHILLED, iceValveLift: 1 });
+    expect(w.state('yogurt-homogenizer')).toMatchObject({ screenColor: DARK, runLampColor: OFF, cleanLampColor: OFF });
+    expect(w.state('yogurt-deaerator').sightGlassColor).toBe('#2a3036');
+    expect(w.state('yogurt-phe').hotWaterDisplayColor).toBe(DARK);
+    expect(w.state('culture-pump').displayColor).toBe(DARK);
+    // A tank that is emptied and cleans takes no jacket water: its valve closes.
+    runUntil(w, (each) => each.yogurt.ferment.tanks[0]?.state === 'cleaning');
+    w.frames(20);
+    expect(w.state('ferment-tank-1')).toMatchObject({ jacketValveColor: OFF, jacketValveLift: 0 });
+  });
+
+  it('in production: the homogenizer\'s screen and green lamp lit, the mix in the deaerator\'s glass, the hot water\'s display at 92 °C, the culture dosing', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.heat.mode === 'production' && each.yogurt.heat.flowLph > 0);
+    const snap = w.frames(5);
+    expect(w.state('yogurt-homogenizer')).toMatchObject({ screenColor: '#4aa3ff', runLampColor: '#34c759', cleanLampColor: OFF });
+    expect(w.state('yogurt-deaerator').sightGlassColor).toBe('#f3f1ea');
+    expect(w.state('yogurt-phe').hotWaterDisplayColor).toBe(hex(wingTempColor(snap.yogurt.heat.outletC, new THREE.Color())));
+    expect(w.state('culture-pump').displayColor).toBe('#34c759');
+  });
+
+  it('in the clean after a divert: the homogenizer\'s screen and its other lamp amber', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.heat.mode === 'production' && each.yogurt.heat.flowLph > 0);
+    w.sim.dispatch({ type: 'triggerScenario', id: 'yogurtHeatUnderTemp' });
+    runUntil(w, (each) => each.yogurt.heat.mode === 'cleaning');
+    w.frames(2);
+    expect(w.state('yogurt-homogenizer')).toMatchObject({ screenColor: '#ffd84a', runLampColor: OFF, cleanLampColor: '#ffd84a' });
   });
 });

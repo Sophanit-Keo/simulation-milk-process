@@ -17,6 +17,7 @@
 //   in a clean) while its tank fills or empties.
 // - Stage 14: the flow meter after the smoothing valve spins; the cooler's strip shows its outlet; the fruit pump strokes.
 //   Phase 25: the ice-water pump turns while the cooler cools; the buffer's outlet valve opens while P8 runs on it.
+// - Phase 26: the process hall's fittings in colour, some following the sim (hallDetail.ts).
 // - Stage 15: the coder flashes as each cycle's lids pass, and the three check gates flash as they check a row.
 // - Stage 16: the blast chiller's fans turn while it holds pallets; the cold room's evaporator fans turn while its
 //   cooling works, and stand still in a cooling failure (D30).
@@ -26,94 +27,16 @@ import * as THREE from 'three';
 import type { Snapshot, YogurtSnapshot } from '../../../contracts';
 import plantJson from '../../../data/plant.json';
 import { motionDtS } from '../../motion';
+import { hallDetailParts } from './hallDetail';
 import * as at from './layout';
+import { blade, clamp01, contentColor, fixed, flashColor, gauge, heating, HEX, p8Running, plate, plunger, rotor, still, TURN, valveStem, wingTempColor, type Part, type PartState, type Pose } from './motionParts';
 import { yogurtOf } from './readings';
 
+export { contentColor, wingTempColor } from './motionParts';
+
 const Y = plantJson.yogurt;
-const TURN = Math.PI * 2;
 /** At most this much of a turn or stroke a frame, so a slow frame never skips a whole one. */
 const MAX_PHASE_PER_FRAME = 0.45;
-
-/** Colours: the moving metal, a lamp off and a flash, the temperature ramp of the pipes (tokens.css --t4 … --t140). */
-const HEX = {
-  metal: 0x5d6a74,
-  blade: 0x8a96a0,
-  off: 0x30363c,
-  flash: 0xffd84a,
-  glassEmpty: 0x2a3036,
-  mix: 0xf3f1ea,
-  yogurt: 0xe9dcb2,
-  // Phase 25: a valve open for product, a gauge's face and needle, the recorder's paper, its grid, its pen and the limit.
-  open: 0x34c759,
-  dial: 0xf2f0ea,
-  needle: 0xc8352a,
-  paper: 0xeeeae0,
-  grid: 0xbdb6a6,
-  ink: 0x2b5fa8,
-  bad: 0xd63b26,
-} as const;
-const TEMP_STOPS = [
-  { tempC: 4, color: new THREE.Color(0x2b7bd0) },
-  { tempC: 20, color: new THREE.Color(0x2aa0c0) },
-  { tempC: 60, color: new THREE.Color(0xe3a21c) },
-  { tempC: 80, color: new THREE.Color(0xea8027) },
-  { tempC: 140, color: new THREE.Color(0xd63b26) },
-];
-
-/** The pipes' colour of milk at `tempC` (pipes.ts tempColor), with the light theme's stops, which both themes share. */
-export function wingTempColor(tempC: number, out: THREE.Color): THREE.Color {
-  const stops = TEMP_STOPS;
-  if (tempC <= stops[0].tempC) return out.copy(stops[0].color);
-  for (let i = 1; i < stops.length; i++) {
-    const lo = stops[i - 1];
-    const hi = stops[i];
-    if (tempC <= hi.tempC) return out.lerpColors(lo.color, hi.color, (tempC - lo.tempC) / (hi.tempC - lo.tempC));
-  }
-  return out.copy(stops[stops.length - 1].color);
-}
-
-/** A tank's contents seen through its sight glass: the mix's white at the start pH, cream yogurt by the end pH. */
-export function contentColor(ph: number, out: THREE.Color): THREE.Color {
-  const { startPh, endPh } = Y.ferment;
-  const t = Math.min(1, Math.max(0, (startPh - ph) / (startPh - endPh)));
-  return out.lerpColors(new THREE.Color(HEX.mix), new THREE.Color(HEX.yogurt), t);
-}
-
-/** One moving part as the frame leaves it, for the machine's debugState and the tests. */
-interface PartState {
-  /** Turns or strokes so far, or the flash's 0/1; what the part does now. */
-  value: number;
-  moving: boolean;
-  color: number;
-  /** What its gauge reads now, in its own unit (phase 25); null for a part that reads nothing. */
-  reading: number | null;
-}
-
-interface Part {
-  machine: string;
-  name: string;
-  /** Turns (or strokes) a second at its full rate, on animation time. */
-  ratePerS: number;
-  /** Where it is, its size and turn, from its phase (0–1 of a turn or stroke) and the live snapshot. */
-  pose(phase: number, yogurt: YogurtSnapshot, out: Pose): void;
-  /** Its share of its full rate now: 0 stands it still. */
-  speed(yogurt: YogurtSnapshot): number;
-  /**
-   * Phase 25: a part that travels to a place instead of turning, a valve's stem or a gauge's needle. Its phase eases to
-   * this, 0–1, at ratePerS a second on animation time; `speed` is not used.
-   */
-  target?(yogurt: YogurtSnapshot): number;
-  /** What it shows in its own unit, a gauge's bar or the recorder's °C (phase 25), for its debugState. */
-  reading?(yogurt: YogurtSnapshot): number;
-  /** Its colour now; the part's metal if left out. */
-  color?(yogurt: YogurtSnapshot, phase: number, out: THREE.Color): THREE.Color;
-}
-
-interface Pose {
-  position: THREE.Vector3;
-  rotation: THREE.Euler;
-  size: THREE.Vector3;
-}
 
 export interface WingMotion {
   /** How many instances it draws (SharedBoxes). */
@@ -131,8 +54,6 @@ export interface WingMotion {
 }
 
 const PIPE_Y = at.PIPE_Y_M;
-/** A plunger strokes along x by this much either side of its rest. */
-const STROKE_M = 0.06;
 /** A fermentation tank's sight glass on its +z face, left of the level gauge: its middle and height. */
 const SIGHT_GLASS = { yM: 2.9, heightM: 0.7 } as const;
 /** Phase 25: the deaerator's vacuum while it runs, bar below atmospheric (Tetra Pak's deaeration at about 0.8 bar). */
@@ -147,97 +68,8 @@ const RECORDER_FROM_C = 80;
 const RECORDER_TO_C = 95;
 /** The fermentation tanks' outlet line under their cones (yogurtPipes.ts). */
 const OUTLET_Y_M = 0.6;
-const p8Running = (y: YogurtSnapshot): boolean => y.p8.state === 'running';
 const mixing = (y: YogurtSnapshot): number => y.mix.flowLph / Y.mix.capacityLph;
-const heating = (y: YogurtSnapshot): number => (y.heat.mode === 'production' || y.heat.mode === 'divert' ? y.heat.flowLph / Y.mix.capacityLph : 0);
 const p8Rate = (y: YogurtSnapshot): number => (p8Running(y) ? (y.p8.cyclesPerMin ?? 30) / 30 : 0);
-
-/** A box turning about y at (x, y, z), `lengthM` across. */
-const blade = (x: number, yM: number, z: number, lengthM: number, widthM = 0.06, offsetTurn = 0) =>
-  (phase: number, _y: YogurtSnapshot, out: Pose): void => {
-    out.position.set(x, yM, z);
-    out.rotation.set(0, (phase + offsetTurn) * TURN, 0);
-    out.size.set(lengthM, 0.03, widthM);
-  };
-
-/** A plunger along x at (x, y, z): out and back once a stroke. */
-const plunger = (x: number, yM: number, z: number, lengthM: number, offsetTurn = 0) =>
-  (phase: number, _y: YogurtSnapshot, out: Pose): void => {
-    out.position.set(x + STROKE_M * Math.sin((phase + offsetTurn) * TURN), yM, z);
-    out.rotation.set(0, 0, 0);
-    out.size.set(lengthM, 0.05, 0.05);
-  };
-
-/** A flat strip or plate, still, at (x, y, z). */
-const plate = (x: number, yM: number, z: number, sx: number, sy: number, sz: number, turnY = 0) =>
-  (_phase: number, _y: YogurtSnapshot, out: Pose): void => {
-    out.position.set(x, yM, z);
-    out.rotation.set(0, turnY, 0);
-    out.size.set(sx, sy, sz);
-  };
-
-/** A flash once a cycle: lit for the first `litFrac` of each turn of the phase. */
-const flashColor = (litFrac: number) => (y: YogurtSnapshot, phase: number, out: THREE.Color): THREE.Color =>
-  out.setHex(p8Running(y) && phase % 1 < litFrac ? HEX.flash : HEX.off);
-
-const still = (): number => 0;
-const fixed = (hex: number) => (_y: YogurtSnapshot, _phase: number, out: THREE.Color): THREE.Color => out.setHex(hex);
-const clamp01 = (value: number): number => Math.min(1, Math.max(0, value));
-
-/**
- * A round-faced gauge on a face to the aisle (+z) at (x, y, z), phase 25: its white face, and its needle, which sweeps
- * 270° from the bottom left (0) to the bottom right (full scale) as its phase eases to the reading.
- */
-function gauge(machine: string, name: string, [xM, yM, zM]: readonly [number, number, number], read: (y: YogurtSnapshot) => number, fullScale: number): Part[] {
-  const needleM = 0.06;
-  return [
-    { machine, name: `${name}Face`, ratePerS: 0, pose: plate(xM, yM, zM, 0.11, 0.11, 0.006), speed: still, color: fixed(HEX.dial) },
-    {
-      machine,
-      name,
-      ratePerS: 1.5,
-      pose(phase, _y, out) {
-        const angle = (0.75 - 1.5 * phase) * Math.PI;
-        out.position.set(xM - Math.sin(angle) * (needleM / 2), yM + Math.cos(angle) * (needleM / 2), zM + 0.006);
-        out.rotation.set(0, 0, angle);
-        out.size.set(0.01, needleM, 0.005);
-      },
-      speed: still,
-      target: (y) => read(y) / fullScale,
-      reading: read,
-      color: fixed(HEX.needle),
-    },
-  ];
-}
-
-/** A valve's stem on top of its actuator at (x, y, z): it lifts `liftM` as the valve opens, green open, amber in a clean. */
-function valveStem(machine: string, name: string, [xM, yM, zM]: readonly [number, number, number], open: (y: YogurtSnapshot) => 'product' | 'clean' | null, liftM = 0.06): Part {
-  return {
-    machine,
-    name,
-    ratePerS: 1.2,
-    pose(phase, _y, out) {
-      out.position.set(xM, yM + phase * liftM, zM);
-      out.rotation.set(0, 0, 0);
-      out.size.set(0.05, 0.07, 0.05);
-    },
-    speed: still,
-    target: (y) => (open(y) ? 1 : 0),
-    color(y, _phase, out) {
-      const how = open(y);
-      return out.setHex(how === 'product' ? HEX.open : how === 'clean' ? HEX.flash : HEX.off);
-    },
-  };
-}
-
-/** A rotor's blade turning on a pump's face to the aisle (+z), or to the east (+x) with `faceX`. */
-const rotor = (xM: number, yM: number, zM: number, lengthM: number, faceX = false) =>
-  (phase: number, _y: YogurtSnapshot, out: Pose): void => {
-    out.position.set(xM, yM, zM);
-    if (faceX) out.rotation.set(phase * TURN, 0, 0);
-    else out.rotation.set(0, 0, phase * TURN);
-    out.size.set(faceX ? 0.02 : lengthM, faceX ? lengthM : 0.04, faceX ? 0.05 : 0.02);
-  };
 
 /** A fermentation tank's sight glass: on the +z face, left of the gauge, turned to face out. */
 function sightGlass(tank: number): Part {
@@ -471,6 +303,8 @@ function wingParts(): Part[] {
       out.size.set(0.44, 0.07, 0.02);
     }, speed: coolingWorks, color: (_y, _p, out) => out.setHex(HEX.blade) });
   });
+  // Phase 26: the process hall's fittings in colour, after every part before them, so those keep their instances.
+  parts.push(...hallDetailParts());
   return parts;
 }
 

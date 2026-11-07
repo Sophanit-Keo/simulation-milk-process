@@ -36,13 +36,18 @@ export const HOMOGENIZER_GAUGES = [
   { name: 'stage1Gauge', dxM: -0.35, yM: 1.1 },
   { name: 'stage2Gauge', dxM: -0.1, yM: 1.1 },
 ] as const;
+/** Phase 26: the homogenizer's control cabinet, standing east of it with its face (+z) to the aisle. */
+export const HOMOGENIZER_PANEL = { xM: HOMOGENIZER.xM + 1.0, zM: HOMOGENIZER.zM + 0.4, widthM: 0.36, heightM: 1.4, depthM: 0.25 } as const;
+/** Phase 26: its lube-oil unit, behind its east end. */
+export const HOMOGENIZER_LUBE = { xM: HOMOGENIZER.xM + 0.88, zM: HOMOGENIZER.zM - 0.55 } as const;
 /** The plate pack, 2.6 m long: regeneration, heating and cooling sections from west to east. */
 export const PHE = { xM: -35, zM: LINE_Z_M, lengthM: 2.6, depthM: 0.6, heightM: 1.6 } as const;
 /**
  * Phase 25: the heat exchanger's hot-water set, on the floor east of it before the holding cell's outlet: the tank of
  * the closed hot-water circuit, its steam valve on top, its pump in front, whose rotor turns on its face to the aisle.
+ * Phase 26: its controller on the tank's front, at `displayYM`.
  */
-export const HOT_WATER_SET = { xM: PHE.xM + PHE.lengthM / 2 + 0.8, tankZM: LINE_Z_M - 0.15, pumpZM: LINE_Z_M + 0.55, valveYM: 1.2 } as const;
+export const HOT_WATER_SET = { xM: PHE.xM + PHE.lengthM / 2 + 0.8, tankZM: LINE_Z_M - 0.15, pumpZM: LINE_Z_M + 0.55, valveYM: 1.2, displayYM: 0.85 } as const;
 /** The holding cell's frame, round a serpentine of 500 L (H123) drawn by pipes.ts. */
 export const HOLDING_CELL = { xMinM: -37, xMaxM: -33, zMinM: -53.4, zMaxM: -50, heightM: 1.5 } as const;
 /** The serpentine's passes, west to east and back, from its inlet at the north-west to its outlet. */
@@ -56,6 +61,10 @@ export const REPROCESS_PUMP = { xM: REPROCESS_TANK.xM + REPROCESS_TANK.radiusM +
 
 /** Stage 13: the culture dosing pump and the three insulated fermentation tanks. */
 export const CULTURE_PUMP: Footprint = { xM: -27.5, zM: -43 };
+/** Phase 26: the culture skid's controller on its post at the skid's east corner, its face to the aisle. */
+export const CULTURE_PANEL = { xM: CULTURE_PUMP.xM + 0.55, yM: 1.15, zM: CULTURE_PUMP.zM + 0.32 } as const;
+/** Phase 26: the culture freezer, west of the skid. */
+export const CULTURE_FREEZER = { xM: CULTURE_PUMP.xM - 1.15, zM: CULTURE_PUMP.zM, widthM: 0.8, heightM: 0.8, depthM: 0.55 } as const;
 export const FERMENT_TANK = { xsM: [-24, -20, -16], zM: -48.5, radiusM: 1.4, legsM: 0.7, coneM: 0.5, bodyM: 2.6, domeM: 0.4 } as const;
 /** The inlet header in front of the tanks, from the culture injection, and the outlet manifold behind them. */
 export const FERMENT_INLET_Z_M = -45.2;
@@ -64,12 +73,22 @@ export const FERMENT_OUTLET_Z_M = -50.6;
 /** Phase 25: the valve matrix: each tank's inlet valve on its branch from the header, its outlet valve under its cone. */
 export const FERMENT_INLET_VALVE_Z_M = -46.15;
 export const FERMENT_OUTLET_VALVE_Z_M = -48.95;
+/**
+ * Phase 26: the fermentation tanks' services. Each tank's jacket risers stand at 60° from +z toward −x, outside the
+ * shell; the CIP header runs over the tanks' tops behind their drives, on two posts.
+ */
+export const FERMENT_JACKET = { angleRad: Math.PI / 3, radiusM: FERMENT_TANK.radiusM + 0.32, spreadM: 0.09, supplyYM: 1.5, returnYM: 3.45 } as const;
+export const FERMENT_CIP_HEADER = { yM: 4.9, zM: FERMENT_TANK.zM - 0.7, xMinM: FERMENT_TANK.xsM[0] - 1.7, xMaxM: FERMENT_TANK.xsM[2] + 1.7 } as const;
 
 /** Stage 14: the smoothing valve, the plate cooler, the fruit tank and its pump, and the P8 buffer. */
 export const SMOOTHING_VALVE: Footprint = { xM: -11.5, zM: LINE_Z_M };
+/** Phase 26: the pressure gauge on the line after the smoothing valve's flow meter: its dial's middle. */
+export const SMOOTHING_GAUGE = { xM: SMOOTHING_VALVE.xM + 0.9, yM: PIPE_Y_M + 0.23 } as const;
 export const COOLER = { xM: -9, zM: LINE_Z_M, lengthM: 1.2, depthM: 0.5, heightM: 1.3 } as const;
 /** Phase 25: the cooler's ice-water pump, at its east end in front of the line; its rotor turns on its face to the aisle. */
 export const ICE_WATER_PUMP = { xM: COOLER.xM + COOLER.lengthM / 2 + 0.55, zM: LINE_Z_M + 0.15 } as const;
+/** Phase 26: the ice-water control valve, on the pump's line into the cooler's east end. */
+export const ICE_WATER_VALVE = { xM: (COOLER.xM + COOLER.lengthM / 2 + 0.05 + ICE_WATER_PUMP.xM - 0.15) / 2, yM: 0.22, zM: ICE_WATER_PUMP.zM } as const;
 export const FRUIT_TANK = { xM: -9, zM: -52, radiusM: 0.7, legsM: 0.4, bodyM: 1.4 } as const;
 /** Phase 25: the fruit preparation's IBC, west of its tank. */
 export const FRUIT_IBC = { xM: FRUIT_TANK.xM - FRUIT_TANK.radiusM - 0.75, zM: FRUIT_TANK.zM } as const;

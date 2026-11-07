@@ -413,6 +413,17 @@ Measured on 7 November 2026 the same way as phase 24, with no console errors.
   - Phase 23's sphere was the cold chain's alone, so up close the camera culled every moving part of stages 11–14. The two calls above phase 24's counts are those meshes, now drawn at these stops.
   - At the UHT's first two stops, the wing stands at the view's edge and its sphere now reaches into it.
 
+### Phase 26: every machine of the yogurt process hall in more detail
+
+Measured on 7 November 2026 the same way as phase 25, with no console errors.
+
+- **The overview:** **350** draw calls and **388,650** triangles, within the budget.
+  - The grey fittings join meshes their machines already have. `tests/scene/yogurtLine.test.ts` holds every stage 12–14 machine to its mesh count.
+  - The 50 coloured fittings are instances in the shared box mesh.
+- **The stops:** 161 (1), 146 (2), 144 (3), 149 (4), 148 (5), 164 (6), 153 (7), 153 (8), 170 (9), 166 (10), 129 (11), 133 (12), 133 (13), 127 (14), 132 (15) and 141 (16) draw calls.
+  - The yogurt stops read as in phase 25.
+  - Stops 2 and 3 read 2 and 1 more. No machine has more meshes, so these are likely meshes whose bounds, grown with their fittings, now reach the edge of those views. This was not checked mesh by mesh.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:
