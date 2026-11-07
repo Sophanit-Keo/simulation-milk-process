@@ -1,0 +1,70 @@
+{
+  "stages": [
+    {
+      "stage": 11,
+      "steps": [
+        { "id": "silo", "name": "Yogurt silo", "does": "Raw milk waits at 4 °C in the wing's own silo, topped up by tanker from the shared bay." },
+        { "id": "standardize", "name": "Standardization skid", "does": "Cream is taken off at 40% fat until the milk carries just enough fat for 3.0% in the mix." },
+        { "id": "powder", "name": "Powder station and high-shear mixer", "does": "Skim-milk powder, drawn into the flow by the mixer, raises the solids-not-fat from 8.7% to 11%." },
+        { "id": "stabilizer", "name": "Stabilizer skid", "does": "0.3% stabilizer is dosed in, so the gel holds its water; the mix is now about 14% dry matter." },
+        { "id": "mixTank", "name": "Mix tank", "does": "An agitated tank keeps the powder in suspension and feeds the heat treatment." }
+      ]
+    },
+    {
+      "stage": 12,
+      "steps": [
+        { "id": "deaerator", "name": "Deaerator", "does": "Under vacuum the air comes out of the mix, so it does not foam or burn onto the plates." },
+        { "id": "homogenizer", "name": "Homogenizer", "does": "At 180 bar and about 68 °C the fat globules are broken up, so no cream rises and less whey weeps from the gel." },
+        { "id": "heating", "name": "Plate heat exchanger: heating", "does": "Hot water lifts the mix to 92 °C; the regeneration section recovers most of the heat from the mix coming back." },
+        { "id": "holdingCell", "name": "Holding cell", "does": "A serpentine tube holds the mix at 92 °C for 5 min: the whey proteins denature and will build into the gel." },
+        { "id": "divertValve", "name": "Divert valve (CCP)", "does": "Under 85 °C, or held under 3 min, the mix is sent back to the reprocess tank instead of forward." },
+        { "id": "reprocess", "name": "Reprocess tank", "does": "Mix that was not heat-treated waits here and goes to rework while the wing cleans the line.", "branch": true },
+        { "id": "cooling", "name": "Plate heat exchanger: cooling", "does": "The mix gives its heat back to the incoming mix and leaves at 43 °C, the culture's temperature." }
+      ]
+    },
+    {
+      "stage": 13,
+      "steps": [
+        { "id": "inoculation", "name": "Culture dosing", "does": "Starter culture, L. bulgaricus and S. thermophilus, is injected into the 43 °C mix in step with the flow." },
+        { "id": "setRoute", "name": "Set yogurt: straight to the buffer", "does": "Set yogurt skips the tanks: it goes to the P8 buffer warm and sets in the cup.", "branch": true },
+        { "id": "tank1", "name": "Fermentation tank 1", "does": "Stirred yogurt ferments in an insulated tank until its pH falls from 6.6 to 4.55, about 4 h at 43 °C." },
+        { "id": "tank2", "name": "Fermentation tank 2", "does": "Only one tank fills at a time; the tanks take turns filling, fermenting, waiting and emptying." },
+        { "id": "tank3", "name": "Fermentation tank 3", "does": "A ready tank is cooled at once, so its pH holds, and is cleaned in place once it is empty." }
+      ]
+    },
+    {
+      "stage": 14,
+      "steps": [
+        { "id": "smoothing", "name": "Smoothing valve", "does": "The curd from the oldest ready tank is smoothed at low shear, so it does not thin." },
+        { "id": "cooler", "name": "Plate cooler", "does": "Stirred yogurt is cooled to 18 °C on its way to the buffer; set yogurt skips it." },
+        { "id": "fruit", "name": "Fruit dosing", "does": "For a fruit recipe a pump doses the fruit preparation in line, 15% of the flow." },
+        { "id": "buffer", "name": "P8 buffer", "does": "The buffer feeds the filler's manifold under steady pressure; set mix may wait in it at most 45 min." }
+      ]
+    },
+    {
+      "stage": 15,
+      "steps": [
+        { "id": "denester", "name": "De-nester", "does": "Suction cups pull empty cups from 12 magazines into the carrier's pockets, 12 a cycle." },
+        { "id": "decontamination", "name": "Ionized air and UV-C", "does": "Ionized air loosens dust, a vacuum takes it off, and UV-C light disinfects the cups' insides." },
+        { "id": "filler", "name": "Piston fillers", "does": "Twelve volumetric pistons fill each cup with about 127 g, through anti-drip nozzles." },
+        { "id": "lidder", "name": "Foil pick and sealing heads", "does": "A foil is placed on each cup and heat-sealed: 180–220 °C, 0.8–1.2 s, 4–6 bar." },
+        { "id": "coder", "name": "Coder", "does": "Each lid is printed with the batch code and its best-before date." },
+        { "id": "checkweigher", "name": "Checkweigher", "does": "Every cup is weighed; under 120.5 g or over 135 g it is kicked out." },
+        { "id": "metal", "name": "Metal detector", "does": "Ferrous, non-ferrous and stainless fragments reject the cup." },
+        { "id": "vision", "name": "Vision check", "does": "A camera checks each lid's placement and its print; a bad one rejects the cup." },
+        { "id": "sealTest", "name": "Seal test", "does": "Every 2 h of running, 5 cups are tested for leaks; a failure holds every cup since the last pass." }
+      ]
+    },
+    {
+      "stage": 16,
+      "steps": [
+        { "id": "trayPacker", "name": "Tray packer", "does": "A pick-and-place head packs the cups 24 to a tray." },
+        { "id": "palletizer", "name": "Palletizer and wrapper", "does": "A robot stacks 120 trays on a pallet, one batch to a pallet, and the wrapper winds it in film." },
+        { "id": "warmRoom", "name": "Warm room", "does": "Set yogurt sets in the cup at 43 °C until its pH is 4.60; stirred yogurt skips it." },
+        { "id": "chiller", "name": "Blast chiller", "does": "Cold air at −2 °C brings each pallet's core down to 4 °C." },
+        { "id": "coldRoom", "name": "Cold room", "does": "At 2–4 °C the gel firms for at least 24 h; a pallet is released once its seal tests have passed." },
+        { "id": "reefers", "name": "Reefer dock", "does": "Refrigerated trucks take 26 released pallets each, oldest first, within 48 h." }
+      ]
+    }
+  ]
+}

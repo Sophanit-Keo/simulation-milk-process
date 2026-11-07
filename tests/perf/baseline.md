@@ -385,6 +385,10 @@ Measured on 6 November 2026 at 1440 × 900 with `node tests/perf/measure.mjs 550
 
 Software GL draws every pixel on the CPU, so the frame rate follows the pixel count and whatever else the machine is doing more than the draw calls. Two pages rendering at once, as in a parallel Playwright run, roughly halve each other's frame rate on this machine, so `playwright.config.ts` runs the browser tests one page at a time.
 
+### Phase 23: the yogurt machines in motion
+
+Measured on 7 November 2026 the same way as phase 21. The wing's 33 moving parts first had a mesh of their own, and the overview read 351 draw calls; drawn in the cold chain's box mesh instead, it reads **350** draw calls and **367,034** triangles, within the budget, with no console errors. The yogurt stages' stops read 128 (11), 132 (12), 132 (13), 128 (14), 134 (15) and 141 (16) draw calls.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

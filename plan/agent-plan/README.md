@@ -27,6 +27,8 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 19. Cold chain & dispatch (16) | yogurt weeks 8–9 | sim, scene | **Y2** · scope freeze: silo to reefer truck, both routes | [Phase 19](phase-19-yogurt-cold-chain.md) |
 | 20. Yogurt heroes, faults & tour | yogurt weeks 10–11 | assets, sim, ui | P8 and tank heroes, five yogurt faults, the yogurt tour | [Phase 20](phase-20-yogurt-detail-and-scenarios.md) |
 | 21. Yogurt polish & docs | yogurt week 12 | qa, lead | **Y3** · 60 fps with both lines, docs updated | [Phase 21](phase-21-yogurt-polish.md) |
+| 22. Yogurt process flow | after Y3 | process, ui | Each yogurt stage's process flow, step by step, live, in its panel | [Phase 22](phase-22-yogurt-process-flow.md) |
+| 23. Yogurt machines in motion | after Y3 | scene | The yogurt machines show what happens inside them | [Phase 23](phase-23-yogurt-machines-in-motion.md) |
 
 ## The agents
 

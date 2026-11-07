@@ -29,18 +29,40 @@ import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
 import * as at from './yogurt/layout';
 import { coldChainTokens } from './yogurt/coldChainScene';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
+import { createWingMotion, type WingMotion } from './yogurt/wingMotion';
 import { finite, HEAT_MODE_TEXT, heatValveLamp, phRingFrac, tankStirs, yogurtFill, yogurtOf } from './yogurt/readings';
 
 /** A held tank's lamp (phase 20, D30): red, over its pH probe, at about the probe's height plus a little. */
 const HELD_LAMP_HEX = 0xff3b30;
 const HELD_LAMP_Y_M = 2.15;
 
+/**
+ * A machine with moving parts in the wing's motion (phase 23): its update moves the motion on (once a frame, whichever
+ * machine comes first), and its debugState reports its parts. `host`, the cold chain's tokens, draws them.
+ */
+function withMotion(item: Equipment, motion: WingMotion, host: boolean): Equipment {
+  const own = motion.machines.includes(item.id);
+  if (!own && !host) return item;
+  const { update, debugState } = item;
+  return {
+    ...item,
+    update(snapshot, realDtS) {
+      update(snapshot, realDtS);
+      motion.advance(snapshot, realDtS);
+    },
+    ...(own ? { debugState: () => ({ ...(debugState?.() ?? {}), ...motion.state(item.id) }) } : {}),
+  };
+}
+
 /** The yogurt line, stages 11–16: one Equipment per machine. */
 export const yogurtLine: EquipmentFactory = (ctx) => {
   const kit = createKit(ctx);
   // P8's machine and its cups follow one carrier clock (phase 18).
   const carrier = createP8Carrier();
-  return [
+  // The wing's moving parts (phase 23), in world metres, drawn in the cold chain's box mesh, whose root stands at the
+  // world's origin and spans the wing, and which takes no clicks: no draw call of their own.
+  const motion = createWingMotion();
+  const items = [
     yogurtSilo(kit),
     powderStation(kit),
     highShearMixer(kit),
@@ -133,8 +155,9 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
     warmRoom(kit),
     blastChiller(kit),
     coldRoom(kit),
-    coldChainTokens(kit),
+    coldChainTokens(kit, motion),
   ];
+  return items.map((item) => withMotion(item, motion, item.id === 'yogurt-pallets'));
 };
 
 /* shared shapes */

@@ -14,6 +14,7 @@ import { createStagePanel, type PanelPart } from './stagePanel';
 import { createStageRail } from './stageRail';
 import { createStockList } from './stockList';
 import { createTopBar, speedKey } from './topBar';
+import { createProcessFlow, isYogurtStage } from './processFlow';
 import { createTour, YOGURT_TOUR_STOP_S, type Tour } from './tour';
 import { createTrendChart, TREND_CHARTS } from './trendChart';
 import { createTrendHistory } from './trends';
@@ -104,6 +105,8 @@ export function createHud(
   const history = createTrendHistory();
   const panelParts = (stage: StageInfo['id'], host: HTMLElement): PanelPart[] => {
     const built: PanelPart[] = [];
+    // The yogurt stages' process flow, step by step, first under the live values (phase 22).
+    if (isYogurtStage(stage)) built.push(createProcessFlow(host, stage));
     const chart = TREND_CHARTS[stage];
     if (chart) built.push(createTrendChart(host, stage, chart, history));
     // Line P8's fill weights (phase 18), above its rate slider.
