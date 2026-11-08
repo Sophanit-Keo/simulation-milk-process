@@ -432,6 +432,13 @@ Measured on 7 November 2026 the same way as phase 26, with no console errors.
 - **The stops:** 161 (1), 146 (2), 145 (3), 149 (4), 148 (5), 164 (6), 153 (7), 153 (8), 170 (9), 166 (10), 129 (11), 133 (12), 133 (13), 127 (14), 132 (15) and 141 (16) draw calls.
   - These read as in phase 26 but for stop 3, one more. That is likely the rebuilt homogenizer's meshes, which now reach further, at the edge of that view. This was not checked mesh by mesh.
 
+### Phase 28: the holding cell and Line P8, explained and in more detail
+
+Measured on 8 November 2026 the same way as phase 27, with no console errors.
+
+- **The overview:** **350** draw calls and **389,694** triangles, within the budget. P8's 17 new parts are instances in the shared box mesh, and the notes are the panel's, not the scene's.
+- **The stops:** every one reads as in phase 27: 161 (1), 146 (2), 145 (3), 149 (4), 148 (5), 164 (6), 153 (7), 153 (8), 170 (9), 166 (10), 129 (11), 133 (12), 133 (13), 127 (14), 132 (15) and 141 (16) draw calls.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

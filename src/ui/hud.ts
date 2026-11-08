@@ -5,6 +5,7 @@ import { el, onPress } from './dom';
 import { createFillHistogram } from './fillHistogram';
 import { createEventLog } from './eventLog';
 import { createKpiStrip } from './kpiStrip';
+import { createMachineNotes, notesFor } from './machineNotes';
 import { createPipeLegend } from './pipeLegend';
 import { createProductPicker } from './productPicker';
 import { createScenarioLog } from './scenarioLog';
@@ -107,6 +108,8 @@ export function createHud(
     const built: PanelPart[] = [];
     // The yogurt stages' process flow, step by step, first under the live values (phase 22).
     if (isYogurtStage(stage)) built.push(createProcessFlow(host, stage));
+    // A machine explained, under the flow (phase 28): the holding cell's (stage 12) and Line P8's (stage 15).
+    if (notesFor(stage).length > 0) built.push(createMachineNotes(host, stage));
     const chart = TREND_CHARTS[stage];
     if (chart) built.push(createTrendChart(host, stage, chart, history));
     // Line P8's fill weights (phase 18), above its rate slider.

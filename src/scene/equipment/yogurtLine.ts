@@ -63,7 +63,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
   const carrier = createP8Carrier();
   // The wing's moving parts (phase 23), in world metres, drawn in the cold chain's box mesh, whose root stands at the
   // world's origin and spans the wing, and which takes no clicks: no draw call of their own.
-  const motion = createWingMotion();
+  const motion = createWingMotion(carrier);
   // The palletizer, the wrapper and the pallets between them (phase 24), likewise drawn in the cold chain's box mesh.
   const palletLine = createPalletLine();
   const items = [
