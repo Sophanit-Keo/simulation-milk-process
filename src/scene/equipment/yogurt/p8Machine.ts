@@ -45,7 +45,7 @@ const smooth = (t: number): number => {
   return c * c * (3 - 2 * c);
 };
 /** Down over the dwell's [from, from + 0.15], held, and up again over [to − 0.15, to]: a station's stroke, 0–1. */
-const stroke = (dwell: number, from: number, to: number): number => smooth((dwell - from) / 0.15) * (1 - smooth((dwell - (to - 0.15)) / 0.15));
+export const stroke = (dwell: number, from: number, to: number): number => smooth((dwell - from) / 0.15) * (1 - smooth((dwell - (to - 0.15)) / 0.15));
 
 /** P8's state, or undefined for a snapshot without the yogurt line. */
 const p8Of = (snapshot: Snapshot): P8Snapshot | undefined => yogurtOf(snapshot)?.p8;

@@ -19,6 +19,7 @@
 // - Stage 14: the flow meter after the smoothing valve spins; the cooler's strip shows its outlet; the fruit pump strokes.
 //   Phase 25: the ice-water pump turns while the cooler cools; the buffer's outlet valve opens while P8 runs on it.
 // - Phase 26: the process hall's fittings in colour, some following the sim (hallDetail.ts).
+// - Phase 28: Line P8's de-nester, hood fans, magazine levels, seal display, stack light and screen (p8Detail.ts).
 // - Stage 15: the coder flashes as each cycle's lids pass, and the three check gates flash as they check a row.
 // - Stage 16: the blast chiller's fans turn while it holds pallets; the cold room's evaporator fans turn while its
 //   cooling works, and stand still in a cooling failure (D30).
@@ -29,6 +30,8 @@ import type { Snapshot, YogurtSnapshot } from '../../../contracts';
 import plantJson from '../../../data/plant.json';
 import { motionDtS } from '../../motion';
 import { hallDetailParts } from './hallDetail';
+import { p8DetailParts } from './p8Detail';
+import type { P8Carrier } from './p8Machine';
 import * as at from './layout';
 import { blade, clamp01, contentColor, fixed, flashColor, gauge, heating, HEX, p8Running, plate, plunger, rotor, still, topGauge, TURN, valveStem, wingTempColor, type Part, type PartState, type Pose } from './motionParts';
 import { yogurtOf } from './readings';
@@ -112,7 +115,7 @@ export function evaporatorXs(): number[] {
 }
 
 /** The wing's parts, machine by machine, in world metres (layout.ts and the fixtures in yogurtLine.ts). */
-function wingParts(): Part[] {
+function wingParts(carrier?: P8Carrier): Part[] {
   const parts: Part[] = [];
   // Stage 11.
   const powder = at.POWDER_STATION;
@@ -324,11 +327,14 @@ function wingParts(): Part[] {
   });
   // Phase 26: the process hall's fittings in colour, after every part before them, so those keep their instances.
   parts.push(...hallDetailParts());
+  // Phase 28: Line P8's de-nester bar, hood fans, magazine levels, seal display, stack light and screen (p8Detail.ts).
+  parts.push(...p8DetailParts(carrier));
   return parts;
 }
 
-export function createWingMotion(): WingMotion {
-  const parts = wingParts();
+/** The wing's moving parts; Line P8's carrier, if given, times the de-nester's stroke with the other stations'. */
+export function createWingMotion(carrier?: P8Carrier): WingMotion {
+  const parts = wingParts(carrier);
   let mesh: THREE.InstancedMesh | null = null;
   let offset = 0;
   const phases = parts.map(() => 0);

@@ -10,6 +10,7 @@ import type { Equipment, EquipmentContext, MaterialName } from '../../src/scene/
 import { DOCK_DOORS_X_M, HOMOGENIZER_FRAME } from '../../src/scene/equipment/yogurt/layout';
 import { wingSphere } from '../../src/scene/equipment/yogurt/coldChainScene';
 import { jacketWater } from '../../src/scene/equipment/yogurt/hallDetail';
+import { stackLamp } from '../../src/scene/equipment/yogurt/p8Detail';
 import { contentColor, evaporatorXs, wingTempColor } from '../../src/scene/equipment/yogurt/wingMotion';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
 import { STAGE_VIEWS } from '../../src/scene/layout';
@@ -393,5 +394,65 @@ describe('the homogenizer, laid out as the UHT line\'s (phase 27)', () => {
     expect(stopped.piston1Moving).toBe(false);
     w.frames(5, 0.1);
     expect(w.state('yogurt-homogenizer').piston1Turns).toBe(stopped.piston1Turns);
+  });
+});
+
+describe('Line P8 in more detail (phase 28)', () => {
+  it('strokes the de-nester\'s bar once a cycle in the dwell, and stands it while P8 stands', () => {
+    const w = wing();
+    w.frames(1);
+    runUntil(w, (each) => each.yogurt.p8.state === 'running');
+    const seen: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      w.frames(1, 0.1);
+      seen.push(Number(w.state('p8-filler').denesterBarReading));
+    }
+    // Over 3 s at 30 cycles a minute: down all the way and back up.
+    expect(Math.max(...seen)).toBeGreaterThan(0.95);
+    expect(Math.min(...seen)).toBe(0);
+    w.sim.dispatch({ type: 'pause', paused: true });
+    const paused = w.state('p8-filler').denesterBarReading;
+    w.frames(5, 0.1);
+    expect(w.state('p8-filler').denesterBarReading).toBe(paused);
+  });
+
+  it('runs the hood\'s fans while the cabin holds, and in a HEPA loss runs them down to a stop, the stack light and screen red', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.p8.state === 'running');
+    w.frames(20, 0.1);
+    expect(w.state('p8-filler')).toMatchObject({ hepaFan1Moving: true, hepaFan3CrossMoving: true, stackGreenColor: '#34c759', stackRedColor: '#4a2622', screenColor: '#4aa3ff' });
+    w.sim.dispatch({ type: 'triggerScenario', id: 'yogurtHepaLoss' });
+    w.frames(30, 0.1);
+    const state = w.state('p8-filler');
+    expect(state).toMatchObject({ hepaFan1Moving: false, hepaFan2Moving: false, stackRedColor: '#d63b26', stackGreenColor: '#21402a', screenColor: '#d63b26' });
+    w.frames(5, 0.1);
+    expect(w.state('p8-filler').hepaFan1Turns).toBe(state.hepaFan1Turns);
+  });
+
+  it('shows the seal in its window green, and red once the seal drift takes it under 180 °C', () => {
+    const w = wing();
+    runUntil(w, (each) => each.yogurt.p8.state === 'running');
+    w.frames(2);
+    expect(w.state('p8-filler')).toMatchObject({ sealDisplayColor: '#34c759', sealDisplayReading: 200 });
+    w.sim.dispatch({ type: 'triggerScenario', id: 'yogurtSealDrift' });
+    runUntil(w, (each) => (each.yogurt.p8.seal?.tempC ?? 200) < 179);
+    w.frames(2);
+    expect(w.state('p8-filler').sealDisplayColor).toBe('#d63b26');
+  });
+
+  it('fills the magazines\' level bars with their cups and foils, amber under the refill mark', () => {
+    expect(stackLamp('running')).toBe('green');
+    expect(stackLamp('starved')).toBe('amber');
+    expect(stackLamp('sterilizing')).toBe('amber');
+    expect(stackLamp('stopped')).toBe('red');
+    expect(stackLamp('idle')).toBeNull();
+    const w = wing();
+    const snap = w.frames(2);
+    const magazines = snap.yogurt.p8.magazines;
+    expect(Number(w.state('p8-filler').cupMagazineLevelReading)).toBeCloseTo(magazines?.cupsPct ?? 100, 1);
+    expect(Number(w.state('p8-filler').foilMagazineLevelReading)).toBeCloseTo(magazines?.foilsPct ?? 100, 1);
+    runUntil(w, (each) => (each.yogurt.p8.magazines?.cupsPct ?? 100) < 25);
+    w.frames(1);
+    expect(w.state('p8-filler').cupMagazineLevelColor).toBe('#ffd84a');
   });
 });

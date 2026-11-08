@@ -1,0 +1,52 @@
+{
+  "notes": [
+    {
+      "id": "holdingCell",
+      "stage": 12,
+      "title": "The holding cell",
+      "summary": "Why the mix is held at 92 °C for 5 minutes, and how the line proves it was.",
+      "sections": [
+        {
+          "heading": "What it is",
+          "text": "A 500 L insulated tube, laid as a serpentine of five passes, straight after the heat exchanger's heating section. The mix fills it at 92 °C and takes as long to cross it as the flow allows: 5 min at the line's full 6,000 L/h, about 11 min at P8's pace. Being insulated, it lets the mix leave at the temperature it came in with: the heater brings the mix up to temperature, the holding cell counts the time."
+        },
+        {
+          "heading": "Why yogurt needs it",
+          "text": "Held at 92 °C for 5 min, about 99% of the whey protein β-lactoglobulin is denatured, against a target of 85%. It then binds to the casein and builds into the gel, so the yogurt is firmer and smoother and does not weep whey in the cup. The same heat kills the bacteria in the mix, so the starter culture added next has it to itself."
+        },
+        {
+          "heading": "The critical control point",
+          "text": "A probe at the outlet reads every litre that leaves. Under 85 °C, or held under 3 min, the divert valve sends the mix back to the reprocess tank instead of forward; the line then cleans itself and starts again, and the reprocess tank goes to rework. At 85 °C for 3 min only about 82% of the whey protein would be denatured, under the target. The recorder at the outlet writes the temperature on its chart: the record that every batch was treated."
+        },
+        {
+          "heading": "At this plant",
+          "text": "To hold the mix under 3 min the line would have to pump more than 10,000 L/h, more than it can: here only a low temperature diverts. To watch one, start the scenario Heat treatment under temperature: the recorder's pen falls under its red line and the divert valve's flag turns to the reprocess tank."
+        }
+      ]
+    },
+    {
+      "id": "p8",
+      "stage": 15,
+      "title": "Line P8, the cup filler",
+      "summary": "How the filler makes 21,600 cups an hour, station by station, under clean air.",
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "Line P8 fills ready-made cups, 12 lanes side by side: 12 cups a cycle, 30 cycles a minute, 21,600 cups of 125 g an hour. A carrier chain moves the cups one row forward every 2 s, and each station works on the row under it while the chain stands."
+        },
+        {
+          "heading": "Station by station",
+          "text": "The de-nester's suction bar pulls an empty cup from each of the 12 magazines into the carrier's pockets. Ionized air loosens the dust, a vacuum takes it off, and UV-C light disinfects the cups' insides. Twelve volumetric pistons fill each cup with about 127 g. A foil is picked onto each cup and heat-sealed at 200 °C for 1.0 s at 5 bar, and the coder prints the batch code and the best-before date. Past the machine a checkweigher, a metal detector and a camera check every cup, and every 2 h of running 5 cups are tested for leaks."
+        },
+        {
+          "heading": "Clean air",
+          "text": "The cups are open from the de-nester to the sealing heads, so the whole line runs under a HEPA hood: its fans keep the cabin at about 25 Pa over the hall, and filtered air flows out, never in. Under 15 Pa P8 stops. Before set yogurt the line is cleaned in place (CIP), then sterilized with steam at 121 °C for 20 min (SIP)."
+        },
+        {
+          "heading": "What stops it",
+          "text": "A cup or foil magazine run empty (each is topped up once under 25%), the HEPA cabin under its limit, or an empty buffer. A seal outside 180–220 °C, 0.8–1.2 s or 4–6 bar does not stop it but makes leaks likely, and a failed seal test holds every cup made since the last test that passed."
+        }
+      ]
+    }
+  ]
+}
