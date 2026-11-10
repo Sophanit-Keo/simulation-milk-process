@@ -34,6 +34,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 26. Yogurt hall machines in more detail | after Y3 | scene | Every stage 12–14 machine's fittings: manways, flanges, probes, a control cabinet, the tanks' jackets and CIP header, lamps and displays | [Phase 26](phase-26-yogurt-hall-machines-detail.md) |
 | 27. Yogurt homogenizer, rebuilt | after Y3 | scene | The yogurt homogenizer laid out as the UHT line's: pistons in the open gap, gauges on the top cover, a round motor, a crank that spins up and down | [Phase 27](phase-27-yogurt-homogenizer-fix.md) |
 | 28. Holding cell and P8 explained | after Y3 | ui, scene | The holding cell and Line P8 explained in their panels with live readings; P8's de-nester, hood fans, magazine levels, seal display, stack light and screen | [Phase 28](phase-28-holding-cell-and-p8-explained.md) |
+| 29. Yogurt mix room and dispatch in motion | after Y3 | scene | Stage 11's machines with their fittings and moving parts; stackers carrying the pallets to the rooms; reefers that arrive, open up, back in, load and leave | [Phase 29](phase-29-yogurt-mix-and-dispatch.md) |
 
 ## The agents
 
