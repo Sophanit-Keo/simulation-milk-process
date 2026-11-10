@@ -20,6 +20,7 @@
 //   Phase 25: the ice-water pump turns while the cooler cools; the buffer's outlet valve opens while P8 runs on it.
 // - Phase 26: the process hall's fittings in colour, some following the sim (hallDetail.ts).
 // - Phase 28: Line P8's de-nester, hood fans, magazine levels, seal display, stack light and screen (p8Detail.ts).
+// - Phase 29: the mix room's pump, valves, fans, powder specks, bag gauge and drum levels (mixDetail.ts).
 // - Stage 15: the coder flashes as each cycle's lids pass, and the three check gates flash as they check a row.
 // - Stage 16: the blast chiller's fans turn while it holds pallets; the cold room's evaporator fans turn while its
 //   cooling works, and stand still in a cooling failure (D30).
@@ -30,6 +31,7 @@ import type { Snapshot, YogurtSnapshot } from '../../../contracts';
 import plantJson from '../../../data/plant.json';
 import { motionDtS } from '../../motion';
 import { hallDetailParts } from './hallDetail';
+import { mixDetailParts } from './mixDetail';
 import { p8DetailParts } from './p8Detail';
 import type { P8Carrier } from './p8Machine';
 import * as at from './layout';
@@ -329,6 +331,8 @@ function wingParts(carrier?: P8Carrier): Part[] {
   parts.push(...hallDetailParts());
   // Phase 28: Line P8's de-nester bar, hood fans, magazine levels, seal display, stack light and screen (p8Detail.ts).
   parts.push(...p8DetailParts(carrier));
+  // Phase 29: the mix room's pump, valves, fans, powder and levels (mixDetail.ts), after every part before them.
+  parts.push(...mixDetailParts());
   return parts;
 }
 
@@ -380,6 +384,7 @@ export function createWingMotion(carrier?: P8Carrier): WingMotion {
       if (snapshot === last) return;
       last = snapshot;
       const yogurt = yogurtOf(snapshot);
+      for (const part of parts) part.observe?.(snapshot);
       if (yogurt) {
         const dtS = motionDtS(snapshot, realDtS);
         parts.forEach((part, i) => {
