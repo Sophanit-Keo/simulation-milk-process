@@ -4,7 +4,7 @@ import { YOGURT_STAGE_IDS, type Snapshot } from '../../src/contracts';
 import { EQUIPMENT_FACTORIES, type Equipment, type EquipmentContext, type MaterialName } from '../../src/scene/equipment';
 import { createKit } from '../../src/scene/equipment/liquid/kit';
 import { OUTFEED, P8, P8_STATIONS } from '../../src/scene/equipment/yogurt/layout';
-import { COLD_PLACES, CHILLER_PLACES, REEFER_M, reeferOffsetM, shownPallets, WARM_PLACES } from '../../src/scene/equipment/yogurt/coldChainScene';
+import { COLD_PLACES, CHILLER_PLACES, shownPallets, WARM_PLACES } from '../../src/scene/equipment/yogurt/coldChainScene';
 import { createP8Carrier, cupCodeText, FILL_ROW, FOIL_ROW, hepaLamp, p8Cups, p8Filler } from '../../src/scene/equipment/yogurt/p8Machine';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
 import { REEFER_YARD, STAGE_VIEWS, ZONES, type RectM } from '../../src/scene/layout';
@@ -168,11 +168,13 @@ describe('the yogurt wing in grey boxes', () => {
     for (const item of solids) scene.remove(item.object);
   });
 
-  it('keeps the reefer yard north of the cold store, outside every zone', () => {
+  it('keeps the reefer yard north of the wing, outside every zone', () => {
     const cold = ZONES.find((zone) => zone.id === 'coldChain')?.rect;
     expect(REEFER_YARD.rect.zMaxM).toBe(cold?.zMinM);
-    expect(REEFER_YARD.rect.xMinM).toBe(cold?.xMinM);
     expect(REEFER_YARD.rect.xMaxM).toBe(cold?.xMaxM);
+    // Since phase 29 it reaches west behind the cup hall, for the reefers' turn (reeferTruck.test.ts walks it).
+    expect(REEFER_YARD.rect.xMinM).toBeLessThan(cold?.xMinM ?? 0);
+    for (const zone of ZONES) expect(zone.rect.zMinM, zone.id).toBeGreaterThanOrEqual(REEFER_YARD.rect.zMaxM);
   });
 
   it('fills the tank gauges and writes the labels from the mock snapshot', () => {
@@ -458,10 +460,7 @@ describe('the cold chain in the 3D view (phase 19)', () => {
     item.dispose();
   });
 
-  it('backs a reefer in over its last 10 minutes of arriving, and stands it at its door while it loads', () => {
-    expect(reeferOffsetM('arriving', 1_200, 0)).toBe(REEFER_M.backInM);
-    expect(reeferOffsetM('arriving', 300, 0)).toBeCloseTo(REEFER_M.backInM / 2, 9);
-    expect(reeferOffsetM('loading', 600, 0)).toBe(0);
+  it('shows a reefer the sim has at a door, and names it on the dock\'s label (its moves are reeferTruck.test.ts\'s)', () => {
     const item = tokens();
     const base = createSim(plantConfig).snapshot();
     const snapshot = { ...base, yogurt: { ...base.yogurt, coldChain: { ...base.yogurt.coldChain, reefers: [{ id: 3, door: 1, state: 'loading' as const, pallets: 10, load: 26, untilS: base.timeS + 300 }] } } };

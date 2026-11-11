@@ -77,11 +77,14 @@ export const APRON: { colorVar: ZoneColorVar; rect: RectM } = {
 
 /**
  * The yogurt wing's reefer yard (phase 16): north of the cold store, whose dock doors face it, so the chilled
- * pallets never cross the UHT halls (plan 12). Deep enough for a 16.5 m reefer backed onto a door (phase 19).
+ * pallets never cross the UHT halls (plan 12). Since phase 29 the reefers drive in from the east along a lane
+ * behind the docked ones (z −78.6 to −76.1), stop past their door and back in along a curve (yogurt/reeferTruck.ts):
+ * the cab swings out to z −84.3 and stops as far west as x −1.5, so the yard runs to z −86 and west to x −4, behind
+ * the cup hall.
  */
 export const REEFER_YARD: { colorVar: ZoneColorVar; rect: RectM } = {
   colorVar: '--apron',
-  rect: { xMinM: 19, xMaxM: 37, zMinM: -76, zMaxM: -56 },
+  rect: { xMinM: -4, xMaxM: 37, zMinM: -86, zMaxM: -56 },
 };
 
 /** Where the camera and the labels go for each stage. One table, so the guided tour can reuse it (phase 2, "Watch for"). */

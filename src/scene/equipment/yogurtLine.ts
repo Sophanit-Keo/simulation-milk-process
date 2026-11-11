@@ -28,6 +28,7 @@ import { HERO_MODELS, swapInHero } from './heroes';
 import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
 import * as at from './yogurt/layout';
 import { coldChainTokens } from './yogurt/coldChainScene';
+import { createReeferYard } from './yogurt/reeferTruck';
 import { MIXER_FITTINGS, onSilo, POWDER_FITTINGS, SILO_FITTINGS, SKID_FITTINGS } from './yogurt/mixDetail';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
 import { createWingMotion, type WingMotion } from './yogurt/wingMotion';
@@ -67,6 +68,8 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
   const motion = createWingMotion(carrier);
   // The palletizer, the wrapper and the pallets between them (phase 24), likewise drawn in the cold chain's box mesh.
   const palletLine = createPalletLine();
+  // The reefers on the north yard and the dock's doors and lamps (phase 29), drawn in the same mesh.
+  const yard = createReeferYard();
   const items = [
     yogurtSilo(kit),
     powderStation(kit),
@@ -163,7 +166,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
     warmRoom(kit),
     blastChiller(kit),
     coldRoom(kit),
-    coldChainTokens(kit, [motion, palletLine]),
+    coldChainTokens(kit, [motion, palletLine, yard], { yard }),
   ];
   return items.map((item) => withMotion(item, motion, item.id === 'yogurt-pallets'));
 };

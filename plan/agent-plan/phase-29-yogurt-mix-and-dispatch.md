@@ -45,19 +45,21 @@ Two electric stacker trucks, each with its rider, carry the pallets between the 
 
 ### Stage 16 · Reefers at the dock
 
-A reefer is now an articulated truck built of about 50 boxes: the trailer's deck, walls and roof, open at the back; its two rear doors; the refrigeration unit on its front wall with a fan and a status lamp; the tractor with its cab, windscreen, lights and mirrors; ten wheels. It moves through phase 12's dock moves (`packs/truckMoves.ts`), mirrored to the north yard:
+A reefer is now an articulated truck built of about 50 boxes: the trailer's deck, walls and roof, open at the back; its two rear doors; the refrigeration unit on its front wall with a fan and a status lamp; the tractor with its cab, windscreen, lights and mirrors; ten wheels. It moves through phase 12's dock moves (`packs/truckMoves.ts`), turned round to the north yard:
 
 | Step | What you see | Time (motion s) |
 |---|---|---|
-| 1. Arrive | The reefer drives in along the road behind the wing, past its door, and stops | about 13–15 |
+| 1. Arrive | The reefer drives in from the east along the yard's lane, past its door, and stops | about 8 |
 | 2. Doors | The rear doors swing open, flat against the trailer's sides | 3 |
-| 3. Back in | It reverses along a curve to its door, tractor and trailer articulated (at most 0.6 rad) | 10 |
+| 3. Back in | It reverses along a curve to its door, tractor and trailer articulated (at most 0.9 rad), the last 9 m straight | 10 |
 | 4. Dock | The dock's roller door rises and its lamp turns red | 3 |
 | 5. Load | Pallets fill the trailer from the front, two abreast, by the sim's own count (`reefers[].pallets`) | sim |
-| 6. Leave | The roller door comes down, the lamp turns green, the doors close, and the reefer pulls out and drives off east | 3 + about 8 |
+| 6. Leave | The roller door comes down, the lamp turns green, the doors close, and the reefer pulls out and drives off west along the road behind the wing | 3 + about 13 |
 
 - **Fits the sim's time:** the sim gives a reefer 30 min to back up and 20 min to load. The arrival is timed to end as the sim docks the reefer; when the sim runs faster than the moves can play, they play up to 10× faster or are skipped (phase 12's rule).
 - **The unit runs:** its fan turns and its lamp shows blue while the reefer is on the yard.
+- **A path of the yard's own:** the north dock's doors stand 4.5 m apart (the UHT dock's 8 m), so a reefer pulls 9 m straight out before it turns and turns harder than a UHT truck. It passes 0.9 m clear of a reefer docked at the next door; the cold-room fault can call three at once.
+- **The yard grows** to hold the lane and the cab's swing: x −4 to 37, z −86 to −56.
 
 ## Contracts (`lead`)
 
@@ -79,7 +81,7 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 |---|---|---|---|
 | 1 | `lead` | This card, D31 | `plan/` |
 | 2 | `scene` | `yogurt/mixDetail.ts`: stage 11's coloured and moving parts; the grey fittings in `yogurtLine.ts`, joined to meshes the machines already have | `src/scene/equipment/yogurt/`, `yogurtLine.ts` |
-| 3 | `scene` | `yogurt/reeferTruck.ts`: the reefer's boxes and the mirrored dock moves; the dock's roller doors and lamps; the three-box reefers go | likewise |
+| 3 | `scene` | `yogurt/reeferTruck.ts`: the reefer's boxes and the dock moves turned round; the dock's roller doors and lamps; the three-box reefers go. `packs/truckMoves.ts`: a path and a road for each yard. `scene/layout.ts`: the yard | likewise, and `packs/truckMoves.ts`, `scene/layout.ts` |
 | 4 | `scene` | `yogurt/stackers.ts`: the two stackers' routes, trips and doors, headless; drawn in `yogurt/dispatchBoxes.ts` | likewise |
 | 5 | `qa` | `tests/scene/mixDetail.test.ts`, `reeferTruck.test.ts`, `stackers.test.ts` on the live sim; `e2e/yogurtMotion.spec.ts` and `yogurtColdChain.spec.ts`; the overview's draw calls | `tests/`, `e2e/` |
 
