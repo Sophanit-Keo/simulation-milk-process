@@ -281,7 +281,8 @@ describe('forklifts (stage 10)', () => {
     const gone = snapshotAt(stock, []);
     play(machines, gone, 300, () => state(machines, 'forklift-2').job === 'parked');
     expect(state(machines, 'forklift-2')).toMatchObject({ job: 'parked', carrying: false, beacon: false });
-  });
+    // About 4 s on its own: the default 5 s is too little once the other scene tests run beside it.
+  }, 20_000);
 
   it('lifts the inner mast by half the forks’ lift, grey or model, and flashes the beacon only while working', async () => {
     const cases: Record<string, () => THREE.Object3D>[] = [{}, { 'vehicles/forklift.glb': () => stubForklift() }];

@@ -58,6 +58,7 @@ test('the hero models load in place of their grey boxes with no errors; with ?gr
     'palletizer.glb',
     'separator.glb',
     'stretch-wrapper.glb',
+    'yogurt-palletizer.glb',
   ]);
   // Each machine swaps its model in, meshopt-decoded.
   await page.goto('/?debug');

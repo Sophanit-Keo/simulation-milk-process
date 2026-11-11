@@ -439,6 +439,17 @@ Measured on 8 November 2026 the same way as phase 27, with no console errors.
 - **The overview:** **350** draw calls and **389,694** triangles, within the budget. P8's 17 new parts are instances in the shared box mesh, and the notes are the panel's, not the scene's.
 - **The stops:** every one reads as in phase 27: 161 (1), 146 (2), 145 (3), 149 (4), 148 (5), 164 (6), 153 (7), 153 (8), 170 (9), 166 (10), 129 (11), 133 (12), 133 (13), 127 (14), 132 (15) and 141 (16) draw calls.
 
+### Phase 29: the yogurt mix room and the dispatch in motion
+
+Measured on 11 November 2026 the same way as phase 28, with no console errors.
+
+- **The overview:** **350** draw calls and **394,210** triangles, within the budget, which it meets exactly as before.
+  - Stage 11's 30 moving parts, the three reefers (53 boxes each, their 26 pallets, a roller door and a lamp a door), the two stackers (25 boxes each, their pallets) and the four rapid doors are all instances in the cold chain's shared box mesh. None adds a draw call.
+  - Stage 11's grey fittings (the silo's pump, agitator drive, manway and CIP riser; the powder station's filter, hoist and panel; the mixer's motor; the skid's agitator drives) are joined to meshes their machines already had. They account for the 4,516 more triangles.
+- **The stops:** every one reads as in phase 28: 161 (1), 146 (2), 145 (3), 149 (4), 148 (5), 164 (6), 153 (7), 153 (8), 170 (9), 166 (10), 129 (11), 133 (12), 133 (13), 127 (14), 132 (15) and 141 (16) draw calls.
+- **Stage 16 while it works** reads 141 to 146 draw calls as the wrapper's film and the rooms' glows come and go, as it did before this phase; a reefer on the yard and both stackers at work add none.
+- **Not measured:** the frame rate. The shared box mesh now holds about 380 more instances whose matrices are written every frame; on software GL this could not be told apart from the noise.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

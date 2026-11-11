@@ -61,7 +61,9 @@ export const ZONES: readonly Zone[] = [
   { id: 'yogurtProcess', label: ZONE_NAMES.yogurtProcess, stages: [12, 13, 14], colorVar: '--zone-yog', rect: { xMinM: -43, xMaxM: -3, zMinM: -56, zMaxM: -38.5 }, labelAlign: 'left' },
   { id: 'p8', label: ZONE_NAMES.p8, stages: [15], colorVar: '--zone-clean', rect: { xMinM: 0, xMaxM: 16, zMinM: -56, zMaxM: -38.5 }, labelAlign: 'left' },
   // Its name ends at its east end: begun at the west one it would run past the view's edge.
-  { id: 'coldChain', label: ZONE_NAMES.coldChain, stages: [16], colorVar: '--zone-cold', rect: { xMinM: 19, xMaxM: 37, zMinM: -56, zMaxM: -32 }, labelAlign: 'right' },
+  // Since phase 29 it reaches 3 m further east than the halls south of it: the transfer aisle from the blast chiller's
+  // east mouth round the end of the pallet line to the cold room, the only way across the line.
+  { id: 'coldChain', label: ZONE_NAMES.coldChain, stages: [16], colorVar: '--zone-cold', rect: { xMinM: 19, xMaxM: 40, zMinM: -56, zMaxM: -32 }, labelAlign: 'right' },
 ];
 
 /**
@@ -77,11 +79,14 @@ export const APRON: { colorVar: ZoneColorVar; rect: RectM } = {
 
 /**
  * The yogurt wing's reefer yard (phase 16): north of the cold store, whose dock doors face it, so the chilled
- * pallets never cross the UHT halls (plan 12). Deep enough for a 16.5 m reefer backed onto a door (phase 19).
+ * pallets never cross the UHT halls (plan 12). Since phase 29 the reefers drive in from the east along a lane
+ * behind the docked ones (z −78.6 to −76.1), stop past their door and back in along a curve (yogurt/reeferTruck.ts):
+ * the cab swings out to z −84.3 and stops as far west as x −1.5, so the yard runs to z −86 and west to x −4, behind
+ * the cup hall; its east edge is the cold store's.
  */
 export const REEFER_YARD: { colorVar: ZoneColorVar; rect: RectM } = {
   colorVar: '--apron',
-  rect: { xMinM: 19, xMaxM: 37, zMinM: -76, zMaxM: -56 },
+  rect: { xMinM: -4, xMaxM: 40, zMinM: -86, zMaxM: -56 },
 };
 
 /** Where the camera and the labels go for each stage. One table, so the guided tour can reuse it (phase 2, "Watch for"). */

@@ -2,7 +2,7 @@
 // colours, and the poses and colours it is built from. wingMotion.ts lists the parts of phases 23 and 25,
 // hallDetail.ts those of phase 26; wingMotion.ts moves and draws them all.
 import * as THREE from 'three';
-import type { YogurtSnapshot } from '../../../contracts';
+import type { Snapshot, YogurtSnapshot } from '../../../contracts';
 import plantJson from '../../../data/plant.json';
 
 const Y = plantJson.yogurt;
@@ -95,6 +95,11 @@ export interface Part {
   reading?(yogurt: YogurtSnapshot): number;
   /** Its colour now; the part's metal if left out. */
   color?(yogurt: YogurtSnapshot, phase: number, out: THREE.Color): THREE.Color;
+  /**
+   * Phase 29: sees each new snapshot once, before any part moves: a part that counts something over sim time, the mix
+   * room's powder bag (mixDetail.ts).
+   */
+  observe?(snapshot: Snapshot): void;
 }
 
 export interface Pose {

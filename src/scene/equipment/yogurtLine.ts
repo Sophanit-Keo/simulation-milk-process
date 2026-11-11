@@ -28,6 +28,9 @@ import { HERO_MODELS, swapInHero } from './heroes';
 import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
 import * as at from './yogurt/layout';
 import { coldChainTokens } from './yogurt/coldChainScene';
+import { createTransfers } from './yogurt/dispatchBoxes';
+import { createReeferYard } from './yogurt/reeferTruck';
+import { MIXER_FITTINGS, onSilo, POWDER_FITTINGS, SILO_FITTINGS, SKID_FITTINGS } from './yogurt/mixDetail';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
 import { createWingMotion, type WingMotion } from './yogurt/wingMotion';
 import { createPalletLine, FILM_TOP_M, filmHeightM, GANTRY, PALLET, STACK_CAPACITY, type PalletLine } from './yogurt/palletLine';
@@ -66,6 +69,9 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
   const motion = createWingMotion(carrier);
   // The palletizer, the wrapper and the pallets between them (phase 24), likewise drawn in the cold chain's box mesh.
   const palletLine = createPalletLine();
+  // The reefers on the north yard and the dock's doors and lamps (phase 29), drawn in the same mesh.
+  const yard = createReeferYard();
+  const transfers = createTransfers(palletLine);
   const items = [
     yogurtSilo(kit),
     powderStation(kit),
@@ -162,7 +168,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
     warmRoom(kit),
     blastChiller(kit),
     coldRoom(kit),
-    coldChainTokens(kit, [motion, palletLine]),
+    coldChainTokens(kit, [motion, palletLine, yard, transfers], { yard, transfers }),
   ];
   return items.map((item) => withMotion(item, motion, item.id === 'yogurt-pallets'));
 };
@@ -333,6 +339,7 @@ function yogurtSilo(kit: Kit): Equipment {
   b.part('cyl', 'steel', [xM, plinthM + bodyM / 2, zM], [radiusM, bodyM, radiusM], { castShadow: true });
   b.part('dome', 'steel', [xM, plinthM + bodyM, zM], [radiusM, domeM, radiusM], { castShadow: true });
   b.part('box', 'steelDark', [xM - radiusM - 0.04, plinthM + bodyM / 2, zM], [0.08, bodyM - 0.3, 0.45]); // ladder, on the far side from the outlet
+  siloFittings(b);
   const level = levelGauge(b, [xM, 0, zM + radiusM + 0.02], plinthM + 0.2, bodyM - 0.4, 0.12, yogurtFill((y) => y.mix.tanks.silo));
   return machine(b, {
     id: 'yogurt-silo',
@@ -343,6 +350,28 @@ function yogurtSilo(kit: Kit): Equipment {
     update: (s) => level.update(s),
     debugState: () => ({ fillFrac: level.fillFrac() }),
   });
+}
+
+/**
+ * Phase 29: the silo's fittings (mixDetail.ts SILO_FITTINGS), in its own materials so they join its meshes: the milk
+ * pump on the outlet pipe, its volute to the aisle and its motor behind; the side agitator's drive, out from the
+ * shell; the manway; and the CIP riser up the back to the dome.
+ */
+function siloFittings(b: MachineBuilder): void {
+  const S = SILO_FITTINGS;
+  const { zM, plinthM, bodyM } = at.SILO;
+  const alongZ: [number, number, number] = [Math.PI / 2, 0, 0];
+  b.part('box', 'steelDark', [S.pumpXM, 0.12, zM - 0.1], [0.4, 0.24, 0.9]); // the pump's base
+  b.part('cylLo', 'steelDark', [S.pumpXM, 0.45, zM + 0.14], [0.2, 0.12, 0.2], { rotationRad: alongZ }); // its volute
+  b.part('cylLo', 'steelDark', [S.pumpXM, 0.45, zM - 0.3], [0.16, 0.5, 0.16], { rotationRad: alongZ }); // its motor
+  // A cylinder laid out from the shell at `rad` round it: its height axis turned from y to the shell's normal.
+  const outward = (rad: number): [number, number, number] => [Math.PI / 2, 0, -rad];
+  const [driveXM, driveZM] = onSilo(S.agitatorRad, 0.26);
+  b.part('cylLo', 'steelDark', [driveXM, S.agitatorYM, driveZM], [0.16, 0.5, 0.16], { rotationRad: outward(S.agitatorRad) });
+  const [manwayXM, manwayZM] = onSilo(S.manwayRad, 0.03);
+  b.part('cylLo', 'steelDark', [manwayXM, S.manwayYM, manwayZM], [0.3, 0.07, 0.3], { rotationRad: outward(S.manwayRad) });
+  const [riserXM, riserZM] = onSilo(S.riserRad, 0.08);
+  b.part('cylLo', 'steelDark', [riserXM, plinthM + bodyM / 2, riserZM], [0.05, bodyM, 0.05]);
 }
 
 function powderStation(kit: Kit): Equipment {
@@ -359,6 +388,13 @@ function powderStation(kit: Kit): Equipment {
     const chuteFromZM = zM + 0.8;
     const chuteToZM = at.MIXER.zM - 0.5;
     b.part('cylLo', 'steel', [xM, 1.6, (chuteFromZM + chuteToZM) / 2], [0.1, chuteToZM - chuteFromZM, 0.1], { rotationRad: [Math.PI / 2, 0, 0] });
+    // Phase 29 (mixDetail.ts POWDER_FITTINGS), in the frame's dark steel: the dust filter on the frame's top, the
+    // hoist's rail reaching out over the aisle with its chain block, and the operator panel on the front left post.
+    const P = POWDER_FITTINGS;
+    b.part('box', 'steelDark', [xM + P.filter.dxM, P.filter.yM, zM + P.filter.dzM], P.filter.sizeM);
+    b.part('box', 'steelDark', [xM, 3.33, zM + 0.25], [0.14, 0.14, 2.3]);
+    b.part('box', 'steelDark', [xM, 3.16, zM + 1.25], [0.22, 0.2, 0.22]);
+    b.part('box', 'steelDark', [xM + P.panel.dxM, P.panel.yM, zM + P.panel.dzM], P.panel.sizeM);
   }, (s) => labelValue(stageValue(s, 11, 'powderKgPerT'), 1, 'kg/t'));
 }
 
@@ -369,6 +405,9 @@ function highShearMixer(kit: Kit): Equipment {
     body(b, xM, zM, [0.9, 0.6, 0.7]);
     b.part('cylLo', 'steel', [xM, 0.9, zM], [0.22, 0.6, 0.22]);
     b.part('coneDown', 'steel', [xM, 1.5, zM], [0.45, 0.6, 0.45]); // the funnel, wide at the top
+    // Phase 29: the drive motor, lying along z in front of the body, in the body's paint (one mesh with it).
+    const M = MIXER_FITTINGS;
+    b.part('cylLo', 'paint', [xM, M.motorYM, M.motorZM], [M.motorRadiusM, M.motorLengthM, M.motorRadiusM], { rotationRad: [Math.PI / 2, 0, 0] });
   });
 }
 
@@ -378,6 +417,9 @@ function stabilizerSkid(kit: Kit): Equipment {
     b.part('box', 'steelDark', [xM, 0.08, zM], [1.6, 0.16, 1.0]);
     for (const dx of [-0.4, 0.4]) b.part('cylLo', 'paint', [xM + dx, 0.6, zM], [0.3, 0.9, 0.3]); // two drums
     b.part('box', 'paint', [xM, 0.3, zM + 0.4], [0.4, 0.3, 0.25]); // dosing pump
+    // Phase 29: an agitator drive on each drum's lid, in the drums' paint (one mesh with them).
+    const K = SKID_FITTINGS;
+    for (const dx of [-K.drumDxM, K.drumDxM]) b.part('cylLo', 'paint', [xM + dx, K.drumTopM + 0.08, zM], [0.09, 0.16, 0.09]);
   });
 }
 
@@ -1061,7 +1103,7 @@ function warmRoom(kit: Kit): Equipment {
     'Warm room',
     [xM, zM],
     r.wallM,
-    (b) => walls(b, r, r.wallM, [{ side: 'north', atM: xM, widthM: 2 }]),
+    (b) => walls(b, r, r.wallM, [{ side: 'east', atM: at.WARM_DOOR.zM, widthM: at.WARM_DOOR.widthM }]),
     (s) => labelValue(finite(yogurtOf(s)?.coldChain.warmRoom.tempC), 0, '°C'),
   );
 }
@@ -1106,7 +1148,7 @@ function coldRoom(kit: Kit): Equipment {
     r.wallM,
     (b) => {
       // The dock doors in the north wall, facing the reefer yard, and a doorway from the chiller in the south one.
-      walls(b, r, r.wallM, [...at.DOCK_DOORS_X_M.map((atM) => ({ side: 'north' as const, atM, widthM: 2.8 })), { side: 'south', atM: 33.2, widthM: 2.4 }]);
+      walls(b, r, r.wallM, [...at.DOCK_DOORS_X_M.map((atM) => ({ side: 'north' as const, atM, widthM: 2.8 })), { side: 'south', atM: at.COLD_DOORWAY.xM, widthM: at.COLD_DOORWAY.widthM }]);
       for (const doorXM of at.DOCK_DOORS_X_M) {
         b.part('box', 'steel', [doorXM, r.wallM - 0.15, r.zMinM], [3.0, 0.3, 0.25], { castShadow: true }); // door head, in the walls' steel (one mesh)
         b.part('box', 'concrete', [doorXM, 0.6, r.zMinM - 0.6], [3.0, 1.2, 1.2]); // dock leveller

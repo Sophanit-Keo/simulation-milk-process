@@ -137,6 +137,8 @@ export type RiderPhase = 'toWrapper' | 'wrapping' | 'toStaging';
 
 /** The closed pallet on its way from the gantry to the staging row. */
 export interface Rider {
+  /** The sim's pallet it is (coldChain.pallets[].id): the stackers carry it on from the staging row (phase 29). */
+  id: number;
   trays: number;
   phase: RiderPhase;
   xM: number;
@@ -208,7 +210,7 @@ export function createPalletLine(): PalletLine {
     const trays = yogurt.coldChain.pallets?.find((pallet) => pallet.id === id)?.trays ?? Math.max(stacked, simOpen);
     // A pallet still on its way finishes its ride and wrap: at a high speed pallets close faster than one rides, and the
     // stack under the gantry simply starts again (the line is a sample, as the UHT palletizer is).
-    if (!rider) rider = { trays: Math.min(STACK_CAPACITY, Math.max(1, trays)), phase: 'toWrapper', xM: at.PALLETIZER.xM, wrapS: -1 };
+    if (!rider) rider = { id, trays: Math.min(STACK_CAPACITY, Math.max(1, trays)), phase: 'toWrapper', xM: at.PALLETIZER.xM, wrapS: -1 };
     if (place.slideFrac >= 1) place.slideFrac = 0;
     laidHere = 0;
     if (gantry.carrying) step = 'idle';

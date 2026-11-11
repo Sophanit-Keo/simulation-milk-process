@@ -753,6 +753,43 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Why:** the phase plan's five faults are the yogurt line's CCPs and hygiene limits in the SOP: the heat treatment, the culture, the seal, the clean-air cabin and the cold chain. Each shows how a fault travels down the line, as the UHT faults do.
 - **What it changes:** `plant.json` schema 14 (`yogurt.faults`), contracts v12 (the five scenario ids; `FermentTank.held`, `YogurtPallet.qaHold`, `coldRoom.excursion`), `src/sim/` (the five faults and their runs), `src/data/scenarios.json`, `src/ui/letReport.ts`, and the menu, the scenario log and the 3D view's lamps.
 
+## D31. The yogurt mix room and dispatch, in motion
+
+- **Status:** Proposed
+- **Date:** 2026-11-10
+- **Review note:** none (the developer asked to improve the animation of the yogurt processing line's machines and of the distribution; [phase 29](agent-plan/phase-29-yogurt-mix-and-dispatch.md))
+- **Decision:** the two parts of the yogurt wing that phases 23–28 left plain move like the real thing.
+  - **Stage 11:** the silo, the powder station, the high-shear mixer, the stabilizer skid and the mix tank get their fittings, and parts that move with the mix flow.
+  - **Stage 16, transfers:** two electric stacker trucks, each with its rider, carry the pallets from the wrapper's rollers to the warm room and the blast chiller, and from the chiller to the cold room, through rapid doors that open for them. The layout makes room for them: the warm room's door moves to its east wall, the chiller's west end steps back 1 m, and the store gets a 3 m transfer aisle on its east side.
+  - **Stage 16, reefers:** a reefer is an articulated truck with rear doors and a refrigeration unit. It arrives, opens up, backs in, loads and leaves by phase 12's dock moves ([D22](#d22-lifelike-motion-at-the-end-of-the-line)), turned round to the north yard and on a path of that yard's own, under a roller door and a dock lamp.
+- **The motion's numbers, visual assumptions unless sourced:**
+
+| Thing | Value | Basis |
+|---|---|---|
+| Stacker truck | 1.6 m/s empty, 1.2 m/s with a pallet, 0.5 m/s for the last 1.5 m into a pick or a drop; forks 0.15 m/s; it lifts a pallet 0.2 m clear to carry it | Rider pallet stackers travel at about 6 km/h and lift at 0.1–0.2 m/s |
+| Stacker's turn | On the spot at 60° a second, about its load wheels under the pallet; its rear, 1.6 m behind, swings 1.65 m round | A stacker's drive wheel turned square pivots it about its load wheels; a working aisle of about 2.5 m for a 1,000 × 1,200 mm pallet |
+| Warm room's door | In its east wall at z −41, 2 m wide (was in its north wall); its pallets 4 × 5 with a 1.4 m strip free inside the door | The north door stood 1 m from the palletizer's legs: no truck could turn into it |
+| Blast chiller | x 31 to 36.4 (was 30 to 36.4) | A truck backing off the rollers' end with a pallet 1.2 m wide passes the tunnel's corner 0.6 m clear |
+| Transfer aisle | The store's zone and the reefer yard reach x 40 (was 37) | The pallet line runs unbroken from the tray packer to the zone's edge: the aisle round its end is the only way from the tunnel's east mouth to the cold room. A stacker needs 3.3 m to turn there |
+| Trips queued | 3 a truck; a pallet that moves beyond that changes place unseen | As phase 12's pallet pool: a sample at high speed, every move at ×1 and ×10 (a pallet every 8 min, 150 a day, H130) |
+| Rapid doors | Open 1.2 s, when a stacker with a trip through them is within 3 m | Rapid roll doors open at about 1–2 m/s |
+| Powder bag | 1,000 kg; at 27 kg a tonne of mix and 6,000 L/h it lasts about 6 h | A standard big bag; H122's powder dose |
+| Reefer moves | Phase 12's: doors 3 s, reversing 10 s, roller door 3 s, closing 3 s | D22 |
+| Reefer's path | 9 m straight out of the dock, then a quarter turn with the tractor up to 0.9 rad (52°) off the trailer; the lane 20.6 m out from the dock | The north dock's doors stand 4.5 m apart, the UHT dock's 8 m. On the UHT path (3 m straight, 0.6 rad) a reefer would swing 2.2 m into a reefer docked at the next door; on this one it passes 0.9 m clear. Drivers back into tight docks at 45° and more |
+| Reefer's road | In from beyond the floor's east edge, out beyond its west one, along the road behind the wing; about 8 s in and 13 s out | The other way round, a reefer would stop past its door beyond the floor's east edge |
+| Reefer yard | x −4 to 37, z −86 to −56 (was x 19 to 37, z −76 to −56) | Room for the lane and the cab's swing, as the UHT apron has (D22) |
+| Reefer | 16.5 m: a 13.6 m trailer, its deck at 1.3 m, 26 pallets in 13 rows of two | The UHT truck's size (D22); the sim's load of 26 (D29) |
+
+- **Rules with no key:**
+  - **The sim leads.** A stacker's trip starts when a pallet changes place in the snapshot; a pallet off the line is carried when its ride on the rollers ends. The sim already counts the pallet in its new room, so the 3D view holds it back: it stands where it was until its stacker lifts it and shows in the new room once it is set down. The panel's numbers are the sim's, and the trailer's load is the sim's count.
+  - **The reefer's arrival ends as the sim docks it:** it sets off when the motion time left of the sim's 30 min is what its moves take. It then loads for the sim's 20 min, and closes up 3 motion seconds before the sim sends it away. When the sim outruns the moves they play up to 10× faster, or are skipped (D22's rule).
+  - **This replaces D29's reefer rule** ("backs the last metres in its last 10 minutes of arriving").
+  - **No draw call:** every part is an instance in the cold chain's box mesh, as phases 23–28's, so the overview stays at its budget of 350.
+  - **Left as the layout has it:** the cold room's racks stand across its doorway and its dock doors, so a stacker sets its pallet down in the doorway and the racks fill by the sim's count; pallets move from the dock door into the trailer with no truck drawn inside the room.
+  - The motion shows what runs, so it stays on under `prefers-reduced-motion`; only the stackers' beacons then shine steadily.
+- **Why:** the mix room is where the recipe is made and the dispatch is where the cold chain ends. Both read better when the powder is seen to be drawn in, a truck is seen to carry each pallet to its room, and a reefer is seen to dock, load and leave.
+- **What it changes:** new `src/scene/equipment/yogurt/mixDetail.ts`, `stackers.ts`, `reeferTruck.ts` and `dispatchBoxes.ts`; `yogurtLine.ts` (stage 11's fittings) and `coldChainScene.ts` (the three-box reefers go); `packs/truckMoves.ts` (a path and a road for each yard, the UHT yard's unchanged); `scene/layout.ts` (the reefer yard, the store's east edge) and `yogurt/layout.ts` (the warm room's door, the chiller's west end); `palletLine.ts` (the rider names its pallet). The sim, the contracts and the UI are unchanged.
+
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →
