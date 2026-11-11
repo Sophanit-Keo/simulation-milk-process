@@ -106,7 +106,7 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 Built on 11 November 2026, lane by lane in one session.
 
 - **Checked:** `npm run check` (83 test files, 1,919 tests) and `npm run build` pass. The overview draws 350 calls, its budget, and every stage stop reads as in phase 28.
-- **Browser tests:** 116 of 117 pass on software GL. Two are new: the mix room's parts (`e2e/yogurtMotion.spec.ts`) and the stackers, their doors and a reefer's visit (`e2e/yogurtColdChain.spec.ts`).
+- **Browser tests:** 115 of 116 pass on software GL. Two are new: the mix room's parts (`e2e/yogurtMotion.spec.ts`) and the stackers, their doors and a reefer's visit (`e2e/yogurtColdChain.spec.ts`).
   - `e2e/shell.spec.ts`, "the canvas follows the screen pixel ratio", fails here. It fails the same way on `master` without this phase, so it was left: it looks like this machine's Chromium, which does not apply the emulated pixel ratio.
   - `e2e/smoke.spec.ts`'s list of hero models lacked `yogurt-palletizer.glb` since phase 24 and failed on `master` too. The list is corrected here.
 - **Changed from the plan above as first written:**
