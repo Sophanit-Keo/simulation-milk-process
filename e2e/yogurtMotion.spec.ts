@@ -67,3 +67,40 @@ test('the valve matrix, the gauges, the steam valve and the CCP recorder follow 
   await railButton(page, 12).click();
   await expect(flow.locator('.flow-step[data-step="hotWater"] .flow-reading')).toHaveText(/^\d+ kg\/h of steam into the circuit$/);
 });
+
+// Phase 29 in the browser: stage 11's new parts move while the mix room makes mix (two minutes after the plant opens,
+// for half an hour) and stand when it stops: the silo's pump and outlet valve, the powder station's filter fan, the
+// mixer's motor and the specks of powder in its funnel, the stabilizer skid's agitators, the mix tank's inlet valve.
+// The silo's agitator turns on while the silo holds milk. What each part does is tests/scene/mixDetail.test.ts's.
+test('the mix room\'s pump, valves, fans and powder specks move while mix is made, stand while paused, and stop with the mix', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.goto('/?debug');
+  await waitForClock(page);
+  await waitForScene(page);
+  await expect.poll(async () => (await stateOf(page, 'yogurt-silo'))?.pumpRotorMoving, { timeout: 60_000 }).toBe(true);
+  await expect.poll(async () => (await stateOf(page, 'yogurt-silo'))?.outletValveLift, { timeout: 30_000 }).toBe(1);
+  expect(await stateOf(page, 'yogurt-silo')).toMatchObject({ outletValveColor: '#34c759', agitatorFanMoving: true });
+  expect(await stateOf(page, 'powder-station')).toMatchObject({ filterFanMoving: true });
+  expect(await stateOf(page, 'high-shear-mixer')).toMatchObject({ motorFanMoving: true, speck1Moving: true, speck2Moving: true, speck3Moving: true });
+  expect(await stateOf(page, 'stabilizer-skid')).toMatchObject({ agitator1Moving: true, agitator2Moving: true });
+  await expect.poll(async () => (await stateOf(page, 'yogurt-mix-tank'))?.inletValveLift, { timeout: 30_000 }).toBe(1);
+  // The powder bag's sight strip reads what is left of its 1,000 kg.
+  const bag = Number((await stateOf(page, 'powder-station'))?.bagLevelReading);
+  expect(bag).toBeGreaterThan(50);
+  expect(bag).toBeLessThanOrEqual(100);
+
+  await page.keyboard.press('Space');
+  const paused = await turns(page, 'yogurt-silo', 'pumpRotorTurns');
+  await page.waitForTimeout(1_000);
+  expect(await turns(page, 'yogurt-silo', 'pumpRotorTurns')).toBe(paused);
+  await page.keyboard.press('Space');
+
+  // The mix tank fills and the mix room stops: the pump stands and the valve shuts; the silo's agitator turns on.
+  await page.getByTestId('speed-1000').click();
+  await expect.poll(async () => (await stateOf(page, 'yogurt-silo'))?.pumpRotorMoving, { timeout: 120_000 }).toBe(false);
+  await page.getByTestId('speed-1').click();
+  await expect.poll(async () => (await stateOf(page, 'yogurt-silo'))?.outletValveLift, { timeout: 30_000 }).toBe(0);
+  expect(await stateOf(page, 'yogurt-silo')).toMatchObject({ agitatorFanMoving: true });
+  expect(await stateOf(page, 'high-shear-mixer')).toMatchObject({ motorFanMoving: false });
+  expect(Number((await stateOf(page, 'powder-station'))?.bagLevelReading)).toBeLessThan(bag);
+});

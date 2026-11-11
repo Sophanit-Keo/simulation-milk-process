@@ -93,14 +93,23 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 
 ## Exit checklist
 
-- [ ] `npm run check` and `npm run build` pass.
-- [ ] Stage 11's machines have their fittings, and their parts move with the mix flow and stand while paused.
-- [ ] A reefer drives in, opens its doors, backs in articulated, docks under a rising roller door, fills by the sim's count, closes and leaves; at ×1,000 the moves fit the sim's time.
-- [ ] The stackers carry every pallet move at ×1 and ×10, each carries a pallet only between pick and drop, and the rapid doors open only for them.
-- [ ] The overview stays at 350 draw calls; the new count is in `tests/perf/baseline.md`.
-- [ ] The yogurt browser tests pass with the new debug keys.
+- [x] `npm run check` and `npm run build` pass.
+- [x] Stage 11's machines have their fittings, and their parts move with the mix flow and stand while paused.
+- [x] A reefer drives in, opens its doors, backs in articulated, docks under a rising roller door, fills by the sim's count, closes and leaves; at ×1,000 the moves fit the sim's time.
+- [x] The stackers carry every pallet move at ×1 and ×10, each carries a pallet only between pick and drop, and the rapid doors open only for them.
+- [x] The overview stays at 350 draw calls; the new count is in `tests/perf/baseline.md`.
+- [x] The yogurt browser tests pass with the new debug keys.
 - [ ] The developer watches stages 11 and 16 at ×1 and ×10.
 
 ## Status
 
-Planned on 10 November 2026.
+Built on 11 November 2026, lane by lane in one session.
+
+- **Checked:** `npm run check` (83 test files, 1,919 tests) and `npm run build` pass. The overview draws 350 calls, its budget, and every stage stop reads as in phase 28.
+- **Browser tests:** 116 of 117 pass on software GL. Two are new: the mix room's parts (`e2e/yogurtMotion.spec.ts`) and the stackers, their doors and a reefer's visit (`e2e/yogurtColdChain.spec.ts`).
+  - `e2e/shell.spec.ts`, "the canvas follows the screen pixel ratio", fails here. It fails the same way on `master` without this phase, so it was left: it looks like this machine's Chromium, which does not apply the emulated pixel ratio.
+  - `e2e/smoke.spec.ts`'s list of hero models lacked `yogurt-palletizer.glb` since phase 24 and failed on `master` too. The list is corrected here.
+- **Changed from the plan above as first written:**
+  - The stackers needed room the layout did not have, so the warm room's door, the chiller's west end and the store's east edge moved (see "Room for a truck").
+  - The reefers come in from the east and leave west, on a path of their yard's own: the UHT dock's path turned round would have stopped them beyond the floor's edge and swung them through a reefer docked at the next door.
+- **Not checked:** the frame rate on a real GPU, and how the motion reads to a person at ×1 and ×10. That is the developer's to watch.
