@@ -40,8 +40,11 @@ function grid(rect: { xMinM: number; xMaxM: number; zMinM: number; zMaxM: number
   return places;
 }
 
-/** The warm room's places: 5 × 4 on the floor, two high, 40 for its 36 positions, inside walls and doorway. */
-export const WARM_PLACES = grid({ xMinM: at.WARM_ROOM.xMinM + 0.3, xMaxM: at.WARM_ROOM.xMaxM - 0.3, zMinM: at.WARM_ROOM.zMinM + 1.4, zMaxM: at.WARM_ROOM.zMaxM - 0.3 }, 5, 4, 2, PALLET_TALL_M);
+/**
+ * The warm room's places: 4 × 5 on the floor, two high, 40 for its 36 positions, inside its walls, with a strip 1.4 m
+ * wide left free inside its door in the east wall (phase 29), where a stacker sets a pallet down.
+ */
+export const WARM_PLACES = grid({ xMinM: at.WARM_ROOM.xMinM + 0.3, xMaxM: at.WARM_ROOM.xMaxM - 1.5, zMinM: at.WARM_ROOM.zMinM + 0.3, zMaxM: at.WARM_ROOM.zMaxM - 0.3 }, 4, 5, 2, PALLET_TALL_M);
 /** The chiller's: four along the roller track, two high, each a share of its positions. */
 export const CHILLER_PLACES = grid({ xMinM: at.BLAST_CHILLER.xMinM + 0.2, xMaxM: at.BLAST_CHILLER.xMaxM - 0.2, zMinM: (at.BLAST_CHILLER.zMinM + at.BLAST_CHILLER.zMaxM) / 2 - 0.5, zMaxM: (at.BLAST_CHILLER.zMinM + at.BLAST_CHILLER.zMaxM) / 2 + 0.5 }, 4, 1, 2, PALLET_TALL_M, 0.4);
 /**
@@ -103,9 +106,18 @@ export function wingSphere(): THREE.Sphere {
   return new THREE.Sphere(centre, Math.hypot((xMaxM - xMinM) / 2, (zMaxM - zMinM) / 2, 4));
 }
 
-/** The parts of the dispatch that move on their own clock (phase 29): the reefers' yard. Each also draws as a sharer. */
+/**
+ * The parts of the dispatch that move on their own clock (phase 29): the reefers' yard, and the stackers that carry the
+ * pallets between the line and the rooms. Each also draws as a sharer.
+ */
 export interface Dispatch {
   yard?: { advance(snapshot: Snapshot, realDtS: number): void; state(): Readonly<Record<string, number | string | boolean>> };
+  transfers?: {
+    advance(snapshot: Snapshot, realDtS: number): void;
+    state(): Readonly<Record<string, number | string | boolean>>;
+    /** Pallets to add to what each room shows, while a stacker has yet to lift one or to set it down. */
+    adjust(): Readonly<Record<'staging' | 'warmRoom' | 'chiller' | 'coldRoom', number>>;
+  };
 }
 
 export function coldChainTokens(kit: Kit, shared: readonly SharedBoxes[] = [], dispatch: Dispatch = {}): Equipment {
@@ -161,10 +173,13 @@ export function coldChainTokens(kit: Kit, shared: readonly SharedBoxes[] = [], d
     const chain = coldChainOf(snapshot);
     const pallets = chain?.pallets ?? [];
     const count = (where: string): number => pallets.reduce((n, pallet) => n + (pallet.place === where ? 1 : 0), 0);
-    const warm = chain ? shownPallets(chain.warmRoom.pallets, chain.warmRoom.capacity, WARM_PLACES.length) : 0;
-    const chilling = chain ? shownPallets(chain.chiller.pallets, chain.chiller.capacity, CHILLER_PLACES.length) : 0;
-    const cold = chain ? shownPallets(chain.coldRoom.positionsUsed, chain.coldRoom.capacity, COLD_PLACES.length) : 0;
-    const staging = Math.min(count('staging'), STAGING_PLACES.length);
+    // A pallet a stacker carries shows in its new room once it is set down, and where it stood until it is lifted.
+    const moving = dispatch.transfers?.adjust();
+    const held_ = (inRoom: number, room: 'staging' | 'warmRoom' | 'chiller' | 'coldRoom'): number => Math.max(0, inRoom + (moving?.[room] ?? 0));
+    const warm = chain ? shownPallets(held_(chain.warmRoom.pallets, 'warmRoom'), chain.warmRoom.capacity, WARM_PLACES.length) : 0;
+    const chilling = chain ? shownPallets(held_(chain.chiller.pallets, 'chiller'), chain.chiller.capacity, CHILLER_PLACES.length) : 0;
+    const cold = chain ? shownPallets(held_(chain.coldRoom.positionsUsed, 'coldRoom'), chain.coldRoom.capacity, COLD_PLACES.length) : 0;
+    const staging = Math.min(held_(count('staging'), 'staging'), STAGING_PLACES.length);
     // The cold room's excursion (phase 20): its share of held pallets shows red, and the alarm strip lights.
     const excursion = chain?.coldRoom.excursion ?? null;
     const heldCount = count('coldRoom') > 0 ? pallets.reduce((n, each) => n + (each.place === 'coldRoom' && each.qaHold ? 1 : 0), 0) : 0;
@@ -222,11 +237,13 @@ export function coldChainTokens(kit: Kit, shared: readonly SharedBoxes[] = [], d
       return loading ? `reefer ${loading.id} ${loading.pallets}/${loading.load}` : `${chain.reefersShipped} shipped`;
     },
     update(snapshot, realDtS) {
+      // The stackers first: the rooms show what they have set down.
+      dispatch.transfers?.advance(snapshot, realDtS);
       place(snapshot);
       dispatch.yard?.advance(snapshot, realDtS);
     },
     // `reefers` is the yard's: the reefers the 3D view shows, on the yard or at a door.
-    debugState: () => ({ ...state, reefers: 0, ...(dispatch.yard?.state() ?? {}) }),
+    debugState: () => ({ ...state, reefers: 0, ...(dispatch.yard?.state() ?? {}), ...(dispatch.transfers?.state() ?? {}) }),
     dispose() {
       root.removeFromParent();
       boxMaterial.dispose();

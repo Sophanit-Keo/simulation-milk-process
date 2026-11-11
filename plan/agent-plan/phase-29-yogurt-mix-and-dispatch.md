@@ -33,15 +33,21 @@ Two electric stacker trucks, each with its rider, carry the pallets between the 
 
 | Truck | Trip | Route |
 |---|---|---|
-| `stacker-1`, south of the line | Staging → chiller (stirred) | From the end of the wrapper's rollers to the tunnel's west door |
-| | Staging → warm room (set) | West along the line's south side to the warm room's door |
-| | Warm room → chiller | From the warm room's door east to the tunnel's west door |
-| `stacker-2`, east and north of the line | Chiller → cold room | From the tunnel's east door round the end of the rollers to the cold room's south doorway |
+| `stacker-1`, in the transfer bay south of the wrapper | Line → chiller (stirred) | From the end of the wrapper's rollers to the tunnel's west mouth |
+| | Line → warm room (set) | From the end of the rollers to the warm room's door, in its east wall |
+| | Warm room → chiller | From the warm room's door across the bay to the tunnel's west mouth |
+| `stacker-2`, in the aisle east of the chiller | Chiller → cold room | From the tunnel's east mouth round the end of the line, along the corridor north of it, to the cold room's doorway |
 
-- **Moving like a stacker:** 1.6 m/s empty and 1.2 m/s with a pallet; 0.5 m/s into a door or to a pick; it turns on the spot at 60° a second (its drive wheel is under its middle); forks 0.15 m/s. It lifts a pallet 0.1 m clear to carry it, and to the roller track's height at the tunnel.
-- **A sample, as phase 12's:** one trip at a time for each truck. A move that comes while its truck is busy is queued, up to 3; beyond that the pallet changes place unseen, as all did before. At ×1 and ×10 every move is carried.
-- **Doors:** a rapid door on the warm room, on each end of the chiller's tunnel and on the cold room's doorway. Each rolls up as a stacker comes within 3 m with a trip through it, and down behind it.
-- **Parked:** each truck stands at its spot, forks down, its beacon dark; the beacon flashes while it works.
+- **Moving like a stacker:** 1.6 m/s empty and 1.2 m/s with a pallet; 0.5 m/s for the last 1.5 m into a pick or a drop and the first 1.5 m out; forks 0.15 m/s. It turns on the spot at 60° a second about its load wheels, under the pallet, so its rear swings 1.65 m round: it drives straight along its forks and turns only where that swing is clear. It lifts a pallet 0.2 m clear of where it stood to carry it.
+- **Room for a truck (three changes to the layout).** As phases 19 and 24 left it, no truck could reach the warm room's door, a metre from the palletizer's legs, or cross the pallet line to the cold room.
+  - The warm room's door moves from its north wall to its east wall, onto the transfer bay; its pallets stand 4 × 5 with a strip left free inside the door.
+  - The blast chiller's west end stands 1 m further east (x 31), so a truck with a pallet off the line passes its corner.
+  - The store's zone, and the reefer yard north of it, reach 3 m further east (x 40): the transfer aisle from the tunnel's east mouth round the end of the line, the only way across it.
+- **The sim leads:** a pallet that changes place in the snapshot sets a trip off. A pallet off the line is carried when its ride on the rollers ends (`palletLine.ts`); it waits on their end until `stacker-1` lifts it.
+- **The rooms show what has been set down:** a pallet stands where it was until its stacker lifts it, and shows in its new room once it is set down, though the sim counts it there from the start.
+- **A sample, as phase 12's:** one trip at a time for each truck, three more waiting; a move beyond that changes place unseen, as all did before. At ×1 and ×10 every move is carried.
+- **Doors:** a rapid door on the warm room, on each end of the chiller's tunnel and on the cold room's doorway. Each rolls up in 1.2 s as a stacker comes within 3 m with a trip through it, and down behind it.
+- **Parked:** `stacker-1` stands in the bay, facing the end of the rollers; `stacker-2` east of the tunnel, facing its mouth. Forks down, beacon dark; the beacon flashes while the truck works.
 
 ### Stage 16 · Reefers at the dock
 
@@ -71,7 +77,7 @@ No contract changes. The lanes share:
 | Id | Keys |
 |---|---|
 | `yogurt-silo`, `powder-station`, `high-shear-mixer`, `stabilizer-skid`, `yogurt-mix-tank` | Each new part's `…Turns` or `…Lift`, `…Moving` and `…Color`, as the wing's other parts report them |
-| `yogurt-pallets` | Kept: `warm`, `chiller`, `cold`, `held`, `staging`, `reefers`, the glows and `alarm`. New: `reeferPhases` (each door's phase, comma-separated), `reeferDoorsOpen`, `reeferLoaded` (each door's pallets on board, `-` for none), `dockDoorsUp`, `dockLamps` (`red` or `green` per door), `stacker1Job` and `stacker2Job` (`parked`, `toPick`, `pick`, `toDrop`, `drop`, `home`), `stacker1Carrying`, `stacker2Carrying`, `stackerTrips` (trips finished), `doorsOpen` (rapid doors open now) |
+| `yogurt-pallets` | Kept: `warm`, `chiller`, `cold`, `held`, `staging`, `reefers`, the glows and `alarm`. New: `reeferPhases` (each door's phase, comma-separated), `reeferDoorsOpen`, `reeferLoaded` (each door's pallets on board, `-` for none), `dockDoorsUp`, `dockLamps` (`red` or `green` per door), `stacker1Job` and `stacker2Job` (`parked`, `toPick`, `pick`, `toDrop`, `drop`, `home`), `stacker1Carrying`, `stacker2Carrying`, `stacker1Beacon`, `stacker2Beacon`, `stackerTrips` (trips finished), `stackerQueue` (trips waiting), `stackerUnseen` (moves not shown, the queues full), `doorsOpen` (rapid doors fully up now) |
 
 ## Who does what
 
@@ -82,7 +88,7 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 | 1 | `lead` | This card, D31 | `plan/` |
 | 2 | `scene` | `yogurt/mixDetail.ts`: stage 11's coloured and moving parts; the grey fittings in `yogurtLine.ts`, joined to meshes the machines already have | `src/scene/equipment/yogurt/`, `yogurtLine.ts` |
 | 3 | `scene` | `yogurt/reeferTruck.ts`: the reefer's boxes and the dock moves turned round; the dock's roller doors and lamps; the three-box reefers go. `packs/truckMoves.ts`: a path and a road for each yard. `scene/layout.ts`: the yard | likewise, and `packs/truckMoves.ts`, `scene/layout.ts` |
-| 4 | `scene` | `yogurt/stackers.ts`: the two stackers' routes, trips and doors, headless; drawn in `yogurt/dispatchBoxes.ts` | likewise |
+| 4 | `scene` | `yogurt/stackers.ts`: the two stackers' routes, trips and doors, headless; drawn in `yogurt/dispatchBoxes.ts`. `yogurt/layout.ts`, `scene/layout.ts`: the warm room's door, the chiller's west end, the transfer aisle | likewise |
 | 5 | `qa` | `tests/scene/mixDetail.test.ts`, `reeferTruck.test.ts`, `stackers.test.ts` on the live sim; `e2e/yogurtMotion.spec.ts` and `yogurtColdChain.spec.ts`; the overview's draw calls | `tests/`, `e2e/` |
 
 ## Exit checklist

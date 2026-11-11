@@ -172,8 +172,19 @@ export const PALLET_LINE = {
 export const WRAPPER: Footprint = { xM: 28, zM: LINE_Z_M };
 /** Behind the second line of zone names (z −38.5), so its walls hide none of them from the overview. */
 export const WARM_ROOM = { xMinM: 19.6, xMaxM: 26.4, zMinM: -45, zMaxM: -39, wallM: 3 } as const;
-export const BLAST_CHILLER = { xMinM: 30, xMaxM: 36.4, zMinM: -44.6, zMaxM: -41.8, heightM: 2.8 } as const;
+/**
+ * The warm room's door (phase 29): in its east wall, onto the transfer bay between it and the blast chiller, where a
+ * stacker can reach it. Before, it stood in the north wall, a metre from the palletizer's legs.
+ */
+export const WARM_DOOR = { zM: -41, widthM: 2 } as const;
+/**
+ * The blast chiller: a tunnel along x, in at its west mouth from the transfer bay and out at its east one. Since phase
+ * 29 its west end stands 1 m further east, so a stacker with a pallet off the line passes its corner.
+ */
+export const BLAST_CHILLER = { xMinM: 31, xMaxM: 36.4, zMinM: -44.6, zMaxM: -41.8, heightM: 2.8 } as const;
 export const COLD_ROOM = { xMinM: 19.6, xMaxM: 36.4, zMinM: -55.6, zMaxM: -50.2, wallM: 4 } as const;
+/** The cold room's doorway from the chiller, in its south wall. */
+export const COLD_DOORWAY = { xM: 33.2, widthM: 2.4 } as const;
 /** The cold room's dock doors, in its north wall, facing the reefer yard (layout.ts REEFER_YARD). */
 export const DOCK_DOORS_X_M = [23.5, 28, 32.5] as const;
 

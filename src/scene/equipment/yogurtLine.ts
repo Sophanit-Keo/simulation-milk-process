@@ -28,6 +28,7 @@ import { HERO_MODELS, swapInHero } from './heroes';
 import type { Equipment, EquipmentContext, EquipmentFactory } from './types';
 import * as at from './yogurt/layout';
 import { coldChainTokens } from './yogurt/coldChainScene';
+import { createTransfers } from './yogurt/dispatchBoxes';
 import { createReeferYard } from './yogurt/reeferTruck';
 import { MIXER_FITTINGS, onSilo, POWDER_FITTINGS, SILO_FITTINGS, SKID_FITTINGS } from './yogurt/mixDetail';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
@@ -70,6 +71,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
   const palletLine = createPalletLine();
   // The reefers on the north yard and the dock's doors and lamps (phase 29), drawn in the same mesh.
   const yard = createReeferYard();
+  const transfers = createTransfers(palletLine);
   const items = [
     yogurtSilo(kit),
     powderStation(kit),
@@ -166,7 +168,7 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
     warmRoom(kit),
     blastChiller(kit),
     coldRoom(kit),
-    coldChainTokens(kit, [motion, palletLine, yard], { yard }),
+    coldChainTokens(kit, [motion, palletLine, yard, transfers], { yard, transfers }),
   ];
   return items.map((item) => withMotion(item, motion, item.id === 'yogurt-pallets'));
 };
@@ -1101,7 +1103,7 @@ function warmRoom(kit: Kit): Equipment {
     'Warm room',
     [xM, zM],
     r.wallM,
-    (b) => walls(b, r, r.wallM, [{ side: 'north', atM: xM, widthM: 2 }]),
+    (b) => walls(b, r, r.wallM, [{ side: 'east', atM: at.WARM_DOOR.zM, widthM: at.WARM_DOOR.widthM }]),
     (s) => labelValue(finite(yogurtOf(s)?.coldChain.warmRoom.tempC), 0, '°C'),
   );
 }
@@ -1146,7 +1148,7 @@ function coldRoom(kit: Kit): Equipment {
     r.wallM,
     (b) => {
       // The dock doors in the north wall, facing the reefer yard, and a doorway from the chiller in the south one.
-      walls(b, r, r.wallM, [...at.DOCK_DOORS_X_M.map((atM) => ({ side: 'north' as const, atM, widthM: 2.8 })), { side: 'south', atM: 33.2, widthM: 2.4 }]);
+      walls(b, r, r.wallM, [...at.DOCK_DOORS_X_M.map((atM) => ({ side: 'north' as const, atM, widthM: 2.8 })), { side: 'south', atM: at.COLD_DOORWAY.xM, widthM: at.COLD_DOORWAY.widthM }]);
       for (const doorXM of at.DOCK_DOORS_X_M) {
         b.part('box', 'steel', [doorXM, r.wallM - 0.15, r.zMinM], [3.0, 0.3, 0.25], { castShadow: true }); // door head, in the walls' steel (one mesh)
         b.part('box', 'concrete', [doorXM, 0.6, r.zMinM - 0.6], [3.0, 1.2, 1.2]); // dock leveller
