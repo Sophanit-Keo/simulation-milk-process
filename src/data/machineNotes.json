@@ -45,6 +45,220 @@
         {
           "heading": "What stops it",
           "text": "A cup or foil magazine run empty (each is topped up once under 25%), the HEPA cabin under its limit, or an empty buffer. A seal outside 180–220 °C, 0.8–1.2 s or 4–6 bar does not stop it but makes leaks likely, and a failed seal test holds every cup made since the last test that passed."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The carrier steps one row forward, then stands while every station works at once: the de-nester's bar and the pistons come down, the foil pick and the sealing heads follow, and the coder flashes. The index drive on the cabinet's front turns a sixth of a turn with each step. The stack light at the out end is green while it runs, amber while it waits, cleans or sterilizes, and red when it is stopped. Each machine of the room has its own note below."
+        }
+      ]
+    },
+    {
+      "id": "p8Denester",
+      "stage": 15,
+      "title": "The de-nester and cup cleaning",
+      "summary": "Puts 12 empty cups on the carrier each cycle and cleans them before they are filled.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "The de-nester takes one cup from the bottom of each of the 12 magazines and sets it in the carrier's pockets. Before the cups reach the filler, their insides are freed of dust and disinfected, because nothing else touches the yogurt between the filler and the lid."
+        },
+        {
+          "heading": "How it works",
+          "text": "A suction bar strokes down, grips the lowest cup of every stack and pulls it free. At the next station ionized air takes the static charge off the cups, so the dust lets go, and a vacuum shroud draws it away. The cups then ride through the UV-C tunnel, whose light kills the bacteria on their inner surface. The magazines hold 7,200 cups, 20 min of running, and are topped up once under 25%, which takes 4 min."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "At the machine's in end the suction bar strokes down once a cycle and a new row of cups drops into the pockets. The ionizer's jet flashes ice-blue under its shroud and the small fan on top of it turns. The tunnel glows violet while P8 runs. The bar on the de-nester's upright shows the magazine's level: green, amber once under the refill mark."
+        }
+      ]
+    },
+    {
+      "id": "p8Dosing",
+      "stage": 15,
+      "title": "The piston filler",
+      "summary": "Doses about 127 g of yogurt into each of the 12 cups, the same every cycle.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "The filler measures the yogurt by volume and puts it into the cups without splashing or shearing it thin. A cup must hold at least its declared 125 g, so the filler aims a little higher, at 127 g."
+        },
+        {
+          "heading": "How it works",
+          "text": "The yogurt comes from the P8 buffer under gentle pressure through the feed valve into the hopper on the manifold. Each lane has a piston: it draws one dose from the hopper while the carrier moves, and pushes it out through its nozzle while the carrier stands. The nozzles dip into the cups, fill from the bottom and cut off without a drip. The doses spread about 1 g round the target."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The feed valve before the machine is green while yogurt flows. On top of the manifold the two dosing crossheads stand up with a drawn dose and come down as the nozzles under them stroke into the cups. The yogurt's surface grows across each cup of the row under the filler."
+        }
+      ]
+    },
+    {
+      "id": "p8Sealing",
+      "stage": 15,
+      "title": "The lidder, the sealing heads and the coder",
+      "summary": "Closes each cup with a foil lid, welds it on and prints the batch code.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "The lidder lays a foil lid on every cup, the sealing heads weld it to the rim, and the coder prints what the cup is. From here on the yogurt is closed in, and stays safe outside the clean air of the hood."
+        },
+        {
+          "heading": "How it works",
+          "text": "Suction cups pick 12 pre-cut foils from the foil magazine and set them on the rims. Heated heads then press down at 200 °C for 1.0 s at 5 bar, which melts the foil's coating onto the cup. The seal holds inside 180–220 °C, 0.8–1.2 s and 4–6 bar; outside that window leaks become likely. The coder prints the batch code and the best-before date on each lid. The foil magazine holds 12,000 lids."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "A silver strip of lids rides down under the pick each cycle, and the cups past it carry their lids. The sealing platen over the heads glows orange at its heat, turns red over 220 °C and dull under 180 °C; the small display beside it is green while the seal is in its window. The coder's head flashes yellow as each row passes."
+        }
+      ]
+    },
+    {
+      "id": "checkweigher",
+      "stage": 15,
+      "title": "The checkweigher",
+      "summary": "Weighs every sealed cup as it passes and throws out the ones that are too light or too heavy.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "It is the first of the three in-line checks. It proves that every cup holds what its label says, and it shows at once if the filler starts to drift."
+        },
+        {
+          "heading": "How it works",
+          "text": "The cups ride over a short belt that stands on a load cell, so each is weighed without stopping. A cup under 120.5 g is under-filled and one over 135 g is over-filled: both are thrown out at the reject flap. Everything between passes. The target is 127 g."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The weigh platform dips a little under each row of cups. The scale on its front runs from the under limit to the over limit: a green tick marks the target and a red marker jumps to the last cup's weight. The display above it is green for a cup inside the limits and red outside them; the lamp turns red for a moment when the gate throws a cup out."
+        }
+      ]
+    },
+    {
+      "id": "metalDetector",
+      "stage": 15,
+      "title": "The metal detector",
+      "summary": "Finds any piece of metal in a sealed cup and throws that cup out.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "It guards against foreign bodies: a chip from a worn machine part, a screw, a piece of wire. It finds iron, non-ferrous metals and stainless steel through the sealed cup."
+        },
+        {
+          "heading": "How it works",
+          "text": "The cups pass through a tunnel with coils round it. The coils set up a field, and a piece of metal passing through disturbs it; the detector then marks that cup and the reject flap takes it off the belt. Here about 5 cups in a million are thrown out this way, most of them false alarms."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The cups run through the dark mouths of the tunnel in the arch. On the arch's face a blue marker sweeps along the field's bar while the detector searches; it turns red, with the lamp below, when the detector throws a cup out, and stands grey while the line stands."
+        }
+      ]
+    },
+    {
+      "id": "visionCheck",
+      "stage": 15,
+      "title": "The vision check and the reject bin",
+      "summary": "A camera checks every lid and its print; the cups any check refuses end in the bin.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "The camera looks at each cup from above and checks that the lid sits straight and that the code is printed and can be read. It is the last check: a cup that passes all three goes on to the tray packer."
+        },
+        {
+          "heading": "How it works",
+          "text": "A strobe lights each row for an instant so the camera sees it sharp, and a computer compares the picture with what a good cup looks like. About 50 cups in a million fail. A flap beside the gates kicks every cup that a check refused off the belt, and it goes down the chute into the reject bin. Cups in the bin are counted and destroyed."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The strobe under the camera flashes white for each row and the monitor on its post is blue while it looks, red on a cup it throws out. A rejected cup is kicked off the belt by the flap, flies to the bin, and the heap on the bin grows."
+        }
+      ]
+    },
+    {
+      "id": "airUnit",
+      "stage": 15,
+      "title": "The sterile air unit and the HEPA hood",
+      "summary": "Keeps clean, filtered air flowing over the open cups so nothing from the hall can reach them.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "From the de-nester to the sealing heads the cups are open. The air unit and the hood keep that part of the machine under clean air at a slightly higher pressure than the hall, so air always flows out of the cabin and never in."
+        },
+        {
+          "heading": "How it works",
+          "text": "The unit behind the machine draws hall air through a pre-filter and blows it through the duct into the filter housing on top of the hood. There HEPA filters hold back dust and bacteria, and fans push the clean air down over the cups. The cabin normally stands about 25 Pa over the hall. Under 15 Pa the air could flow the wrong way, so P8 stops until the pressure is back."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The two fans on the unit's top and the three on the hood's housing turn while the cabin holds its pressure. The gauge on the hood's west post reads the cabin's pressure. In the scenario HEPA overpressure loss the fans run down, the needle falls, the hood's glass turns red and the stack light goes red."
+        }
+      ]
+    },
+    {
+      "id": "cipSip",
+      "stage": 15,
+      "title": "The CIP/SIP skid",
+      "summary": "Washes the inside of the machine without taking it apart, then sterilizes it with steam.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "Yogurt left in the pipes, pistons and nozzles would spoil the next batch. The skid cleans every surface the product touches (CIP, cleaning in place) and then kills what is left with steam (SIP, sterilizing in place)."
+        },
+        {
+          "heading": "How it works",
+          "text": "In the clean the skid's CIP valve opens and wash solutions are pumped through the feed line, the hopper, the pistons and the nozzles, and back. Before set yogurt, which ferments in the cup, the machine is also sterilized: in the SIP the skid's steam valve opens and steam at about 123 °C fills the same path; it must hold at least 121 °C for 20 min. After that a swab of a product surface is tested for traces of dirt (ATP); under 10 RLU, P8 may start."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The skid stands behind the machine's out end. In the clean its CIP valve's stem lifts amber, the lances under the hood's ceiling blink amber and the feed valve is amber. In the SIP the steam valve lifts orange, the lances stand orange and the skid's display turns red. The stack light is amber through both."
+        }
+      ]
+    },
+    {
+      "id": "qaBench",
+      "stage": 15,
+      "title": "The QA bench and the seal test",
+      "summary": "Where cups taken from the line are tested for leaks, every 2 h.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "The in-line checks cannot see whether a lid is welded tight. So at fixed times cups are taken off the line and tested on the bench. The test proves the seal for all the cups made since the last one."
+        },
+        {
+          "heading": "How it works",
+          "text": "Every 2 h of running, 5 cups are taken and put in the seal tester, a small chamber that pulls a vacuum round them: a cup that leaks shows it. If all pass, the cups made since the last test are good. If one fails, every cup made since the last test that passed is held back and counted as rejected, and the sealing heads are checked."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The bench stands by the check gates. The bar on the tester's front fills as the next test comes due. After a test the 5 cups stand beside the tester for ten minutes and its lamp shows the result: green for passed, red for failed. To see a failure, start the scenario Seal temperature drift and wait for the next test."
+        }
+      ]
+    },
+    {
+      "id": "supplies",
+      "stage": 15,
+      "title": "Cups, foils and the operator",
+      "summary": "The packaging the line uses up, the person who keeps it fed, and the way into the clean zone.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "Line P8 uses 21,600 cups and as many foil lids an hour. The pallet of cup cartons and the cart of foil boxes hold the next loads, and the operator tops the magazines up before they run empty. The yellow line on the floor marks the high-care zone round the open product."
+        },
+        {
+          "heading": "How it works",
+          "text": "A magazine calls for a refill once it falls under 25%. The operator then walks to the de-nester or the lidder and loads it, which takes 4 min; the line keeps running if the magazine lasts that long, and stops if it runs empty. People enter the zone only at the gap in the line: they wash their hands at the basin, put on a clean coat and hairnet from the locker, swing their legs over the bench and step on the sticky mat, which takes the dust off their shoes."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "The operator stands at the screen while all is well, and walks to the magazine that calls. Each refill of the cups takes one layer of cartons off the pallet, and each refill of the foils one stack of boxes off the cart; a full pallet or cart stands there once the last is gone. The tags over them show the magazines' levels."
         }
       ]
     }
