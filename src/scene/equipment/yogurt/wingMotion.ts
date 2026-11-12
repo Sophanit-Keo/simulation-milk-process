@@ -21,6 +21,9 @@
 // - Phase 26: the process hall's fittings in colour, some following the sim (hallDetail.ts).
 // - Phase 28: Line P8's de-nester, hood fans, magazine levels, seal display, stack light and screen (p8Detail.ts).
 // - Phase 29: the mix room's pump, valves, fans, powder specks, bag gauge and drum levels (mixDetail.ts).
+// - Phase 30: the cup filling room and more of Line P8: its feed valve, ionizer, dosing, foil and index drive, the check
+//   gates' displays, the cup and foil supplies, the operator, the air unit, the CIP/SIP skid and the QA bench
+//   (cupRoomDetail.ts).
 // - Stage 15: the coder flashes as each cycle's lids pass, and the three check gates flash as they check a row.
 // - Stage 16: the blast chiller's fans turn while it holds pallets; the cold room's evaporator fans turn while its
 //   cooling works, and stand still in a cooling failure (D30).
@@ -30,6 +33,7 @@ import * as THREE from 'three';
 import type { Snapshot, YogurtSnapshot } from '../../../contracts';
 import plantJson from '../../../data/plant.json';
 import { motionDtS } from '../../motion';
+import { cupRoomParts } from './cupRoomDetail';
 import { hallDetailParts } from './hallDetail';
 import { mixDetailParts } from './mixDetail';
 import { p8DetailParts } from './p8Detail';
@@ -333,6 +337,8 @@ function wingParts(carrier?: P8Carrier): Part[] {
   parts.push(...p8DetailParts(carrier));
   // Phase 29: the mix room's pump, valves, fans, powder and levels (mixDetail.ts), after every part before them.
   parts.push(...mixDetailParts());
+  // Phase 30: the cup filling room and more of Line P8 (cupRoomDetail.ts), after every part before them.
+  parts.push(...cupRoomParts(carrier));
   return parts;
 }
 
