@@ -96,7 +96,9 @@ Built by `lead` lane by lane in one session, within the agents' ownership rules.
 
 Built on 12 November 2026 in one session, on phase 30's branch.
 
-- **Checked:** the typecheck, the lint and the tests of `tests/ui/`, `tests/scene/cupRoom.test.ts` and `tests/scene/yogurtLine.test.ts` pass. The overview draws 350 calls. The full `npm run check` and its count are in the pull request.
-- **Browser tests:** one is new, in `e2e/yogurtNotes.spec.ts` (the eleven notes, the tags, the gates). Its result is in the pull request.
+- **Checked:** the typecheck, the lint and the asset tests pass. The unit tests: 1,941 of 1,942 pass in the full run (84 files; 10 tests are new or changed for this phase).
+  - The one that fails is `tests/scene/warehouseMotion.test.ts`, "drives in past its door…" (the UHT dock's truck), which times out at its 30 s limit when the whole suite runs in parallel on this machine. Run alone it passes, in the same time on `master` as here (54 s for its file), so it was left: it is a slow test near its limit, not this phase's.
+  - The overview draws 350 calls.
+- **Browser tests:** 50 of 50 pass on software GL in the run made for this phase: every yogurt spec, `p8`, `stages`, `smoke`, `energy`, `kpis` and `liquid`. One is new, in `e2e/yogurtNotes.spec.ts` (the eleven notes, the tags, the gates). The other specs were not rerun.
 - **Not checked:** the frame rate on a real GPU; how the eleven notes read on a small screen (the panel scrolls).
 - **Left out:** a click on a machine still selects its stage, not its note; the operator has no tag.
