@@ -820,6 +820,24 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Why:** stage 15 is the line's last open-product step and its hygiene limit. The cups, the foils, the clean air and the steam all come from somewhere, and a person tends the machine; the room reads as a filling room once they are seen.
 - **What it changes:** new `src/scene/equipment/yogurt/cupRoomDetail.ts`, listed in `wingMotion.ts`. The sim, the contracts, `plant.json` and the UI are unchanged.
 
+## D33. Each machine of the cup filling room, explained
+
+- **Status:** Proposed
+- **Date:** 2026-11-12
+- **Review note:** none (the developer asked for the details of each machine in the filling room, its animation and what it does; [phase 31](agent-plan/phase-31-cup-room-machines-explained.md))
+- **Decision:** every machine of stage 15 says what it is for, in the panel and in 3D.
+  - **A note each.** Stage 15's panel gains ten notes under Line P8's: the de-nester and cup cleaning, the piston filler, the lidder with the sealing heads and the coder, the checkweigher, the metal detector, the vision check with the reject bin, the sterile air unit with the HEPA hood, the CIP/SIP skid, the QA bench, and the supplies with the operator. Each has three parts, "What it does", "How it works" and "In the 3D view", under its live readings.
+  - **Closed until asked for.** Eleven open notes would bury the stage's live values, so a note may say `"open": false`; Line P8's stays open. What a viewer opens or closes holds for the session.
+  - **Name tags.** The room's five units that are not machines of their own get a floating label with a live reading, as machines have.
+  - **The gates move.** The checkweigher's platform and scale, the metal detector's field, the vision check's strobe and monitor, and a chute to the reject bin.
+- **Rules with no key:**
+  - **The text's numbers are `plant.json`'s**, held by a test, as phase 28's.
+  - **The text describes this model.** Where the real machine does more than the model (the wash solutions of the CIP, the camera's picture), the text says what the machine does and the "In the 3D view" part says only what is drawn.
+  - **A tag is not a machine:** it has no mesh, takes no click and costs no draw call. Its id is a token's, so the tests that keep machines apart skip it.
+  - **Rates on the gates:** their belts carry three rows of four for each cycle of twelve, so the platform dips and the strobe flashes 1.5 times a second at full rate (visual; the sim counts cups, not rows).
+- **Why:** the developer asked what each machine does. The panel is where the simulation explains; the 3D view is where it shows. A viewer reads the note and then sees the part it names move.
+- **What it changes:** `src/data/machineNotes.json` (ten notes, one new part), `src/ui/machineNotes.ts` (`open`, the readings), `src/scene/equipment/yogurt/cupRoomDetail.ts` (the gates, the chute), new `cupRoomTags.ts`, `yogurtLine.ts` (the tags). The sim, the contracts and `plant.json` are unchanged.
+
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →
