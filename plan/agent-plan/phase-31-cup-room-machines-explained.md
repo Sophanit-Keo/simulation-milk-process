@@ -10,7 +10,7 @@ The developer's request after phase 30: "add the details on each machine in fill
 
 Nothing in the sim, the contracts or `plant.json` changes.
 
-- **Entry:** phase 30 (PR #34, the same pull request).
+- **Entry:** phase 30 is merged (PR #34).
 - **Exit:** the checklist below.
 - **Critical path:** `process` (the text), `ui`, `scene`.
 
@@ -94,7 +94,7 @@ Built by `lead` lane by lane in one session, within the agents' ownership rules.
 
 ## Status
 
-Built on 12 November 2026 in one session, on phase 30's branch.
+Built on 12 November 2026 in one session, after phase 30.
 
 - **Checked:** the typecheck, the lint and the asset tests pass. The unit tests: 1,941 of 1,942 pass in the full run (84 files; 10 tests are new or changed for this phase).
   - The one that fails is `tests/scene/warehouseMotion.test.ts`, "drives in past its door…" (the UHT dock's truck), which times out at its 30 s limit when the whole suite runs in parallel on this machine. Run alone it passes, in the same time on `master` as here (54 s for its file), so it was left: it is a slow test near its limit, not this phase's.
