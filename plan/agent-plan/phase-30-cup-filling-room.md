@@ -93,6 +93,6 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 Built on 12 November 2026 in one session.
 
 - **Checked:** `npm run check` passes (84 test files, 1,932 tests; 13 are new, in `tests/scene/cupRoom.test.ts`). The overview draws 350 calls, its budget.
-- **Browser tests:** the new one passes on software GL (`e2e/yogurtMotion.spec.ts`: the room's parts move while P8 runs, stand while paused, and the air unit stops in a HEPA loss), and so does the overview's click test, which holds the draw calls. The full run's result is in the pull request.
+- **Browser tests:** the new one passes on software GL (`e2e/yogurtMotion.spec.ts`: the room's parts move while P8 runs, stand while paused, and the air unit stops in a HEPA loss), and so does the overview's click test, which holds the draw calls. The yogurt, stage and smoke specs were rerun with phase 31 and pass ([phase 31](phase-31-cup-room-machines-explained.md#status)); the whole suite was not run to its end.
 - **Not checked:** the frame rate on a real GPU, and how the room reads to a person. That is the developer's to watch. From the stage's stop the air unit and the CIP/SIP skid stand behind the machine and show mostly their tops and the duct; orbit to see their valves.
 - **Left out:** the room has no walls or ceiling, as no room of the plant has: they would hide the machine from the stage's camera. The hygiene line on the floor stands for the high-care zone's edge. The operator carries nothing, and no truck brings the new pallet of cups.

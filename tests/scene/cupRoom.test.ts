@@ -16,8 +16,10 @@ import {
   HYGIENE_LINE,
   OPERATOR,
   operatorStationXM,
+  REJECT_CHUTE,
   SAMPLE_SHOWN_S,
 } from '../../src/scene/equipment/yogurt/cupRoomDetail';
+import { cupRoomTags, TAG_TEXT } from '../../src/scene/equipment/yogurt/cupRoomTags';
 import * as at from '../../src/scene/equipment/yogurt/layout';
 import type { Pose } from '../../src/scene/equipment/yogurt/motionParts';
 import { yogurtLine } from '../../src/scene/equipment/yogurtLine';
@@ -206,6 +208,81 @@ describe('where the room\'s parts stand', () => {
     // The reject bin and the gates stand inside the hygiene line.
     expect(at.REJECT_BIN.zM).toBeGreaterThan(HYGIENE_LINE.zMinM);
     expect(at.CHECK_GATES.vision + 0.45).toBeLessThan(HYGIENE_LINE.xMaxM);
+  });
+});
+
+describe('the check gates in motion and the room\'s name tags (phase 31)', () => {
+  it('dips the weigh platform, sweeps the detector\'s field and flashes the strobe while P8 runs, and marks the last cup on the scale', () => {
+    const r = room();
+    r.frames(1);
+    runUntil(r, running);
+    const strobe = new Set<string>();
+    for (let i = 0; i < 30; i++) {
+      r.frames(1, 0.05);
+      strobe.add(String(r.state('p8-vision').strobeColor));
+    }
+    expect(strobe).toEqual(new Set(['#ffffff', '#30363c']));
+    expect(r.state('p8-checkweigher')).toMatchObject({ weighPlatformMoving: true, weighTargetColor: '#34c759', weighMarkerColor: '#c8352a' });
+    // The marker stands between the scale's ends, near the target's 45% of the way from 120.5 g to 135 g.
+    const marker = Number(r.state('p8-checkweigher').weighMarkerReading);
+    expect(marker).toBeGreaterThan(20);
+    expect(marker).toBeLessThan(70);
+    expect(r.state('p8-metal-detector')).toMatchObject({ fieldSweepMoving: true, fieldSweepColor: '#7cc4ff' });
+    expect(r.state('p8-vision')).toMatchObject({ strobeMoving: true, monitorColor: '#4aa3ff' });
+    // Stopped, they stand: the field's marker grey, the monitor and the strobe dark.
+    r.sim.dispatch({ type: 'triggerScenario', id: 'yogurtHepaLoss' });
+    r.frames(30, 0.1);
+    expect(r.state('p8-checkweigher').weighPlatformMoving).toBe(false);
+    expect(r.state('p8-metal-detector')).toMatchObject({ fieldSweepMoving: false, fieldSweepColor: '#5d6a74' });
+    expect(r.state('p8-vision')).toMatchObject({ strobeMoving: false, strobeColor: '#30363c', monitorColor: '#1d2328' });
+  });
+
+  it('runs the reject chute from behind the belt at the flap down to the bin, clear of the gates', () => {
+    const chute = cupRoomParts().find((part) => part.name === 'chute');
+    if (!chute) throw new Error('no chute');
+    const pose: Pose = { position: new THREE.Vector3(), rotation: new THREE.Euler(), size: new THREE.Vector3() };
+    chute.pose(0, createSim(plantConfig).snapshot().yogurt, pose);
+    const turn = new THREE.Quaternion().setFromEuler(pose.rotation);
+    const end = (sign: number): THREE.Vector3 => new THREE.Vector3(0, 0, (sign * pose.size.z) / 2).applyQuaternion(turn).add(pose.position);
+    const [top, foot] = end(1).y > end(-1).y ? [end(1), end(-1)] : [end(-1), end(1)];
+    for (const [got, want] of [[top, REJECT_CHUTE.fromM], [foot, REJECT_CHUTE.toM]] as const) {
+      expect(got.x).toBeCloseTo(want[0], 2);
+      expect(got.y).toBeCloseTo(want[1], 2);
+      expect(got.z).toBeCloseTo(want[2], 2);
+    }
+    // It starts at the flap, behind the belt, and passes the metal detector's body on its east side.
+    expect(REJECT_CHUTE.fromM[0]).toBe(at.REJECT_KICK_XM);
+    expect(REJECT_CHUTE.fromM[2]).toBeLessThan(at.P8.zM - 0.2);
+    const atDetectorBackX = top.x + ((foot.x - top.x) * (at.P8.zM - 0.35 - top.z)) / (foot.z - top.z);
+    expect(atDetectorBackX - 0.12).toBeGreaterThan(at.CHECK_GATES.metalDetector + 0.4);
+    expect(foot.y).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it('tags the room\'s five units with what each does now', () => {
+    const tags = cupRoomTags();
+    expect(tags.map((tag) => tag.label)).toEqual(['Sterile air unit', 'CIP/SIP skid', 'QA bench', 'Cup cartons', 'Foil lids']);
+    for (const tag of tags) {
+      expect(tag.stage).toBe(15);
+      expect(tag.object.children.length, tag.id).toBe(0);
+      expect(tag.object.userData.tokens).toBe(true);
+    }
+    const y = (p8: Partial<YogurtSnapshot['p8']>): YogurtSnapshot => ({ p8: { state: 'running', ...p8 } }) as unknown as YogurtSnapshot;
+    expect(TAG_TEXT.airUnit(y({ hepaPa: 25.24 }))).toBe('+25.2 Pa');
+    expect(TAG_TEXT.airUnit(y({ hepaPa: 5 }))).toBe('+5.0 Pa · fan stopped');
+    expect(TAG_TEXT.cipSkid(y({}))).toBe('standing by');
+    expect(TAG_TEXT.cipSkid(y({ state: 'cleaning' }))).toBe('CIP running');
+    expect(TAG_TEXT.cipSkid(y({ state: 'sterilizing' }))).toBe(`SIP · ${P8.sip.runC} °C steam`);
+    expect(TAG_TEXT.qaBench(y({ nextSealTestS: 7_080 }), 0)).toBe('seal test in 1 h 58 min');
+    expect(TAG_TEXT.qaBench(y({ nextSealTestS: 600 }), 30)).toBe('seal test in 10 min');
+    expect(TAG_TEXT.qaBench(y({ nextSealTestS: null }), 0)).toBe('no test planned');
+    expect(TAG_TEXT.cups(y({ magazines: { cupsPct: 93.6, foilsPct: 50 } }))).toBe('magazine 94 %');
+    expect(TAG_TEXT.cups(y({ magazines: { cupsPct: 20, foilsPct: 50 } }))).toBe('magazine 20 % · refilling');
+    expect(TAG_TEXT.foils(y({ magazines: { cupsPct: 90, foilsPct: 12 } }))).toBe('magazine 12 % · refilling');
+    // On the live sim, through the wing's own list.
+    const live = new Map(yogurtLine(makeContext()).map((item) => [item.id, item]));
+    const snap = createSim(plantConfig).snapshot();
+    expect(live.get('p8-cup-supply')?.labelText(snap)).toMatch(/^magazine \d+ %$/);
+    expect(live.get('p8-air-unit')?.labelText(snap)).toMatch(/^\+\d+\.\d Pa$/);
   });
 });
 

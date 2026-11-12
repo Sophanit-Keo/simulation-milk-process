@@ -31,6 +31,7 @@ import { coldChainTokens } from './yogurt/coldChainScene';
 import { createTransfers } from './yogurt/dispatchBoxes';
 import { createReeferYard } from './yogurt/reeferTruck';
 import { MIXER_FITTINGS, onSilo, POWDER_FITTINGS, SILO_FITTINGS, SKID_FITTINGS } from './yogurt/mixDetail';
+import { cupRoomTags } from './yogurt/cupRoomTags';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
 import { createWingMotion, type WingMotion } from './yogurt/wingMotion';
 import { createPalletLine, FILM_TOP_M, filmHeightM, GANTRY, PALLET, STACK_CAPACITY, type PalletLine } from './yogurt/palletLine';
@@ -162,6 +163,8 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
     checkGate(kit, 'p8-vision', 'Vision check', at.CHECK_GATES.vision, 'camera', 2.5),
     rejectBin(kit),
     p8Cups(kit, carrier),
+    // Phase 31: a name tag over each of the cup filling room's units (cupRoomTags.ts).
+    ...cupRoomTags(),
     trayPacker(kit),
     palletizer(kit, ctx, palletLine),
     wrapper(kit, ctx, palletLine),

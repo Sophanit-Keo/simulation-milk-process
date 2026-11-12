@@ -1,11 +1,12 @@
 // A machine explained in its stage's panel (phase 28): what it is, why the plant needs it and how it works, from
 // src/data/machineNotes.json (process's text), with a few live readings on top. Stage 12 explains the holding cell,
-// stage 15 Line P8. Each note is a <details>, open by default; whether a viewer closed it is kept for the session.
+// stage 15 Line P8 and, since phase 31, each machine of the cup filling room. Each note is a <details>, open by default
+// unless the file says "open": false (the room's machines); whether a viewer opened or closed it is kept for the session.
 import type { PlantConfig, Snapshot, StageId, YogurtSnapshot } from '../contracts';
 import plantJson from '../data/plant.json';
 import notesJson from '../data/machineNotes.json';
 import { el, setText } from './dom';
-import { formatDuration, formatNumber, NO_VALUE, withUnit } from './format';
+import { formatDay, formatDuration, formatNumber, NO_VALUE, withUnit } from './format';
 import type { PanelPart } from './stagePanel';
 
 const PLANT: PlantConfig = plantJson;
@@ -23,6 +24,8 @@ export interface MachineNote {
   /** One line under the title, shown while the note is closed too. */
   summary: string;
   sections: NoteSection[];
+  /** Whether the note starts open; true if left out. */
+  open: boolean;
 }
 
 /** A live reading at the top of a note: its text, and whether it is fine ('ok'), a warning or a fault. */
@@ -50,7 +53,9 @@ export function parseMachineNotes(json: unknown): readonly MachineNote[] {
       if (!section?.heading?.trim() || !section.text?.trim()) throw new Error(`${where}, section ${j + 1}: needs a heading and its text`);
       return { heading: section.heading, text: section.text };
     });
-    return { id: note.id, stage: note.stage as StageId, title: note.title, summary: note.summary, sections };
+    const open = (raw as { open?: unknown }).open;
+    if (open !== undefined && typeof open !== 'boolean') throw new Error(`${where}: "open" must be true or false`);
+    return { id: note.id, stage: note.stage as StageId, title: note.title, summary: note.summary, sections, open: open ?? true };
   });
 }
 
@@ -76,6 +81,45 @@ function ccpFact(yogurt: YogurtSnapshot): NoteFact {
 
 const P8_STATE_TEXT = { running: 'Running', idle: 'Standing ready', cleaning: 'Cleaning in place', sterilizing: 'Sterilizing with steam (SIP)', starved: 'Waiting for the buffer', stopped: 'Stopped' } as const;
 const STOP_WHY = { hepa: 'the HEPA cabin under its limit', cups: 'the cup magazine is empty', foils: 'the foil magazine is empty' } as const;
+
+const grams = (value: number, decimals = 0): string => withUnit(formatNumber(value, decimals), 'g');
+const refillMarkPct = Y.p8.magazines.refillBelowFrac * 100;
+
+/** The last cup's weight against the checkweigher's limits. */
+const lastCup: FactReader = (y) =>
+  y.p8.lastFillG === null || y.p8.lastFillG === undefined
+    ? { text: NO_VALUE, state: 'idle' }
+    : { text: `${grams(y.p8.lastFillG, 1)}, the target ${grams(Y.p8.fill.targetG)}`, state: y.p8.lastFillG < Y.p8.fill.underBelowG || y.p8.lastFillG > Y.p8.fill.overAboveG ? 'bad' : 'ok' };
+const sealing: FactReader = (y) => {
+  const seal = y.p8.seal;
+  if (!seal) return { text: NO_VALUE, state: 'idle' };
+  const s = Y.p8.seal;
+  const outside = seal.tempC < s.minTempC || seal.tempC > s.maxTempC || seal.timeS < s.minTimeS || seal.timeS > s.maxTimeS || seal.bar < s.minBar || seal.bar > s.maxBar;
+  return { text: `${degC(seal.tempC, 0)} · ${withUnit(formatNumber(seal.timeS, 1), 's')} · ${withUnit(formatNumber(seal.bar, 1), 'bar')}`, state: outside ? 'warn' : 'ok' };
+};
+const hepaCabin: FactReader = (y) => {
+  const pa = y.p8.hepaPa;
+  if (pa === undefined) return { text: NO_VALUE, state: 'idle' };
+  return { text: `+${formatNumber(pa, 1)} Pa, the limit +${formatNumber(Y.p8.hepa.minPa)} Pa`, state: pa < Y.p8.hepa.minPa ? 'bad' : 'ok' };
+};
+const nextSealTest: FactReader = (y, s) => {
+  const next = y.p8.nextSealTestS;
+  return next === null || next === undefined ? { text: 'Only while it runs', state: 'idle' } : { text: `in ${formatDuration(Math.max(0, next - s.timeS))}`, state: 'ok' };
+};
+/** One magazine's level: amber while it is under its refill mark, red once it has run out and stopped the line. */
+const magazine = (which: 'cups' | 'foils'): FactReader => (y) => {
+  const m = y.p8.magazines;
+  if (!m) return { text: NO_VALUE, state: 'idle' };
+  const level = which === 'cups' ? m.cupsPct : m.foilsPct;
+  if (y.p8.stopReason === which) return { text: `${pct(level)} · empty, P8 waits for its refill`, state: 'bad' };
+  return level <= refillMarkPct ? { text: `${pct(level)} · being refilled`, state: 'warn' } : { text: pct(level), state: 'ok' };
+};
+/** Cups a check has thrown out so far: fine at none, a warning once there are some. */
+const thrownOut = (count: (y: YogurtSnapshot) => number | undefined): FactReader => (y) => {
+  const n = count(y);
+  return n === undefined ? { text: NO_VALUE, state: 'idle' } : { text: `${formatNumber(n)} cups`, state: n > 0 ? 'warn' : 'ok' };
+};
+const whileRunning = (running: string): FactReader => (y) => (y.p8.state === 'running' ? { text: running, state: 'ok' } : { text: 'Standing', state: 'idle' });
 
 /** Each note's live readings, by label, in the order shown. */
 export const NOTE_FACTS: Readonly<Record<string, Readonly<Record<string, FactReader>>>> = {
@@ -107,31 +151,97 @@ export const NOTE_FACTS: Readonly<Record<string, Readonly<Record<string, FactRea
       text: `${formatNumber(y.p8.cyclesPerMin ?? 0)} cycles a min · ${withUnit(formatNumber(y.p8.cupsPerH), 'cups/h')}`,
       state: y.p8.state === 'running' ? 'ok' : 'idle',
     }),
-    'Last cup': (y) =>
-      y.p8.lastFillG === null || y.p8.lastFillG === undefined
-        ? { text: NO_VALUE, state: 'idle' }
-        : { text: `${withUnit(formatNumber(y.p8.lastFillG, 1), 'g')}, the target ${withUnit(formatNumber(Y.p8.fill.targetG), 'g')}`, state: y.p8.lastFillG < Y.p8.fill.underBelowG || y.p8.lastFillG > Y.p8.fill.overAboveG ? 'bad' : 'ok' },
-    Sealing: (y) => {
-      const seal = y.p8.seal;
-      if (!seal) return { text: NO_VALUE, state: 'idle' };
-      const s = Y.p8.seal;
-      const outside = seal.tempC < s.minTempC || seal.tempC > s.maxTempC || seal.timeS < s.minTimeS || seal.timeS > s.maxTimeS || seal.bar < s.minBar || seal.bar > s.maxBar;
-      return { text: `${degC(seal.tempC, 0)} · ${withUnit(formatNumber(seal.timeS, 1), 's')} · ${withUnit(formatNumber(seal.bar, 1), 'bar')}`, state: outside ? 'warn' : 'ok' };
-    },
-    'HEPA cabin': (y) => {
-      const pa = y.p8.hepaPa;
-      if (pa === undefined) return { text: NO_VALUE, state: 'idle' };
-      return { text: `+${formatNumber(pa, 1)} Pa, the limit +${formatNumber(Y.p8.hepa.minPa)} Pa`, state: pa < Y.p8.hepa.minPa ? 'bad' : 'ok' };
-    },
+    'Last cup': lastCup,
+    Sealing: sealing,
+    'HEPA cabin': hepaCabin,
     Magazines: (y) => {
       const m = y.p8.magazines;
       if (!m) return { text: NO_VALUE, state: 'idle' };
-      const low = Math.min(m.cupsPct, m.foilsPct) < Y.p8.magazines.refillBelowFrac * 100;
+      const low = Math.min(m.cupsPct, m.foilsPct) < refillMarkPct;
       return { text: `cups ${pct(m.cupsPct)} · foils ${pct(m.foilsPct)}`, state: low ? 'warn' : 'ok' };
     },
-    'Next seal test': (y, s) => {
-      const next = y.p8.nextSealTestS;
-      return next === null || next === undefined ? { text: 'Only while it runs', state: 'idle' } : { text: `in ${formatDuration(Math.max(0, next - s.timeS))}`, state: 'ok' };
+    'Next seal test': nextSealTest,
+  },
+  // Phase 31: the cup filling room's machines, one note each.
+  p8Denester: {
+    'Cups set down': (y) => (y.p8.state === 'running' ? { text: `${formatNumber((y.p8.cyclesPerMin ?? 0) * Y.p8.lanes)} a minute`, state: 'ok' } : { text: 'Standing', state: 'idle' }),
+    'Cup magazine': magazine('cups'),
+    'UV-C tunnel': whileRunning('Lit'),
+  },
+  p8Dosing: {
+    'Last cup': lastCup,
+    'Feed from the buffer': (y) =>
+      y.p8.state === 'running' && y.buffer.levelL > 0
+        ? { text: `Open · ${withUnit(formatNumber(y.buffer.levelL), 'L')} in the buffer`, state: 'ok' }
+        : { text: y.p8.state === 'starved' ? 'The buffer is empty' : 'Shut', state: y.p8.state === 'starved' ? 'warn' : 'idle' },
+    Doses: (y) => (y.p8.state === 'running' ? { text: `${formatNumber(y.p8.cupsPerH)} an hour`, state: 'ok' } : { text: 'Standing', state: 'idle' }),
+  },
+  p8Sealing: {
+    Sealing: sealing,
+    'Foil magazine': magazine('foils'),
+    'Printed on the lid': (y) => {
+      const batch = y.p8.currentBatch;
+      return batch ? { text: `${batch.code} · best before ${formatDay(batch.expiresS)}`, state: 'ok' } : { text: NO_VALUE, state: 'idle' };
+    },
+  },
+  checkweigher: {
+    'Last cup': lastCup,
+    Passes: () => ({ text: `${formatNumber(Y.p8.fill.underBelowG, 1)}–${grams(Y.p8.fill.overAboveG)}`, state: 'ok' }),
+    'Under-filled': thrownOut((y) => y.p8.rejects?.underFill),
+    'Over-filled': thrownOut((y) => y.p8.rejects?.overFill),
+  },
+  metalDetector: {
+    Now: whileRunning('Searching every cup'),
+    'Thrown out': thrownOut((y) => y.p8.rejects?.metal),
+  },
+  visionCheck: {
+    Now: whileRunning('Looking at every lid'),
+    'Thrown out': thrownOut((y) => y.p8.rejects?.vision),
+    'In the reject bin': thrownOut((y) => y.p8.cupsRejected),
+  },
+  airUnit: {
+    'HEPA cabin': hepaCabin,
+    Fans: (y) => {
+      const pa = y.p8.hepaPa;
+      if (pa === undefined) return { text: NO_VALUE, state: 'idle' };
+      return pa < Y.p8.hepa.minPa ? { text: 'Stopped', state: 'bad' } : { text: 'Running', state: 'ok' };
+    },
+  },
+  cipSip: {
+    Now: (y) =>
+      y.p8.state === 'cleaning'
+        ? { text: 'Cleaning in place', state: 'warn' }
+        : y.p8.state === 'sterilizing'
+          ? { text: `Sterilizing with steam at ${degC(Y.p8.sip.runC, 0)}`, state: 'warn' }
+          : { text: 'Standing by', state: 'idle' },
+    'Last SIP': (y) => {
+      const sip = y.p8.sip;
+      if (!sip || sip.lastS === null) return { text: NO_VALUE, state: 'idle' };
+      return sip.ok ? { text: `Passed, ${formatDay(sip.lastS)}`, state: 'ok' } : { text: `Fell short, ${formatDay(sip.lastS)}`, state: 'bad' };
+    },
+    'ATP swab': (y) => {
+      const rlu = y.p8.atpRlu;
+      if (rlu === null || rlu === undefined) return { text: NO_VALUE, state: 'idle' };
+      return { text: `${formatNumber(rlu, 1)} RLU, must be under ${formatNumber(Y.p8.atpMaxRlu)} RLU`, state: rlu < Y.p8.atpMaxRlu ? 'ok' : 'bad' };
+    },
+  },
+  qaBench: {
+    'Next seal test': nextSealTest,
+    'Tests so far': (y) => {
+      const t = y.p8.sealTests;
+      if (!t) return { text: NO_VALUE, state: 'idle' };
+      return { text: `${formatNumber(t.passed)} passed · ${formatNumber(t.failed)} failed`, state: t.failed > 0 ? 'bad' : 'ok' };
+    },
+    'Cups held back': thrownOut((y) => y.p8.rejects?.sealHold),
+  },
+  supplies: {
+    'Cup magazine': magazine('cups'),
+    'Foil magazine': magazine('foils'),
+    Operator: (y) => {
+      const m = y.p8.magazines;
+      if (y.p8.stopReason === 'cups' || (m && m.cupsPct <= refillMarkPct)) return { text: 'At the de-nester, loading cups', state: 'warn' };
+      if (y.p8.stopReason === 'foils' || (m && m.foilsPct <= refillMarkPct)) return { text: 'At the lidder, loading foils', state: 'warn' };
+      return { text: 'At the screen', state: 'ok' };
     },
   },
 };
@@ -147,8 +257,8 @@ export function noteFacts(id: string, snapshot: Snapshot): Record<string, NoteFa
 /** The notes a stage's panel shows. */
 export const notesFor = (stage: StageId): readonly MachineNote[] => MACHINE_NOTES.filter((note) => note.stage === stage);
 
-/** Whether a viewer closed a note, for the session, by its id; open by default. */
-const closed = new Set<string>();
+/** Whether a viewer opened or closed a note, for the session, by its id; until then it is as its file says. */
+const toggled = new Map<string, boolean>();
 
 /**
  * The panel part (stagePanel.ts parts): one <details> a note, its title and summary as the summary line, then its live
@@ -160,11 +270,8 @@ export function createMachineNotes(host: HTMLElement, stage: StageId): PanelPart
     section.dataset.testid = 'machine-notes';
     section.dataset.note = note.id;
     const details = el('details', 'notes');
-    details.open = !closed.has(note.id);
-    details.addEventListener('toggle', () => {
-      if (details.open) closed.delete(note.id);
-      else closed.add(note.id);
-    });
+    details.open = toggled.get(note.id) ?? note.open;
+    details.addEventListener('toggle', () => toggled.set(note.id, details.open));
     const summary = el('summary', 'notes-head');
     summary.append(el('span', 'notes-title', note.title), el('span', 'notes-summary', note.summary));
     const facts = el('dl', 'notes-facts');

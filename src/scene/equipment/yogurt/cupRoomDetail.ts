@@ -12,6 +12,9 @@
 // - The cabin's pressure gauge on the hood's west post reads its overpressure.
 // - The check gates: the checkweigher's display is green for a cup inside its limits; each gate's belt roller turns
 //   and its lamp turns red for a moment when it throws a cup out; the rejected cups heap up on the bin.
+//   Phase 31: the checkweigher's weigh platform dips under each row and a marker on its scale shows the last cup's
+//   weight between its limits; the metal detector's field sweeps on its arch; the vision check's strobe flashes for
+//   each row and its monitor shows the verdict; a chute runs from the reject flap to the bin.
 //
 // The room:
 // - A pallet of cup cartons by the de-nester and a cart of foil boxes by the lidder: each refill of a magazine takes
@@ -71,6 +74,8 @@ export const AIR_UNIT = { xM: 6.5, zM: Z - 3.2, sizeM: [1.2, 1.5, 0.8], ductXM: 
 export const CIP_SKID = { xM: 9.8, zM: Z - 3.2, cipValveXM: 9.55, steamValveXM: 10.05 } as const;
 /** The QA bench, inside the hygiene line by the check gates. */
 export const QA_BENCH = { xM: 13, zM: Z + 2.4, topM: 0.9, sizeM: [1.4, 0.6] } as const;
+/** The reject chute (phase 31): from behind the belt at the reject flap down to the bin's near rim. */
+export const REJECT_CHUTE = { fromM: [at.REJECT_KICK_XM, 0.72, Z - 0.26], toM: [at.REJECT_BIN.xM + 0.05, 0.62, at.REJECT_BIN.zM + 0.3] } as const;
 /** The hygiene line round the high-care zone, and the gap in its aisle side where people step in. */
 export const HYGIENE_LINE = { xMinM: 0.6, xMaxM: 15.6, zMinM: Z - 5.4, zMaxM: Z + 3.6, gapXM: [4.4, 5.6] } as const;
 
@@ -369,6 +374,102 @@ function gateParts(watch: CupRoomWatch): Part[] {
       color: (y, _p, out) => out.setHex(watch.rejecting(gate) ? HEX.bad : p8Running(y) ? HEX.open : HEX.off),
     });
   }
+  // Phase 31. The gates' belts carry three rows of four for each of P8's cycles: 1.5 rows a second at full rate.
+  const ROWS_PER_S = 1.5;
+  const weigherXM = at.CHECK_GATES.checkweigher;
+  // The checkweigher's weigh platform, proud of the belt: it dips 4 mm under each row and comes back.
+  const dip = (phase: number): number => Math.max(0, Math.sin(phase * TURN));
+  parts.push({
+    machine: 'p8-checkweigher',
+    name: 'weighPlatform',
+    ratePerS: ROWS_PER_S,
+    pose(phase, _y, out) {
+      out.position.set(weigherXM, 0.763 - 0.004 * dip(phase), Z);
+      out.rotation.set(0, 0, 0);
+      out.size.set(0.5, 0.006, 0.38);
+    },
+    speed: p8Rate,
+    color: fixed(COLOR.steel),
+  });
+  // Its scale on the body's front: the under limit at its left end, the over limit at its right, a green tick at the
+  // target and a red marker at the last cup's weight.
+  const scaleM = 0.5;
+  const scaleYM = 0.26;
+  const onScale = (g: number): number => weigherXM + 0.08 - scaleM / 2 + scaleM * Math.min(1, Math.max(0, (g - P8.fill.underBelowG) / (P8.fill.overAboveG - P8.fill.underBelowG)));
+  parts.push(box('p8-checkweigher', 'weighScale', weigherXM + 0.08, scaleYM, bodyFrontZM + 0.004, scaleM + 0.02, 0.05, 0.008, HEX.dial));
+  parts.push(box('p8-checkweigher', 'weighTarget', onScale(P8.fill.targetG), scaleYM, bodyFrontZM + 0.009, 0.012, 0.05, 0.004, HEX.open));
+  parts.push({
+    machine: 'p8-checkweigher',
+    name: 'weighMarker',
+    ratePerS: 0,
+    pose(_phase, y, out) {
+      out.position.set(onScale(y.p8.lastFillG ?? P8.fill.targetG), scaleYM, bodyFrontZM + 0.012);
+      out.rotation.set(0, 0, 0);
+      if (y.p8.lastFillG === null || y.p8.lastFillG === undefined) out.size.set(0, 0, 0);
+      else out.size.set(0.016, 0.07, 0.004);
+    },
+    speed: still,
+    reading: (y) => (y.p8.lastFillG === null || y.p8.lastFillG === undefined ? 0 : Math.round(((onScale(y.p8.lastFillG) - (weigherXM + 0.08 - scaleM / 2)) / scaleM) * 1000) / 10),
+    color: fixed(HEX.needle),
+  });
+  // The metal detector: its tunnel's mouths on the arch's two ends, and the search field's bar on its face, a marker
+  // sweeping it while the coils search.
+  const detectorXM = at.CHECK_GATES.metalDetector;
+  const archFrontZM = Z + 0.375;
+  for (const [name, dx] of [['tunnelMouthIn', -1], ['tunnelMouthOut', 1]] as const) {
+    parts.push(box('p8-metal-detector', name, detectorXM + dx * 0.177, 0.83, Z, 0.006, 0.14, 0.46, HEX.off));
+  }
+  parts.push(box('p8-metal-detector', 'fieldBar', detectorXM, 1.1, archFrontZM + 0.004, 0.27, 0.06, 0.008, HEX.off));
+  parts.push({
+    machine: 'p8-metal-detector',
+    name: 'fieldSweep',
+    ratePerS: 1,
+    pose(phase, _y, out) {
+      out.position.set(detectorXM + 0.11 * Math.sin(phase * TURN), 1.1, archFrontZM + 0.01);
+      out.rotation.set(0, 0, 0);
+      out.size.set(0.03, 0.045, 0.004);
+    },
+    speed: p8Rate,
+    color: (y, _p, out) => out.setHex(watch.rejecting('metal') ? HEX.bad : p8Running(y) ? HEX.frost : HEX.metal),
+  });
+  // The vision check: its strobe under the camera, lit for the first quarter of each row, and its monitor on a post
+  // at the gate's out end: blue while it looks, red on a cup it throws out.
+  const visionXM = at.CHECK_GATES.vision;
+  parts.push({
+    machine: 'p8-vision',
+    name: 'strobe',
+    ratePerS: ROWS_PER_S,
+    pose: plate(visionXM, 1.02, Z, 0.42, 0.008, 0.46),
+    speed: p8Rate,
+    reading: (y) => (p8Running(y) ? 1 : 0),
+    color: (y, phase, out) => out.setHex(p8Running(y) && phase % 1 < 0.25 ? 0xffffff : HEX.off),
+  });
+  parts.push(box('p8-vision', 'monitorPost', visionXM + 0.3, 1.0, bodyFrontZM + 0.05, 0.04, 0.6, 0.04, HEX.metal));
+  parts.push({
+    machine: 'p8-vision',
+    name: 'monitor',
+    ratePerS: 0,
+    pose: plate(visionXM + 0.3, 1.36, bodyFrontZM + 0.06, 0.26, 0.18, 0.03),
+    speed: still,
+    color: (y, _p, out) => out.setHex(watch.rejecting('vision') ? HEX.bad : p8Running(y) ? HEX.screen : HEX.screenDark),
+  });
+  // The reject chute: a trough from under the flap, behind the belt, down to the bin.
+  const chute = REJECT_CHUTE;
+  const [dx, dy, dz] = [chute.toM[0] - chute.fromM[0], chute.toM[1] - chute.fromM[1], chute.toM[2] - chute.fromM[2]];
+  const yawRad = Math.atan2(dx, dz);
+  parts.push({
+    machine: 'p8-reject-bin',
+    name: 'chute',
+    ratePerS: 0,
+    pose(_phase, _y, out) {
+      out.position.set((chute.fromM[0] + chute.toM[0]) / 2, (chute.fromM[1] + chute.toM[1]) / 2, (chute.fromM[2] + chute.toM[2]) / 2);
+      // Along its run, then tipped down toward the bin.
+      out.rotation.set(-Math.asin(dy / Math.hypot(dx, dy, dz) / Math.cos(yawRad)), yawRad, 0);
+      out.size.set(0.24, 0.02, Math.hypot(dx, dy, dz));
+    },
+    speed: still,
+    color: fixed(COLOR.steel),
+  });
   // The checkweigher's display: the last cup's weight, green inside its limits and red outside them.
   parts.push({
     machine: 'p8-checkweigher',

@@ -35,13 +35,15 @@ const boxOf = (item: Equipment): THREE.Box3 => {
 const inside = (box: THREE.Box3, rect: RectM, marginM = 1e-6): boolean =>
   box.min.x >= rect.xMinM - marginM && box.max.x <= rect.xMaxM + marginM && box.min.z >= rect.zMinM - marginM && box.max.z <= rect.zMaxM + marginM;
 
+/** The cup filling room's name tags (phase 31): labels over boxes of the shared mesh, not machines. */
+const ROOM_TAGS = ['p8-air-unit', 'p8-cip-skid', 'p8-qa-bench', 'p8-cup-supply', 'p8-foil-supply'] as const;
 /** The phase 16 table's machines, by stage. */
 const EXPECTED: Readonly<Record<number, readonly string[]>> = {
   11: ['yogurt-silo', 'powder-station', 'high-shear-mixer', 'stabilizer-skid', 'yogurt-mix-tank'],
   12: ['yogurt-deaerator', 'yogurt-homogenizer', 'yogurt-phe', 'holding-cell', 'yogurt-divert-valve', 'reprocess-tank'],
   13: ['culture-pump', 'ferment-tank-1', 'ferment-tank-2', 'ferment-tank-3'],
   14: ['smoothing-valve', 'yogurt-cooler', 'fruit-tank', 'p8-buffer'],
-  15: ['p8-filler', 'p8-checkweigher', 'p8-metal-detector', 'p8-vision', 'p8-reject-bin', 'p8-cups'],
+  15: ['p8-filler', 'p8-checkweigher', 'p8-metal-detector', 'p8-vision', 'p8-reject-bin', 'p8-cups', ...ROOM_TAGS],
   16: ['p8-tray-packer', 'yogurt-palletizer', 'yogurt-wrapper', 'warm-room', 'blast-chiller', 'cold-room', 'yogurt-pallets'],
 };
 
@@ -57,7 +59,7 @@ describe('the yogurt wing in grey boxes', () => {
     for (const stage of YOGURT_STAGE_IDS) {
       expect(everything.filter((item) => item.stage === stage).map((item) => item.id), `stage ${stage}`).toEqual(EXPECTED[stage]);
     }
-    expect(everything.filter(isTokens).map((item) => item.id)).toEqual(['p8-cups', 'yogurt-pallets']);
+    expect(everything.filter(isTokens).map((item) => item.id)).toEqual(['p8-cups', ...ROOM_TAGS, 'yogurt-pallets']);
   });
 
   it('has ids no other machine of the plant uses', () => {
