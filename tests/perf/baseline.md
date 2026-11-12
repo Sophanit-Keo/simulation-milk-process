@@ -458,6 +458,10 @@ Read on 12 November 2026 from `window.__scene.drawCalls()` on the dev server (16
 - **Stage 15**, zoomed in on the machine and orbited a little from its stop, read 124 draw calls while P8 ran.
 - **Not measured:** the triangles and the other stops with `measure.mjs`, and the frame rate.
 
+### Phase 31: the cup filling room's machines explained
+
+Read on 12 November 2026 as phase 30's. **The overview:** **350** draw calls, as before. The gates' 12 new parts are instances in the shared box mesh, and the five name tags are labels without a mesh.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

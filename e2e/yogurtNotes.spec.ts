@@ -47,3 +47,59 @@ test('the holding cell and Line P8 are explained in their panels, with live read
   await expect.poll(async () => (await filler())?.hepaFan2Moving).toBe(true);
   expect(await filler()).toMatchObject({ stackGreenColor: '#34c759', screenColor: '#4aa3ff', sealDisplayColor: '#34c759' });
 });
+
+// Phase 31 in the browser: stage 15's panel has a note for each machine of the cup filling room, closed until asked
+// for, each saying what the machine does, how it works and what the 3D view shows, with live readings; the room's
+// units carry name tags in 3D; and the check gates' new parts move. What each reads is the unit tests'
+// (tests/ui/machineNotes.test.ts, tests/scene/cupRoom.test.ts).
+test('each machine of the cup filling room is explained in stage 15\'s panel and tagged in 3D, and the check gates move', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.goto('/?debug');
+  await waitForClock(page);
+  await waitForScene(page);
+  await showOnRail(page, 15);
+  await railButton(page, 15).click();
+  const notes = page.locator('[data-testid="machine-notes"]');
+  await expect(notes.locator('.notes-title')).toHaveText([
+    'Line P8, the cup filler',
+    'The de-nester and cup cleaning',
+    'The piston filler',
+    'The lidder, the sealing heads and the coder',
+    'The checkweigher',
+    'The metal detector',
+    'The vision check and the reject bin',
+    'The sterile air unit and the HEPA hood',
+    'The CIP/SIP skid',
+    'The QA bench and the seal test',
+    'Cups, foils and the operator',
+  ]);
+  // Line P8's note is open; the room's machines open when asked, and stay open when the stage comes back.
+  await expect(notes.locator('details[open]')).toHaveCount(1);
+  const weigher = page.locator('[data-testid="machine-notes"][data-note="checkweigher"]');
+  await weigher.locator('summary').click();
+  await expect(weigher.locator('details')).toHaveAttribute('open', '');
+  await expect(weigher.locator('.notes-heading')).toHaveText(['What it does', 'How it works', 'In the 3D view']);
+  await expect(weigher.locator('.notes-fact[data-fact="Passes"] dd')).toHaveText('120.5–135 g');
+  await expect(weigher.locator('.notes-fact[data-fact="Last cup"] dd')).toHaveText(/^1\d\d\.\d g, the target 127 g$/);
+  await railButton(page, 14).click();
+  await railButton(page, 15).click();
+  await expect(page.locator('[data-testid="machine-notes"][data-note="checkweigher"] details')).toHaveAttribute('open', '');
+  const air = page.locator('[data-testid="machine-notes"][data-note="airUnit"]');
+  await air.locator('summary').click();
+  await expect(air.locator('.notes-fact[data-fact="Fans"] dd')).toHaveText('Running');
+
+  // The tags over the room's units.
+  const tag = (id: string) => page.locator(`.equipment-label[data-equipment="${id}"]`);
+  await expect(tag('p8-air-unit').locator('.equipment-name')).toHaveText('Sterile air unit');
+  await expect(tag('p8-air-unit').locator('.equipment-value')).toHaveText(/^\+\d+\.\d Pa$/);
+  await expect(tag('p8-cip-skid').locator('.equipment-value')).toHaveText('standing by');
+  await expect(tag('p8-qa-bench').locator('.equipment-value')).toHaveText(/^seal test in \d/);
+  await expect(tag('p8-cup-supply').locator('.equipment-value')).toHaveText(/^magazine \d+ %/);
+  await expect(tag('p8-foil-supply').locator('.equipment-value')).toHaveText(/^magazine \d+ %/);
+
+  // The gates: the weigh platform dips, the detector's field sweeps, the strobe flashes.
+  const gate = (id: string) => sceneCall(page, 'equipmentState', id) as Promise<State>;
+  await expect.poll(async () => (await gate('p8-checkweigher'))?.weighPlatformMoving).toBe(true);
+  expect(await gate('p8-metal-detector')).toMatchObject({ fieldSweepMoving: true, fieldSweepColor: '#7cc4ff' });
+  expect(await gate('p8-vision')).toMatchObject({ strobeMoving: true, monitorColor: '#4aa3ff' });
+});
