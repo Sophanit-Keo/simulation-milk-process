@@ -450,6 +450,14 @@ Measured on 11 November 2026 the same way as phase 28, with no console errors.
 - **Stage 16 while it works** reads 141 to 146 draw calls as the wrapper's film and the rooms' glows come and go, as it did before this phase; a reefer on the yard and both stackers at work add none.
 - **Not measured:** the frame rate. The shared box mesh now holds about 380 more instances whose matrices are written every frame; on software GL this could not be told apart from the noise.
 
+### Phase 30: the cup filling room in detail
+
+Read on 12 November 2026 from `window.__scene.drawCalls()` on the dev server (1600 × 900, headless Chromium on SwiftShader), not with `measure.mjs`; no console errors.
+
+- **The overview:** **350** draw calls, within the budget, as before. The room's 104 parts are instances in the cold chain's shared box mesh: none adds a draw call, and together they add at most 1,248 triangles.
+- **Stage 15**, zoomed in on the machine and orbited a little from its stop, read 124 draw calls while P8 ran.
+- **Not measured:** the triangles and the other stops with `measure.mjs`, and the frame rate.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

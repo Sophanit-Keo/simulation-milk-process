@@ -104,3 +104,40 @@ test('the mix room\'s pump, valves, fans and powder specks move while mix is mad
   expect(await stateOf(page, 'high-shear-mixer')).toMatchObject({ motorFanMoving: false });
   expect(Number((await stateOf(page, 'powder-station'))?.bagLevelReading)).toBeLessThan(bag);
 });
+
+// Phase 30 in the browser: the cup filling room. While P8 runs its feed valve stands open, the shroud's and the air
+// unit's fans turn, the index drive steps on with the carrier, the checkweigher's display is green and the operator
+// stands at the screen; paused, they stand. In a HEPA loss the air unit's fans stop and the cabin gauge falls under
+// its limit. What each part does is tests/scene/cupRoom.test.ts's.
+test('the cup filling room\'s parts move while P8 runs, stand while paused, and the air unit stops in a HEPA loss', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto('/?debug');
+  await waitForClock(page);
+  await waitForScene(page);
+  await expect.poll(async () => (await stateOf(page, 'p8-filler'))?.feedValveLift, { timeout: 60_000 }).toBe(1);
+  expect(await stateOf(page, 'p8-filler')).toMatchObject({
+    feedValveColor: '#34c759',
+    shroudFanMoving: true,
+    airUnitFanMoving: true,
+    sealPlatenColor: '#ea8027',
+    operatorReading: 10,
+    cupCarton1Reading: 18,
+    foilBox1Reading: 9,
+  });
+  expect(await stateOf(page, 'p8-checkweigher')).toMatchObject({ beltRollerMoving: true, weighDisplayColor: '#34c759' });
+  const steps = await turns(page, 'p8-filler', 'indexDriveReading');
+  await expect.poll(() => turns(page, 'p8-filler', 'indexDriveReading')).toBeGreaterThan(steps);
+
+  await page.keyboard.press('Space');
+  const paused = await turns(page, 'p8-filler', 'airUnitFanTurns');
+  await page.waitForTimeout(1_000);
+  expect(await turns(page, 'p8-filler', 'airUnitFanTurns')).toBe(paused);
+  await page.keyboard.press('Space');
+
+  await page.getByTestId('scenario-menu').click();
+  await page.locator('#scenario-menu-list [data-scenario="yogurtHepaLoss"]').click();
+  await expect.poll(async () => (await stateOf(page, 'p8-filler'))?.airUnitFanMoving, { timeout: 60_000 }).toBe(false);
+  const state = await stateOf(page, 'p8-filler');
+  expect(Number(state?.cabinGaugeReading)).toBeLessThan(15);
+  expect(state).toMatchObject({ feedValveColor: '#30363c' });
+});
