@@ -790,6 +790,36 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
 - **Why:** the mix room is where the recipe is made and the dispatch is where the cold chain ends. Both read better when the powder is seen to be drawn in, a truck is seen to carry each pallet to its room, and a reefer is seen to dock, load and leave.
 - **What it changes:** new `src/scene/equipment/yogurt/mixDetail.ts`, `stackers.ts`, `reeferTruck.ts` and `dispatchBoxes.ts`; `yogurtLine.ts` (stage 11's fittings) and `coldChainScene.ts` (the three-box reefers go); `packs/truckMoves.ts` (a path and a road for each yard, the UHT yard's unchanged); `scene/layout.ts` (the reefer yard, the store's east edge) and `yogurt/layout.ts` (the warm room's door, the chiller's west end); `palletLine.ts` (the rider names its pallet). The sim, the contracts and the UI are unchanged.
 
+## D32. The cup filling room and Line P8, in more detail
+
+- **Status:** Proposed
+- **Date:** 2026-11-12
+- **Review note:** none (the developer asked for more detail on the cup filling room and on the machine, Bench P8, and its animation; [phase 30](agent-plan/phase-30-cup-filling-room.md))
+- **Decision:** stage 15 shows what the SOP's Part 2 names and the 3D view left unseen.
+  - **The machine:** the feed valve, the cabin's pressure gauge, the ionizer's jet and extraction fan, the dosing crossheads, the foil strip under the pick, the sealing platen's heat, the carrier's index drive and the wash lances of the clean and the SIP.
+  - **The gates:** a belt roller and a reject lamp on each, the checkweigher's display, and the rejected cups heaped on the bin.
+  - **The room:** a pallet of cup cartons and a cart of foil boxes, an operator, the sterile air unit and its duct, the CIP/SIP skid, a QA bench with the seal tester, and a hygiene line on the floor with its entry.
+- **The room's numbers, visual assumptions unless sourced:**
+
+| Thing | Value | Basis |
+|---|---|---|
+| Cup pallet | 18 cartons in three layers of six; a refill takes a layer | A refill is 5,400 cups (75% of the magazine's 7,200, D28): six cartons of 900 |
+| Foil cart | 9 boxes in three stacks; a refill takes a stack | A refill is 9,000 lids (75% of 12,000, D28): three boxes of 3,000 |
+| Operator | Walks at 1.2 m/s, 0.5 m off the hood; 7.7 m from the screen to the de-nester | A walking pace; the sim's refill takes 240 s (D28), so the operator is there for most of it |
+| Cabin gauge | 0–50 Pa full scale | Twice the cabin's normal 25 Pa (D28) |
+| Reject lamp | Red for 90 frames, about 1.5 s | Long enough to see; the gates reject about one cup an hour |
+| Reject heap | 2 mm a cup, up to 0.3 m | A failed seal test holds thousands of cups; the heap only says that there are many |
+| Sample cups | The test's 5 cups stand on the bench for 10 sim minutes | The sim's 5 cups a test, every 2 h (D28) |
+| Hygiene line | x 0.6 to 15.6, z −52.4 to −43.4, its gap at x 4.4 to 5.6 | Round the machine, the gates, the supplies and the utilities, inside the zone's slab |
+
+- **Rules with no key:**
+  - **The sim leads.** The scene counts nothing the sim does not: it watches the snapshot's magazine levels, reject counts and seal tests change. A magazine's level rising by more than 10 points between two frames is a refill.
+  - **The operator is a sign, not a resource.** The sim's refill takes its 240 s whether or not the operator has arrived; at high speeds the operator may still be walking when it ends.
+  - **No walls.** The room stays open, as every room of the plant is, so the stage's camera sees the machine; the hygiene line marks the high-care zone.
+  - **No draw call:** every part is an instance in the cold chain's box mesh, so the overview stays at its budget of 350.
+- **Why:** stage 15 is the line's last open-product step and its hygiene limit. The cups, the foils, the clean air and the steam all come from somewhere, and a person tends the machine; the room reads as a filling room once they are seen.
+- **What it changes:** new `src/scene/equipment/yogurt/cupRoomDetail.ts`, listed in `wingMotion.ts`. The sim, the contracts, `plant.json` and the UI are unchanged.
+
 ---
 
 ← [Review](REVIEW.md) · [Hand calculations](hand-calculations.md) →
