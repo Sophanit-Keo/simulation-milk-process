@@ -31,7 +31,16 @@ export interface SceneDebug {
    * point's stripe offset in metres, and the cleaning fluid in the CIP circuit (null while it carries milk) with its
    * stripes' offset (phase 7).
    */
-  pipeState(): { divertLit: boolean; yogurtDivertLit?: boolean; phaseM: Record<string, number>; cleaning: string | null; cleanPhaseM: number };
+  pipeState(): {
+    divertLit: boolean;
+    yogurtDivertLit?: boolean;
+    phaseM: Record<string, number>;
+    cleaning: string | null;
+    cleanPhaseM: number;
+    /** Phase 32: the fluid in each of the yogurt wing's CIP circuits, and its stripes' offset. */
+    yogurtCleaning?: Record<string, string | null>;
+    yogurtCleanPhaseM?: Record<string, number>;
+  };
 }
 
 export type EquipmentState = Readonly<Record<string, number | string | boolean>>;
@@ -54,7 +63,15 @@ export interface DebugSources {
   info(): { calls: number; triangles: number };
   equipmentIds(): string[];
   equipmentState(id: string): EquipmentState | null;
-  pipeState(): { divertLit: boolean; yogurtDivertLit?: boolean; phaseM: Record<string, number>; cleaning: string | null; cleanPhaseM: number };
+  pipeState(): {
+    divertLit: boolean;
+    yogurtDivertLit?: boolean;
+    phaseM: Record<string, number>;
+    cleaning: string | null;
+    cleanPhaseM: number;
+    yogurtCleaning?: Record<string, string | null>;
+    yogurtCleanPhaseM?: Record<string, number>;
+  };
 }
 
 export interface DebugHook {
@@ -89,8 +106,16 @@ export function installDebugHook(sources: DebugSources): DebugHook {
       return state ? { ...state } : null;
     },
     pipeState: () => {
-      const { divertLit, yogurtDivertLit, phaseM, cleaning, cleanPhaseM } = sources.pipeState();
-      return { divertLit, ...(yogurtDivertLit === undefined ? {} : { yogurtDivertLit }), phaseM: { ...phaseM }, cleaning, cleanPhaseM };
+      const { divertLit, yogurtDivertLit, phaseM, cleaning, cleanPhaseM, yogurtCleaning, yogurtCleanPhaseM } = sources.pipeState();
+      return {
+        divertLit,
+        ...(yogurtDivertLit === undefined ? {} : { yogurtDivertLit }),
+        phaseM: { ...phaseM },
+        cleaning,
+        cleanPhaseM,
+        ...(yogurtCleaning === undefined ? {} : { yogurtCleaning: { ...yogurtCleaning } }),
+        ...(yogurtCleanPhaseM === undefined ? {} : { yogurtCleanPhaseM: { ...yogurtCleanPhaseM } }),
+      };
     },
   };
   window.__scene = hook;

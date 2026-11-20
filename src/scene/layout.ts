@@ -115,7 +115,7 @@ export const STAGE_VIEWS: Readonly<Record<StageId, StageView>> = {
   10: { focusM: [-45, 1.5, 19], cameraOffsetM: [2, 32, 38], badgeM: [-40, 5.4, 10.6], ringRadiusM: 25 },
   // The yogurt wing (phase 16): each stop looks north at its stage from the aisle side, as the milk row's do.
   11: { focusM: [-53, 1.8, -46], cameraOffsetM: [2, 13, 19], badgeM: [-57, 6.4, -46], ringRadiusM: 8 },
-  12: { focusM: [-36, 1.0, -49], cameraOffsetM: [1, 9, 13.5], badgeM: [-35, 2.4, -47], ringRadiusM: 6.5 },
+  12: { focusM: [-34.3, 1.0, -50], cameraOffsetM: [1, 10.5, 16], badgeM: [-35, 2.4, -47], ringRadiusM: 8 },
   13: { focusM: [-21, 2.0, -48], cameraOffsetM: [1, 10, 15], badgeM: [-20, 4.8, -48.5], ringRadiusM: 7 },
   14: { focusM: [-8, 1.0, -49], cameraOffsetM: [1, 7.5, 12], badgeM: [-5.5, 3.4, -47], ringRadiusM: 5 },
   15: { focusM: [8.3, 1.2, -47.5], cameraOffsetM: [1, 9, 15], badgeM: [6.5, 3.1, -47], ringRadiusM: 8.5 },

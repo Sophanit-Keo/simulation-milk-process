@@ -79,6 +79,39 @@ export const REPROCESS_TANK = { xM: -31, zM: -51.8, radiusM: 0.75, legsM: 0.4, b
 /** Phase 25: the reprocess tank's pump at its foot, east of it; its rotor turns on its east face. */
 export const REPROCESS_PUMP = { xM: REPROCESS_TANK.xM + REPROCESS_TANK.radiusM + 0.55 } as const;
 
+/**
+ * Phase 32 (D34): the wing's CIP station, at the hall's back between the reprocess tank and tank 1. Along the back a tank
+ * each for the rinse water, the lye and the acid, west to east; in front of them a lane for each of its three circuits
+ * (the heat treatment, the fermentation tanks, the buffer and P8), west to east: the circuit's heater, its supply pump in
+ * front of it, its rotor to the aisle, and the change-over valve on its return, which sends the return back to its tank
+ * or to the drain in front. The control
+ * cabinet stands at the east end. The supplies leave each heater's top on the lane's west side; the returns come down
+ * into their valves on its east side.
+ */
+export const CIP_STATION = {
+  tankXsM: [-28.7, -27.6, -26.5],
+  tankZM: -54.6,
+  tankRadiusM: 0.45,
+  tankLegsM: 0.35,
+  tankBodyM: 1.9,
+  tankDomeM: 0.2,
+  laneXsM: [-28.6, -27.6, -26.6],
+  pumpZM: -52.5,
+  heaterZM: -53.4,
+  /** The heater's top, where the supply leaves it, and the valve's middle on the return. */
+  heaterTopM: 1.05,
+  valveZM: -51.6,
+  valveYM: 0.6,
+  /** A lane's supply leaves `supplyDxM` from the lane's middle, its return comes in `returnDxM` from it. */
+  supplyDxM: -0.15,
+  returnDxM: 0.25,
+  cabinet: { xM: -25.9, zM: -53.0, widthM: 0.3, heightM: 1.6, depthM: 0.5 },
+  /** The floor drain in front of the valves. */
+  drain: { xMinM: -28.8, xMaxM: -26.2, zM: -50.95, widthM: 0.2 },
+  /** The rack along the back wall the supplies and returns of the heat treatment and of P8 run on. */
+  rack: { supplyYM: 3.3, supplyZM: -55.75, returnYM: 3.1, returnZM: -55.45 },
+} as const;
+
 /** Stage 13: the culture dosing pump and the three insulated fermentation tanks. */
 export const CULTURE_PUMP: Footprint = { xM: -27.5, zM: -43 };
 /** Phase 26: the culture skid's controller on its post at the skid's east corner, its face to the aisle. */

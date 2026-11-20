@@ -9,6 +9,7 @@
 // - each fermentation tank's jacket valve opens to warm water while it ferments, to chilled water once it is ready;
 // - the cooler's ice-water valve opens while it cools.
 import type { YogurtSnapshot } from '../../../contracts';
+import { dropColor, headerColor } from './cipStation';
 import * as at from './layout';
 import { fixed, heating, HEX, plate, still, valveStem, wingTempColor, type OpenFor, type Part } from './motionParts';
 
@@ -115,7 +116,8 @@ function stage13(): Part[] {
     // The CIP header's drop into the dome, behind the drive.
     const header = at.FERMENT_CIP_HEADER;
     const domeTopM = tank.legsM + tank.coneM + tank.bodyM + tank.domeM * Math.sqrt(1 - ((tank.zM - header.zM) / tank.radiusM) ** 2);
-    parts.push(riser(machine, 'cipDrop', xM, header.zM, domeTopM, header.yM, 0.06));
+    // Phase 32: it carries the tank's CIP fluid while the tank cleans (cipStation.ts).
+    parts.push({ ...riser(machine, 'cipDrop', xM, header.zM, domeTopM, header.yM, 0.06), color: (y, _p, out) => dropColor(i)(y, out) });
     // The sampling valve low on the shell to the aisle, right of the gauge, and its red handle.
     const sampleAngle = 0.35;
     const [vx, vz] = [xM + Math.sin(sampleAngle) * (tank.radiusM + 0.03), tank.zM + Math.cos(sampleAngle) * (tank.radiusM + 0.03)];
@@ -124,7 +126,8 @@ function stage13(): Part[] {
   });
   // The CIP header over the tanks, on a post at each end.
   const header = at.FERMENT_CIP_HEADER;
-  parts.push(run('ferment-tank-2', 'cipHeader', [header.xMinM, header.zM], [header.xMaxM, header.zM], header.yM, 0.07));
+  // Phase 32: the header carries the fluid of the tanks' circuit while a tank cleans (cipStation.ts).
+  parts.push({ ...run('ferment-tank-2', 'cipHeader', [header.xMinM, header.zM], [header.xMaxM, header.zM], header.yM, 0.07), color: (y, _p, out) => headerColor(y, out) });
   parts.push(riser('ferment-tank-1', 'cipPost', header.xMinM, header.zM, 0, header.yM, 0.08));
   parts.push(riser('ferment-tank-3', 'cipPost', header.xMaxM, header.zM, 0, header.yM, 0.08));
   return parts;

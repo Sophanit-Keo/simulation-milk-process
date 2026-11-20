@@ -12,6 +12,7 @@ import './labels.css';
 import { FLOOR, OVERVIEW, PLANT_BOUNDS, PLANT_HEIGHT_M, overviewDistanceM, type RectM } from './layout';
 import { motionDtS } from './motion';
 import { createPicker, type PickTarget } from './picking';
+import { yogurtPipeCleaning } from './equipment/yogurt/cipCircuits';
 import { createPipes } from './pipes';
 import { readSceneColor, sceneIsDark, watchTheme } from './theme';
 import { createZones } from './zones';
@@ -305,8 +306,17 @@ export function createWorld(host: HTMLElement, bus: ViewBus, options: WorldOptio
       // While the UHT plant cleans (contracts v5), its pipes carry the step's fluid at the circulation.
       const cleaning = snapshot.liquid?.cleaning ?? null;
       // The yogurt line's divert (phase 17) lights its own route to the reprocess tank.
-      const yogurtDiverting = (snapshot as Partial<Snapshot>).yogurt?.heat.mode === 'divert';
-      pipes.update(snapshot.line, motionDtS(snapshot, realDtS), uhtModeOf(snapshot) === 'divert', cleaning && { fluid: cleaning.fluid, flowLph: cleaning.flowLph }, yogurtDiverting);
+      const yogurt = (snapshot as Partial<Snapshot>).yogurt;
+      const yogurtDiverting = yogurt?.heat.mode === 'divert';
+      // Each of the yogurt wing's CIP circuits (phase 32) colours its lines and the pipes it cleans with its step's fluid.
+      pipes.update(
+        snapshot.line,
+        motionDtS(snapshot, realDtS),
+        uhtModeOf(snapshot) === 'divert',
+        cleaning && { fluid: cleaning.fluid, flowLph: cleaning.flowLph },
+        yogurtDiverting,
+        yogurt ? yogurtPipeCleaning(yogurt) : null,
+      );
       // The labels count real time, not realDtS, which counts no frame as longer than maxFrameS: right for the
       // camera (a stall doesn't make it jump), but slow frames would leave the labels behind the rail.
       const nowMs = performance.now();

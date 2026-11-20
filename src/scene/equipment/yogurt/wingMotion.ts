@@ -33,6 +33,8 @@ import * as THREE from 'three';
 import type { Snapshot, YogurtSnapshot } from '../../../contracts';
 import plantJson from '../../../data/plant.json';
 import { motionDtS } from '../../motion';
+import { cipStationParts, FLUID_HEX } from './cipStation';
+import { tankCipFluid } from './cipCircuits';
 import { cupRoomParts } from './cupRoomDetail';
 import { hallDetailParts } from './hallDetail';
 import { mixDetailParts } from './mixDetail';
@@ -107,6 +109,37 @@ function sightGlass(tank: number): Part {
       return topM < yM ? out.setHex(HEX.glassEmpty) : contentColor(level.ph, out);
     },
   };
+}
+
+/**
+ * Phase 32: a cleaning tank's sight glass shows its CIP fluid streaming down its inside from the spray head: two streaks
+ * in the fluid's colour that run down the glass a second apart, while the tank cleans.
+ */
+function cipSpray(tank: number): Part[] {
+  const xM = at.FERMENT_TANK.xsM[tank] ?? 0;
+  const zM = at.FERMENT_TANK.zM;
+  const r = at.FERMENT_TANK.radiusM;
+  const dx = -0.55;
+  const dz = Math.sqrt(r * r - dx * dx) + 0.03;
+  const turnRad = Math.atan2(dx, dz);
+  // A hair in front of the glass, along its outward normal.
+  const nx = Math.sin(turnRad) * 0.02;
+  const nz = Math.cos(turnRad) * 0.02;
+  return [0, 0.5].map((offset, i) => ({
+    machine: `ferment-tank-${tank + 1}`,
+    name: `cipSpray${i + 1}`,
+    ratePerS: 1.2,
+    pose(phase, y, out) {
+      const fluid = tankCipFluid(y, tank);
+      const t = (phase + offset) % 1;
+      out.position.set(xM + dx + nx, SIGHT_GLASS.yM + SIGHT_GLASS.heightM * (0.45 - 0.9 * t), zM + dz + nz);
+      out.rotation.set(0, turnRad, 0);
+      if (fluid) out.size.set(0.24, 0.05 + 0.08 * t, 0.012);
+      else out.size.set(0, 0, 0);
+    },
+    speed: (y) => (tankCipFluid(y, tank) ? 1 : 0),
+    color: (y, _p, out) => out.setHex(FLUID_HEX[tankCipFluid(y, tank) ?? 'water']),
+  }));
 }
 
 /** Where the cold room's evaporators hang: in the middle of the north wall's runs between its dock doors. */
@@ -339,6 +372,9 @@ function wingParts(carrier?: P8Carrier): Part[] {
   parts.push(...mixDetailParts());
   // Phase 30: the cup filling room and more of Line P8 (cupRoomDetail.ts), after every part before them.
   parts.push(...cupRoomParts(carrier));
+  // Phase 32: the wing's CIP station (cipStation.ts), and the cleaning tanks' sight glasses streaming with its fluid.
+  parts.push(...cipStationParts());
+  for (let tank = 0; tank < at.FERMENT_TANK.xsM.length; tank++) parts.push(...cipSpray(tank));
   return parts;
 }
 

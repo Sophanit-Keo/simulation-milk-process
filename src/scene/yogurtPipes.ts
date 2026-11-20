@@ -1,6 +1,8 @@
 // The yogurt wing's pipes (phase 16): the routes between the machines of equipment/yogurt/layout.ts, coloured and
 // flowing from the yogurt line points (contracts v8) the way the milk's are. pipes.ts builds them with the milk runs.
+// Phase 32 (D34): the wing's CIP station's supply and return lines, and the product pipes each of its circuits cleans.
 import type { PointM } from './layout';
+import type { CipCircuitId } from './equipment/yogurt/cipCircuits';
 import * as at from './equipment/yogurt/layout';
 import type { PipeRun, RouteVertex } from './pipes';
 
@@ -105,14 +107,17 @@ const FORWARD_PATH: Path = {
   ],
 };
 
+/** Where the inoculated mix leaves the heat exchanger's cooling section, toward the tanks' header. */
+const INOCULATION_X_M = -35.8;
+
 /** Cooled to 43 °C, the culture injected, along the header in front of the tanks and down into each. */
 const INOCULATION_PATHS: readonly Path[] = [
   {
     radiusM: RADIUS_M,
     vertices: [
-      [-35.8, y, phe.frontM, 'yInoculation'],
-      [-35.8, y, inletZ, 'yInoculation'],
-      [-35.8, inletY, inletZ, 'yInoculation'],
+      [INOCULATION_X_M, y, phe.frontM, 'yInoculation'],
+      [INOCULATION_X_M, y, inletZ, 'yInoculation'],
+      [INOCULATION_X_M, inletY, inletZ, 'yInoculation'],
       [tankXs[2], inletY, inletZ, 'yInoculation'],
       [tankXs[2], inletY, tankFrontZM, 'yInoculation'],
     ],
@@ -156,14 +161,142 @@ const BUFFER_PATHS: readonly Path[] = [
   { radiusM: RADIUS_M, vertices: [[at.COOLER.xM + at.COOLER.lengthM / 2 + 0.05, y, z, 'yCooler'], [at.BUFFER.xM - at.BUFFER.radiusM, y, z, 'yCooler']] },
 ];
 
+/** The feed's height from the buffer into P8. */
+const P8_FEED_Y_M = 0.7;
+
 /** From the buffer to Line P8's filler manifold, under controlled pressure (SOP P8 step 1). */
 const P8_FEED_PATH: Path = {
   radiusM: RADIUS_M,
   vertices: [
-    [at.BUFFER.xM + at.BUFFER.radiusM, 0.7, z, 'p8Buffer', 'p8Filler'],
-    [at.P8.xMinM, 0.7, z, 'p8Filler'],
+    [at.BUFFER.xM + at.BUFFER.radiusM, P8_FEED_Y_M, z, 'p8Buffer', 'p8Filler'],
+    [at.P8.xMinM, P8_FEED_Y_M, z, 'p8Filler'],
   ],
 };
+
+/* Phase 32 (D34): the wing's CIP station's lines */
+
+const station = at.CIP_STATION;
+const supplyX = (lane: number): number => (station.laneXsM[lane] ?? 0) + station.supplyDxM;
+const returnX = (lane: number): number => (station.laneXsM[lane] ?? 0) + station.returnDxM;
+const valveTopM = station.valveYM + 0.07;
+const rack = station.rack;
+/** Where the heat treatment's circuit starts and ends on the product line: at the deaerator's inlet, and after the cooling. */
+export const HEAT_CIP = { supplyXM: -42.3, returnZM: -45.6 } as const;
+/** The tanks' circuit's return main, behind the tanks, and each tank's branch from its outlet valve. */
+const TANK_RETURN = { zM: -51.25, yM: 0.3, dxM: -0.2 } as const;
+/** P8's CIP/SIP skid (cupRoomDetail.ts CIP_SKID), where the circuit's return leaves P8. */
+const P8_RETURN_FROM: PointM = [10.2, 0.54, -50.4];
+
+/** One of the CIP station's lines: a supply or a return of one circuit, in flow order. */
+export interface YogurtCipLine {
+  readonly id: string;
+  readonly circuit: CipCircuitId;
+  readonly pointsM: readonly PointM[];
+}
+export const YOGURT_CIP_LINE_RADIUS_M = 0.05;
+
+/**
+ * The station's lines (D34), each in flow order. The heat treatment's supply runs up to the rack along the back wall,
+ * west and down into the line at the deaerator's inlet; its return rises from the line after the heat exchanger's
+ * cooling and comes back along the rack. The tanks' supply climbs to the CIP header over the tanks (hallDetail.ts); their
+ * return runs from each tank's outlet valve along a main behind them. P8's supply runs east along the rack and down into
+ * the buffer's spray line on its dome; its return leaves P8's CIP/SIP skid and comes back along the rack.
+ */
+export const YOGURT_CIP_LINES: readonly YogurtCipLine[] = [
+  {
+    id: 'y-cip-heat-supply',
+    circuit: 'heat',
+    pointsM: [
+      [supplyX(0), station.heaterTopM, station.heaterZM],
+      [supplyX(0), rack.supplyYM, station.heaterZM],
+      [supplyX(0), rack.supplyYM, rack.supplyZM],
+      [HEAT_CIP.supplyXM, rack.supplyYM, rack.supplyZM],
+      [HEAT_CIP.supplyXM, rack.supplyYM, z],
+      [HEAT_CIP.supplyXM, y + RADIUS_M, z],
+    ],
+  },
+  {
+    id: 'y-cip-heat-return',
+    circuit: 'heat',
+    pointsM: [
+      [INOCULATION_X_M, y + RADIUS_M, HEAT_CIP.returnZM],
+      [INOCULATION_X_M, rack.returnYM, HEAT_CIP.returnZM],
+      [INOCULATION_X_M, rack.returnYM, rack.returnZM],
+      [returnX(0), rack.returnYM, rack.returnZM],
+      [returnX(0), rack.returnYM, station.valveZM],
+      [returnX(0), valveTopM, station.valveZM],
+    ],
+  },
+  {
+    id: 'y-cip-tanks-supply',
+    circuit: 'tanks',
+    pointsM: [
+      [supplyX(1), station.heaterTopM, station.heaterZM],
+      [supplyX(1), at.FERMENT_CIP_HEADER.yM, station.heaterZM],
+      [at.FERMENT_CIP_HEADER.xMinM, at.FERMENT_CIP_HEADER.yM, station.heaterZM],
+      [at.FERMENT_CIP_HEADER.xMinM, at.FERMENT_CIP_HEADER.yM, at.FERMENT_CIP_HEADER.zM - 0.035],
+    ],
+  },
+  ...tankXs.map((xM, i): YogurtCipLine => ({
+    id: `y-cip-tank-${i + 1}-return`,
+    circuit: 'tanks',
+    pointsM: [
+      [xM - 0.08, 0.6, at.FERMENT_OUTLET_VALVE_Z_M],
+      [xM + TANK_RETURN.dxM, 0.6, at.FERMENT_OUTLET_VALVE_Z_M],
+      [xM + TANK_RETURN.dxM, TANK_RETURN.yM, at.FERMENT_OUTLET_VALVE_Z_M],
+      [xM + TANK_RETURN.dxM, TANK_RETURN.yM, TANK_RETURN.zM],
+    ],
+  })),
+  {
+    id: 'y-cip-tanks-return',
+    circuit: 'tanks',
+    pointsM: [
+      [(tankXs[2] ?? 0) + TANK_RETURN.dxM, TANK_RETURN.yM, TANK_RETURN.zM],
+      [returnX(1), TANK_RETURN.yM, TANK_RETURN.zM],
+      [returnX(1), TANK_RETURN.yM, station.valveZM],
+      [returnX(1), station.valveYM - 0.07, station.valveZM],
+    ],
+  },
+  {
+    id: 'y-cip-p8-supply',
+    circuit: 'p8',
+    pointsM: [
+      [supplyX(2), station.heaterTopM, station.heaterZM],
+      [supplyX(2), rack.supplyYM, station.heaterZM],
+      [supplyX(2), rack.supplyYM, rack.supplyZM],
+      [at.BUFFER.xM - 0.75, rack.supplyYM, rack.supplyZM],
+      [at.BUFFER.xM - 0.75, rack.supplyYM, at.BUFFER.zM + 0.25],
+      [at.BUFFER.xM - 0.75, at.BUFFER.legsM + at.BUFFER.bodyM + 0.88, at.BUFFER.zM + 0.25],
+    ],
+  },
+  {
+    id: 'y-cip-p8-return',
+    circuit: 'p8',
+    pointsM: [
+      P8_RETURN_FROM,
+      [P8_RETURN_FROM[0], rack.returnYM, P8_RETURN_FROM[2]],
+      [P8_RETURN_FROM[0], rack.returnYM, rack.returnZM],
+      [returnX(2), rack.returnYM, rack.returnZM],
+      [returnX(2), rack.returnYM, station.valveZM],
+      [returnX(2), valveTopM, station.valveZM],
+    ],
+  },
+];
+
+/**
+ * The product pipes a circuit of the station cleans (D34), by run and place on it: the heat treatment's from the
+ * deaerator's inlet round the holding cell, the divert and the forward line to its return after the cooling; the
+ * buffer and P8's, the feed from the buffer into P8. The tanks are cleaned through their spray heads, not their pipes.
+ */
+export function yogurtCipCircuitAt(runId: string, xM: number, yM: number, zM: number): CipCircuitId | null {
+  if (runId === 'y-holding-cell' || runId === YOGURT_DIVERT_RUN_ID) return 'heat';
+  if (runId === 'y-mix') return xM >= HEAT_CIP.supplyXM - 1e-6 ? 'heat' : null;
+  if (runId === 'y-ferment') {
+    if (Math.abs(xM - INOCULATION_X_M) < 1e-6 && yM < y + 1e-6 && zM <= HEAT_CIP.returnZM + 1e-6) return 'heat';
+    if (Math.abs(yM - P8_FEED_Y_M) < 1e-6 && xM >= at.BUFFER.xM) return 'p8';
+  }
+  return null;
+}
 
 /** The run from the yogurt divert valve to the reprocess tank, which lights up while the heat treatment diverts. */
 export const YOGURT_DIVERT_RUN_ID = 'y-divert';
@@ -199,11 +332,13 @@ export const YOGURT_RUNS: readonly PipeRun[] = [
   },
   {
     // Cooled to 43 °C and inoculated, into the tanks; out of their cone bottoms to the smoothing valve, the cooler,
-    // the buffer and P8's filler manifold.
+    // the buffer and P8's filler manifold. Phase 32: the CIP station's lines join this run's mesh, so they cost no
+    // draw call; they carry nothing but their circuit's cleaning fluid.
     id: 'y-ferment',
     castShadow: false,
     paths: [...INOCULATION_PATHS, ...FERMENT_OUT_PATHS, ...BUFFER_PATHS, P8_FEED_PATH],
     joints: [...INOCULATION_JOINTS, ...FERMENT_OUT_JOINTS],
+    cipLines: YOGURT_CIP_LINES,
   },
 ];
 

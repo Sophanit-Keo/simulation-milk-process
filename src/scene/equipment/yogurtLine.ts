@@ -32,6 +32,7 @@ import { createTransfers } from './yogurt/dispatchBoxes';
 import { createReeferYard } from './yogurt/reeferTruck';
 import { MIXER_FITTINGS, onSilo, POWDER_FITTINGS, SILO_FITTINGS, SKID_FITTINGS } from './yogurt/mixDetail';
 import { cupRoomTags } from './yogurt/cupRoomTags';
+import { cipStationShell, cipStationTag } from './yogurt/cipStation';
 import { createP8Carrier, p8Cups, p8Filler } from './yogurt/p8Machine';
 import { createWingMotion, type WingMotion } from './yogurt/wingMotion';
 import { createPalletLine, FILM_TOP_M, filmHeightM, GANTRY, PALLET, STACK_CAPACITY, type PalletLine } from './yogurt/palletLine';
@@ -103,8 +104,14 @@ export const yogurtLine: EquipmentFactory = (ctx) => {
       domeM: 0.2,
       fill: yogurtFill((y) => y.heat.reprocessTank),
       labelText: (s) => labelValue(stageValue(s, 12, 'reprocessLevelL'), 0, 'L'),
-      detail: reprocessPump,
+      // Phase 32: the wing's CIP station beside it joins its meshes, so the station costs no draw call (cipStation.ts).
+      detail: (b) => {
+        reprocessPump(b);
+        cipStationShell(b);
+      },
     }),
+    // Phase 32: the CIP station's label; its parts move in the wing's motion (cipStation.ts).
+    cipStationTag(),
     culturePump(kit),
     ...at.FERMENT_TANK.xsM.map((xM, i) =>
       vessel(kit, {
