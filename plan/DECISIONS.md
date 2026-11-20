@@ -36,6 +36,10 @@ This log settles the numbers and rules that the plan left open or that the [revi
 | [D28](#d28-line-p8-live-stage-15) | Line P8 live, stage 15: cycles, fill weights, the in-line checks, seal tests and holds, the interlocks and the magazines (schema 12) | — | Proposed |
 | [D29](#d29-the-yogurt-cold-chain-live-stage-16) | The yogurt cold chain live, stage 16: trays, one-batch pallets, the warm room, the blast chiller, the cold-room hold and release, reefers (schema 13) | — | Proposed |
 | [D30](#d30-the-yogurt-lines-fault-scenarios) | The yogurt line's five fault scenarios: a phage, the heat dip, the seal drift, the HEPA loss, the cold-room excursion (schema 14) | — | Proposed |
+| [D31](#d31-the-yogurt-mix-room-and-dispatch-in-motion) | The yogurt mix room and the dispatch in motion: stage 11's fittings, stackers, reefers | — | Proposed |
+| [D32](#d32-the-cup-filling-room-and-line-p8-in-more-detail) | The cup filling room and Line P8 in more detail | — | Proposed |
+| [D33](#d33-each-machine-of-the-cup-filling-room-explained) | Each machine of the cup filling room, explained | — | Proposed |
+| [D34](#d34-the-yogurt-wings-cip-station-and-its-cleans-in-motion) | The yogurt wing's CIP station and its cleans in motion: three circuits, a tank's CIP programme, each clean's step and use (schema 15, contracts v13) | — | Proposed |
 
 ## D1. Batch size
 
@@ -837,6 +841,37 @@ The keys `sim` added (schema 4), with the formulas in `src/sim/liquid/stageModel
   - **Rates on the gates:** their belts carry three rows of four for each cycle of twelve, so the platform dips and the strobe flashes 1.5 times a second at full rate (visual; the sim counts cups, not rows).
 - **Why:** the developer asked what each machine does. The panel is where the simulation explains; the 3D view is where it shows. A viewer reads the note and then sees the part it names move.
 - **What it changes:** `src/data/machineNotes.json` (ten notes, one new part), `src/ui/machineNotes.ts` (`open`, the readings), `src/scene/equipment/yogurt/cupRoomDetail.ts` (the gates, the chute), new `cupRoomTags.ts`, `yogurtLine.ts` (the tags). The sim, the contracts and `plant.json` are unchanged.
+
+## D34. The yogurt wing's CIP station and its cleans, in motion
+
+- **Status:** Proposed
+- **Date:** 2026-11-20
+- **Review note:** none (the developer asked to add the CIP processing in the yogurt line and improve the animation; [phase 32](agent-plan/phase-32-yogurt-cip-station.md))
+- **Decision:** the yogurt wing gets a CIP station of its own in 3D, and every clean of the wing says what it runs.
+  - **One station, three circuits.** The station stands at the back of the process hall, between the reprocess tank and tank 1: a tank each for the rinse water, the lye and the acid, and a lane for each circuit with its supply pump, heater and the change-over valve on its return. The circuits are the heat treatment's (the wing's CIP after a divert), the fermentation tanks' (a tank's CIP after it empties) and the buffer and P8's (the wing's CIP before set yogurt, and the rinse before a stirred product). With a pump each they clean at once, so the sim's cleans keep their timing: nothing waits for the station.
+  - **A tank's CIP has steps.** Until now a tank cleaned for 45 min with no step. It now runs a programme of its own (schema 15, `yogurt.cip.tankSteps`), which fills the same 45 min, through the wing's circuit and on D23's chemistry.
+  - **Every clean gives its step** (contracts v13): a cleaning tank its CIP's (`FermentTank.cleaning`), the buffer and P8's CIP its (`buffer.changeover.cleaning`), as the heat treatment's has since v9.
+  - **What the cleans use** (contracts v13, `YogurtSnapshot.cleaningUse`): the lye and acid lost at each chemical step's interfaces and the rinse water to drain, each step counted as it ends (D23), the rinse's water at its end.
+  - **In 3D:** each circuit's lines take the colour of its step's fluid and flow at its circulation, as the UHT station's (phase 7), steel while it stands; so do the product pipes the heat treatment's and P8's circuits clean. The station's pumps turn, its heaters and conductivity bars read the step, its return valves lift toward the tanks or the drain, which splashes, and its tanks' lamps light. Over the tanks the CIP header and the cleaning tank's drop carry its fluid, and the tank's sight glass streams with it.
+  - **In the panel:** stage 12 explains the station in a note, closed until asked for, with each circuit's step, the returns and what the cleans have used; stage 13's tank rows and stage 14's changeover row name the step.
+- **The numbers, sim assumptions unless sourced:**
+
+| Thing | Value | Basis |
+|---|---|---|
+| A tank's CIP | Pre-rinse 5 min at 45 °C; lye 20 min at 78 °C; rinse 5 min at 45 °C; acid 10 min at 68 °C; post-rinse 5 min at 20 °C: the tank clean's 45 min (`ferment.tankCleanS`, D27) | Shaped on the Dairy Processing Handbook's CIP programmes: a tank, a cold surface, needs less than a heat treatment's 30 min of lye; a fermentation tank's lactic deposit and milkstone take the acid. The strengths and temperatures are the wing's (D27). H139 |
+| The circuits | Each the wing's 300 L at 12,000 L/h (D27); the return changes over at half the solution's conductivity (D23) | The same circuit for every clean keeps one model; the tank's spray heads and lines are taken to hold as much as the line's |
+| What they use | The wing's CIP 3.7235 kg NaOH, 1.5679 kg HNO₃, 3,000 L; a tank's CIP 3.7186 kg, 1.5679 kg, 2,000 L; a rinse 3,000 L; the day of H125e 18.598 kg, 7.839 kg, 14,000 L | H140 |
+| The station | Three tanks of 0.9 m across and 1.9 m of shell, three lanes 1 m apart, at x −29.2 to −25.7 behind the line | Room between the reprocess tank and tank 1 |
+| Its lines | Up to a rack along the back wall at 3.1 and 3.3 m for the heat treatment's and P8's; to the tanks' CIP header at 4.9 m; a return main at 0.3 m behind the tanks | Over every machine but the tanks, whose header was already there (phase 26) |
+| Stage 12's stop | Its focus 1.7 m east and 1 m back, at (−34.3, 1, −50), its camera about 18% further off, so the station shows beside the heat treatment | The station is stage 12's |
+
+- **Rules with no key:**
+  - **The sim leads.** The scene counts nothing: each circuit runs while the snapshot says its clean does, with its step's fluid, temperature, return and change-over.
+  - **Two tanks at once:** the tanks' circuit shows the one further into its clean, and each tank's drop its own fluid.
+  - **P8's SIP is not the station's:** P8's skid raises its steam (phase 30); the station's P8 circuit runs the CIP before it, and the rinses.
+  - **No draw call:** the station's steel joins the reprocess tank's meshes (a click on it selects stage 12, the station's), its moving parts are instances in the wing's shared box mesh, and its lines join a yogurt pipe run's mesh.
+- **Why:** the wing cleaned on a timer that the 3D view hardly showed: a tank sat "cleaning" with nothing moving, and the CIP after a divert or before set yogurt came from nowhere. The UHT plant shows its CIP station and its fluids; the wing now does too, and the panel says what each clean is doing and what it costs.
+- **What it changes:** `plant.json` schema 15 (`yogurt.cip.tankSteps`) and its checks; contracts v13 (`FermentTank.cleaning`, `buffer.changeover.cleaning`, `YogurtSnapshot.cleaningUse`); `src/sim/yogurt/heat.ts` (one programme model for every clean, its use) and `yogurtLine.ts` (the steps and the use in the snapshot); new `src/scene/equipment/yogurt/cipCircuits.ts` and `cipStation.ts`; `yogurtPipes.ts` and `pipes.ts` (the station's lines and the circuits' pipes); `hallDetail.ts` and `wingMotion.ts` (the header, the drops, the sight glasses); `scene/layout.ts` (stage 12's stop); `src/data/machineNotes.json`, `src/ui/machineNotes.ts` and `yogurtRows.ts`. The fixtures are re-recorded at v13: they add only the new fields.
 
 ---
 

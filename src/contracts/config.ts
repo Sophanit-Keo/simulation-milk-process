@@ -166,6 +166,12 @@ export interface YogurtConfig {
     acidConductivityMsPerCm: number;
     circulateLph: number;
     circuitL: number;
+    /**
+     * A fermentation tank's CIP after it is emptied (schema 15, phase 32, D34): its steps, which fill ferment.tankCleanS
+     * exactly, the lye at lyeTempC and the acid at acidTempC. checkPlantConfig refuses an unknown step or fluid, and
+     * yogurtTankCipSteps() narrows them.
+     */
+    tankSteps: CipStepConfig[];
   };
   /** Stage 16. */
   coldChain: {
@@ -879,6 +885,23 @@ function checkYogurt(config: PlantConfig, fail: (message: string) => void): void
   if (!(magazines.cups >= p8.lanes && magazines.foils >= p8.lanes)) fail('yogurt.p8.magazines must hold at least a cycle\'s cups and foils (p8.lanes)');
   if (!(magazines.refillBelowFrac > 0 && magazines.refillBelowFrac < 1)) fail('yogurt.p8.magazines.refillBelowFrac must lie between 0 and 1');
   if (!(cip.lyeTempC > 0 && cip.acidTempC > 0)) fail('yogurt.cip needs the lye\'s and the acid\'s temperatures');
+  // Phase 32 (schema 15, D34): a tank's CIP is a list of known steps that fills ferment.tankCleanS exactly.
+  const tankSteps: unknown = cip.tankSteps;
+  if (!Array.isArray(tankSteps) || tankSteps.length === 0) fail('yogurt.cip.tankSteps must list a fermentation tank\'s CIP steps');
+  else {
+    let sumS = 0;
+    for (const [i, step] of (tankSteps as (CleaningStepConfig & { tempC?: unknown })[]).entries()) {
+      const where = `yogurt.cip.tankSteps[${i}]`;
+      if (!CLEANING_STEP_IDS.includes(step.step as CleaningStepId)) fail(`${where}.step must be one of ${CLEANING_STEP_IDS.join(', ')}`);
+      if (!CLEANING_FLUIDS.includes(step.fluid as CleaningFluid)) fail(`${where}.fluid must be one of ${CLEANING_FLUIDS.join(', ')}`);
+      if (!(typeof step.durationS === 'number' && step.durationS > 0)) fail(`${where}.durationS must be greater than 0`);
+      else sumS += step.durationS;
+      if (typeof step.tempC !== 'number') fail(`${where}.tempC is needed: each step runs at its own temperature`);
+      else if (step.fluid === 'lye' && step.tempC !== cip.lyeTempC) fail(`${where}: the lye runs at yogurt.cip.lyeTempC`);
+      else if (step.fluid === 'acid' && step.tempC !== cip.acidTempC) fail(`${where}: the acid runs at yogurt.cip.acidTempC`);
+    }
+    if (Math.abs(sumS - ferment.tankCleanS) > 1e-6) fail(`yogurt.cip.tankSteps must add up to yogurt.ferment.tankCleanS (${ferment.tankCleanS} s), not ${sumS} s`);
+  }
   const waterMsPerCm = config.cleaning.chemicals?.water?.conductivityMsPerCm ?? 0;
   if (!(cip.lyeConductivityMsPerCm * config.cleaning.changeOverFrac > waterMsPerCm && cip.acidConductivityMsPerCm * config.cleaning.changeOverFrac > waterMsPerCm)) {
     fail('yogurt.cip: the solutions\' change-over must lie above the rinse water\'s conductivity');
@@ -943,14 +966,24 @@ export interface CleaningStep {
   tempC: number | null;
 }
 
-/** A programme's steps from a config checkPlantConfig passed, narrowed to the cleaning types. */
-export function cleaningSteps(config: PlantConfig, program: 'cip' | 'aic'): CleaningStep[] {
-  return config.cleaning[program === 'cip' ? 'cipSteps' : 'aicSteps'].map((step) => ({
+/** A list of step configs narrowed to the cleaning types; a step without a temperature holds none (an AIC step). */
+function narrowSteps(steps: readonly CleaningStepConfig[]): CleaningStep[] {
+  return steps.map((step) => ({
     step: step.step as CleaningStepId,
     fluid: step.fluid as CleaningFluid,
     durationS: step.durationS,
     tempC: 'tempC' in step ? (step as CipStepConfig).tempC : null,
   }));
+}
+
+/** A programme's steps from a config checkPlantConfig passed, narrowed to the cleaning types. */
+export function cleaningSteps(config: PlantConfig, program: 'cip' | 'aic'): CleaningStep[] {
+  return narrowSteps(config.cleaning[program === 'cip' ? 'cipSteps' : 'aicSteps']);
+}
+
+/** A fermentation tank's CIP programme (schema 15, phase 32, D34) from a config checkPlantConfig passed. */
+export function yogurtTankCipSteps(config: PlantConfig): CleaningStep[] {
+  return narrowSteps(config.yogurt.cip.tankSteps);
 }
 
 /** The keys that may be below zero: temperatures under 0 °C (the blast chiller's air, D29). Every other number may not. */

@@ -12,9 +12,10 @@ import type { YogurtSnapshot } from './yogurt';
  * clean, buffer changeover and steam), v10 in phase 18 (Line P8: its cycles, rejects by cause, seal, hygiene,
  * magazines and batch), v11 in phase 19 (the yogurt cold chain: trays, pallets, the rooms and the reefers), v12 in phase 20
  * (the yogurt line's five fault scenarios: a tank held for a slow fermentation, pallets on QA hold, the cold room's
- * excursion). From v3 on, fields may only be added.
+ * excursion), v13 in phase 32 (the yogurt wing's cleans: each tank's CIP step, the CIP of the buffer and P8, and what
+ * the wing's cleans use). From v3 on, fields may only be added.
  */
-export const CONTRACT_VERSION = 12;
+export const CONTRACT_VERSION = 13;
 
 /** Milk at one measuring point of the liquid line (contracts v1). */
 export interface LinePoint {
@@ -98,7 +99,10 @@ export interface CleaningSnapshot {
   stepRemainingS: number;
   /** The temperature the step runs at; null for an AIC step, which holds the UHT set point so the plant stays sterile. */
   tempC: number | null;
-  /** What the CIP station circulates through the UHT plant, stages 2–5, and back. */
+  /**
+   * What the CIP station circulates through the UHT plant, stages 2–5, and back; in the yogurt wing (contracts v9, v13),
+   * what the wing's CIP station circulates through the circuit it cleans.
+   */
   flowLph: number;
   /**
    * The step's chemical strength by weight (contracts v7): the lye's sodium hydroxide or the acid's nitric acid; null

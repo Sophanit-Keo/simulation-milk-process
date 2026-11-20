@@ -1,4 +1,4 @@
-import type { CleaningSnapshot, TankLevel } from './snapshot';
+import type { CleaningSnapshot, CleaningUseSnapshot, TankLevel } from './snapshot';
 
 /**
  * The yogurt line, Line P8 (plan 12, D25, D26; contracts v8): stages 11–16 beyond their per-stage values. Phase 15
@@ -48,6 +48,11 @@ export interface FermentTank extends TankLevel {
    * discarded. Absent from an older snapshot.
    */
   held?: boolean;
+  /**
+   * The step of its CIP while it cleans, from the wing's CIP station (contracts v13, phase 32, D34); null otherwise.
+   * Absent from an older snapshot.
+   */
+  cleaning?: CleaningSnapshot | null;
 }
 
 /** What Line P8 is doing (stage 15); `stopReason` says why it stopped (contracts v10). */
@@ -299,8 +304,11 @@ export interface YogurtSnapshot {
     fruitDosePct: number;
     /** The product in the buffer, or the one it is made ready for; null while it changes over (contracts v9). */
     product?: YogurtProductId | null;
-    /** The changeover under way between two products on P8, or null (contracts v9). */
-    changeover?: { kind: YogurtChangeoverKind; remainingS: number } | null;
+    /**
+     * The changeover under way between two products on P8, or null (contracts v9). Since contracts v13 (phase 32, D34) a
+     * CIP gives its step, `cleaning`; a rinse and an SIP give null there. Absent from an older snapshot.
+     */
+    changeover?: { kind: YogurtChangeoverKind; remainingS: number; cleaning?: CleaningSnapshot | null } | null;
   };
   /** Stage 15. */
   p8: P8Snapshot;
@@ -309,4 +317,10 @@ export interface YogurtSnapshot {
   kpis: YogurtKpis;
   /** The heat treatment's steam (contracts v9, phase 17). Absent from an older snapshot. */
   energy?: YogurtEnergySnapshot;
+  /**
+   * What the wing's cleans have used since the plant opened (contracts v13, phase 32, D34): the heat treatment's CIP after
+   * a divert, each tank's CIP, the CIP of the buffer and P8, and the rinses before a stirred product. Absent from an older
+   * snapshot.
+   */
+  cleaningUse?: CleaningUseSnapshot;
 }

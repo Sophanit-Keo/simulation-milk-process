@@ -37,6 +37,7 @@ Build the simulation with seven agents. Each one owns one part of the code, and 
 | 29. Yogurt mix room and dispatch in motion | after Y3 | scene | Stage 11's machines with their fittings and moving parts; stackers carrying the pallets to the rooms; reefers that arrive, open up, back in, load and leave | [Phase 29](phase-29-yogurt-mix-and-dispatch.md) |
 | 30. Cup filling room and Bench P8 in detail | after Y3 | scene | Line P8's feed valve, ionizer, dosing, foil and index drive in motion; the check gates' displays; the room's cup and foil supplies, operator, sterile air unit, CIP/SIP skid, QA bench and hygiene line | [Phase 30](phase-30-cup-filling-room.md) |
 | 31. The cup filling room's machines explained | after Y3 | process, ui, scene | A note for each machine of the room in stage 15's panel (what it does, how it works, what the 3D view shows) with live readings; name tags on the room's units; the check gates' platform, field, strobe and chute | [Phase 31](phase-31-cup-room-machines-explained.md) |
+| 32. The yogurt wing's CIP station | after Y3 | process, sim, scene, ui | A CIP station for the wing with three circuits; a tank's CIP programme; every clean's step and what the cleans use; the circuits' lines and pipes in their fluids' colours, the station's pumps, heaters, valves and lamps in motion; a note in stage 12's panel | [Phase 32](phase-32-yogurt-cip-station.md) |
 
 ## The agents
 
