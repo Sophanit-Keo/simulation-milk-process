@@ -23,6 +23,7 @@ import {
   sToH,
   yogurtProducts,
   type CleaningSnapshot,
+  type CleaningUseSnapshot,
   type ColdRoomExcursion,
   type LogKind,
   type PlantConfig,
@@ -38,7 +39,7 @@ import { formatDayTime, type LogWriter } from '../log';
 import { createRng, type Rng } from '../rng';
 import { curveRate, ferment, tankPh, tankView, type TankState } from './ferment';
 import { betaLgDenaturedPct, p8DrawLph, timeToPhS } from './formulas';
-import { createHoldingCell, createWingCip } from './heat';
+import { createHoldingCell, createTankCip, createWingCip, rinseUse } from './heat';
 import { mixRecipe } from './mix';
 import { createColdChain, type ColdChain } from './coldChain';
 import { createP8, type P8, type P8Conditions } from './p8';
@@ -80,6 +81,13 @@ export interface YogurtTotals {
   cips: number;
   /** A tank a phage stalled, discarded (phase 20, D30). */
   discardedL: number;
+  /**
+   * What the wing's cleans have used (phase 32, D34): pure sodium hydroxide and nitric acid lost at the chemical steps'
+   * interfaces, and the rinse water sent to drain, each step counted as it ends (D23).
+   */
+  cleanLyeKg: number;
+  cleanAcidKg: number;
+  cleanDrainWaterL: number;
 }
 
 /** The yogurt line's five faults (phase 20, D30), as the scenarios start them. */
@@ -149,6 +157,7 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
   const plan = createProductPlan(config);
   const recipe = mixRecipe(config);
   const wingCip = createWingCip(config);
+  const tankCip = createTankCip(config);
   const cellL = tubeVolumeL(plant.heat.holdS, plant.mix.capacityLph);
   const { batchS, firstShiftStartS } = config.quality;
   const shiftEndS = (timeS: number): number => firstShiftStartS + (Math.floor((timeS - firstShiftStartS) / batchS) + 1) * batchS;
@@ -176,6 +185,15 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
     rinses: 0,
     cips: 0,
     discardedL: 0,
+    cleanLyeKg: 0,
+    cleanAcidKg: 0,
+    cleanDrainWaterL: 0,
+  };
+  /** Adds what a clean's steps used as they ended (phase 32). */
+  const addCleanUse = (use: CleaningUseSnapshot): void => {
+    totals.cleanLyeKg += use.lyeKg;
+    totals.cleanAcidKg += use.acidKg;
+    totals.cleanDrainWaterL += use.drainWaterL;
   };
   let siloL = plant.silo.capacityL * plant.silo.startFrac;
   let tankerLeftL = 0;
@@ -300,7 +318,15 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
       // 1. The changeover between two products on P8. P8 and the buffer's feed start again from the step after it ends.
       let changedOver = false;
       if (changeover) {
+        const leftBeforeS = changeover.leftS;
         changeover.leftS -= dtS;
+        // What the CIP's steps use as they end, and a rinse's water once it is done (phase 32, D34).
+        if (changeover.kind === 'cip') {
+          const toS = changeover.leftS <= EPS ? wingCip.totalS : wingCip.totalS - changeover.leftS;
+          addCleanUse(wingCip.useBetween(wingCip.totalS - leftBeforeS, toS));
+        } else if (changeover.kind === 'rinse' && changeover.leftS <= EPS) {
+          addCleanUse(rinseUse(config, config.yogurt.changeover.rinseS));
+        }
         if (changeover.leftS <= EPS) {
           // After the CIP, P8's SIP; after the SIP, its check and the ATP swab, which may send it back (D28).
           const after = changeover.kind === 'cip' ? 'sip' : changeover.kind === 'sip' ? p8.afterSip(timeS, log) : 'ok';
@@ -355,8 +381,11 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
 
       // 4. The heat treatment.
       if (mode === 'cleaning') {
+        const intoBeforeS = cleaningIntoS;
         cleaningIntoS += dtS;
         modeLeftS -= dtS;
+        // What the CIP's steps use as they end (phase 32, D34).
+        addCleanUse(wingCip.useBetween(intoBeforeS, modeLeftS <= EPS ? wingCip.totalS : cleaningIntoS));
         // The reprocess tank is pumped out to rework by the clean's end.
         const outL = modeLeftS > EPS ? (reprocessL * dtS) / (modeLeftS + dtS) : reprocessL;
         reprocessL -= outL;
@@ -492,7 +521,10 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
           if (phageTank === i) phageTank = null;
         }
         if (tank.state === 'cleaning') {
+          const intoBeforeS = tankCip.totalS - tank.cleanLeftS;
           tank.cleanLeftS -= dtS;
+          // What its CIP's steps use as they end (phase 32, D34).
+          addCleanUse(tankCip.useBetween(intoBeforeS, tank.cleanLeftS <= EPS ? tankCip.totalS : tankCip.totalS - tank.cleanLeftS));
           if (tank.cleanLeftS <= EPS) {
             tank.state = 'empty';
             tank.cleanLeftS = 0;
@@ -603,7 +635,14 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
           modeRemainingS: mode === 'divert' || mode === 'cleaning' ? Math.max(0, modeLeftS) : 0,
           cleaning,
         },
-        ferment: { tempC: setpoints.fermentTempC, tanks: tanks.map((tank) => tankView(plant.ferment, tank, setpoints.fermentTempC, timeS)) },
+        ferment: {
+          tempC: setpoints.fermentTempC,
+          // A cleaning tank gives its CIP's step (contracts v13, phase 32).
+          tanks: tanks.map((tank) => ({
+            ...tankView(plant.ferment, tank, setpoints.fermentTempC, timeS),
+            cleaning: tank.state === 'cleaning' ? tankCip.snapshotAt(Math.max(0, tankCip.totalS - tank.cleanLeftS)) : null,
+          })),
+        },
         buffer: {
           levelL: buffer.levelL,
           capacityL: plant.buffer.capacityL,
@@ -614,7 +653,14 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
           coolerOutletC: buffer.levelL > EPS && bufferProduct && routeOf(bufferProduct) === 'stirred' ? plant.cooling.outletC : null,
           fruitDosePct: fromTankLph > EPS ? fruitDosePct : 0,
           product: bufferProduct,
-          changeover: changeover ? { kind: changeover.kind, remainingS: Math.max(0, changeover.leftS) } : null,
+          changeover: changeover
+            ? {
+                kind: changeover.kind,
+                remainingS: Math.max(0, changeover.leftS),
+                // The CIP of the buffer and P8 gives its step (contracts v13, phase 32).
+                cleaning: changeover.kind === 'cip' ? wingCip.snapshotAt(Math.max(0, wingCip.totalS - changeover.leftS)) : null,
+              }
+            : null,
         },
         p8: {
           ...own,
@@ -643,6 +689,7 @@ export function createYogurtLine(config: PlantConfig, openS: number, options: Yo
           steamKg: totals.steamKg,
           gasKwh: boilerGasKwh(config, totals.steamKg),
         },
+        cleaningUse: { lyeKg: totals.cleanLyeKg, acidKg: totals.cleanAcidKg, drainWaterL: totals.cleanDrainWaterL },
       };
       return yogurtView(config, setpoints, yogurt);
     },
