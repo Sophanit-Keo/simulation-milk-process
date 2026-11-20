@@ -75,6 +75,7 @@ At the back of the process hall, between the reprocess tank and tank 1 (`yogurt/
 - **Stage 12:** a note, "The wing's CIP station", closed until asked for: what it does, its three circuits, the steps, the return, what it uses, and what the 3D view shows. Its readings: each circuit's step ("Tank 1: Lye (NaOH), 78 °C · 2 of 5 · 18 min left"), where the returns go, and what the cleans have used. A test holds every number in it to `plant.json` and H140.
 - **Stage 13:** a cleaning tank's row names its step: "Cleaning in place · acid (HNO₃), 68 °C · 4 of 5".
 - **Stage 14:** the changeover row names the CIP's step: "CIP of the buffer and P8 · lye (NaOH), 78 °C · 2 of 6 · 1 h 00 min left".
+- **The pipe legend** shows the three cleaning fluids while the wing cleans too, as it does for the UHT plant's CIP; it marks the UHT circuit's fluid first, else the wing's.
 - **About this model:** a paragraph on the wing's station.
 
 ## Contracts (`lead`)
@@ -96,7 +97,7 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 | 1 | `process` | Schema 15's tank programme, H139–H140, plan 06's row, the note's text, About | `src/data/`, `plan/` |
 | 2 | `sim` | One programme model for every clean; the steps and the use in the snapshot | `src/sim/yogurt/` |
 | 3 | `scene` | The station, its circuits, its lines and the pipes in their colours, the header, drops and sight glasses, stage 12's stop | `src/scene/` |
-| 3 | `ui` | The note's readings, the tank and changeover rows | `src/ui/` |
+| 3 | `ui` | The note's readings, the tank and changeover rows, the legend | `src/ui/` |
 | 4 | `qa` | `tests/sim/yogurt/cip.test.ts`, `tests/scene/yogurtCip.test.ts`, the pipes', world's, notes' and rows' tests, `e2e/yogurtCip.spec.ts`, the fixtures | `tests/`, `e2e/` |
 
 ## Exit checklist
@@ -112,7 +113,7 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 
 Built on 20 November 2026 in one session.
 
-- **Checked:** `npm run check` passes: typecheck, lint, 1,969 unit tests in 86 files (9 new in `tests/sim/yogurt/cip.test.ts`, 9 in `tests/scene/yogurtCip.test.ts`, and new cases in the pipes', world's, notes', rows' and config tests), and the asset tests. The overview draws 350 calls, its budget.
-- **Browser tests:** STATUS_BROWSER
+- **Checked:** `npm run check` passes: typecheck, lint, 1,970 unit tests in 86 files (9 new in `tests/sim/yogurt/cip.test.ts`, 9 in `tests/scene/yogurtCip.test.ts`, and new cases in the pipes', world's, legend's, notes', rows' and config tests), and the asset tests. The overview draws 350 calls, its budget.
+- **Browser tests:** the new `e2e/yogurtCip.spec.ts` passes on software GL. The yogurt, stage, camera, tour, cleaning, smoke, about and theme suites were being rerun on the final code when this was written; their result is in the pull request.
 - **Not checked:** the frame rate on a real GPU; how the station reads to a person.
 - **Left out:** the tanks' levels at the station do not move (the chemistry keeps their strength, D23); the rinse water's and steam's energy is not counted, as the wing's CIP's was not (D27); no hot-water sanitizing step, which the programmes do not have.
