@@ -13,8 +13,8 @@ const SIMS: [string, (config: PlantConfig) => Sim][] = [
 ];
 
 describe('contracts v3', () => {
-  it('was frozen at G2: since then fields are only added, and the version is 12 (phase 20)', () => {
-    expect(CONTRACT_VERSION).toBe(12);
+  it('was frozen at G2: since then fields are only added, and the version is 13 (phase 32)', () => {
+    expect(CONTRACT_VERSION).toBe(13);
   });
 });
 

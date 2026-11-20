@@ -1,5 +1,5 @@
 {
-  "version": 12,
+  "version": 13,
   "timeS": 627090,
   "speed": 10,
   "paused": false,
@@ -1242,7 +1242,8 @@
           "ph": 4.55,
           "taPct": 0.8999999999999999,
           "startedS": 604800,
-          "readyAtS": 619200
+          "readyAtS": 619200,
+          "cleaning": null
         },
         {
           "levelL": 10000,
@@ -1252,7 +1253,8 @@
           "ph": 4.55,
           "taPct": 0.8999999999999999,
           "startedS": 608400,
-          "readyAtS": 622800
+          "readyAtS": 622800,
+          "cleaning": null
         },
         {
           "levelL": 10000,
@@ -1262,7 +1264,8 @@
           "ph": 5.448510045787023,
           "taPct": 0.5888087158493724,
           "startedS": 619200,
-          "readyAtS": 633600
+          "readyAtS": 633600,
+          "cleaning": null
         }
       ]
     },
@@ -4840,6 +4843,11 @@
       "gasKw": 0,
       "steamKg": 0,
       "gasKwh": 0
+    },
+    "cleaningUse": {
+      "lyeKg": 0,
+      "acidKg": 0,
+      "drainWaterL": 0
     }
   },
   "kpis": {

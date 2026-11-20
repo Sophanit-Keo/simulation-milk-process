@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LinePoint, LinePointId } from '../../src/contracts';
 import { createPipes, TEMP_STOPS, tempColor, type Pipes } from '../../src/scene/pipes';
+import type { PointM } from '../../src/scene/layout';
+import { YOGURT_CIP_LINES } from '../../src/scene/yogurtPipes';
 import { LAMP_GLOW_HEX, readSceneColor, type SceneColorVar } from '../../src/scene/theme';
 import { createSim } from '../../src/sim';
 import { plantConfig } from '../helpers/plantConfig';
@@ -277,6 +279,48 @@ describe('createPipes', () => {
     const still = pipes.state().cleanPhaseM;
     pipes.update(line, 0.01, false, null);
     expect(pipes.state().cleanPhaseM).toBe(still);
+    pipes.dispose();
+  });
+
+  // Phase 32 (D34): the yogurt wing's CIP station, its three circuits, its lines merged into the y-ferment run.
+  it('colours each yogurt circuit\'s lines and the product pipes it cleans with its own fluid, steel lines while it stands', () => {
+    const { pipes, scene, line } = setUp();
+    const supplyHeat = YOGURT_CIP_LINES.find((each) => each.id === 'y-cip-heat-supply')?.pointsM[3] ?? [0, 0, 0];
+    const supplyTanks = YOGURT_CIP_LINES.find((each) => each.id === 'y-cip-tanks-supply')?.pointsM[2] ?? [0, 0, 0];
+    const returnP8 = YOGURT_CIP_LINES.find((each) => each.id === 'y-cip-p8-return')?.pointsM[2] ?? [0, 0, 0];
+    const lineAt = (pointM: PointM): THREE.Color[] => near(scene, 'y-ferment', [pointM[0], pointM[1], pointM[2]]);
+    const standing = { heat: null, tanks: null, p8: null };
+    pipes.update(line, 0, false, null, false, standing);
+    expect(pipes.state().yogurtCleaning).toEqual(standing);
+    for (const c of [...lineAt(supplyHeat), ...lineAt(supplyTanks), ...lineAt(returnP8)]) expectColor(c, stop('--steel'), 'a CIP line standing');
+    // The holding cell carries the mix's temperature until its circuit runs.
+    const cellColour = vertices(scene, 'y-holding-cell')[0]?.color.clone() ?? new THREE.Color();
+    pipes.update(line, 0, false, null, false, { heat: { fluid: 'lye', flowLph: 12_000 }, tanks: { fluid: 'acid', flowLph: 12_000 }, p8: null });
+    expect(pipes.state().yogurtCleaning).toEqual({ heat: 'lye', tanks: 'acid', p8: null });
+    for (const { color: c } of vertices(scene, 'y-holding-cell')) expectColor(c, stop('--clean-lye'), 'pipe-y-holding-cell in its clean');
+    for (const c of near(scene, 'y-mix', [-40.5, 0.9, -47])) expectColor(c, stop('--clean-lye'), 'pipe-y-mix past the deaerator');
+    for (const c of near(scene, 'y-mix', [-46, 0.9, -46])) expect(c.equals(stop('--clean-lye')), 'pipe-y-mix before the CIP\'s tee').toBe(false);
+    for (const c of lineAt(supplyHeat)) expectColor(c, stop('--clean-lye'), 'the heat treatment\'s supply');
+    for (const c of lineAt(supplyTanks)) expectColor(c, stop('--clean-acid'), 'the tanks\' supply');
+    for (const c of lineAt(returnP8)) expectColor(c, stop('--steel'), 'P8\'s return, standing');
+    // The feed from the buffer into P8 is P8's circuit's: water in a rinse.
+    pipes.update(line, 0, false, null, false, { heat: null, tanks: null, p8: { fluid: 'water', flowLph: 12_000 } });
+    for (const c of near(scene, 'y-ferment', [1.5, 0.7, -47])) expectColor(c, stop('--clean-water'), 'the feed into P8 in a rinse');
+    for (const c of lineAt(returnP8)) expectColor(c, stop('--clean-water'), 'P8\'s return in a rinse');
+    for (const { color: c } of vertices(scene, 'y-holding-cell')) expect(c.equals(cellColour), 'the holding cell back to its mix').toBe(true);
+    pipes.dispose();
+  });
+
+  it('flows each yogurt circuit\'s stripes on a slot of its own at its circulation, and stands them while it stands', () => {
+    const { pipes, line } = setUp();
+    pipes.update(line, 0.01, false, null, false, { heat: null, tanks: { fluid: 'lye', flowLph: 12_000 }, p8: null });
+    // 12,000 L/h moves the stripes 1.2 m a second.
+    expect(pipes.state().yogurtCleanPhaseM.tanks).toBeCloseTo(0.012, 6);
+    expect(pipes.state().yogurtCleanPhaseM.heat).toBe(0);
+    expect(pipes.state().cleanPhaseM).toBe(0);
+    pipes.update(line, 0.01, false, null, false, null);
+    expect(pipes.state().yogurtCleanPhaseM.tanks).toBeCloseTo(0.012, 6);
+    expect(pipes.state().yogurtCleaning).toEqual({ heat: null, tanks: null, p8: null });
     pipes.dispose();
   });
 

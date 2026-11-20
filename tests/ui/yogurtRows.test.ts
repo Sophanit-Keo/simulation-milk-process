@@ -120,6 +120,12 @@ describe('the fermentation tanks', () => {
     [{ state: 'ready', levelL: 10_000, ph: 4.55 }, 'Ready at pH 4.55 · cooled, waiting to empty', 'ok'],
     [{ state: 'emptying', levelL: 6_000, ph: 4.55 }, 'Emptying to the buffer · 60 % · pH 4.55', 'ok'],
     [{ state: 'cleaning', levelL: 0, product: null }, 'Cleaning in place', 'warn'],
+    // Its CIP's step since contracts v13 (phase 32).
+    [
+      { state: 'cleaning', levelL: 0, product: null, cleaning: { program: 'cip', step: 'acid', fluid: 'acid', stepIndex: 3, stepCount: 5, stepRemainingS: 300, tempC: 68, flowLph: 12_000 } },
+      'Cleaning in place · acid (HNO₃), 68 °C · 4 of 5',
+      'warn',
+    ],
   ] as const)('%o reads "%s"', (change, text, status) => {
     expect(tankText(tank(change), hToS(4) - hToS(4 / 3))).toEqual({ text, status });
   });
@@ -150,6 +156,11 @@ describe('the P8 buffer', () => {
     });
     expect(changeoverText(yogurtWith((y) => (y.buffer.changeover = { kind: 'cip', remainingS: 4_800 }))).text).toBe('CIP of the buffer and P8 · 1 h 20 min left');
     expect(changeoverText(yogurtWith((y) => (y.buffer.changeover = { kind: 'sip', remainingS: 1_200 }))).text).toBe('P8 sterilizing (SIP) · 20 min left');
+    // Since contracts v13 (phase 32) the CIP gives its step.
+    const lye = { program: 'cip', step: 'lye', fluid: 'lye', stepIndex: 1, stepCount: 6, stepRemainingS: 1_200, tempC: 78, flowLph: 12_000 } as const;
+    expect(changeoverText(yogurtWith((y) => (y.buffer.changeover = { kind: 'cip', remainingS: 3_600, cleaning: lye }))).text).toBe(
+      'CIP of the buffer and P8 · lye (NaOH), 78 °C · 2 of 6 · 1 h 00 min left',
+    );
   });
 
   it("reads the set mix's wait against its 45 min, amber past 80% of it", () => {

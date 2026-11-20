@@ -131,14 +131,22 @@ describe('the 3D view’s update', () => {
       world.update({ ...snapshot, ...changes, liquid: { ...snapshot.liquid, uhtMode: mode, cleaning } }, 0.02);
       return mocks.pipesUpdate.mock.calls[0];
     };
-    expect(at({ speed: 1 })).toEqual([snapshot.line, 0.02, false, null, false]);
+    // The yogurt wing's CIP circuits (phase 32) all stand in the fixture.
+    const standing = { heat: null, tanks: null, p8: null };
+    expect(at({ speed: 1 })).toEqual([snapshot.line, 0.02, false, null, false, standing]);
     const [, fastDtS] = at({ speed: 10_000 });
     expect(fastDtS).toBeCloseTo(0.02 * MAX_MOTION_RATE, 12);
-    expect(at({ speed: 10_000, paused: true })).toEqual([snapshot.line, 0, false, null, false]);
-    expect(at({ speed: 1 }, 'divert')).toEqual([snapshot.line, 0.02, true, null, false]);
-    expect(at({ speed: 1 }, 'cip', lye).slice(2)).toEqual([false, { fluid: 'lye', flowLph: 24_000 }, false]);
+    expect(at({ speed: 10_000, paused: true })).toEqual([snapshot.line, 0, false, null, false, standing]);
+    expect(at({ speed: 1 }, 'divert')).toEqual([snapshot.line, 0.02, true, null, false, standing]);
+    expect(at({ speed: 1 }, 'cip', lye).slice(2)).toEqual([false, { fluid: 'lye', flowLph: 24_000 }, false, standing]);
     // The yogurt line's divert (phase 17) lights its own route, whatever the UHT plant does.
     const yogurtDivert = { yogurt: { ...snapshot.yogurt, heat: { ...snapshot.yogurt.heat, mode: 'divert' as const } } };
-    expect(at({ speed: 1, ...yogurtDivert }).slice(2)).toEqual([false, null, true]);
+    expect(at({ speed: 1, ...yogurtDivert }).slice(2)).toEqual([false, null, true, standing]);
+    // A tank's CIP (phase 32) hands its step's fluid on to the tanks' circuit, at the wing's circulation.
+    const tanks = snapshot.yogurt.ferment.tanks.map((tank, i) =>
+      i === 1 ? { ...tank, state: 'cleaning' as const, product: null, cleaning: { ...lye, stepCount: 5, tempC: 78, flowLph: 12_000 } } : tank,
+    );
+    const tankClean = { yogurt: { ...snapshot.yogurt, ferment: { ...snapshot.yogurt.ferment, tanks } } };
+    expect(at({ speed: 1, ...tankClean }).slice(5)).toEqual([{ heat: null, tanks: { fluid: 'lye', flowLph: 12_000 }, p8: null }]);
   });
 });

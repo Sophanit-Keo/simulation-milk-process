@@ -243,7 +243,15 @@ export interface SceneDebug {
    * Whether the divert route is lit, and each line point's stripe offset in metres (phase 3); and whether the yogurt
    * line's route to its reprocess tank is (phase 17).
    */
-  pipeState(): { divertLit: boolean; yogurtDivertLit?: boolean; phaseM: Record<string, number>; cleaning: string | null; cleanPhaseM: number };
+  pipeState(): {
+    divertLit: boolean;
+    yogurtDivertLit?: boolean;
+    phaseM: Record<string, number>;
+    cleaning: string | null;
+    cleanPhaseM: number;
+    yogurtCleaning?: Record<string, string | null>;
+    yogurtCleanPhaseM?: Record<string, number>;
+  };
 }
 
 /** Calls one method of window.__scene in the page. */

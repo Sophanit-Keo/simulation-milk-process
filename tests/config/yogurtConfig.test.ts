@@ -25,9 +25,9 @@ function withYogurt(path: string, value: unknown): PlantConfig {
 
 const problemsWith = (path: string, value: unknown): string[] => checkPlantConfig(withYogurt(path, value));
 
-describe('plant.json schema 13', () => {
-  it('is at schema 13 (phase 19 added the cold chain\'s keys) and passes checkPlantConfig', () => {
-    expect(plantConfig.schemaVersion).toBe(14);
+describe('plant.json schema 15', () => {
+  it('is at schema 15 (phase 32 added the tanks\' CIP programme) and passes checkPlantConfig', () => {
+    expect(plantConfig.schemaVersion).toBe(15);
     expect(checkPlantConfig(plantConfig)).toEqual([]);
   });
 
@@ -65,6 +65,14 @@ describe('plant.json schema 13', () => {
     });
     expect(yogurt.p8.rateCupsPerH / yogurt.p8.lanes / 60).toBe(30); // 12 lanes × 30 cycles a minute
     expect(yogurt.coldChain).toMatchObject({ cupsPerTray: 24, traysPerPallet: 120, releasePh: 4.6, roomC: 3, minHoldS: 86_400, maxHoldS: 172_800 });
+    // D34's (phase 32): a tank's CIP, 45 min of pre-rinse, lye, rinse, acid and post-rinse at the wing's temperatures.
+    expect(yogurt.cip.tankSteps).toEqual([
+      { step: 'preRinse', fluid: 'water', durationS: 300, tempC: 45 },
+      { step: 'lye', fluid: 'lye', durationS: 1_200, tempC: 78 },
+      { step: 'rinse', fluid: 'water', durationS: 300, tempC: 45 },
+      { step: 'acid', fluid: 'acid', durationS: 600, tempC: 68 },
+      { step: 'postRinse', fluid: 'water', durationS: 300, tempC: 20 },
+    ]);
   });
 
   it('names each product once, with its route, and a product for each of the day\'s three shifts', () => {
@@ -163,6 +171,30 @@ describe('checkPlantConfig refuses a yogurt block', () => {
     const unknown = copyConfig();
     unknown.yogurt.shiftProducts[1] = 'kefir';
     expect(checkPlantConfig(unknown)).toContainEqual(expect.stringMatching(/shiftProducts\[1\] must be one of/));
+  });
+
+  it('whose tank CIP programme (phase 32) is missing, has an unknown step or fluid, a lye off its temperature, or misses the tank clean\'s time', () => {
+    const missing = copyConfig();
+    (missing.yogurt.cip as { tankSteps?: unknown }).tankSteps = undefined;
+    expect(checkPlantConfig(missing)).toContain("yogurt.cip.tankSteps must list a fermentation tank's CIP steps");
+    const step = copyConfig();
+    step.yogurt.cip.tankSteps[0].step = 'soak';
+    expect(checkPlantConfig(step)).toContainEqual(expect.stringMatching(/tankSteps\[0\]\.step must be one of/));
+    const fluid = copyConfig();
+    fluid.yogurt.cip.tankSteps[1].fluid = 'bleach';
+    expect(checkPlantConfig(fluid)).toContainEqual(expect.stringMatching(/tankSteps\[1\]\.fluid must be one of/));
+    const lye = copyConfig();
+    lye.yogurt.cip.tankSteps[1].tempC = 60;
+    expect(checkPlantConfig(lye)).toContain('yogurt.cip.tankSteps[1]: the lye runs at yogurt.cip.lyeTempC');
+    const acid = copyConfig();
+    acid.yogurt.cip.tankSteps[3].tempC = 50;
+    expect(checkPlantConfig(acid)).toContain('yogurt.cip.tankSteps[3]: the acid runs at yogurt.cip.acidTempC');
+    const short = copyConfig();
+    short.yogurt.cip.tankSteps.pop();
+    expect(checkPlantConfig(short)).toContain('yogurt.cip.tankSteps must add up to yogurt.ferment.tankCleanS (2700 s), not 2400 s');
+    const cold = copyConfig();
+    delete (cold.yogurt.cip.tankSteps[0] as { tempC?: number }).tempC;
+    expect(checkPlantConfig(cold)).toContainEqual(expect.stringMatching(/tankSteps\[0\]\.tempC is needed/));
   });
 
   it('leaves the shipped config untouched', () => {

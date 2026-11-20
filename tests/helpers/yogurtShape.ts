@@ -1,8 +1,11 @@
 // Every shape rule of contracts v8's Snapshot.yogurt (src/contracts/yogurt.ts) that a consumer may rely on, with v9's
-// and v10's fields where a snapshot has them, and the agreement between it, the stage 11–16 values and the yogurt line
+// to v13's fields where a snapshot has them, and the agreement between it, the stage 11–16 values and the yogurt line
 // points (src/sim/yogurt/view.ts).
 import { expect } from 'vitest';
 import {
+  CLEANING_FLUIDS,
+  CLEANING_RETURNS,
+  CLEANING_STEP_IDS,
   FERMENT_TANK_STATES,
   P8_STATES,
   P8_STOP_REASONS,
@@ -13,6 +16,7 @@ import {
   YOGURT_PRODUCT_IDS,
   YOGURT_ROUTES,
   YOGURT_STAGE_IDS,
+  type CleaningSnapshot,
   type PlantConfig,
   type Snapshot,
   type TankLevel,
@@ -22,6 +26,19 @@ const finiteAtLeast0 = (value: unknown): boolean => typeof value === 'number' &&
 
 function expectTank(tank: TankLevel, where: string): void {
   if (!(tank.capacityL > 0 && tank.levelL >= 0 && tank.levelL <= tank.capacityL + 1e-9)) expect.fail(`${where} holds ${tank.levelL} of ${tank.capacityL} L`);
+}
+
+/** One step of a wing clean (contracts v13): a known step and fluid, its place in its programme, a return and where it goes. */
+function expectCleaningStep(cleaning: CleaningSnapshot, where: string): void {
+  expect(CLEANING_STEP_IDS, `${where}: step`).toContain(cleaning.step);
+  expect(CLEANING_FLUIDS, `${where}: fluid`).toContain(cleaning.fluid);
+  if (!(Number.isInteger(cleaning.stepIndex) && cleaning.stepIndex >= 0 && cleaning.stepIndex < cleaning.stepCount)) {
+    expect.fail(`${where}: step ${cleaning.stepIndex} of ${cleaning.stepCount}`);
+  }
+  for (const value of [cleaning.stepRemainingS, cleaning.flowLph, cleaning.returnConductivityMsPerCm]) {
+    if (!finiteAtLeast0(value)) expect.fail(`${where}: ${String(value)}`);
+  }
+  if (cleaning.returnTo !== undefined) expect(CLEANING_RETURNS, `${where}: returnTo`).toContain(cleaning.returnTo);
 }
 
 export function expectWellFormedYogurt(snap: Snapshot, config: PlantConfig, where: string): void {
@@ -61,6 +78,11 @@ export function expectWellFormedYogurt(snap: Snapshot, config: PlantConfig, wher
     if (tank.startedS !== null && !(tank.readyAtS !== null && tank.readyAtS > tank.startedS && tank.startedS <= snap.timeS)) {
       expect.fail(`${at}: started ${tank.startedS}, ready ${String(tank.readyAtS)}, now ${snap.timeS}`);
     }
+    // Contracts v13 (phase 32): a cleaning tank gives its CIP's step, and no other does.
+    if (tank.cleaning !== undefined) {
+      expect(tank.cleaning !== null, `${at}: a CIP step only while it cleans`).toBe(tank.state === 'cleaning');
+      if (tank.cleaning) expectCleaningStep(tank.cleaning, `${at}: its CIP`);
+    }
   });
 
   expectTank(buffer, `${where}: the P8 buffer`);
@@ -77,6 +99,15 @@ export function expectWellFormedYogurt(snap: Snapshot, config: PlantConfig, wher
     expect(buffer.waitS, `${where}: nothing waits in an empty buffer`).toBeNull();
   }
   if (buffer.waitS !== null && !finiteAtLeast0(buffer.waitS)) expect.fail(`${where}: buffer.waitS is ${buffer.waitS}`);
+  // Contracts v13 (phase 32): the CIP of the buffer and P8 gives its step; a rinse and an SIP none.
+  const changeover = buffer.changeover;
+  if (changeover && changeover.cleaning !== undefined) {
+    expect(changeover.cleaning !== null, `${where}: a CIP step only in a CIP changeover`).toBe(changeover.kind === 'cip');
+    if (changeover.cleaning) expectCleaningStep(changeover.cleaning, `${where}: the CIP of the buffer and P8`);
+  }
+  if (yogurt.cleaningUse) {
+    for (const [key, value] of Object.entries(yogurt.cleaningUse)) if (!finiteAtLeast0(value)) expect.fail(`${where}: yogurt.cleaningUse.${key} is ${value}`);
+  }
 
   expect(P8_STATES, `${where}: p8.state`).toContain(p8.state);
   for (const key of ['cupsPerH', 'cupsMade', 'cupsRejected'] as const) {

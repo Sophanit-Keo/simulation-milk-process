@@ -1,5 +1,5 @@
 {
-  "version": 12,
+  "version": 13,
   "timeS": 648400.7527456576,
   "speed": 10,
   "paused": false,
@@ -1236,7 +1236,8 @@
           "ph": 5.98461173369333,
           "taPct": 0.4031344727208465,
           "startedS": 643499.5175889863,
-          "readyAtS": 657898.5175889863
+          "readyAtS": 657898.5175889863,
+          "cleaning": null
         },
         {
           "levelL": 0,
@@ -1246,7 +1247,20 @@
           "ph": 6.6,
           "taPct": 0.19,
           "startedS": null,
-          "readyAtS": null
+          "readyAtS": null,
+          "cleaning": {
+            "program": "cip",
+            "step": "lye",
+            "fluid": "lye",
+            "stepIndex": 1,
+            "stepCount": 5,
+            "stepRemainingS": 1024.641949507175,
+            "tempC": 78,
+            "flowLph": 12000,
+            "concentrationPct": 1.8,
+            "returnConductivityMsPerCm": 72.26723935749348,
+            "returnTo": "lyeTank"
+          }
         },
         {
           "levelL": 9637.385656972396,
@@ -1256,7 +1270,8 @@
           "ph": 4.55,
           "taPct": 0.8999999999999999,
           "startedS": 619200,
-          "readyAtS": 633600
+          "readyAtS": 633600,
+          "cleaning": null
         }
       ]
     },
@@ -4324,6 +4339,11 @@
       "gasKw": 0,
       "steamKg": 425.45454545452156,
       "gasKwh": 329.74106290440494
+    },
+    "cleaningUse": {
+      "lyeKg": 3.718572888770745,
+      "acidKg": 1.5678606599338287,
+      "drainWaterL": 3000
     }
   },
   "kpis": {

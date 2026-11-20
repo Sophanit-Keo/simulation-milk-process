@@ -40,7 +40,7 @@ const ROOM_TAGS = ['p8-air-unit', 'p8-cip-skid', 'p8-qa-bench', 'p8-cup-supply',
 /** The phase 16 table's machines, by stage. */
 const EXPECTED: Readonly<Record<number, readonly string[]>> = {
   11: ['yogurt-silo', 'powder-station', 'high-shear-mixer', 'stabilizer-skid', 'yogurt-mix-tank'],
-  12: ['yogurt-deaerator', 'yogurt-homogenizer', 'yogurt-phe', 'holding-cell', 'yogurt-divert-valve', 'reprocess-tank'],
+  12: ['yogurt-deaerator', 'yogurt-homogenizer', 'yogurt-phe', 'holding-cell', 'yogurt-divert-valve', 'reprocess-tank', 'yogurt-cip'],
   13: ['culture-pump', 'ferment-tank-1', 'ferment-tank-2', 'ferment-tank-3'],
   14: ['smoothing-valve', 'yogurt-cooler', 'fruit-tank', 'p8-buffer'],
   15: ['p8-filler', 'p8-checkweigher', 'p8-metal-detector', 'p8-vision', 'p8-reject-bin', 'p8-cups', ...ROOM_TAGS],
@@ -59,7 +59,8 @@ describe('the yogurt wing in grey boxes', () => {
     for (const stage of YOGURT_STAGE_IDS) {
       expect(everything.filter((item) => item.stage === stage).map((item) => item.id), `stage ${stage}`).toEqual(EXPECTED[stage]);
     }
-    expect(everything.filter(isTokens).map((item) => item.id)).toEqual(['p8-cups', ...ROOM_TAGS, 'yogurt-pallets']);
+    // The CIP station's label (phase 32) is a tag too: its steel joins the reprocess tank's meshes.
+    expect(everything.filter(isTokens).map((item) => item.id)).toEqual(['yogurt-cip', 'p8-cups', ...ROOM_TAGS, 'yogurt-pallets']);
   });
 
   it('has ids no other machine of the plant uses', () => {

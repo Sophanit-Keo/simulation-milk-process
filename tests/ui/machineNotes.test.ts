@@ -28,11 +28,12 @@ function run(sim: Sim, seconds: number, until?: (snap: Snapshot) => boolean): Sn
 
 describe('src/data/machineNotes.json', () => {
   it('explains the holding cell in stage 12\'s panel and Line P8 in stage 15\'s, each with its live readings', () => {
-    expect(notesFor(12).map((note) => note.id)).toEqual(['holdingCell']);
+    // Phase 32: the wing's CIP station under the holding cell, closed until asked for.
+    expect(notesFor(12).map((note) => note.id)).toEqual(['holdingCell', 'wingCip']);
+    expect(notesFor(12).map((note) => note.open)).toEqual([true, false]);
     // Phase 31: Line P8's note, then one for each machine of the cup filling room, closed until asked for.
     expect(notesFor(15).map((note) => note.id)).toEqual(['p8', ...ROOM_NOTES]);
     expect(notesFor(15).filter((note) => note.open).map((note) => note.id)).toEqual(['p8']);
-    expect(notesFor(12).every((note) => note.open)).toBe(true);
     expect(notesFor(13)).toEqual([]);
     for (const note of MACHINE_NOTES) {
       expect(Object.keys(NOTE_FACTS[note.id] ?? {}).length, note.id).toBeGreaterThan(ROOM_NOTES.includes(note.id) ? 1 : 3);
@@ -85,6 +86,76 @@ describe('src/data/machineNotes.json', () => {
     expect(text).toContain(`Under ${p8.hepa.minPa} Pa`);
     expect(text).toContain(`${p8.sip.tempC} °C for ${p8.sip.holdS / 60} min`);
     expect(text).toContain(`under ${p8.magazines.refillBelowFrac * 100}%`);
+  });
+});
+
+describe('the wing\'s CIP station\'s note (phase 32)', () => {
+  const cip = Y.cip;
+  const minutes = (s: number): string => `${s / 60} min`;
+  const wingSteps = plantJson.cleaning.cipSteps;
+  const stepS = (steps: readonly { step: string; durationS: number }[], id: string): number => steps.find((step) => step.step === id)?.durationS ?? Number.NaN;
+
+  it('tells what the station does, its three circuits, the steps, the return, what it uses and what the 3D view shows', () => {
+    const note = MACHINE_NOTES.find((each) => each.id === 'wingCip');
+    expect(note?.sections.map((section) => section.heading)).toEqual(['What it does', 'Three circuits', 'The steps', 'The return', 'What it uses', 'In the 3D view']);
+    expect(Object.keys(NOTE_FACTS.wingCip ?? {})).toEqual(['Heat treatment', 'Fermentation tanks', 'Buffer and P8', 'Returns', 'Used since opening']);
+  });
+
+  it('says what plant.json holds about the programmes, their strengths and temperatures, and the return', () => {
+    const text = textOf('wingCip');
+    const wingS = wingSteps.reduce((sum, step) => sum + step.durationS, 0);
+    expect(text).toContain(`the wing's CIP after a divert, ${minutes(wingS)}`);
+    expect(text).toContain(`once it is emptied, ${minutes(Y.ferment.tankCleanS)}`);
+    expect(text).toContain(`a ${minutes(Y.changeover.rinseS)} rinse of the buffer`);
+    expect(text).toContain(`warm water at ${cip.tankSteps[0]?.tempC} °C`);
+    expect(wingSteps[0]?.tempC).toBe(cip.tankSteps[0]?.tempC);
+    expect(text).toContain(`${cip.lyePct}% sodium hydroxide (lye) at ${cip.lyeTempC} °C`);
+    expect(text).toContain(`${cip.acidPct}% nitric acid at ${cip.acidTempC} °C`);
+    expect(text).toContain(`a cold rinse at ${cip.tankSteps.at(-1)?.tempC} °C`);
+    expect(text).toContain(`holds the lye ${minutes(stepS(wingSteps, 'lye'))} and the acid ${minutes(stepS(wingSteps, 'acid'))}, and ends with ${minutes(stepS(wingSteps, 'cooling'))} of gradual cooling`);
+    expect(text).toContain(`a tank's CIP holds the lye ${minutes(stepS(cip.tankSteps, 'lye'))} and the acid ${minutes(stepS(cip.tankSteps, 'acid'))}`);
+    expect(text).toContain(`the lye reads ${cip.lyeConductivityMsPerCm} mS/cm, the acid ${cip.acidConductivityMsPerCm.toFixed(1)} mS/cm and the rinse water ${plantJson.cleaning.chemicals.water.conductivityMsPerCm} mS/cm`);
+    expect(plantJson.cleaning.changeOverFrac).toBe(0.5);
+    expect(text).toContain('until it reads half the solution\'s conductivity');
+    expect(plantJson.cleaning.recoverSteps).toContain('postRinse');
+  });
+
+  it('says what the cleans use as H140 works it out', () => {
+    const text = textOf('wingCip');
+    for (const phrase of ['about 3.7 kg of sodium hydroxide and 1.6 kg of nitric acid', '3,000 L of rinse water', 'the same chemicals and 2,000 L', 'a rinse 3,000 L', 'about 18.6 kg of sodium hydroxide, 7.8 kg of nitric acid and 14,000 L of water']) {
+      expect(text).toContain(phrase);
+    }
+  });
+
+  it('reads the circuits standing as the plant opens, then a tank\'s CIP step by step, its return and what it has used', () => {
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    const open = run(sim, 60);
+    expect(noteFacts('wingCip', open)).toEqual({
+      'Heat treatment': { text: 'Standing by', state: 'idle' },
+      'Fermentation tanks': { text: 'Standing by', state: 'idle' },
+      'Buffer and P8': { text: 'Standing by', state: 'idle' },
+      Returns: { text: 'None', state: 'idle' },
+      'Used since opening': { text: '0.0 kg NaOH · 0.0 kg HNO₃ · 0 L water', state: 'idle' },
+    });
+    // Tank 1 empties at 2.333 h (H125e); 6 min into its clean the lye has run a minute, back to the lye tank.
+    const lye = run(sim, hToS(3), (each) => (each.yogurt.ferment.tanks[0]?.cleaning?.stepIndex ?? 0) === 1 && (each.yogurt.ferment.tanks[0]?.cleaning?.stepRemainingS ?? 0) < 1_100);
+    const facts = noteFacts('wingCip', lye);
+    expect(facts?.['Fermentation tanks']?.text).toMatch(/^Tank 1: Lye \(NaOH\), 78 °C · 2 of 5 · 1\d min left$/);
+    expect(facts?.Returns).toEqual({ text: 'tank 1 back to the lye tank', state: 'ok' });
+    expect(facts?.['Used since opening']?.text).toBe('0.0 kg NaOH · 0.0 kg HNO₃ · 1,000 L water');
+    // Once it is done: H139's tank CIP.
+    const done = run(sim, hToS(1), (each) => each.yogurt.ferment.tanks[0]?.state !== 'cleaning');
+    expect(noteFacts('wingCip', done)?.['Used since opening']).toEqual({ text: '3.7 kg NaOH · 1.6 kg HNO₃ · 2,000 L water', state: 'ok' });
+  });
+
+  it('reads the rinse before strawberry at 14:00, water to the drain', () => {
+    const sim = createSim(plantConfig);
+    sim.step(0.1);
+    const rinse = run(sim, hToS(9), (each) => each.yogurt.buffer.changeover?.kind === 'rinse');
+    const facts = noteFacts('wingCip', rinse);
+    expect(facts?.['Buffer and P8']?.text).toMatch(/^Rinse of the buffer and the fruit line · 1\d min( \d\d s)? left$/);
+    expect(facts?.Returns?.text).toContain('buffer and P8 to drain');
   });
 });
 

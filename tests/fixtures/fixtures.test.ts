@@ -1,7 +1,8 @@
 // The recorded snapshot fixtures (tests/fixtures/record.ts): each one still matches what createSim
 // records now, keeps every contracts v3 shape rule, and shows the state it is named for. With
 // RECORD_FIXTURES=1 the files are written first, so the comparison then passes and git shows the diff.
-// Re-recorded at contracts v8 (phase 15): outside the yogurt line, every value is what it was at v7.
+// Re-recorded at contracts v8 (phase 15): outside the yogurt line, every value is what it was at v7. Re-recorded at v13
+// (phase 32): the yogurt line's tanks and changeover give their CIP step, and the wing's cleans their use.
 import { describe, expect, it } from 'vitest';
 import {
   CONTRACT_VERSION,
@@ -88,7 +89,7 @@ const PHASE_4_KEYS: Readonly<Record<7 | 8 | 9 | 10, readonly string[]>> = {
 /** Every shape rule of contracts v4 (src/contracts/snapshot.ts, packs.ts, scenarios.ts) that a consumer may rely on. */
 function expectContracts(snap: Snapshot, where: string): void {
   expect(snap.version, `${where}: version`).toBe(CONTRACT_VERSION);
-  expect(CONTRACT_VERSION).toBe(12);
+  expect(CONTRACT_VERSION).toBe(13);
   expect(Number.isFinite(snap.timeS), `${where}: timeS`).toBe(true);
   expect(isSpeed(snap.speed), `${where}: speed ${snap.speed}`).toBe(true);
   expect(typeof snap.paused, `${where}: paused`).toBe('boolean');
