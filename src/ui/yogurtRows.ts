@@ -4,6 +4,7 @@
 import {
   fracToPct,
   yogurtProducts,
+  type CleaningSnapshot,
   type FermentTank,
   type PlantConfig,
   type YogurtChangeoverKind,
@@ -13,7 +14,7 @@ import {
 } from '../contracts';
 import plantJson from '../data/plant.json';
 import { formatDuration, formatNumber, NO_VALUE, withUnit } from './format';
-import { cleaningText, type StateText } from './liquidRows';
+import { CLEANING_STEP_TEXT, cleaningText, type StateText } from './liquidRows';
 
 const PLANT: PlantConfig = plantJson;
 const PRODUCTS = yogurtProducts(PLANT);
@@ -91,11 +92,22 @@ export function tankText(tank: FermentTank | undefined, timeS: number): StateTex
       return { text: `Ready at ${ph} · cooled, waiting to empty`, status: 'ok' };
     case 'emptying':
       return { text: `Emptying to the buffer · ${tankPct(tank)} · ${ph}`, status: 'ok' };
-    case 'cleaning':
-      return { text: 'Cleaning in place', status: 'warn' };
+    case 'cleaning': {
+      // Its CIP's step since contracts v13 (phase 32): "Cleaning in place · lye (NaOH), 78 °C · 2 of 5".
+      const step = tank.cleaning;
+      if (!step) return { text: 'Cleaning in place', status: 'warn' };
+      return { text: `Cleaning in place · ${cleaningStepText(step)}`, status: 'warn' };
+    }
     default:
       return NONE;
   }
+}
+
+/** A wing clean's step in a row, its name lower-cased after what precedes it: "lye (NaOH), 78 °C · 2 of 5". */
+function cleaningStepText(step: CleaningSnapshot): string {
+  const name = CLEANING_STEP_TEXT[step.step] ?? step.step;
+  const temp = step.tempC === null ? '' : `, ${withUnit(formatNumber(step.tempC), '°C')}`;
+  return `${name.charAt(0).toLowerCase()}${name.slice(1)}${temp} · ${step.stepIndex + 1} of ${step.stepCount}`;
 }
 
 const CHANGEOVERS: Readonly<Record<YogurtChangeoverKind, string>> = {
@@ -119,7 +131,9 @@ export function changeoverText(yogurt: YogurtSnapshot | undefined): StateText {
   const changeover = yogurt.buffer.changeover;
   if (!changeover) return { text: 'None', status: 'idle' };
   const what = CHANGEOVERS[changeover.kind] ?? changeover.kind;
-  return { text: `${what} · ${formatDuration(changeover.remainingS)} left`, status: 'warn' };
+  // The CIP's step since contracts v13 (phase 32): "CIP of the buffer and P8 · acid (HNO₃), 68 °C · 4 of 6 · 52 min left".
+  const step = changeover.cleaning ? ` · ${cleaningStepText(changeover.cleaning)}` : '';
+  return { text: `${what}${step} · ${formatDuration(changeover.remainingS)} left`, status: 'warn' };
 }
 
 /**

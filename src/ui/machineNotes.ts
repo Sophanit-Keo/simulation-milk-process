@@ -1,12 +1,13 @@
 // A machine explained in its stage's panel (phase 28): what it is, why the plant needs it and how it works, from
-// src/data/machineNotes.json (process's text), with a few live readings on top. Stage 12 explains the holding cell,
-// stage 15 Line P8 and, since phase 31, each machine of the cup filling room. Each note is a <details>, open by default
+// src/data/machineNotes.json (process's text), with a few live readings on top. Stage 12 explains the holding cell and,
+// since phase 32, the wing's CIP station; stage 15 Line P8 and, since phase 31, each machine of the cup filling room. Each note is a <details>, open by default
 // unless the file says "open": false (the room's machines); whether a viewer opened or closed it is kept for the session.
-import type { PlantConfig, Snapshot, StageId, YogurtSnapshot } from '../contracts';
+import type { CleaningSnapshot, PlantConfig, Snapshot, StageId, YogurtSnapshot } from '../contracts';
 import plantJson from '../data/plant.json';
 import notesJson from '../data/machineNotes.json';
 import { el, setText } from './dom';
 import { formatDay, formatDuration, formatNumber, NO_VALUE, withUnit } from './format';
+import { CLEANING_RETURN_TEXT, cleaningText } from './liquidRows';
 import type { PanelPart } from './stagePanel';
 
 const PLANT: PlantConfig = plantJson;
@@ -121,6 +122,31 @@ const thrownOut = (count: (y: YogurtSnapshot) => number | undefined): FactReader
 };
 const whileRunning = (running: string): FactReader => (y) => (y.p8.state === 'running' ? { text: running, state: 'ok' } : { text: 'Standing', state: 'idle' });
 
+/** A wing clean's step, as the UHT panel words its own: "Lye (NaOH), 78 °C · 2 of 5 · 12 min left". */
+const stepFact = (step: CleaningSnapshot | null | undefined): NoteFact => {
+  const text = cleaningText({ cleaning: step ?? null });
+  return step ? { text: text.text, state: 'warn' } : { text: 'Cleaning in place', state: 'warn' };
+};
+const STANDING_BY: NoteFact = { text: 'Standing by', state: 'idle' };
+/** The tanks that clean now, the one furthest into its clean first (as the 3D view's circuit shows it). */
+const cleaningTanks = (y: YogurtSnapshot): number[] =>
+  y.ferment.tanks
+    .map((tank, i) => (tank.state === 'cleaning' ? i : -1))
+    .filter((i) => i >= 0)
+    .sort((a, b) => {
+      const far = (i: number): number => (y.ferment.tanks[i]?.cleaning ? (y.ferment.tanks[i]?.cleaning?.stepIndex ?? 0) * 1e6 - (y.ferment.tanks[i]?.cleaning?.stepRemainingS ?? 0) : 0);
+      return far(b) - far(a);
+    });
+/** What each of the station's circuits runs now: its step, a rinse, or nothing. */
+const circuitSteps = (y: YogurtSnapshot): { what: string; step: CleaningSnapshot | null }[] => {
+  const out: { what: string; step: CleaningSnapshot | null }[] = [];
+  if (y.heat.mode === 'cleaning') out.push({ what: 'heat treatment', step: y.heat.cleaning ?? null });
+  for (const i of cleaningTanks(y)) out.push({ what: `tank ${i + 1}`, step: y.ferment.tanks[i]?.cleaning ?? null });
+  if (y.buffer.changeover?.kind === 'cip') out.push({ what: 'buffer and P8', step: y.buffer.changeover.cleaning ?? null });
+  return out;
+};
+const RINSE_TEXT = 'Rinse of the buffer and the fruit line';
+
 /** Each note's live readings, by label, in the order shown. */
 export const NOTE_FACTS: Readonly<Record<string, Readonly<Record<string, FactReader>>>> = {
   holdingCell: {
@@ -139,6 +165,34 @@ export const NOTE_FACTS: Readonly<Record<string, Readonly<Record<string, FactRea
     }),
     'The CCP': (y) => ccpFact(y),
     'Diverts so far': (y) => ({ text: formatNumber(y.heat.divertCount), state: y.heat.divertCount > 0 ? 'warn' : 'ok' }),
+  },
+  // Phase 32: the wing's CIP station, a circuit a row, then where the returns go and what the cleans have used.
+  wingCip: {
+    'Heat treatment': (y) => (y.heat.mode === 'cleaning' ? stepFact(y.heat.cleaning) : STANDING_BY),
+    'Fermentation tanks': (y) => {
+      const tanks = cleaningTanks(y);
+      if (tanks.length === 0) return STANDING_BY;
+      return { text: tanks.map((i) => `Tank ${i + 1}: ${stepFact(y.ferment.tanks[i]?.cleaning).text}`).join('; '), state: 'warn' };
+    },
+    'Buffer and P8': (y) => {
+      const changeover = y.buffer.changeover;
+      if (changeover?.kind === 'cip') return stepFact(changeover.cleaning);
+      if (changeover?.kind === 'rinse') return { text: `${RINSE_TEXT} · ${formatDuration(changeover.remainingS)} left`, state: 'warn' };
+      return STANDING_BY;
+    },
+    Returns: (y) => {
+      const returns = circuitSteps(y).flatMap(({ what, step }) => (step?.returnTo ? [`${what} ${CLEANING_RETURN_TEXT[step.returnTo] ?? step.returnTo}`] : []));
+      if (y.buffer.changeover?.kind === 'rinse') returns.push(`buffer and P8 ${CLEANING_RETURN_TEXT.drain}`);
+      return returns.length === 0 ? { text: 'None', state: 'idle' } : { text: returns.join('; '), state: 'ok' };
+    },
+    'Used since opening': (y) => {
+      const use = y.cleaningUse;
+      if (!use) return { text: NO_VALUE, state: 'idle' };
+      return {
+        text: `${withUnit(formatNumber(use.lyeKg, 1), 'kg')} NaOH · ${withUnit(formatNumber(use.acidKg, 1), 'kg')} HNO₃ · ${withUnit(formatNumber(use.drainWaterL), 'L')} water`,
+        state: use.lyeKg + use.acidKg + use.drainWaterL > 0 ? 'ok' : 'idle',
+      };
+    },
   },
   p8: {
     Now: (y) => {
