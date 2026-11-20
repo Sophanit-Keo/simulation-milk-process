@@ -462,6 +462,15 @@ Read on 12 November 2026 from `window.__scene.drawCalls()` on the dev server (16
 
 Read on 12 November 2026 as phase 30's. **The overview:** **350** draw calls, as before. The gates' 12 new parts are instances in the shared box mesh, and the five name tags are labels without a mesh.
 
+### Phase 32: the yogurt wing's CIP station
+
+Read on 20 November 2026 from `window.__scene.drawCalls()` on the dev server (1600 × 900, headless Chromium on SwiftShader), not with `measure.mjs`; no console errors.
+
+- **The overview:** **350** draw calls as the plant opens, within the budget, as before. The station's steel joins the reprocess tank's meshes, its 34 parts and the tanks' 6 spray streaks are instances in the wing's shared box mesh, and its lines join the `y-ferment` pipe run's mesh: none adds a draw call.
+- **While a tank cleans:** the overview read **369** at 08:27 on day 8 with tank 1 in its CIP, and so did `master` at the same moment, paused the same way: the extra calls are the hour's trucks and pallets, not the station.
+- **The yogurt stops** as the plant opens, paused: 132 (11), 138 (12), 140 (13), 128 (14), 133 (15) and 145 (16). Stage 12's stop moved (D34) and now takes in the station; it read 144 while tank 1 cleaned.
+- **Not measured:** the triangles with `measure.mjs`, and the frame rate.
+
 ## To do on a real GPU
 
 G1 asks for 60 fps on the grey-box plant on a mid-range laptop. Only the developer can sign that, on real hardware:

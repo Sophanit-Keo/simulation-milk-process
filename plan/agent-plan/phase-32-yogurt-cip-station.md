@@ -114,6 +114,7 @@ The developer asked for this as one change; `lead` builds it lane by lane in one
 Built on 20 November 2026 in one session.
 
 - **Checked:** `npm run check` passes: typecheck, lint, 1,970 unit tests in 86 files (9 new in `tests/sim/yogurt/cip.test.ts`, 9 in `tests/scene/yogurtCip.test.ts`, and new cases in the pipes', world's, legend's, notes', rows' and config tests), and the asset tests. The overview draws 350 calls, its budget.
-- **Browser tests:** the new `e2e/yogurtCip.spec.ts` passes on software GL. The yogurt, stage, camera, tour, cleaning, smoke, about and theme suites were being rerun on the final code when this was written; their result is in the pull request.
+- **Browser tests:** 55 of 55 pass on software GL, on the final code: the new `e2e/yogurtCip.spec.ts`, and the yogurt (wing, tour, notes, liquid, motion, scenarios, flow, cold chain, pallet line), P8, stages, camera, smoke, cleaning, about and theme suites. The other suites were not rerun.
+- **Draw calls:** the overview reads 350 as the plant opens, and 369 with tank 1 cleaning at 08:27, as `master` does at the same moment ([baseline](../../tests/perf/baseline.md#phase-32-the-yogurt-wings-cip-station)).
 - **Not checked:** the frame rate on a real GPU; how the station reads to a person.
 - **Left out:** the tanks' levels at the station do not move (the chemistry keeps their strength, D23); the rinse water's and steam's energy is not counted, as the wing's CIP's was not (D27); no hot-water sanitizing step, which the programmes do not have.
