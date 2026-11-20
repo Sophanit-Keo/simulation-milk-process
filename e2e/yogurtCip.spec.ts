@@ -5,8 +5,9 @@ import { railButton, sceneCall, showOnRail, waitForClock, waitForScene } from '.
 // Phase 32 in the browser: the yogurt wing's CIP station. It stands as the plant opens, its label says so and stage 12's
 // panel explains it in a note closed until asked for. Once tank 1 empties (2.333 h in, H125e) the station cleans it: its
 // pump turns and stands while paused, the tanks' circuit's lines carry the step's fluid, the tank's sight glass streams,
-// the label and the note name the tank and its step, and stage 13's row too. What each part does is the unit tests'
-// (tests/scene/yogurtCip.test.ts, tests/sim/yogurt/cip.test.ts, tests/ui/machineNotes.test.ts).
+// the pipe legend explains the fluids' colours, the label and the note name the tank and its step, and stage 13's row
+// too. What each part does is the unit tests' (tests/scene/yogurtCip.test.ts, tests/sim/yogurt/cip.test.ts,
+// tests/ui/machineNotes.test.ts, tests/ui/pipeLegend.test.ts).
 
 type State = Record<string, number | string | boolean> | null;
 const stateOf = (page: Page, id: string) => sceneCall(page, 'equipmentState', id) as Promise<State>;
@@ -42,6 +43,9 @@ test('the wing\'s CIP station stands as the plant opens, then cleans tank 1 once
   expect(['water', 'lye', 'acid']).toContain(pipes.yogurtCleaning?.tanks);
   expect(pipes.yogurtCleaning).toMatchObject({ heat: null, p8: null });
   expect(await stateOf(page, 'ferment-tank-1')).toMatchObject({ cipSpray1Moving: true });
+  // The legend explains the fluids' colours while the wing cleans, the UHT plant making milk.
+  await expect(page.getByTestId('legend-cleaning')).toBeVisible();
+  await expect(page.locator('.overlay-legend')).toHaveAttribute('aria-label', /Cleaning, (water|lye|acid) now/);
   expect(await stateOf(page, 'ferment-tank-2')).toMatchObject({ cipSpray1Moving: false });
 
   // Paused, the pump stands.

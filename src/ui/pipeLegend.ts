@@ -1,5 +1,7 @@
 // The pipe legend over the 3D view (index.html): the milk temperatures the pipes show, and, while the UHT
-// plant runs a cleaning programme (phase 7), the three cleaning fluids, the one the circuit carries marked.
+// plant runs a cleaning programme (phase 7), the three cleaning fluids, the one the circuit carries marked. Since phase
+// 32 the fluids show too while the yogurt wing's CIP station runs a circuit, its fluid marked when the UHT plant's
+// circuit carries milk.
 import { CLEANING_FLUIDS, type CleaningFluid, type Snapshot } from '../contracts';
 import { el, setAttr } from './dom';
 
@@ -23,9 +25,28 @@ export function legendLabel(fluid: CleaningFluid | null): string {
   return `${MILK_LEGEND_LABEL}. Cleaning, ${fluid} now: ${colours}`;
 }
 
-/** The fluid in the UHT circuit, or null while it carries milk (or the snapshot predates contracts v5). */
-export function circuitFluid(snapshot: Pick<Snapshot, 'liquid'>): CleaningFluid | null {
-  return snapshot.liquid?.cleaning?.fluid ?? null;
+/**
+ * The fluid the yogurt wing's CIP station pumps now (phase 32, D34): the heat treatment's circuit's, a cleaning tank's,
+ * then the buffer and P8's (a rinse is water); null while none runs. A clean that names no step (a snapshot older than
+ * contracts v13) pumps water.
+ */
+export function wingCleaningFluid(snapshot: Pick<Snapshot, 'yogurt'>): CleaningFluid | null {
+  const yogurt = (snapshot as Partial<Snapshot>).yogurt;
+  if (!yogurt) return null;
+  if (yogurt.heat.mode === 'cleaning') return yogurt.heat.cleaning?.fluid ?? 'water';
+  const tank = yogurt.ferment.tanks.find((each) => each.state === 'cleaning');
+  if (tank) return tank.cleaning?.fluid ?? 'water';
+  const changeover = yogurt.buffer.changeover;
+  if (changeover?.kind === 'cip') return changeover.cleaning?.fluid ?? 'water';
+  return changeover?.kind === 'rinse' ? 'water' : null;
+}
+
+/**
+ * The fluid the legend marks: the UHT circuit's, else the yogurt wing's (phase 32); null while both carry milk (or the
+ * snapshot predates contracts v5).
+ */
+export function circuitFluid(snapshot: Pick<Snapshot, 'liquid'> & Partial<Pick<Snapshot, 'yogurt'>>): CleaningFluid | null {
+  return snapshot.liquid?.cleaning?.fluid ?? wingCleaningFluid(snapshot as Pick<Snapshot, 'yogurt'>);
 }
 
 export interface PipeLegend {

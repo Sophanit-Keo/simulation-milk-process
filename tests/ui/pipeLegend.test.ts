@@ -37,6 +37,24 @@ describe('the pipe legend', () => {
     expect(circuitFluid({ liquid: older } as Pick<Snapshot, 'liquid'>)).toBeNull();
   });
 
+  it('marks the yogurt wing\'s fluid while its CIP station runs a circuit and the UHT circuit carries milk (phase 32)', () => {
+    const y = base.yogurt;
+    const lye = { ...cleaning, step: 'lye', fluid: 'lye', tempC: 78, stepCount: 5 } as const;
+    const tankClean = { ...base, yogurt: { ...y, ferment: { ...y.ferment, tanks: y.ferment.tanks.map((tank, i) => (i === 1 ? { ...tank, state: 'cleaning' as const, product: null, cleaning: lye } : tank)) } } };
+    expect(circuitFluid(tankClean)).toBe('lye');
+    // The UHT circuit's own fluid comes first.
+    expect(circuitFluid({ ...tankClean, liquid: { ...base.liquid, cleaning } })).toBe('acid');
+    const heat = { ...base, yogurt: { ...y, heat: { ...y.heat, mode: 'cleaning' as const, cleaning: { ...cleaning, fluid: 'water' as const, step: 'preRinse' as const } } } };
+    expect(circuitFluid(heat)).toBe('water');
+    const rinse = { ...base, yogurt: { ...y, buffer: { ...y.buffer, changeover: { kind: 'rinse' as const, remainingS: 600, cleaning: null } } } };
+    expect(circuitFluid(rinse)).toBe('water');
+    const sip = { ...base, yogurt: { ...y, buffer: { ...y.buffer, changeover: { kind: 'sip' as const, remainingS: 600, cleaning: null } } } };
+    expect(circuitFluid(sip)).toBeNull();
+    // A tank cleaning in a snapshot older than contracts v13 pumps water.
+    const older = { ...base, yogurt: { ...y, ferment: { ...y.ferment, tanks: y.ferment.tanks.map((tank, i) => (i === 0 ? { ...tank, state: 'cleaning' as const, product: null } : tank)) } } };
+    expect(circuitFluid(older)).toBe('water');
+  });
+
   it('has a swatch per fluid in app.css, in the colour token the 3D pipes use', () => {
     const css = readFileSync('src/styles/app.css', 'utf8');
     for (const fluid of CLEANING_FLUIDS) expect(css, fluid).toMatch(new RegExp(`\\.swatch\\.clean-${fluid} \\{\\s*background: var\\(--clean-${fluid}\\);`));
