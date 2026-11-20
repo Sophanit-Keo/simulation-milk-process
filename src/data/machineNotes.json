@@ -25,6 +25,39 @@
       ]
     },
     {
+      "id": "wingCip",
+      "stage": 12,
+      "title": "The wing's CIP station",
+      "summary": "How the yogurt wing cleans its machines in place: three circuits, the steps, the returns and what they use.",
+      "open": false,
+      "sections": [
+        {
+          "heading": "What it does",
+          "text": "CIP is cleaning in place: the station pumps water, lye and acid through the pipes, tanks and machines the yogurt touched, without taking them apart, so no residue is left for bacteria to grow on and no milkstone builds up on the heated surfaces. The wing's station stands at the back of the process hall, between the reprocess tank and tank 1, with a tank each for the rinse water, the lye and the acid."
+        },
+        {
+          "heading": "Three circuits",
+          "text": "Each circuit has its own supply pump, heater and return, so all three can clean at once. The heat treatment's runs the wing's CIP after a divert, 80 min, through the deaerator, the homogenizer, the heat exchanger and the holding cell. The fermentation tanks' cleans each tank once it is emptied, 45 min, through the spray head in its dome, the return leaving by its outlet. The buffer and P8's runs the wing's CIP before set yogurt, 80 min, and a 15 min rinse of the buffer and the fruit line before a stirred product."
+        },
+        {
+          "heading": "The steps",
+          "text": "Each CIP starts with warm water at 45 °C, which pushes the yogurt out; then 1.8% sodium hydroxide (lye) at 78 °C, which dissolves fat and protein; a rinse; 0.8% nitric acid at 68 °C, which dissolves milkstone; and a cold rinse at 20 °C. The wing's CIP holds the lye 30 min and the acid 20 min, and ends with 8 min of gradual cooling; a tank's CIP holds the lye 20 min and the acid 10 min."
+        },
+        {
+          "heading": "The return",
+          "text": "A conductivity transmitter on each return tells water from the solutions: at 20 °C the lye reads 84.2 mS/cm, the acid 45.0 mS/cm and the rinse water 0.3 mS/cm. At the start of a step the circuit still holds what came before, so the return goes to the drain until it reads half the solution's conductivity, about a minute later, then back to its tank to be used again; in the rinse after it, it goes back to the tank until it falls under half, then to the drain. The cold rinse is kept in the water tank for the next pre-rinse."
+        },
+        {
+          "heading": "What it uses",
+          "text": "Each chemical step loses some solution where it meets the water before and after it. The wing's CIP uses about 3.7 kg of sodium hydroxide and 1.6 kg of nitric acid and sends 3,000 L of rinse water to the drain; a tank's CIP the same chemicals and 2,000 L; a rinse 3,000 L. A day with four tank cleans, a CIP and a rinse uses about 18.6 kg of sodium hydroxide, 7.8 kg of nitric acid and 14,000 L of water."
+        },
+        {
+          "heading": "In the 3D view",
+          "text": "Each circuit's lines turn the colour of what they carry, pale blue water, violet lye or magenta acid, and are steel while the circuit stands. The heat treatment's pipes take the colour while it is cleaned, and so does the feed from the buffer into P8. At the station each running circuit's pump turns, its heater's strip shows the temperature and a bar beside it the return's conductivity, and the valve on its return lifts toward the tanks or toward the drain, which splashes. A tank's lamp lights while its fluid is drawn or comes back. Over the fermentation tanks the CIP header and the cleaning tank's drop carry its fluid, and its sight glass streams with it."
+        }
+      ]
+    },
+    {
       "id": "p8",
       "stage": 15,
       "title": "Line P8, the cup filler",

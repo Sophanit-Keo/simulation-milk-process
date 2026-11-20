@@ -68,6 +68,8 @@ A wing beside the UHT plant makes cup yogurt on Line P8, from its own raw-milk s
 
 The day runs plain stirred yogurt from 06:00, strawberry from 14:00 and plain set yogurt from 22:00. Between products the buffer is rinsed; before set yogurt the wing cleans P8 and sterilizes it, and an ATP swab must pass before it fills.
 
+The wing has a CIP station of its own, at the back of the process hall: a tank each for the rinse water, the lye and the acid, and three circuits that can clean at once. The heat treatment's runs the wing's CIP after a divert, 80 min; the fermentation tanks' cleans each tank once it is emptied, 45 min of pre-rinse, lye at 78 °C, rinse, acid at 68 °C and post-rinse; the buffer and P8's runs the CIP before set yogurt, and the rinse before a stirred product. Each circuit's lines take the colour of the fluid it pumps, as the UHT station's do, and the heat treatment's pipes and P8's feed with them. The wing's cleans use about 18.6 kg of sodium hydroxide, 7.8 kg of nitric acid and 14,000 L of rinse water a day; stage 12's panel explains the station and shows what each circuit is doing ([D34](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d34-the-yogurt-wings-cip-station-and-its-cleans-in-motion)).
+
 ## Why it opens on day 8
 
 A plant that started empty would release nothing for a week: the first batch would leave quarantine on day 8, and every truck until then would find no stock. So the model opens on day 8 at 06:00 with a week of history: 42 batches on hold and 634 pallets in stock, two days of cover ([D11](https://github.com/Sophanit-Keo/simulation-milk-process/blob/master/plan/DECISIONS.md#d11-opening-state)).

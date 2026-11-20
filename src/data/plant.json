@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 14,
+  "schemaVersion": 15,
   "seed": 81006,
   "clock": {
     "startTimeS": 626400,
@@ -229,7 +229,14 @@
       "lyeConductivityMsPerCm": 84.2,
       "acidConductivityMsPerCm": 45.0,
       "circulateLph": 12000,
-      "circuitL": 300
+      "circuitL": 300,
+      "tankSteps": [
+        { "step": "preRinse", "fluid": "water", "durationS": 300, "tempC": 45 },
+        { "step": "lye", "fluid": "lye", "durationS": 1200, "tempC": 78 },
+        { "step": "rinse", "fluid": "water", "durationS": 300, "tempC": 45 },
+        { "step": "acid", "fluid": "acid", "durationS": 600, "tempC": 68 },
+        { "step": "postRinse", "fluid": "water", "durationS": 300, "tempC": 20 }
+      ]
     },
     "coldChain": {
       "cupsPerTray": 24,
